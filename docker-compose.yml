@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  penthouse-api:
+    build: ./server
+    container_name: penthouse-api
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./server/data:/app/data
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - JWT_SECRET=${JWT_SECRET:-change-this-secret-in-production}
+      - GIPHY_API_KEY=${GIPHY_API_KEY}
+      - KLIPY_API_KEY=${KLIPY_API_KEY}
+    networks:
+      - penthouse-network
+
+networks:
+  penthouse-network:
+    driver: bridge
