@@ -66,20 +66,18 @@ async function initializeDatabase() {
   `);
 
   // Chats (can be DMs, Group DMs, or Server Channels)
-  // Unified table for all message contexts
   db.run(`
     CREATE TABLE IF NOT EXISTS chats (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT, 
-      type TEXT DEFAULT 'dm', -- 'dm', 'group', 'channel'
+      type TEXT DEFAULT 'dm',
       server_id INTEGER REFERENCES servers(id) ON DELETE CASCADE,
       created_by INTEGER REFERENCES users(id),
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
 
-  // Chat Members / Channel Access could be here
-  // For DMs/Groups: explicit membership
+  // Chat Members
   db.run(`
     CREATE TABLE IF NOT EXISTS chat_members (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -129,34 +127,87 @@ function saveDatabase() {
   }
 }
 
+// Run a parameterized statement and return lastInsertRowid
+function runStatement(sql, params = []) {
+  try {
+    const stmt = db.prepare(sql);
+    if (params.length > 0) {
+      stmt.bind(params);
+    }
+    stmt.step();
+    stmt.free();
+
+    // Get last insert rowid immediately after
+    const result = db.exec("SELECT last_insert_rowid() as id");
+    const lastId = result.length > 0 ? result[0].values[0][0] : 0;
+
+    saveDatabase();
+    return { lastInsertRowid: lastId };
+  } catch (err) {
+    console.error('DB run error:', sql, params, err.message);
+    throw err;
+  }
+}
+
+// Get a single row
+function getRow(sql, params = []) {
+  try {
+    const stmt = db.prepare(sql);
+    if (params.length > 0) {
+      stmt.bind(params);
+    }
+
+    if (!stmt.step()) {
+      stmt.free();
+      return undefined;
+    }
+
+    const columns = stmt.getColumnNames();
+    const values = stmt.get();
+    stmt.free();
+
+    const obj = {};
+    columns.forEach((col, i) => obj[col] = values[i]);
+    return obj;
+  } catch (err) {
+    console.error('DB get error:', sql, params, err.message);
+    throw err;
+  }
+}
+
+// Get all rows
+function getAllRows(sql, params = []) {
+  try {
+    const stmt = db.prepare(sql);
+    if (params.length > 0) {
+      stmt.bind(params);
+    }
+
+    const results = [];
+    const columns = stmt.getColumnNames();
+
+    while (stmt.step()) {
+      const values = stmt.get();
+      const obj = {};
+      columns.forEach((col, i) => obj[col] = values[i]);
+      results.push(obj);
+    }
+
+    stmt.free();
+    return results;
+  } catch (err) {
+    console.error('DB all error:', sql, params, err.message);
+    throw err;
+  }
+}
+
 // Helper functions to match better-sqlite3 API
 function getDb() {
   return {
     prepare: (sql) => ({
-      run: (...params) => {
-        db.run(sql, params);
-        saveDatabase();
-        return { lastInsertRowid: db.exec("SELECT last_insert_rowid()")[0]?.values[0]?.[0] };
-      },
-      get: (...params) => {
-        const result = db.exec(sql, params);
-        if (result.length === 0 || result[0].values.length === 0) return undefined;
-        const columns = result[0].columns;
-        const values = result[0].values[0];
-        const obj = {};
-        columns.forEach((col, i) => obj[col] = values[i]);
-        return obj;
-      },
-      all: (...params) => {
-        const result = db.exec(sql, params);
-        if (result.length === 0) return [];
-        const columns = result[0].columns;
-        return result[0].values.map(row => {
-          const obj = {};
-          columns.forEach((col, i) => obj[col] = row[i]);
-          return obj;
-        });
-      }
+      run: (...params) => runStatement(sql, params),
+      get: (...params) => getRow(sql, params),
+      all: (...params) => getAllRows(sql, params)
     }),
     exec: (sql) => {
       db.run(sql);

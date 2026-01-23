@@ -16,6 +16,7 @@ interface AuthContextType {
     login: (username: string, password: string) => Promise<void>;
     register: (username: string, password: string, displayName?: string) => Promise<void>;
     logout: () => void;
+    updateProfile: (displayName?: string, avatarUrl?: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -68,8 +69,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         disconnectSocket();
     };
 
+    const updateProfile = async (displayName?: string, avatarUrl?: string) => {
+        const response = await fetch('/api/auth/profile', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify({ displayName, avatarUrl }),
+        });
+
+        if (!response.ok) throw new Error('Failed to update profile');
+
+        const data = await response.json();
+        setUser(prev => prev ? { ...prev, displayName: data.displayName, avatarUrl: data.avatarUrl } : null);
+    };
+
     return (
-        <AuthContext.Provider value={{ user, token, isLoading, login, register, logout }}>
+        <AuthContext.Provider value={{ user, token, isLoading, login, register, logout, updateProfile }}>
             {children}
         </AuthContext.Provider>
     );
@@ -82,3 +99,4 @@ export const useAuth = () => {
     }
     return context;
 };
+

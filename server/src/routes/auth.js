@@ -143,4 +143,27 @@ router.patch('/me', authenticateToken, (req, res) => {
     }
 });
 
+// Update profile (PUT - for frontend compatibility)
+router.put('/profile', authenticateToken, (req, res) => {
+    try {
+        const { displayName, avatarUrl } = req.body;
+
+        db.prepare(
+            'UPDATE users SET display_name = COALESCE(?, display_name), avatar_url = COALESCE(?, avatar_url), updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+        ).run(displayName || null, avatarUrl || null, req.user.userId);
+
+        const user = db.prepare(
+            'SELECT id, username, display_name, avatar_url FROM users WHERE id = ?'
+        ).get(req.user.userId);
+
+        res.json({
+            displayName: user.display_name,
+            avatarUrl: user.avatar_url
+        });
+    } catch (err) {
+        console.error('Update profile error:', err);
+        res.status(500).json({ error: 'Failed to update profile' });
+    }
+});
+
 module.exports = router;

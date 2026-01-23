@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import {
     getChats,
@@ -13,6 +13,8 @@ import {
 } from '../services/api';
 import { getSocket, joinChat, leaveChat } from '../services/socket';
 import type { Chat, Message, User, Server, Channel } from '../types';
+import GifPicker from '../components/GifPicker';
+import ProfileModal from '../components/ProfileModal';
 import './Chat.css';
 
 export default function ChatPage() {
@@ -26,6 +28,7 @@ export default function ChatPage() {
     const [chats, setChats] = useState<Chat[]>([]); // DMs and Groups
     const [serverChannels, setServerChannels] = useState<Channel[]>([]);
     const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
+    const [serverMembers, setServerMembers] = useState<User[]>([]);
 
     // Messages State
     const [messages, setMessages] = useState<Message[]>([]);
@@ -38,10 +41,49 @@ export default function ChatPage() {
     const [showNewServer, setShowNewServer] = useState(false);
     const [showNewChannel, setShowNewChannel] = useState(false);
     const [inputName, setInputName] = useState(''); // reused for Create Group/Server/Channel
+    const [showGifPicker, setShowGifPicker] = useState(false);
+    const [showProfileModal, setShowProfileModal] = useState(false);
+
+    const loadServers = useCallback(async () => {
+        try {
+            const { data } = await getServers();
+            setServers(data);
+        } catch (err) {
+            console.error('Failed to load servers:', err);
+        }
+    }, []);
+
+    const loadServerDetails = useCallback(async (serverId: number) => {
+        try {
+            const { data } = await getServerDetails(serverId);
+            setServerChannels(data.channels);
+            setServerMembers(data.members || []);
+        } catch (err) {
+            console.error('Failed to load server details:', err);
+        }
+    }, []);
+
+    const loadChats = useCallback(async () => {
+        try {
+            const { data } = await getChats();
+            setChats(data);
+        } catch (err) {
+            console.error('Failed to load chats:', err);
+        }
+    }, []);
+
+    const loadUsers = useCallback(async () => {
+        try {
+            const { data } = await searchUsers();
+            setUsers(data);
+        } catch (err) {
+            console.error('Failed to load users:', err);
+        }
+    }, []);
 
     useEffect(() => {
         loadServers();
-        loadChats(); // Always load DMs in background or on Home select
+        loadChats();
         loadUsers();
 
         const socket = getSocket();
@@ -50,68 +92,32 @@ export default function ChatPage() {
                 if (selectedChat?.id === message.chatId) {
                     setMessages((prev) => [...prev, message]);
                 }
-                // If it's a DM, refresh chat list to show unread/latest
-                if (!message.metadata?.serverId) { // Assuming we track this eventually
-                    loadChats();
-                }
+                loadChats();
             });
         }
 
         return () => {
             socket?.off('new_message');
         };
-    }, [selectedChat]);
+    }, [selectedChat, loadServers, loadChats, loadUsers]);
 
     useEffect(() => {
         if (selectedServerId) {
             loadServerDetails(selectedServerId);
         }
-    }, [selectedServerId]);
+    }, [selectedServerId, loadServerDetails]);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
 
-    const loadServers = async () => {
-        try {
-            const { data } = await getServers();
-            setServers(data);
-        } catch (err) {
-            console.error('Failed to load servers:', err);
-        }
-    };
-
-    const loadServerDetails = async (serverId: number) => {
-        try {
-            const { data } = await getServerDetails(serverId);
-            setServerChannels(data.channels);
-            // Could also setServerMembers here if we want to show them
-        } catch (err) {
-            console.error('Failed to load server details:', err);
-        }
-    };
-
-    const loadChats = async () => {
-        try {
-            const { data } = await getChats();
-            setChats(data);
-        } catch (err) {
-            console.error('Failed to load chats:', err);
-        }
-    };
-
-    const loadUsers = async () => {
-        try {
-            const { data } = await searchUsers();
-            setUsers(data);
-        } catch (err) {
-            console.error('Failed to load users:', err);
-        }
-    };
-
     const handleServerSelect = (serverId: number | null) => {
         setSelectedServerId(serverId);
         setSelectedChat(null); // Deselect chat when switching contexts
+        if (!serverId) {
+            setServerChannels([]);
+            setServerMembers([]);
+        }
     };
 
     const selectChat = async (chat: Chat) => {
@@ -149,6 +155,16 @@ export default function ChatPage() {
         }
     };
 
+    const handleGifSelect = async (gifUrl: string) => {
+        if (!selectedChat) return;
+
+        try {
+            await sendMessage(selectedChat.id, gifUrl, 'gif', { gifUrl });
+        } catch (err) {
+            console.error('Failed to send GIF:', err);
+        }
+    };
+
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!inputName.trim()) return;
@@ -177,6 +193,24 @@ export default function ChatPage() {
         const date = new Date(dateStr);
         return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     };
+
+    const isGifMessage = (msg: Message) => {
+        return msg.type === 'gif' || msg.content?.match(/\.(gif|webp)$/i) || msg.content?.includes('giphy.com');
+    };
+
+    const renderMessageContent = (msg: Message) => {
+        if (isGifMessage(msg)) {
+            return (
+                <div className="message-gif">
+                    <img src={msg.content} alt="GIF" loading="lazy" />
+                </div>
+            );
+        }
+        return <div className="message-content">{msg.content}</div>;
+    };
+
+    // Get members to display (server members if in server, otherwise all users)
+    const displayMembers = selectedServerId ? serverMembers : users;
 
     return (
         <div className="app-container">
@@ -220,13 +254,28 @@ export default function ChatPage() {
             <aside className="sidebar">
                 <div className="sidebar-header">
                     <h2>{selectedServerId ? servers.find(s => s.id === selectedServerId)?.name : 'The Penthouse'}</h2>
-                    {selectedServerId === null && (
-                        <div className="user-info">
-                            <span>{user?.displayName || user?.username}</span>
-                            <button onClick={logout} className="logout-btn">Logout</button>
-                        </div>
-                    )}
                 </div>
+
+                {/* User info displayed when at Home */}
+                {selectedServerId === null && (
+                    <div className="user-panel" onClick={() => setShowProfileModal(true)}>
+                        <div className="user-avatar">
+                            {user?.avatarUrl ? (
+                                <img src={user.avatarUrl} alt="avatar" />
+                            ) : (
+                                <span>{user?.username?.[0]?.toUpperCase() || '?'}</span>
+                            )}
+                            <div className="status-indicator online"></div>
+                        </div>
+                        <div className="user-details">
+                            <span className="username">{user?.displayName || user?.username}</span>
+                            <span className="user-status">Online</span>
+                        </div>
+                        <button onClick={(e) => { e.stopPropagation(); logout(); }} className="logout-btn" title="Logout">
+                            ⬅
+                        </button>
+                    </div>
+                )}
 
                 <div className="sidebar-actions">
                     {selectedServerId === null ? (
@@ -316,33 +365,39 @@ export default function ChatPage() {
                         </div>
 
                         <div className="messages-container">
-                            {messages.map((msg) => (
-                                <div
-                                    key={msg.id}
-                                    className={`message ${msg.sender.id === user?.id ? 'own' : ''}`}
-                                >
-                                    <div className="avatar">
-                                        {msg.sender.avatarUrl ? (
-                                            <img src={msg.sender.avatarUrl} alt="avatar" />
-                                        ) : (
-                                            <div className="avatar-placeholder">{msg.sender.username[0]}</div>
-                                        )}
-                                    </div>
-                                    <div className="message-body">
-                                        <div className="message-header">
-                                            <span className="sender">{msg.sender.displayName || msg.sender.username}</span>
-                                            <span className="time">{formatTime(msg.createdAt)}</span>
-                                        </div>
-                                        <div className="message-content">{msg.content}</div>
-                                    </div>
+                            {messages.length === 0 ? (
+                                <div className="no-messages">
+                                    <p>No messages yet. Start the conversation!</p>
                                 </div>
-                            ))}
+                            ) : (
+                                messages.map((msg) => (
+                                    <div
+                                        key={msg.id}
+                                        className={`message ${msg.sender.id === user?.id ? 'own' : ''}`}
+                                    >
+                                        <div className="avatar">
+                                            {msg.sender.avatarUrl ? (
+                                                <img src={msg.sender.avatarUrl} alt="avatar" />
+                                            ) : (
+                                                <div className="avatar-placeholder">{msg.sender.username[0]}</div>
+                                            )}
+                                        </div>
+                                        <div className="message-body">
+                                            <div className="message-header">
+                                                <span className="sender">{msg.sender.displayName || msg.sender.username}</span>
+                                                <span className="time">{formatTime(msg.createdAt)}</span>
+                                            </div>
+                                            {renderMessageContent(msg)}
+                                        </div>
+                                    </div>
+                                ))
+                            )}
                             <div ref={messagesEndRef} />
                         </div>
 
                         <form onSubmit={handleSend} className="message-input">
                             <div className="input-wrapper">
-                                <button type="button" className="attach-btn">+</button>
+                                <button type="button" className="attach-btn" title="Attach file">+</button>
                                 <input
                                     type="text"
                                     value={newMessage}
@@ -350,16 +405,39 @@ export default function ChatPage() {
                                     placeholder={`Message ${selectedChat.type === 'channel' ? '#' + selectedChat.name : '...'} `}
                                     autoComplete="off"
                                 />
-                                <button type="button" className="emoji-btn">😊</button>
-                                <button type="button" className="gif-btn">GIF</button>
+                                <button type="button" className="emoji-btn" title="Emojis">😊</button>
+                                <button
+                                    type="button"
+                                    className="gif-btn"
+                                    onClick={() => setShowGifPicker(true)}
+                                    title="GIFs"
+                                >
+                                    GIF
+                                </button>
                             </div>
                         </form>
                     </>
                 ) : (
                     <div className="no-chat-selected">
-                        <div className="feature-showcase">
+                        <div className="welcome-card">
+                            <div className="welcome-icon">🏠</div>
                             <h2>Welcome to The Penthouse</h2>
-                            <p>Select a server or chat to begin.</p>
+                            <p>Your exclusive private hangout space</p>
+                            <div className="welcome-features">
+                                <div className="feature">
+                                    <span className="feature-icon">💬</span>
+                                    <span>Group Chats</span>
+                                </div>
+                                <div className="feature">
+                                    <span className="feature-icon">🎬</span>
+                                    <span>GIF Support</span>
+                                </div>
+                                <div className="feature">
+                                    <span className="feature-icon">🔒</span>
+                                    <span>Private & Secure</span>
+                                </div>
+                            </div>
+                            <p className="welcome-hint">Select a chat or create a new one to get started</p>
                         </div>
                     </div>
                 )}
@@ -368,24 +446,35 @@ export default function ChatPage() {
             {/* 4. Member List (Right Sidebar) - Only if chat selected */}
             {selectedChat && (
                 <aside className="members-sidebar">
-                    <h3>MEMBERS</h3>
-                    {/* Assuming we fetch members for the current context. 
-                        For DMs, it's just the participants. 
-                        For Servers, it's server members. 
-                        Currently using global users list as placeholder/search 
-                    */}
-                    {users.map((u) => (
+                    <h3>MEMBERS — {displayMembers.length}</h3>
+                    {displayMembers.map((u) => (
                         <div key={u.id} className="member-item">
                             <div className="member-avatar">
-                                {u.username[0].toUpperCase()}
+                                {u.avatarUrl ? (
+                                    <img src={u.avatarUrl} alt="avatar" />
+                                ) : (
+                                    u.username[0].toUpperCase()
+                                )}
+                                <div className="member-status-dot online"></div>
                             </div>
                             <div className="member-info">
                                 <span className="member-name">{u.displayName || u.username}</span>
-                                <span className="member-status">Online</span>
                             </div>
                         </div>
                     ))}
                 </aside>
+            )}
+
+            {/* Modals */}
+            {showGifPicker && (
+                <GifPicker
+                    onSelect={handleGifSelect}
+                    onClose={() => setShowGifPicker(false)}
+                />
+            )}
+
+            {showProfileModal && (
+                <ProfileModal onClose={() => setShowProfileModal(false)} />
             )}
         </div>
     );
