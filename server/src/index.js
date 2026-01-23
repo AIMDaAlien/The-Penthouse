@@ -10,6 +10,7 @@ const { initializeWebSocket } = require('./websocket');
 const authRoutes = require('./routes/auth');
 const messagesRoutes = require('./routes/messages');
 const chatsRoutes = require('./routes/chats');
+const serversRoutes = require('./routes/servers');
 const mediaRoutes = require('./routes/media');
 
 const app = express();
@@ -34,6 +35,7 @@ app.use('/uploads', express.static('data/uploads'));
 app.use('/api/auth', authRoutes);
 app.use('/api/messages', messagesRoutes);
 app.use('/api/chats', chatsRoutes);
+app.use('/api/servers', serversRoutes);
 app.use('/api/media', mediaRoutes);
 
 // Health check

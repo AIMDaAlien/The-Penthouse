@@ -4,7 +4,7 @@ const { authenticateToken } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Get all chats for current user
+// Get all chats for current user (DMs and Groups only, channels via servers)
 router.get('/', authenticateToken, (req, res) => {
     try {
         const chats = db.prepare(`
@@ -14,14 +14,15 @@ router.get('/', authenticateToken, (req, res) => {
         (SELECT m.created_at FROM messages m WHERE m.chat_id = c.id ORDER BY m.created_at DESC LIMIT 1) as last_message_at
       FROM chats c
       INNER JOIN chat_members cm ON c.id = cm.chat_id
-      WHERE cm.user_id = ?
+      WHERE cm.user_id = ? AND c.server_id IS NULL
       ORDER BY last_message_at DESC
     `).all(req.user.userId);
 
         res.json(chats.map(c => ({
             id: c.id,
             name: c.name,
-            isGroup: c.is_group === 1,
+            isGroup: c.type === 'group',
+            type: c.type,
             nickname: c.nickname,
             memberCount: c.member_count,
             lastMessage: c.last_message,
@@ -45,8 +46,8 @@ router.post('/group', authenticateToken, (req, res) => {
 
         // Create the chat
         const result = db.prepare(
-            'INSERT INTO chats (name, is_group, created_by) VALUES (?, 1, ?)'
-        ).run(name, req.user.userId);
+            'INSERT INTO chats (name, type, created_by) VALUES (?, ?, ?)'
+        ).run(name, 'group', req.user.userId);
 
         const chatId = result.lastInsertRowid;
 
@@ -67,6 +68,7 @@ router.post('/group', authenticateToken, (req, res) => {
             id: chatId,
             name,
             isGroup: true,
+            type: 'group',
             createdAt: new Date().toISOString()
         });
     } catch (err) {
@@ -89,9 +91,11 @@ router.post('/dm', authenticateToken, (req, res) => {
         }
 
         // Check if DM already exists between these two users
+        // DM has type='dm' and server_id IS NULL
         const existingDm = db.prepare(`
       SELECT c.id FROM chats c
-      WHERE c.is_group = 0
+      WHERE c.type = 'dm'
+      AND c.server_id IS NULL
       AND EXISTS (SELECT 1 FROM chat_members WHERE chat_id = c.id AND user_id = ?)
       AND EXISTS (SELECT 1 FROM chat_members WHERE chat_id = c.id AND user_id = ?)
       AND (SELECT COUNT(*) FROM chat_members WHERE chat_id = c.id) = 2
@@ -109,8 +113,8 @@ router.post('/dm', authenticateToken, (req, res) => {
 
         // Create new DM
         const result = db.prepare(
-            'INSERT INTO chats (name, is_group, created_by) VALUES (?, 0, ?)'
-        ).run(null, req.user.userId);
+            'INSERT INTO chats (name, type, created_by) VALUES (?, ?, ?)'
+        ).run(null, 'dm', req.user.userId);
 
         const chatId = result.lastInsertRowid;
 
@@ -138,7 +142,10 @@ router.get('/:chatId', authenticateToken, (req, res) => {
     try {
         const { chatId } = req.params;
 
-        // Verify membership
+        // Verify membership (simple check for DMs/Groups)
+        // Note: For DMs/Groups, user must be in chat_members.
+        // We aren't fully handling server channels here via this endpoint unless we decide to.
+        // But let's keep it safe.
         const membership = db.prepare(
             'SELECT * FROM chat_members WHERE chat_id = ? AND user_id = ?'
         ).get(chatId, req.user.userId);
@@ -159,7 +166,8 @@ router.get('/:chatId', authenticateToken, (req, res) => {
         res.json({
             id: chat.id,
             name: chat.name,
-            isGroup: chat.is_group === 1,
+            isGroup: chat.type === 'group',
+            type: chat.type,
             createdAt: chat.created_at,
             members: members.map(m => ({
                 id: m.id,
@@ -183,7 +191,7 @@ router.post('/:chatId/members', authenticateToken, (req, res) => {
 
         const chat = db.prepare('SELECT * FROM chats WHERE id = ?').get(chatId);
 
-        if (!chat || chat.is_group !== 1) {
+        if (!chat || chat.type !== 'group') {
             return res.status(404).json({ error: 'Group chat not found' });
         }
 

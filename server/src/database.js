@@ -43,18 +43,43 @@ async function initializeDatabase() {
     )
   `);
 
-  // Chats table (for both group chats and DMs)
+  // Servers (Communities)
+  db.run(`
+    CREATE TABLE IF NOT EXISTS servers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      icon_url TEXT,
+      owner_id INTEGER REFERENCES users(id),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Server Members
+  db.run(`
+    CREATE TABLE IF NOT EXISTS server_members (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      server_id INTEGER REFERENCES servers(id) ON DELETE CASCADE,
+      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(server_id, user_id)
+    )
+  `);
+
+  // Chats (can be DMs, Group DMs, or Server Channels)
+  // Unified table for all message contexts
   db.run(`
     CREATE TABLE IF NOT EXISTS chats (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT,
-      is_group INTEGER DEFAULT 0,
+      name TEXT, 
+      type TEXT DEFAULT 'dm', -- 'dm', 'group', 'channel'
+      server_id INTEGER REFERENCES servers(id) ON DELETE CASCADE,
       created_by INTEGER REFERENCES users(id),
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
 
-  // Chat members (who's in which chat)
+  // Chat Members / Channel Access could be here
+  // For DMs/Groups: explicit membership
   db.run(`
     CREATE TABLE IF NOT EXISTS chat_members (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

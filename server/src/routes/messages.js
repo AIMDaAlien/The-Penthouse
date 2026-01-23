@@ -10,12 +10,29 @@ router.get('/:chatId', authenticateToken, (req, res) => {
         const { chatId } = req.params;
         const { limit = 50, before } = req.query;
 
-        // Verify user is member of chat
-        const membership = db.prepare(
-            'SELECT * FROM chat_members WHERE chat_id = ? AND user_id = ?'
-        ).get(chatId, req.user.userId);
+        // Get chat to check type
+        const chat = db.prepare('SELECT server_id FROM chats WHERE id = ?').get(chatId);
+        if (!chat) {
+            return res.status(404).json({ error: 'Chat not found' });
+        }
 
-        if (!membership) {
+        // Verify membership
+        let isMember = false;
+        if (chat.server_id) {
+            // Server channel: Check server membership
+            const member = db.prepare(
+                'SELECT 1 FROM server_members WHERE server_id = ? AND user_id = ?'
+            ).get(chat.server_id, req.user.userId);
+            isMember = !!member;
+        } else {
+            // DM/Group: Check chat membership
+            const member = db.prepare(
+                'SELECT 1 FROM chat_members WHERE chat_id = ? AND user_id = ?'
+            ).get(chatId, req.user.userId);
+            isMember = !!member;
+        }
+
+        if (!isMember) {
             return res.status(403).json({ error: 'Not a member of this chat' });
         }
 
@@ -68,12 +85,27 @@ router.post('/:chatId', authenticateToken, (req, res) => {
             return res.status(400).json({ error: 'Message content is required' });
         }
 
-        // Verify user is member of chat
-        const membership = db.prepare(
-            'SELECT * FROM chat_members WHERE chat_id = ? AND user_id = ?'
-        ).get(chatId, req.user.userId);
+        // Get chat to check type
+        const chat = db.prepare('SELECT server_id FROM chats WHERE id = ?').get(chatId);
+        if (!chat) {
+            return res.status(404).json({ error: 'Chat not found' });
+        }
 
-        if (!membership) {
+        // Verify membership
+        let isMember = false;
+        if (chat.server_id) {
+            const member = db.prepare(
+                'SELECT 1 FROM server_members WHERE server_id = ? AND user_id = ?'
+            ).get(chat.server_id, req.user.userId);
+            isMember = !!member;
+        } else {
+            const member = db.prepare(
+                'SELECT 1 FROM chat_members WHERE chat_id = ? AND user_id = ?'
+            ).get(chatId, req.user.userId);
+            isMember = !!member;
+        }
+
+        if (!isMember) {
             return res.status(403).json({ error: 'Not a member of this chat' });
         }
 
@@ -97,6 +129,8 @@ router.post('/:chatId', authenticateToken, (req, res) => {
 
         // Broadcast via WebSocket
         const io = req.app.get('io');
+        // If it's a channel, we might want to broadcast to server room or channel room.
+        // Currently architecture uses chat:chatId room for everything. That works.
         io.to(`chat:${chatId}`).emit('new_message', message);
 
         res.status(201).json(message);

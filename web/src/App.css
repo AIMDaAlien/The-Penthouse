@@ -1,0 +1,34 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #0f0f1a;
+  color: white;
+  -webkit-font-smoothing: antialiased;
+}
+
+.loading-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #1a1a2e 0%, #0f0f1a 100%);
+}
+
+.loading-content {
+  text-align: center;
+}
+
+.loading-content h1 {
+  color: #d4af37;
+  font-size: 2rem;
+  margin-bottom: 12px;
+}
+
+.loading-content p {
+  color: rgba(255, 255, 255, 0.5);
+}

@@ -1,0 +1,48 @@
+export interface User {
+    id: number;
+    username: string;
+    displayName?: string;
+    avatarUrl?: string;
+}
+
+export interface Server {
+    id: number;
+    name: string;
+    iconUrl?: string;
+    ownerId: number;
+    memberCount?: number;
+}
+
+export interface Channel {
+    id: number;
+    name: string;
+    type: 'text' | 'voice' | 'dm' | 'group' | 'channel'; // Unified type
+    serverId?: number;
+    lastMessage?: string;
+}
+
+export interface Chat {
+    id: number;
+    name: string | null;
+    isGroup: boolean;
+    type: 'dm' | 'group' | 'channel';
+    serverId?: number;
+    lastMessage?: string;
+    lastMessageAt?: string;
+    memberCount: number;
+    nickname?: string;
+}
+
+export interface Message {
+    id: number;
+    content: string;
+    type: string;
+    metadata?: any;
+    createdAt: string;
+    sender: {
+        id: number;
+        username: string;
+        displayName?: string;
+        avatarUrl?: string;
+    };
+}
