@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import './GifPicker.css'; // Reuse same styling
+import './GifPicker.css';
 
-// Klipy API configuration
 const KLIPY_API_KEY = 'tc14Tax6viWl5Cenp2rpn9Dj5WbIA4VPTHF0skyutWomHQUfNSSxn4bInYvUaLc0';
 const KLIPY_BASE_URL = 'https://api.klipy.co/v1';
 
@@ -79,7 +78,7 @@ export default function KlipyPicker({ onSelect, onClose }: KlipyPickerProps) {
 
     return (
         <div className="gif-picker-overlay" onClick={onClose}>
-            <div className="gif-picker" onClick={(e) => e.stopPropagation()}>
+            <div className="gif-picker klipy" onClick={(e) => e.stopPropagation()}>
                 <div className="gif-picker-header">
                     <input
                         type="text"

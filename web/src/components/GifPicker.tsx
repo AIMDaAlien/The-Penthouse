@@ -1,10 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { GiphyFetch } from '@giphy/js-fetch-api';
-import { Gif } from '@giphy/react-components';
 import type { IGif } from '@giphy/js-types';
 import './GifPicker.css';
 
-// GIPHY API key from environment
 const GIPHY_API_KEY = 'H2jGWv5wskQcoU1gMU2f3YuLCYYLHqjN';
 const gf = new GiphyFetch(GIPHY_API_KEY);
 
@@ -56,7 +54,6 @@ export default function GifPicker({ onSelect, onClose }: GifPickerProps) {
     }, [search, loadTrending, searchGifs]);
 
     const handleGifClick = (gif: IGif) => {
-        // Use the downsized version for optimal performance
         const gifUrl = gif.images.fixed_height.url || gif.images.original.url;
         onSelect(gifUrl, String(gif.id));
         onClose();
@@ -64,7 +61,7 @@ export default function GifPicker({ onSelect, onClose }: GifPickerProps) {
 
     return (
         <div className="gif-picker-overlay" onClick={onClose}>
-            <div className="gif-picker" onClick={(e) => e.stopPropagation()}>
+            <div className="gif-picker giphy" onClick={(e) => e.stopPropagation()}>
                 <div className="gif-picker-header">
                     <input
                         type="text"
@@ -88,7 +85,11 @@ export default function GifPicker({ onSelect, onClose }: GifPickerProps) {
                                 className="gif-item"
                                 onClick={() => handleGifClick(gif)}
                             >
-                                <Gif gif={gif} width={120} noLink hideAttribution />
+                                <img
+                                    src={gif.images.fixed_width.url}
+                                    alt={gif.title || 'GIF'}
+                                    loading="lazy"
+                                />
                             </div>
                         ))
                     )}

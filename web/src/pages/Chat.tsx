@@ -14,6 +14,7 @@ import {
 import { getSocket, joinChat, leaveChat } from '../services/socket';
 import type { Chat, Message, User, Server, Channel } from '../types';
 import GifPicker from '../components/GifPicker';
+import KlipyPicker from '../components/KlipyPicker';
 import ProfileModal from '../components/ProfileModal';
 import './Chat.css';
 
@@ -22,10 +23,10 @@ export default function ChatPage() {
 
     // Global State
     const [servers, setServers] = useState<Server[]>([]);
-    const [selectedServerId, setSelectedServerId] = useState<number | null>(null); // null = Home (DMs)
+    const [selectedServerId, setSelectedServerId] = useState<number | null>(null);
 
     // Chat/Channel State
-    const [chats, setChats] = useState<Chat[]>([]); // DMs and Groups
+    const [chats, setChats] = useState<Chat[]>([]);
     const [serverChannels, setServerChannels] = useState<Channel[]>([]);
     const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
     const [serverMembers, setServerMembers] = useState<User[]>([]);
@@ -40,9 +41,12 @@ export default function ChatPage() {
     const [showNewGroup, setShowNewGroup] = useState(false);
     const [showNewServer, setShowNewServer] = useState(false);
     const [showNewChannel, setShowNewChannel] = useState(false);
-    const [inputName, setInputName] = useState(''); // reused for Create Group/Server/Channel
-    const [showGifPicker, setShowGifPicker] = useState(false);
+    const [inputName, setInputName] = useState('');
+    const [showGiphyPicker, setShowGiphyPicker] = useState(false);
+    const [showKlipyPicker, setShowKlipyPicker] = useState(false);
     const [showProfileModal, setShowProfileModal] = useState(false);
+    const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+    const [membersCollapsed, setMembersCollapsed] = useState(false);
 
     const loadServers = useCallback(async () => {
         try {
@@ -113,7 +117,7 @@ export default function ChatPage() {
 
     const handleServerSelect = (serverId: number | null) => {
         setSelectedServerId(serverId);
-        setSelectedChat(null); // Deselect chat when switching contexts
+        setSelectedChat(null);
         if (!serverId) {
             setServerChannels([]);
             setServerMembers([]);
@@ -125,7 +129,6 @@ export default function ChatPage() {
             leaveChat(selectedChat.id);
         }
 
-        // Ensure type consistency
         const completeChat: Chat = {
             ...chat,
             isGroup: chat.type === 'group',
@@ -209,7 +212,6 @@ export default function ChatPage() {
         return <div className="message-content">{msg.content}</div>;
     };
 
-    // Get members to display (server members if in server, otherwise all users)
     const displayMembers = selectedServerId ? serverMembers : users;
 
     return (
@@ -251,12 +253,18 @@ export default function ChatPage() {
             </nav>
 
             {/* 2. Sidebar (Channels or DMs) */}
-            <aside className="sidebar">
+            <aside className={`sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
                 <div className="sidebar-header">
                     <h2>{selectedServerId ? servers.find(s => s.id === selectedServerId)?.name : 'The Penthouse'}</h2>
+                    <button
+                        className="collapse-btn"
+                        onClick={() => setSidebarCollapsed(true)}
+                        title="Collapse"
+                    >
+                        ◀
+                    </button>
                 </div>
 
-                {/* User info displayed when at Home */}
                 {selectedServerId === null && (
                     <div className="user-panel" onClick={() => setShowProfileModal(true)}>
                         <div className="user-avatar">
@@ -289,7 +297,6 @@ export default function ChatPage() {
                     )}
                 </div>
 
-                {/* Creation Form Modal/Inline */}
                 {(showNewGroup || showNewServer || showNewChannel) && (
                     <form onSubmit={handleCreate} className="creation-form">
                         <input
@@ -317,7 +324,6 @@ export default function ChatPage() {
                     <h3>{selectedServerId ? 'CHANNELS' : 'DIRECT MESSAGES'}</h3>
 
                     {selectedServerId === null ? (
-                        // DM List
                         chats.length === 0 ? (
                             <p className="empty-state">No active chats.</p>
                         ) : (
@@ -333,7 +339,6 @@ export default function ChatPage() {
                             ))
                         )
                     ) : (
-                        // Server Channel List
                         serverChannels.map(channel => (
                             <div
                                 key={channel.id}
@@ -353,14 +358,31 @@ export default function ChatPage() {
                 {selectedChat ? (
                     <>
                         <div className="chat-header">
-                            <div className="header-title">
-                                <span className="header-icon">
-                                    {selectedChat.type === 'channel' ? '#' : selectedChat.isGroup ? '👥' : '👤'}
-                                </span>
-                                <h3>{selectedChat.name || 'Direct Message'}</h3>
+                            <div className="header-left">
+                                {sidebarCollapsed && (
+                                    <button
+                                        className="toggle-sidebar-btn"
+                                        onClick={() => setSidebarCollapsed(false)}
+                                        title="Show channels"
+                                    >
+                                        ☰
+                                    </button>
+                                )}
+                                <div className="header-title">
+                                    <span className="header-icon">
+                                        {selectedChat.type === 'channel' ? '#' : selectedChat.isGroup ? '👥' : '👤'}
+                                    </span>
+                                    <h3>{selectedChat.name || 'Direct Message'}</h3>
+                                </div>
                             </div>
                             <div className="header-actions">
-                                {/* Search, Pin, etc icons could go here */}
+                                <button
+                                    className={`toggle-sidebar-btn ${!membersCollapsed ? 'active' : ''}`}
+                                    onClick={() => setMembersCollapsed(!membersCollapsed)}
+                                    title={membersCollapsed ? "Show members" : "Hide members"}
+                                >
+                                    👥
+                                </button>
                             </div>
                         </div>
 
@@ -402,23 +424,40 @@ export default function ChatPage() {
                                     type="text"
                                     value={newMessage}
                                     onChange={(e) => setNewMessage(e.target.value)}
-                                    placeholder={`Message ${selectedChat.type === 'channel' ? '#' + selectedChat.name : '...'} `}
+                                    placeholder={`Message ${selectedChat.type === 'channel' ? '#' + selectedChat.name : '...'}`}
                                     autoComplete="off"
                                 />
                                 <button type="button" className="emoji-btn" title="Emojis">😊</button>
                                 <button
                                     type="button"
-                                    className="gif-btn"
-                                    onClick={() => setShowGifPicker(true)}
-                                    title="GIFs"
+                                    className="gif-btn giphy"
+                                    onClick={() => setShowGiphyPicker(true)}
+                                    title="GIPHY"
                                 >
-                                    GIF
+                                    GIPHY
+                                </button>
+                                <button
+                                    type="button"
+                                    className="gif-btn klipy"
+                                    onClick={() => setShowKlipyPicker(true)}
+                                    title="Klipy"
+                                >
+                                    KLIPY
                                 </button>
                             </div>
                         </form>
                     </>
                 ) : (
                     <div className="no-chat-selected">
+                        {sidebarCollapsed && (
+                            <button
+                                className="toggle-sidebar-btn"
+                                onClick={() => setSidebarCollapsed(false)}
+                                style={{ position: 'absolute', top: 16, left: 16 }}
+                            >
+                                ☰
+                            </button>
+                        )}
                         <div className="welcome-card">
                             <div className="welcome-icon">🏠</div>
                             <h2>Welcome to The Penthouse</h2>
@@ -443,33 +482,51 @@ export default function ChatPage() {
                 )}
             </main>
 
-            {/* 4. Member List (Right Sidebar) - Only if chat selected */}
+            {/* 4. Member List (Right Sidebar) */}
             {selectedChat && (
-                <aside className="members-sidebar">
-                    <h3>MEMBERS — {displayMembers.length}</h3>
-                    {displayMembers.map((u) => (
-                        <div key={u.id} className="member-item">
-                            <div className="member-avatar">
-                                {u.avatarUrl ? (
-                                    <img src={u.avatarUrl} alt="avatar" />
-                                ) : (
-                                    u.username[0].toUpperCase()
-                                )}
-                                <div className="member-status-dot online"></div>
+                <aside className={`members-sidebar ${membersCollapsed ? 'collapsed' : ''}`}>
+                    <div className="members-header">
+                        <h3>MEMBERS — {displayMembers.length}</h3>
+                        <button
+                            className="collapse-btn"
+                            onClick={() => setMembersCollapsed(true)}
+                            title="Hide"
+                        >
+                            ▶
+                        </button>
+                    </div>
+                    <div className="members-list">
+                        {displayMembers.map((u) => (
+                            <div key={u.id} className="member-item">
+                                <div className="member-avatar">
+                                    {u.avatarUrl ? (
+                                        <img src={u.avatarUrl} alt="avatar" />
+                                    ) : (
+                                        u.username[0].toUpperCase()
+                                    )}
+                                    <div className="member-status-dot online"></div>
+                                </div>
+                                <div className="member-info">
+                                    <span className="member-name">{u.displayName || u.username}</span>
+                                </div>
                             </div>
-                            <div className="member-info">
-                                <span className="member-name">{u.displayName || u.username}</span>
-                            </div>
-                        </div>
-                    ))}
+                        ))}
+                    </div>
                 </aside>
             )}
 
             {/* Modals */}
-            {showGifPicker && (
+            {showGiphyPicker && (
                 <GifPicker
                     onSelect={handleGifSelect}
-                    onClose={() => setShowGifPicker(false)}
+                    onClose={() => setShowGiphyPicker(false)}
+                />
+            )}
+
+            {showKlipyPicker && (
+                <KlipyPicker
+                    onSelect={handleGifSelect}
+                    onClose={() => setShowKlipyPicker(false)}
                 />
             )}
 
