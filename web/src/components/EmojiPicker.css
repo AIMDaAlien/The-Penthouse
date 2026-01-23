@@ -1,0 +1,26 @@
+.emoji-picker-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    z-index: 1000;
+    padding-bottom: 100px;
+}
+
+.emoji-picker-container {
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(180, 160, 220, 0.2);
+}
+
+/* Override emoji-mart styles for lavender theme */
+.emoji-picker-container em-emoji-picker {
+    --em-rgb-background: 30, 25, 45;
+    --em-rgb-input: 40, 35, 55;
+    --em-rgb-color: 255, 255, 255;
+    --em-rgb-accent: 180, 160, 220;
+    --border-radius: 12px;
+}

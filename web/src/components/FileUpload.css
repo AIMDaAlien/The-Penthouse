@@ -1,0 +1,74 @@
+.file-upload-menu {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    margin-bottom: 8px;
+    background: linear-gradient(135deg,
+            rgba(40, 35, 60, 0.98) 0%,
+            rgba(25, 20, 45, 0.98) 100%);
+    border-radius: 12px;
+    border: 1px solid rgba(180, 160, 220, 0.2);
+    box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
+    padding: 8px;
+    min-width: 220px;
+    z-index: 100;
+    animation: slideUp 0.15s ease;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.upload-option {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 12px;
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    color: white;
+    transition: background 0.15s;
+    text-align: left;
+}
+
+.upload-option:hover {
+    background: rgba(180, 160, 220, 0.15);
+}
+
+.upload-icon {
+    font-size: 1.5rem;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(180, 160, 220, 0.1);
+    border-radius: 8px;
+}
+
+.upload-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.upload-title {
+    font-weight: 500;
+    font-size: 0.9rem;
+}
+
+.upload-desc {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.5);
+}

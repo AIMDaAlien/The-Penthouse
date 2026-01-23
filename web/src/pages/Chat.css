@@ -826,6 +826,26 @@
 }
 
 
+/* Attach wrapper for file upload menu */
+.attach-wrapper {
+    position: relative;
+}
+
+/* Message image styling */
+.message-image {
+    max-width: 400px;
+    border-radius: 8px;
+    overflow: hidden;
+    margin-top: 4px;
+}
+
+.message-image img {
+    max-width: 100%;
+    display: block;
+    border-radius: 8px;
+}
+
+
 /* Scrollbar styling */
 ::-webkit-scrollbar {
     width: 6px;

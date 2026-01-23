@@ -15,6 +15,8 @@ import { getSocket, joinChat, leaveChat } from '../services/socket';
 import type { Chat, Message, User, Server, Channel } from '../types';
 import GifPicker from '../components/GifPicker';
 import KlipyPicker from '../components/KlipyPicker';
+import EmojiPicker from '../components/EmojiPicker';
+import FileUpload from '../components/FileUpload';
 import ProfileModal from '../components/ProfileModal';
 import './Chat.css';
 
@@ -44,6 +46,8 @@ export default function ChatPage() {
     const [inputName, setInputName] = useState('');
     const [showGiphyPicker, setShowGiphyPicker] = useState(false);
     const [showKlipyPicker, setShowKlipyPicker] = useState(false);
+    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+    const [showFileUpload, setShowFileUpload] = useState(false);
     const [showProfileModal, setShowProfileModal] = useState(false);
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [membersCollapsed, setMembersCollapsed] = useState(false);
@@ -168,6 +172,30 @@ export default function ChatPage() {
         }
     };
 
+    const handleEmojiSelect = (emoji: string) => {
+        setNewMessage(prev => prev + emoji);
+        setShowEmojiPicker(false);
+    };
+
+    const handleFileSelect = async (file: File) => {
+        if (!selectedChat) return;
+
+        // For now, just create a local URL preview
+        // In production, you'd upload to server first
+        const fileUrl = URL.createObjectURL(file);
+        const isImage = file.type.startsWith('image/');
+
+        try {
+            if (isImage) {
+                await sendMessage(selectedChat.id, fileUrl, 'image', { fileName: file.name });
+            } else {
+                await sendMessage(selectedChat.id, `📎 ${file.name}`, 'file', { fileName: file.name, fileUrl });
+            }
+        } catch (err) {
+            console.error('Failed to send file:', err);
+        }
+    };
+
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!inputName.trim()) return;
@@ -201,11 +229,22 @@ export default function ChatPage() {
         return msg.type === 'gif' || msg.content?.match(/\.(gif|webp)$/i) || msg.content?.includes('giphy.com');
     };
 
+    const isImageMessage = (msg: Message) => {
+        return msg.type === 'image' || msg.content?.match(/\.(jpg|jpeg|png|webp)$/i);
+    };
+
     const renderMessageContent = (msg: Message) => {
         if (isGifMessage(msg)) {
             return (
                 <div className="message-gif">
                     <img src={msg.content} alt="GIF" loading="lazy" />
+                </div>
+            );
+        }
+        if (isImageMessage(msg)) {
+            return (
+                <div className="message-image">
+                    <img src={msg.content} alt="Image" loading="lazy" />
                 </div>
             );
         }
@@ -419,7 +458,22 @@ export default function ChatPage() {
 
                         <form onSubmit={handleSend} className="message-input">
                             <div className="input-wrapper">
-                                <button type="button" className="attach-btn" title="Attach file">+</button>
+                                <div className="attach-wrapper">
+                                    <button
+                                        type="button"
+                                        className="attach-btn"
+                                        title="Upload file"
+                                        onClick={() => setShowFileUpload(!showFileUpload)}
+                                    >
+                                        +
+                                    </button>
+                                    {showFileUpload && (
+                                        <FileUpload
+                                            onFileSelect={handleFileSelect}
+                                            onClose={() => setShowFileUpload(false)}
+                                        />
+                                    )}
+                                </div>
                                 <input
                                     type="text"
                                     value={newMessage}
@@ -427,7 +481,14 @@ export default function ChatPage() {
                                     placeholder={`Message ${selectedChat.type === 'channel' ? '#' + selectedChat.name : '...'}`}
                                     autoComplete="off"
                                 />
-                                <button type="button" className="emoji-btn" title="Emojis">😊</button>
+                                <button
+                                    type="button"
+                                    className="emoji-btn"
+                                    title="Emojis"
+                                    onClick={() => setShowEmojiPicker(true)}
+                                >
+                                    😊
+                                </button>
                                 <button
                                     type="button"
                                     className="gif-btn giphy"
@@ -527,6 +588,13 @@ export default function ChatPage() {
                 <KlipyPicker
                     onSelect={handleGifSelect}
                     onClose={() => setShowKlipyPicker(false)}
+                />
+            )}
+
+            {showEmojiPicker && (
+                <EmojiPicker
+                    onSelect={handleEmojiSelect}
+                    onClose={() => setShowEmojiPicker(false)}
                 />
             )}
 
