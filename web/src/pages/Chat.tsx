@@ -718,16 +718,6 @@ export default function ChatPage() {
                                 )}
                             </div>
                             <div ref={messagesEndRef} />
-
-                            {/* Typing indicator */}
-                            {typingUsers.size > 0 && (
-                                <div className="typing-indicator">
-                                    <span className="typing-dots">●●●</span>
-                                    <span className="typing-text">
-                                        {Array.from(typingUsers.values()).join(', ')} {typingUsers.size === 1 ? 'is' : 'are'} typing...
-                                    </span>
-                                </div>
-                            )}
                         </div>
 
                         <form onSubmit={handleSend} className="message-input">
@@ -805,6 +795,16 @@ export default function ChatPage() {
                                     <span className="reply-bar-preview">{replyingTo.content.slice(0, 50)}{replyingTo.content.length > 50 ? '...' : ''}</span>
                                 </div>
                                 <button className="reply-bar-close" onClick={() => setReplyingTo(null)}>✕</button>
+                            </div>
+                        )}
+
+                        {/* Typing indicator - below input like Discord/Instagram */}
+                        {typingUsers.size > 0 && (
+                            <div className="typing-indicator">
+                                <span className="typing-dots">●●●</span>
+                                <span className="typing-text">
+                                    {Array.from(typingUsers.values()).join(', ')} {typingUsers.size === 1 ? 'is' : 'are'} typing...
+                                </span>
                             </div>
                         )}
                     </>

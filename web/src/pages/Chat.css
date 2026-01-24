@@ -1197,15 +1197,17 @@
 /* ======================
    TYPING INDICATOR
    Discord-style "●●● User is typing..."
+   Positioned below message input
    ====================== */
 .typing-indicator {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 24px;
-    font-size: 0.85rem;
+    gap: 6px;
+    padding: 4px 24px;
+    font-size: 0.75rem;
     color: var(--text-muted);
-    min-height: 28px;
+    min-height: 20px;
+    margin-bottom: 8px;
 }
 
 .typing-dots {
