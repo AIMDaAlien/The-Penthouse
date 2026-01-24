@@ -12,7 +12,7 @@ import {
     createChannel,
     addReaction
 } from '../services/api';
-import { getSocket, joinChat, leaveChat } from '../services/socket';
+import { getSocket, joinChat, leaveChat, sendTyping, stopTyping } from '../services/socket';
 import type { Chat, Message, User, Server, Channel } from '../types';
 import GifPicker from '../components/GifPicker';
 import KlipyPicker from '../components/KlipyPicker';
@@ -74,6 +74,11 @@ export default function ChatPage() {
     const [lightboxImage, setLightboxImage] = useState<{ src: string; alt?: string } | null>(null);
     const [previewFile, setPreviewFile] = useState<{ url: string; name: string; type?: string } | null>(null);
 
+    // Typing indicator state
+    const [typingUsers, setTypingUsers] = useState<Map<number, string>>(new Map());
+    const typingTimeouts = useRef<Map<number, number>>(new Map());
+    const lastTypingEmit = useRef<number>(0);
+
     const loadServers = useCallback(async () => {
         try {
             const { data } = await getServers();
@@ -121,13 +126,55 @@ export default function ChatPage() {
             socket.on('new_message', (message: Message & { chatId: number }) => {
                 if (selectedChat?.id === message.chatId) {
                     setMessages((prev) => [...prev, message]);
+                    // Clear typing indicator when message received from that user
+                    setTypingUsers(prev => {
+                        const next = new Map(prev);
+                        next.delete(message.sender.id);
+                        return next;
+                    });
                 }
                 loadChats();
+            });
+
+            // Typing indicator listeners
+            socket.on('user_typing', (data: { chatId: number; userId: number; username: string }) => {
+                if (selectedChat?.id === data.chatId) {
+                    setTypingUsers(prev => {
+                        const next = new Map(prev);
+                        next.set(data.userId, data.username);
+                        return next;
+                    });
+                    // Auto-clear after 3 seconds if no update
+                    const existingTimeout = typingTimeouts.current.get(data.userId);
+                    if (existingTimeout) clearTimeout(existingTimeout);
+                    const timeout = window.setTimeout(() => {
+                        setTypingUsers(prev => {
+                            const next = new Map(prev);
+                            next.delete(data.userId);
+                            return next;
+                        });
+                    }, 3000);
+                    typingTimeouts.current.set(data.userId, timeout);
+                }
+            });
+
+            socket.on('user_stop_typing', (data: { chatId: number; userId: number }) => {
+                if (selectedChat?.id === data.chatId) {
+                    setTypingUsers(prev => {
+                        const next = new Map(prev);
+                        next.delete(data.userId);
+                        return next;
+                    });
+                    const existingTimeout = typingTimeouts.current.get(data.userId);
+                    if (existingTimeout) clearTimeout(existingTimeout);
+                }
             });
         }
 
         return () => {
             socket?.off('new_message');
+            socket?.off('user_typing');
+            socket?.off('user_stop_typing');
         };
     }, [selectedChat, loadServers, loadChats, loadUsers]);
 
@@ -177,6 +224,7 @@ export default function ChatPage() {
         if (!newMessage.trim() || !selectedChat) return;
 
         try {
+            stopTyping(selectedChat.id); // Stop typing indicator when sending
             await sendMessage(selectedChat.id, newMessage.trim(), 'text', undefined, replyingTo?.id);
             setNewMessage('');
             setReplyingTo(null); // Clear reply state after sending
@@ -246,6 +294,16 @@ export default function ChatPage() {
     const formatTime = (dateStr: string) => {
         const date = new Date(dateStr);
         return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    };
+
+    // Helper for Penthouse timeline - show time marker for first message or after 5+ minute gap
+    const shouldShowTimeMarker = (msg: Message, index: number) => {
+        if (index === 0) return true;
+        const prevMsg = messages[index - 1];
+        const currentTime = new Date(msg.createdAt).getTime();
+        const prevTime = new Date(prevMsg.createdAt).getTime();
+        const gapMinutes = (currentTime - prevTime) / (1000 * 60);
+        return gapMinutes >= 5;
     };
 
     const isGifMessage = (msg: Message) => {
@@ -570,86 +628,106 @@ export default function ChatPage() {
                             </div>
                         </div>
 
-                        <div className="messages-container">
-                            {messages.length === 0 ? (
-                                <div className="no-messages">
-                                    <p>No messages yet. Start the conversation!</p>
-                                </div>
-                            ) : (
-                                messages.map((msg) => (
-                                    <div
-                                        key={msg.id}
-                                        id={`msg-${msg.id}`}
-                                        className={`message ${msg.sender.id === user?.id ? 'own' : ''} ${hoveredMsgId === msg.id || longPressedMsgId === msg.id ? 'hovered' : ''}`}
-                                        onMouseEnter={() => handleMsgMouseEnter(msg.id)}
-                                        onMouseLeave={handleMsgMouseLeave}
-                                        onTouchStart={() => handleMsgTouchStart(msg.id)}
-                                        onTouchEnd={handleMsgTouchEnd}
-                                    >
-                                        <div className="avatar">
-                                            {msg.sender.avatarUrl ? (
-                                                <img src={msg.sender.avatarUrl} alt="avatar" />
-                                            ) : (
-                                                <div className="avatar-placeholder">{msg.sender.username[0]}</div>
-                                            )}
-                                        </div>
-                                        <div className="message-body">
-                                            {/* Reply context - Discord style */}
-                                            {msg.replyToMessage && (
-                                                <div className="reply-context" onClick={() => {
-                                                    const el = document.getElementById(`msg-${msg.replyToMessage?.id}`);
-                                                    el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                                }}>
-                                                    <span className="reply-line"></span>
-                                                    <span className="reply-author">@{msg.replyToMessage.sender.displayName || msg.replyToMessage.sender.username}</span>
-                                                    <span className="reply-preview">{msg.replyToMessage.content}</span>
-                                                </div>
-                                            )}
-                                            <div className="message-header">
-                                                <span className="sender">{msg.sender.displayName || msg.sender.username}</span>
-                                                <span className="time">{formatTime(msg.createdAt)}</span>
-                                            </div>
-                                            {renderMessageContent(msg)}
-
-                                            {/* Reactions display */}
-                                            {msg.reactions && msg.reactions.length > 0 && (
-                                                <div className="reactions-row">
-                                                    {groupReactions(msg.reactions).map(({ emoji, count, users }) => (
-                                                        <button
-                                                            key={emoji}
-                                                            className="reaction-chip"
-                                                            title={users.join(', ')}
-                                                            onClick={() => handleReact(msg.id, emoji)}
-                                                        >
-                                                            <span className="reaction-emoji">{emoji}</span>
-                                                            {count > 1 && <span className="reaction-count">{count}</span>}
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {/* Hover/Long-press Actions */}
-                                        <div className="message-actions">
-                                            <button
-                                                className="action-btn react-btn"
-                                                onClick={() => handleReact(msg.id, hoverEmoji || '❤️')}
-                                                title="React"
-                                            >
-                                                {hoverEmoji || '❤️'}
-                                            </button>
-                                            <button
-                                                className="action-btn reply-btn"
-                                                onClick={() => handleReply(msg)}
-                                                title="Reply"
-                                            >
-                                                ↩
-                                            </button>
-                                        </div>
+                        <div className="messages-container timeline-view">
+                            <div className="timeline-rail"></div>
+                            <div className="timeline-messages">
+                                {messages.length === 0 ? (
+                                    <div className="no-messages">
+                                        <p>No messages yet. Start the conversation!</p>
                                     </div>
-                                ))
-                            )}
+                                ) : (
+                                    messages.map((msg, index) => (
+                                        <div key={msg.id} className="timeline-message-wrapper">
+                                            {/* Time marker on timeline */}
+                                            {shouldShowTimeMarker(msg, index) && (
+                                                <div className="timeline-time-marker">
+                                                    <span className="timeline-time">{formatTime(msg.createdAt)}</span>
+                                                </div>
+                                            )}
+                                            <div
+                                                id={`msg-${msg.id}`}
+                                                className={`message ${msg.sender.id === user?.id ? 'own' : ''} ${hoveredMsgId === msg.id || longPressedMsgId === msg.id ? 'hovered' : ''}`}
+                                                onMouseEnter={() => handleMsgMouseEnter(msg.id)}
+                                                onMouseLeave={handleMsgMouseLeave}
+                                                onTouchStart={() => handleMsgTouchStart(msg.id)}
+                                                onTouchEnd={handleMsgTouchEnd}
+                                            >
+                                                <div className="avatar">
+                                                    {msg.sender.avatarUrl ? (
+                                                        <img src={msg.sender.avatarUrl} alt="avatar" />
+                                                    ) : (
+                                                        <div className="avatar-placeholder">{msg.sender.username[0]}</div>
+                                                    )}
+                                                </div>
+                                                <div className="message-body">
+                                                    {/* Reply context - Discord style */}
+                                                    {msg.replyToMessage && (
+                                                        <div className="reply-context" onClick={() => {
+                                                            const el = document.getElementById(`msg-${msg.replyToMessage?.id}`);
+                                                            el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                                        }}>
+                                                            <span className="reply-line"></span>
+                                                            <span className="reply-author">@{msg.replyToMessage.sender.displayName || msg.replyToMessage.sender.username}</span>
+                                                            <span className="reply-preview">{msg.replyToMessage.content}</span>
+                                                        </div>
+                                                    )}
+                                                    <div className="message-header">
+                                                        <span className="sender">{msg.sender.displayName || msg.sender.username}</span>
+                                                        <span className="time">{formatTime(msg.createdAt)}</span>
+                                                    </div>
+                                                    {renderMessageContent(msg)}
+
+                                                    {/* Reactions display */}
+                                                    {msg.reactions && msg.reactions.length > 0 && (
+                                                        <div className="reactions-row">
+                                                            {groupReactions(msg.reactions).map(({ emoji, count, users }) => (
+                                                                <button
+                                                                    key={emoji}
+                                                                    className="reaction-chip"
+                                                                    title={users.join(', ')}
+                                                                    onClick={() => handleReact(msg.id, emoji)}
+                                                                >
+                                                                    <span className="reaction-emoji">{emoji}</span>
+                                                                    {count > 1 && <span className="reaction-count">{count}</span>}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {/* Hover/Long-press Actions */}
+                                                <div className="message-actions">
+                                                    <button
+                                                        className="action-btn react-btn"
+                                                        onClick={() => handleReact(msg.id, hoverEmoji || '❤️')}
+                                                        title="React"
+                                                    >
+                                                        {hoverEmoji || '❤️'}
+                                                    </button>
+                                                    <button
+                                                        className="action-btn reply-btn"
+                                                        onClick={() => handleReply(msg)}
+                                                        title="Reply"
+                                                    >
+                                                        ↩
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
                             <div ref={messagesEndRef} />
+
+                            {/* Typing indicator */}
+                            {typingUsers.size > 0 && (
+                                <div className="typing-indicator">
+                                    <span className="typing-dots">●●●</span>
+                                    <span className="typing-text">
+                                        {Array.from(typingUsers.values()).join(', ')} {typingUsers.size === 1 ? 'is' : 'are'} typing...
+                                    </span>
+                                </div>
+                            )}
                         </div>
 
                         <form onSubmit={handleSend} className="message-input">
@@ -673,7 +751,19 @@ export default function ChatPage() {
                                 <input
                                     type="text"
                                     value={newMessage}
-                                    onChange={(e) => setNewMessage(e.target.value)}
+                                    onChange={(e) => {
+                                        setNewMessage(e.target.value);
+                                        // Debounced typing indicator emit
+                                        if (selectedChat && e.target.value.trim()) {
+                                            const now = Date.now();
+                                            if (now - lastTypingEmit.current > 1000) {
+                                                sendTyping(selectedChat.id);
+                                                lastTypingEmit.current = now;
+                                            }
+                                        } else if (selectedChat && !e.target.value.trim()) {
+                                            stopTyping(selectedChat.id);
+                                        }
+                                    }}
                                     placeholder={`Message ${selectedChat.type === 'channel' ? '#' + selectedChat.name : '...'}`}
                                     autoComplete="off"
                                 />

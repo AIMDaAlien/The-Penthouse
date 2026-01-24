@@ -1193,3 +1193,138 @@
     background: rgba(180, 160, 220, 0.15);
     border-radius: 4px;
 }
+
+/* ======================
+   TYPING INDICATOR
+   Discord-style "●●● User is typing..."
+   ====================== */
+.typing-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 24px;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    min-height: 28px;
+}
+
+.typing-dots {
+    display: inline-flex;
+    gap: 2px;
+    color: var(--accent-lavender);
+    font-size: 1rem;
+    animation: typing-pulse 1.2s ease-in-out infinite;
+}
+
+.typing-text {
+    font-style: italic;
+}
+
+@keyframes typing-pulse {
+
+    0%,
+    100% {
+        opacity: 0.4;
+    }
+
+    50% {
+        opacity: 1;
+    }
+}
+
+/* ======================
+   PENTHOUSE TIMELINE
+   Vertical rail with time markers
+   ====================== */
+.messages-container.timeline-view {
+    display: flex;
+    position: relative;
+    padding-left: 0;
+}
+
+.timeline-rail {
+    position: absolute;
+    left: 40px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: linear-gradient(to bottom,
+            transparent 0%,
+            rgba(180, 160, 220, 0.3) 10%,
+            rgba(180, 160, 220, 0.4) 50%,
+            rgba(180, 160, 220, 0.3) 90%,
+            transparent 100%);
+    pointer-events: none;
+}
+
+.timeline-messages {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.timeline-message-wrapper {
+    display: flex;
+    flex-direction: column;
+}
+
+.timeline-time-marker {
+    display: flex;
+    align-items: center;
+    padding: 12px 24px;
+    padding-left: 12px;
+    margin-left: 24px;
+}
+
+.timeline-time {
+    font-size: 0.7rem;
+    color: var(--accent-lavender);
+    font-weight: 500;
+    background: var(--bg-secondary);
+    padding: 2px 8px;
+    border-radius: 10px;
+    border: 1px solid rgba(180, 160, 220, 0.2);
+    position: relative;
+}
+
+/* Dot on the timeline for time markers */
+.timeline-time-marker::before {
+    content: '';
+    position: absolute;
+    left: 39px;
+    width: 8px;
+    height: 8px;
+    background: var(--accent-lavender);
+    border-radius: 50%;
+    box-shadow: 0 0 8px rgba(180, 160, 220, 0.5);
+}
+
+/* Adjust message to work with timeline */
+.timeline-view .message {
+    position: relative;
+    margin-left: 50px;
+}
+
+/* Hide the inline time on message header when timeline is active */
+.timeline-view .message-header .time {
+    display: none;
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+    .timeline-rail {
+        left: 20px;
+    }
+
+    .timeline-time-marker {
+        margin-left: 12px;
+    }
+
+    .timeline-time-marker::before {
+        left: 19px;
+    }
+
+    .timeline-view .message {
+        margin-left: 32px;
+    }
+}
