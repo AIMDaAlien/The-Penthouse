@@ -68,14 +68,20 @@ router.post('/login', async (req, res) => {
             return res.status(400).json({ error: 'Username and password are required' });
         }
 
+        console.log('Login attempt for:', username);
+
         // Find user
         const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
         if (!user) {
+            console.log('User not found in DB:', username);
             return res.status(401).json({ error: 'Invalid username or password' });
         }
+        console.log('User found:', user.username, 'ID:', user.id);
 
         // Check password
         const validPassword = await bcrypt.compare(password, user.password);
+        console.log('Password valid:', validPassword);
+
         if (!validPassword) {
             return res.status(401).json({ error: 'Invalid username or password' });
         }

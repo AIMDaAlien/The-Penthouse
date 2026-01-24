@@ -18,9 +18,9 @@
 
 /* Override emoji-mart styles for lavender theme */
 .emoji-picker-container em-emoji-picker {
-    --em-rgb-background: 30, 25, 45;
-    --em-rgb-input: 40, 35, 55;
+    --em-rgb-background: 20, 16, 28;
+    --em-rgb-input: 30, 25, 40;
     --em-rgb-color: 255, 255, 255;
-    --em-rgb-accent: 180, 160, 220;
+    --em-rgb-accent: 166, 136, 250;
     --border-radius: 12px;
 }

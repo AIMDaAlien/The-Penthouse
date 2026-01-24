@@ -9,7 +9,8 @@ import {
     getServers,
     createServer,
     getServerDetails,
-    createChannel
+    createChannel,
+    addReaction
 } from '../services/api';
 import { getSocket, joinChat, leaveChat } from '../services/socket';
 import type { Chat, Message, User, Server, Channel } from '../types';
@@ -18,7 +19,13 @@ import KlipyPicker from '../components/KlipyPicker';
 import EmojiPicker from '../components/EmojiPicker';
 import FileUpload from '../components/FileUpload';
 import ProfileModal from '../components/ProfileModal';
+import ImageLightbox from '../components/ImageLightbox';
+import FilePreview from '../components/FilePreview';
 import './Chat.css';
+
+// Random emoji pool for quick reactions
+const REACTION_EMOJIS = ['❤️', '😂', '😮', '😢', '😡', '👍', '🔥', '🎉', '💯', '🙌', '👀', '✨', '💜', '🤔', '😍'];
+const getRandomEmoji = () => REACTION_EMOJIS[Math.floor(Math.random() * REACTION_EMOJIS.length)];
 
 export default function ChatPage() {
     const { user, logout } = useAuth();
@@ -38,6 +45,17 @@ export default function ChatPage() {
     const [newMessage, setNewMessage] = useState('');
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
+    // Reply State
+    const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+
+    // Hover State for Random Emoji
+    const [hoveredMsgId, setHoveredMsgId] = useState<number | null>(null);
+    const [hoverEmoji, setHoverEmoji] = useState<string>('');
+
+    // Long-press for mobile
+    const longPressTimer = useRef<number | null>(null);
+    const [longPressedMsgId, setLongPressedMsgId] = useState<number | null>(null);
+
     // UI State
     const [users, setUsers] = useState<User[]>([]);
     const [showNewGroup, setShowNewGroup] = useState(false);
@@ -51,6 +69,10 @@ export default function ChatPage() {
     const [showProfileModal, setShowProfileModal] = useState(false);
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [membersCollapsed, setMembersCollapsed] = useState(false);
+
+    // Lightbox and File Preview state
+    const [lightboxImage, setLightboxImage] = useState<{ src: string; alt?: string } | null>(null);
+    const [previewFile, setPreviewFile] = useState<{ url: string; name: string; type?: string } | null>(null);
 
     const loadServers = useCallback(async () => {
         try {
@@ -233,28 +255,162 @@ export default function ChatPage() {
         return msg.type === 'image' || msg.content?.match(/\.(jpg|jpeg|png|webp)$/i);
     };
 
+    const handleImageClick = (src: string, alt?: string) => {
+        setLightboxImage({ src, alt });
+    };
+
+    const handleFileClick = (url: string, name: string, type?: string) => {
+        setPreviewFile({ url, name, type });
+    };
+
     const renderMessageContent = (msg: Message) => {
         if (isGifMessage(msg)) {
             return (
-                <div className="message-gif">
+                <div className="message-gif clickable" onClick={() => handleImageClick(msg.content, 'GIF')}>
                     <img src={msg.content} alt="GIF" loading="lazy" />
+                    <div className="media-overlay"><span>🔍</span></div>
                 </div>
             );
         }
         if (isImageMessage(msg)) {
             return (
-                <div className="message-image">
+                <div className="message-image clickable" onClick={() => handleImageClick(msg.content, 'Image')}>
                     <img src={msg.content} alt="Image" loading="lazy" />
+                    <div className="media-overlay"><span>🔍</span></div>
+                </div>
+            );
+        }
+        // Handle file attachments
+        if (msg.type === 'file' && msg.metadata?.fileUrl) {
+            const isPDF = msg.metadata.fileName?.toLowerCase().endsWith('.pdf');
+            return (
+                <div className="message-file" onClick={() => handleFileClick(msg.metadata!.fileUrl!, msg.metadata!.fileName || 'file')}>
+                    <span className="file-icon">{isPDF ? '📄' : '📎'}</span>
+                    <span className="file-name">{msg.metadata.fileName}</span>
+                    <span className="file-action">{isPDF ? 'View' : 'Download'}</span>
                 </div>
             );
         }
         return <div className="message-content">{msg.content}</div>;
     };
 
+    // Reaction handler
+    const handleReact = async (messageId: number, emoji: string) => {
+        try {
+            await addReaction(messageId, emoji);
+            // Optimistic update - socket will sync actual state
+            setMessages(prev => prev.map(m => {
+                if (m.id === messageId) {
+                    const existingReactions = m.reactions || [];
+                    const hasReacted = existingReactions.some(r => r.emoji === emoji && r.userId === user?.id);
+                    if (!hasReacted) {
+                        return {
+                            ...m,
+                            reactions: [...existingReactions, { emoji, userId: user!.id, username: user!.username, displayName: user?.displayName }]
+                        };
+                    }
+                }
+                return m;
+            }));
+        } catch (err) {
+            console.error('Failed to add reaction:', err);
+        }
+    };
+
+    // Reply handler
+    const handleReply = (msg: Message) => {
+        setReplyingTo(msg);
+        // Focus input
+        document.querySelector<HTMLInputElement>('.input-wrapper input')?.focus();
+    };
+
+    // Message hover handlers
+    const handleMsgMouseEnter = (msgId: number) => {
+        setHoveredMsgId(msgId);
+        setHoverEmoji(getRandomEmoji());
+    };
+
+    const handleMsgMouseLeave = () => {
+        setHoveredMsgId(null);
+    };
+
+    // Long-press handlers for mobile
+    const handleMsgTouchStart = (msgId: number) => {
+        longPressTimer.current = setTimeout(() => {
+            setLongPressedMsgId(msgId);
+            setHoverEmoji(getRandomEmoji());
+        }, 500);
+    };
+
+    const handleMsgTouchEnd = () => {
+        if (longPressTimer.current) {
+            clearTimeout(longPressTimer.current);
+        }
+    };
+
+    // Group reactions by emoji for Instagram-style display
+    const groupReactions = (reactions: Message['reactions']) => {
+        if (!reactions) return [];
+        const groups: { emoji: string; count: number; users: string[] }[] = [];
+        reactions.forEach(r => {
+            const existing = groups.find(g => g.emoji === r.emoji);
+            if (existing) {
+                existing.count++;
+                existing.users.push(r.displayName || r.username);
+            } else {
+                groups.push({ emoji: r.emoji, count: 1, users: [r.displayName || r.username] });
+            }
+        });
+        return groups;
+    };
+
     const displayMembers = selectedServerId ? serverMembers : users;
 
+    // Touch Handling for Mobile Gestures
+    const touchStart = useRef<number | null>(null);
+    const touchEnd = useRef<number | null>(null);
+
+    const onTouchStart = (e: React.TouchEvent) => {
+        touchEnd.current = null;
+        touchStart.current = e.targetTouches[0].clientX;
+    };
+
+    const onTouchMove = (e: React.TouchEvent) => {
+        touchEnd.current = e.targetTouches[0].clientX;
+    };
+
+    const onTouchEnd = () => {
+        if (!touchStart.current || !touchEnd.current) return;
+        const distance = touchStart.current - touchEnd.current;
+        const isLeftSwipe = distance > 50;
+        const isRightSwipe = distance < -50;
+
+        if (isLeftSwipe) {
+            // Swiped Left: Open Members or Close Channels (if open)
+            if (!sidebarCollapsed) {
+                setSidebarCollapsed(true); // Close left sidebar
+            } else if (membersCollapsed) {
+                setMembersCollapsed(false); // Open right sidebar
+            }
+        }
+
+        if (isRightSwipe) {
+            // Swiped Right: Open Channels or Close Members (if open)
+            if (!membersCollapsed) {
+                setMembersCollapsed(true); // Close right sidebar
+            } else if (sidebarCollapsed) {
+                setSidebarCollapsed(false); // Open left sidebar
+            }
+        }
+    };
+
     return (
-        <div className="app-container">
+        <div
+            className="app-container"
+            onTouchStart={onTouchStart}
+            onTouchMove={onTouchMove}
+            onTouchEnd={onTouchEnd}
+        >
             {/* 1. Server Rail */}
             <nav className="server-rail">
                 <div
@@ -264,8 +420,6 @@ export default function ChatPage() {
                 >
                     🏠
                 </div>
-
-                <div className="server-separator"></div>
 
                 {servers.map(server => (
                     <div
@@ -295,13 +449,6 @@ export default function ChatPage() {
             <aside className={`sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
                 <div className="sidebar-header">
                     <h2>{selectedServerId ? servers.find(s => s.id === selectedServerId)?.name : 'The Penthouse'}</h2>
-                    <button
-                        className="collapse-btn"
-                        onClick={() => setSidebarCollapsed(true)}
-                        title="Collapse"
-                    >
-                        ◀
-                    </button>
                 </div>
 
                 {selectedServerId === null && (
@@ -398,27 +545,23 @@ export default function ChatPage() {
                     <>
                         <div className="chat-header">
                             <div className="header-left">
-                                {sidebarCollapsed && (
-                                    <button
-                                        className="toggle-sidebar-btn"
-                                        onClick={() => setSidebarCollapsed(false)}
-                                        title="Show channels"
-                                    >
-                                        ☰
-                                    </button>
-                                )}
                                 <div className="header-title">
-                                    <span className="header-icon">
-                                        {selectedChat.type === 'channel' ? '#' : selectedChat.isGroup ? '👥' : '👤'}
-                                    </span>
                                     <h3>{selectedChat.name || 'Direct Message'}</h3>
                                 </div>
+                                {/* Hidden Toggle for Desktop Hover */}
+                                <button
+                                    className="toggle-sidebar-btn"
+                                    onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                                    title="Toggle Sidebar"
+                                >
+                                    ☰
+                                </button>
                             </div>
                             <div className="header-actions">
                                 <button
                                     className={`toggle-sidebar-btn ${!membersCollapsed ? 'active' : ''}`}
                                     onClick={() => setMembersCollapsed(!membersCollapsed)}
-                                    title={membersCollapsed ? "Show members" : "Hide members"}
+                                    title="Toggle Members"
                                 >
                                     👥
                                 </button>
@@ -434,7 +577,11 @@ export default function ChatPage() {
                                 messages.map((msg) => (
                                     <div
                                         key={msg.id}
-                                        className={`message ${msg.sender.id === user?.id ? 'own' : ''}`}
+                                        className={`message ${msg.sender.id === user?.id ? 'own' : ''} ${hoveredMsgId === msg.id || longPressedMsgId === msg.id ? 'hovered' : ''}`}
+                                        onMouseEnter={() => handleMsgMouseEnter(msg.id)}
+                                        onMouseLeave={handleMsgMouseLeave}
+                                        onTouchStart={() => handleMsgTouchStart(msg.id)}
+                                        onTouchEnd={handleMsgTouchEnd}
                                     >
                                         <div className="avatar">
                                             {msg.sender.avatarUrl ? (
@@ -444,11 +591,50 @@ export default function ChatPage() {
                                             )}
                                         </div>
                                         <div className="message-body">
+                                            {/* Reply context if replying to this message */}
+                                            {replyingTo?.id === msg.id && (
+                                                <div className="reply-indicator">Replying to this message</div>
+                                            )}
                                             <div className="message-header">
                                                 <span className="sender">{msg.sender.displayName || msg.sender.username}</span>
                                                 <span className="time">{formatTime(msg.createdAt)}</span>
                                             </div>
                                             {renderMessageContent(msg)}
+
+                                            {/* Reactions display */}
+                                            {msg.reactions && msg.reactions.length > 0 && (
+                                                <div className="reactions-row">
+                                                    {groupReactions(msg.reactions).map(({ emoji, count, users }) => (
+                                                        <button
+                                                            key={emoji}
+                                                            className="reaction-chip"
+                                                            title={users.join(', ')}
+                                                            onClick={() => handleReact(msg.id, emoji)}
+                                                        >
+                                                            <span className="reaction-emoji">{emoji}</span>
+                                                            {count > 1 && <span className="reaction-count">{count}</span>}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Hover/Long-press Actions */}
+                                        <div className="message-actions">
+                                            <button
+                                                className="action-btn react-btn"
+                                                onClick={() => handleReact(msg.id, hoverEmoji || '❤️')}
+                                                title="React"
+                                            >
+                                                {hoverEmoji || '❤️'}
+                                            </button>
+                                            <button
+                                                className="action-btn reply-btn"
+                                                onClick={() => handleReply(msg)}
+                                                title="Reply"
+                                            >
+                                                ↩
+                                            </button>
                                         </div>
                                     </div>
                                 ))
@@ -510,34 +696,11 @@ export default function ChatPage() {
                     </>
                 ) : (
                     <div className="no-chat-selected">
-                        {sidebarCollapsed && (
-                            <button
-                                className="toggle-sidebar-btn"
-                                onClick={() => setSidebarCollapsed(false)}
-                                style={{ position: 'absolute', top: 16, left: 16 }}
-                            >
-                                ☰
-                            </button>
-                        )}
                         <div className="welcome-card">
-                            <div className="welcome-icon">🏠</div>
+                            <div className="welcome-icon">💎</div>
                             <h2>Welcome to The Penthouse</h2>
-                            <p>Your exclusive private hangout space</p>
-                            <div className="welcome-features">
-                                <div className="feature">
-                                    <span className="feature-icon">💬</span>
-                                    <span>Group Chats</span>
-                                </div>
-                                <div className="feature">
-                                    <span className="feature-icon">🎬</span>
-                                    <span>GIF Support</span>
-                                </div>
-                                <div className="feature">
-                                    <span className="feature-icon">🔒</span>
-                                    <span>Private & Secure</span>
-                                </div>
-                            </div>
-                            <p className="welcome-hint">Select a chat or create a new one to get started</p>
+                            <p>Exclusive. Private. Yours.</p>
+                            <p className="welcome-hint">Select a channel to begin.</p>
                         </div>
                     </div>
                 )}
@@ -548,13 +711,6 @@ export default function ChatPage() {
                 <aside className={`members-sidebar ${membersCollapsed ? 'collapsed' : ''}`}>
                     <div className="members-header">
                         <h3>MEMBERS — {displayMembers.length}</h3>
-                        <button
-                            className="collapse-btn"
-                            onClick={() => setMembersCollapsed(true)}
-                            title="Hide"
-                        >
-                            ▶
-                        </button>
                     </div>
                     <div className="members-list">
                         {displayMembers.map((u) => (
@@ -600,6 +756,23 @@ export default function ChatPage() {
 
             {showProfileModal && (
                 <ProfileModal onClose={() => setShowProfileModal(false)} />
+            )}
+
+            {lightboxImage && (
+                <ImageLightbox
+                    src={lightboxImage.src}
+                    alt={lightboxImage.alt}
+                    onClose={() => setLightboxImage(null)}
+                />
+            )}
+
+            {previewFile && (
+                <FilePreview
+                    fileUrl={previewFile.url}
+                    fileName={previewFile.name}
+                    fileType={previewFile.type}
+                    onClose={() => setPreviewFile(null)}
+                />
             )}
         </div>
     );

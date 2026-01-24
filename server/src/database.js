@@ -98,7 +98,20 @@ async function initializeDatabase() {
       content TEXT,
       message_type TEXT DEFAULT 'text',
       metadata TEXT,
+      reply_to INTEGER REFERENCES messages(id) ON DELETE SET NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Reactions (Instagram-style)
+  db.run(`
+    CREATE TABLE IF NOT EXISTS reactions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      message_id INTEGER REFERENCES messages(id) ON DELETE CASCADE,
+      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      emoji TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(message_id, user_id, emoji)
     )
   `);
 

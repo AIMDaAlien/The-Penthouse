@@ -11,14 +11,14 @@
 
 .profile-modal {
     width: 400px;
-    background: linear-gradient(145deg,
-            rgba(35, 35, 55, 0.95) 0%,
-            rgba(20, 20, 35, 0.98) 100%);
+    background: rgba(20, 16, 28, 0.95);
+    backdrop-filter: blur(40px);
+    -webkit-backdrop-filter: blur(40px);
     border-radius: 16px;
-    border: 1px solid rgba(212, 175, 55, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     box-shadow:
         0 25px 80px rgba(0, 0, 0, 0.6),
-        0 0 40px rgba(212, 175, 55, 0.05);
+        0 0 40px rgba(166, 136, 250, 0.1);
     overflow: hidden;
 }
 
@@ -70,7 +70,7 @@
     height: 96px;
     border-radius: 50%;
     overflow: hidden;
-    border: 3px solid rgba(212, 175, 55, 0.4);
+    border: 3px solid rgba(166, 136, 250, 0.5);
     margin-bottom: 12px;
 }
 
@@ -94,9 +94,9 @@
 
 .avatar-upload-btn {
     padding: 8px 16px;
-    background: rgba(212, 175, 55, 0.15);
-    border: 1px solid rgba(212, 175, 55, 0.3);
-    color: #d4af37;
+    background: rgba(166, 136, 250, 0.15);
+    border: 1px solid rgba(166, 136, 250, 0.3);
+    color: #a688fa;
     border-radius: 6px;
     font-size: 0.85rem;
     cursor: pointer;
@@ -104,7 +104,7 @@
 }
 
 .avatar-upload-btn:hover {
-    background: rgba(212, 175, 55, 0.25);
+    background: rgba(166, 136, 250, 0.25);
 }
 
 .form-group {
@@ -133,8 +133,8 @@
 
 .form-group input:focus {
     outline: none;
-    border-color: rgba(212, 175, 55, 0.5);
-    box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.1);
+    border-color: rgba(166, 136, 250, 0.5);
+    box-shadow: 0 0 0 2px rgba(166, 136, 250, 0.1);
 }
 
 .form-group input.input-disabled {
@@ -187,10 +187,10 @@
 .save-btn {
     flex: 1;
     padding: 12px;
-    background: linear-gradient(135deg, #d4af37 0%, #b8960c 100%);
+    background: #a688fa;
     border: none;
     border-radius: 8px;
-    color: #000;
+    color: #12101a;
     font-size: 0.9rem;
     font-weight: 600;
     cursor: pointer;
@@ -198,8 +198,8 @@
 }
 
 .save-btn:hover {
-    background: linear-gradient(135deg, #e5c348 0%, #c9a71d 100%);
-    box-shadow: 0 4px 15px rgba(212, 175, 55, 0.3);
+    background: #c4b0ff;
+    box-shadow: 0 0 15px rgba(166, 136, 250, 0.4);
 }
 
 .save-btn:disabled {

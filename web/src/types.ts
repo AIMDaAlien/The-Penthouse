@@ -33,11 +33,20 @@ export interface Chat {
     nickname?: string;
 }
 
+export interface Reaction {
+    emoji: string;
+    userId: number;
+    username: string;
+    displayName?: string;
+}
+
 export interface Message {
     id: number;
     content: string;
     type: string;
     metadata?: any;
+    replyTo?: number | null;
+    reactions?: Reaction[];
     createdAt: string;
     sender: {
         id: number;
