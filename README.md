@@ -1,4 +1,4 @@
-# The Penthouse 🏠
+# The Penthouse
 
 A private, self-hosted social media app for close friends.
 
