@@ -40,12 +40,23 @@ export interface Reaction {
     displayName?: string;
 }
 
+export interface ReplyContext {
+    id: number;
+    content: string;
+    sender: {
+        id: number;
+        username: string;
+        displayName?: string;
+    };
+}
+
 export interface Message {
     id: number;
     content: string;
     type: string;
-    metadata?: any;
+    metadata?: Record<string, unknown>;
     replyTo?: number | null;
+    replyToMessage?: ReplyContext | null;
     reactions?: Reaction[];
     createdAt: string;
     sender: {

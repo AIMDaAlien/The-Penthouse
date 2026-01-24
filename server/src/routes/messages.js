@@ -78,6 +78,31 @@ router.get('/:chatId', authenticateToken, (req, res) => {
             });
         }
 
+        // Build reply context map for messages with reply_to
+        const replyIds = messages.filter(m => m.reply_to).map(m => m.reply_to);
+        let replyMap = {};
+        if (replyIds.length > 0) {
+            const replyPlaceholders = replyIds.map(() => '?').join(',');
+            const replyMessages = db.prepare(`
+                SELECT m.id, m.content, m.user_id, u.username, u.display_name
+                FROM messages m
+                LEFT JOIN users u ON m.user_id = u.id
+                WHERE m.id IN (${replyPlaceholders})
+            `).all(...replyIds);
+
+            replyMessages.forEach(r => {
+                replyMap[r.id] = {
+                    id: r.id,
+                    content: r.content?.slice(0, 100) || '',
+                    sender: {
+                        id: r.user_id,
+                        username: r.username,
+                        displayName: r.display_name
+                    }
+                };
+            });
+        }
+
         // Return in chronological order
         res.json(messages.reverse().map(m => ({
             id: m.id,
@@ -85,6 +110,7 @@ router.get('/:chatId', authenticateToken, (req, res) => {
             type: m.message_type,
             metadata: m.metadata ? JSON.parse(m.metadata) : null,
             replyTo: m.reply_to || null,
+            replyToMessage: m.reply_to ? replyMap[m.reply_to] || null : null,
             reactions: reactionsMap[m.id] || [],
             createdAt: m.created_at,
             sender: {
@@ -104,7 +130,7 @@ router.get('/:chatId', authenticateToken, (req, res) => {
 router.post('/:chatId', authenticateToken, (req, res) => {
     try {
         const { chatId } = req.params;
-        const { content, type = 'text', metadata } = req.body;
+        const { content, type = 'text', metadata, replyTo } = req.body;
 
         if (!content && type === 'text') {
             return res.status(400).json({ error: 'Message content is required' });
@@ -134,10 +160,32 @@ router.post('/:chatId', authenticateToken, (req, res) => {
             return res.status(403).json({ error: 'Not a member of this chat' });
         }
 
-        // Insert message
+        // Insert message with optional reply_to
         const result = db.prepare(
-            'INSERT INTO messages (chat_id, user_id, content, message_type, metadata) VALUES (?, ?, ?, ?, ?)'
-        ).run(chatId, req.user.userId, content, type, metadata ? JSON.stringify(metadata) : null);
+            'INSERT INTO messages (chat_id, user_id, content, message_type, metadata, reply_to) VALUES (?, ?, ?, ?, ?, ?)'
+        ).run(chatId, req.user.userId, content, type, metadata ? JSON.stringify(metadata) : null, replyTo || null);
+
+        // Get reply context if replying
+        let replyToMessage = null;
+        if (replyTo) {
+            const originalMsg = db.prepare(`
+                SELECT m.id, m.content, m.user_id, u.username, u.display_name
+                FROM messages m
+                LEFT JOIN users u ON m.user_id = u.id
+                WHERE m.id = ?
+            `).get(replyTo);
+            if (originalMsg) {
+                replyToMessage = {
+                    id: originalMsg.id,
+                    content: originalMsg.content?.slice(0, 100) || '',
+                    sender: {
+                        id: originalMsg.user_id,
+                        username: originalMsg.username,
+                        displayName: originalMsg.display_name
+                    }
+                };
+            }
+        }
 
         const message = {
             id: result.lastInsertRowid,
@@ -145,6 +193,9 @@ router.post('/:chatId', authenticateToken, (req, res) => {
             content,
             type,
             metadata: metadata || null,
+            replyTo: replyTo || null,
+            replyToMessage,
+            reactions: [],
             createdAt: new Date().toISOString(),
             sender: {
                 id: req.user.userId,
@@ -154,8 +205,6 @@ router.post('/:chatId', authenticateToken, (req, res) => {
 
         // Broadcast via WebSocket
         const io = req.app.get('io');
-        // If it's a channel, we might want to broadcast to server room or channel room.
-        // Currently architecture uses chat:chatId room for everything. That works.
         io.to(`chat:${chatId}`).emit('new_message', message);
 
         res.status(201).json(message);

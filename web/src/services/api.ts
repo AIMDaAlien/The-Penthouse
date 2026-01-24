@@ -39,8 +39,8 @@ export const searchUsers = (q?: string) => api.get('/chats/users/search', { para
 export const getMessages = (chatId: number, limit = 50, before?: number) =>
     api.get(`/messages/${chatId}`, { params: { limit, before } });
 
-export const sendMessage = (chatId: number, content: string, type = 'text', metadata?: object) =>
-    api.post(`/messages/${chatId}`, { content, type, metadata });
+export const sendMessage = (chatId: number, content: string, type = 'text', metadata?: object, replyTo?: number) =>
+    api.post(`/messages/${chatId}`, { content, type, metadata, replyTo });
 
 // Reactions
 export const addReaction = (messageId: number, emoji: string) =>

@@ -177,8 +177,9 @@ export default function ChatPage() {
         if (!newMessage.trim() || !selectedChat) return;
 
         try {
-            await sendMessage(selectedChat.id, newMessage.trim());
+            await sendMessage(selectedChat.id, newMessage.trim(), 'text', undefined, replyingTo?.id);
             setNewMessage('');
+            setReplyingTo(null); // Clear reply state after sending
         } catch (err) {
             console.error('Failed to send message:', err);
         }
@@ -281,12 +282,13 @@ export default function ChatPage() {
             );
         }
         // Handle file attachments
-        if (msg.type === 'file' && msg.metadata?.fileUrl) {
-            const isPDF = msg.metadata.fileName?.toLowerCase().endsWith('.pdf');
+        if (msg.type === 'file' && msg.metadata) {
+            const meta = msg.metadata as { fileUrl?: string; fileName?: string };
+            const isPDF = meta.fileName?.toLowerCase().endsWith('.pdf');
             return (
-                <div className="message-file" onClick={() => handleFileClick(msg.metadata!.fileUrl!, msg.metadata!.fileName || 'file')}>
+                <div className="message-file" onClick={() => handleFileClick(meta.fileUrl || '', meta.fileName || 'file')}>
                     <span className="file-icon">{isPDF ? '📄' : '📎'}</span>
-                    <span className="file-name">{msg.metadata.fileName}</span>
+                    <span className="file-name">{meta.fileName}</span>
                     <span className="file-action">{isPDF ? 'View' : 'Download'}</span>
                 </div>
             );
@@ -577,6 +579,7 @@ export default function ChatPage() {
                                 messages.map((msg) => (
                                     <div
                                         key={msg.id}
+                                        id={`msg-${msg.id}`}
                                         className={`message ${msg.sender.id === user?.id ? 'own' : ''} ${hoveredMsgId === msg.id || longPressedMsgId === msg.id ? 'hovered' : ''}`}
                                         onMouseEnter={() => handleMsgMouseEnter(msg.id)}
                                         onMouseLeave={handleMsgMouseLeave}
@@ -591,9 +594,16 @@ export default function ChatPage() {
                                             )}
                                         </div>
                                         <div className="message-body">
-                                            {/* Reply context if replying to this message */}
-                                            {replyingTo?.id === msg.id && (
-                                                <div className="reply-indicator">Replying to this message</div>
+                                            {/* Reply context - Discord style */}
+                                            {msg.replyToMessage && (
+                                                <div className="reply-context" onClick={() => {
+                                                    const el = document.getElementById(`msg-${msg.replyToMessage?.id}`);
+                                                    el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                                }}>
+                                                    <span className="reply-line"></span>
+                                                    <span className="reply-author">@{msg.replyToMessage.sender.displayName || msg.replyToMessage.sender.username}</span>
+                                                    <span className="reply-preview">{msg.replyToMessage.content}</span>
+                                                </div>
                                             )}
                                             <div className="message-header">
                                                 <span className="sender">{msg.sender.displayName || msg.sender.username}</span>
@@ -693,6 +703,20 @@ export default function ChatPage() {
                                 </button>
                             </div>
                         </form>
+
+                        {/* Reply bar above input */}
+                        {replyingTo && (
+                            <div className="reply-bar">
+                                <div className="reply-bar-content">
+                                    <span className="reply-bar-line"></span>
+                                    <span className="reply-bar-text">
+                                        Replying to <strong>@{replyingTo.sender.displayName || replyingTo.sender.username}</strong>
+                                    </span>
+                                    <span className="reply-bar-preview">{replyingTo.content.slice(0, 50)}{replyingTo.content.length > 50 ? '...' : ''}</span>
+                                </div>
+                                <button className="reply-bar-close" onClick={() => setReplyingTo(null)}>✕</button>
+                            </div>
+                        )}
                     </>
                 ) : (
                     <div className="no-chat-selected">

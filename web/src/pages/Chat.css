@@ -701,6 +701,102 @@
     display: inline-block;
 }
 
+/* Discord-style Reply Context above message */
+.reply-context {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+    margin-bottom: 4px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.reply-context:hover {
+    opacity: 0.7;
+}
+
+.reply-context .reply-line {
+    width: 2px;
+    height: 16px;
+    background: var(--accent-lavender);
+    border-radius: 1px;
+    flex-shrink: 0;
+}
+
+.reply-context .reply-author {
+    color: var(--accent-lavender);
+    font-weight: 500;
+    flex-shrink: 0;
+}
+
+.reply-context .reply-preview {
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 300px;
+}
+
+/* Reply Bar above input */
+.reply-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 24px;
+    background: rgba(180, 160, 220, 0.1);
+    border-top: 1px solid rgba(180, 160, 220, 0.2);
+    margin-top: -8px;
+}
+
+.reply-bar-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+}
+
+.reply-bar-line {
+    width: 3px;
+    height: 20px;
+    background: var(--accent-lavender);
+    border-radius: 2px;
+    flex-shrink: 0;
+}
+
+.reply-bar-text {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+.reply-bar-text strong {
+    color: var(--accent-lavender);
+}
+
+.reply-bar-preview {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.reply-bar-close {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 1rem;
+    padding: 4px 8px;
+    transition: color 0.2s;
+}
+
+.reply-bar-close:hover {
+    color: var(--text-primary);
+}
+
 
 /* Chat Input */
 .message-input {
