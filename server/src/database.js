@@ -112,6 +112,9 @@ async function initializeDatabase() {
   try {
     db.run('ALTER TABLE messages ADD COLUMN deleted_at DATETIME DEFAULT NULL');
   } catch (e) { /* Column may already exist */ }
+  try {
+    db.run('ALTER TABLE messages ADD COLUMN reply_to INTEGER REFERENCES messages(id) ON DELETE SET NULL');
+  } catch (e) { /* Column may already exist */ }
 
   // Reactions (Instagram-style)
   db.run(`

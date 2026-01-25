@@ -201,6 +201,9 @@ router.post('/:chatId', authenticateToken, (req, res) => {
             replyToMessage,
             reactions: [],
             createdAt: new Date().toISOString(),
+            edited_at: null,
+            deleted_at: null,
+            readAt: null,
             sender: {
                 id: req.user.userId,
                 username: req.user.username
