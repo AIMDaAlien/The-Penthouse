@@ -12,7 +12,8 @@ import {
     createChannel,
     addReaction,
     editMessage,
-    deleteMessage
+    deleteMessage,
+    markMessageRead
 } from '../services/api';
 import { getSocket, joinChat, leaveChat, sendTyping, stopTyping } from '../services/socket';
 import type { Chat, Message, User, Server, Channel } from '../types';
@@ -194,6 +195,16 @@ export default function ChatPage() {
                     ));
                 }
                 loadChats();
+            });
+
+            socket.on('message_read', (data: { messageId: number; chatId: number; userId: number; readAt: string }) => {
+                if (selectedChat?.id === data.chatId) {
+                    setMessages(prev => prev.map(msg =>
+                        msg.id === data.messageId
+                            ? { ...msg, readAt: data.readAt }
+                            : msg
+                    ));
+                }
             });
 
             socket.on('user_stop_typing', (data: { chatId: number; userId: number }) => {
@@ -705,7 +716,26 @@ export default function ChatPage() {
                                     </div>
                                 ) : (
                                     messages.map((msg, index) => (
-                                        <div key={msg.id} className="timeline-message-wrapper">
+                                        <div
+                                            key={msg.id}
+                                            className="timeline-message-wrapper"
+                                            ref={(el) => {
+                                                if (el && msg.sender.id !== user?.id && !msg.readAt) {
+                                                    const observer = new IntersectionObserver(
+                                                        (entries) => {
+                                                            entries.forEach(entry => {
+                                                                if (entry.isIntersecting) {
+                                                                    markMessageRead(msg.id).catch(console.error);
+                                                                    observer.disconnect();
+                                                                }
+                                                            });
+                                                        },
+                                                        { threshold: 0.5 }
+                                                    );
+                                                    observer.observe(el);
+                                                }
+                                            }}
+                                        >
                                             {/* Time marker on timeline */}
                                             {shouldShowTimeMarker(msg, index) && (
                                                 <div className="timeline-time-marker">
@@ -741,7 +771,18 @@ export default function ChatPage() {
                                                     )}
                                                     <div className="message-header">
                                                         <span className="sender">{msg.sender.displayName || msg.sender.username}</span>
-                                                        <span className="time">{formatTime(msg.createdAt)}</span>
+                                                        <span className="time">
+                                                            {formatTime(msg.createdAt)}
+                                                            {/* Read Receipt Indicator */}
+                                                            {msg.sender.id === user?.id && !msg.deleted_at && (
+                                                                <span className="read-status" title={msg.readAt ? "Read" : "Sent"}>
+                                                                    {msg.readAt ?
+                                                                        <span style={{ color: '#4da6ff', marginLeft: '4px' }}>✓✓</span> :
+                                                                        <span style={{ color: '#666', marginLeft: '4px' }}>✓</span>
+                                                                    }
+                                                                </span>
+                                                            )}
+                                                        </span>
                                                     </div>
 
                                                     {msg.deleted_at ? (

@@ -36,9 +36,10 @@ router.get('/:chatId', authenticateToken, (req, res) => {
             return res.status(403).json({ error: 'Not a member of this chat' });
         }
 
-        // Get messages
+        // Get messages with read status
         let query = `
-      SELECT m.*, u.username, u.display_name, u.avatar_url
+      SELECT m.*, u.username, u.display_name, u.avatar_url,
+      (SELECT MIN(read_at) FROM read_receipts rr WHERE rr.message_id = m.id AND rr.user_id != m.user_id) as read_at
       FROM messages m
       LEFT JOIN users u ON m.user_id = u.id
       WHERE m.chat_id = ?
@@ -113,6 +114,9 @@ router.get('/:chatId', authenticateToken, (req, res) => {
             replyToMessage: m.reply_to ? replyMap[m.reply_to] || null : null,
             reactions: reactionsMap[m.id] || [],
             createdAt: m.created_at,
+            edited_at: m.edited_at,
+            deleted_at: m.deleted_at,
+            readAt: m.read_at,
             sender: {
                 id: m.user_id,
                 username: m.username,
@@ -263,7 +267,6 @@ router.delete('/:messageId', authenticateToken, (req, res) => {
         const { messageId } = req.params;
 
         const message = db.prepare('SELECT * FROM messages WHERE id = ?').get(messageId);
-
         if (!message) {
             return res.status(404).json({ error: 'Message not found' });
         }
@@ -272,17 +275,18 @@ router.delete('/:messageId', authenticateToken, (req, res) => {
             return res.status(403).json({ error: 'Can only delete your own messages' });
         }
 
-        if (message.deleted_at) {
-            return res.status(400).json({ error: 'Message already deleted' });
-        }
-
+        // Soft delete: set deleted_at instead of removing the row
         db.prepare('UPDATE messages SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?').run(messageId);
 
         // Notify via WebSocket
         const io = req.app.get('io');
-        io.to(`chat:${message.chat_id}`).emit('message_deleted', { messageId, chatId: message.chat_id });
+        io.to(`chat:${message.chat_id}`).emit('message_deleted', {
+            messageId: parseInt(messageId),
+            chatId: message.chat_id,
+            deletedAt: new Date().toISOString()
+        });
 
-        res.json({ message: 'Message deleted' });
+        res.json({ success: true });
     } catch (err) {
         console.error('Delete message error:', err);
         res.status(500).json({ error: 'Failed to delete message' });

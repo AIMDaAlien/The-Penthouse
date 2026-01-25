@@ -48,6 +48,9 @@ export const editMessage = (messageId: number, content: string) =>
 export const deleteMessage = (messageId: number) =>
     api.delete(`/messages/${messageId}`);
 
+export const markMessageRead = (messageId: number) =>
+    api.post(`/messages/${messageId}/read`);
+
 // Reactions
 export const addReaction = (messageId: number, emoji: string) =>
     api.post(`/messages/${messageId}/react`, { emoji });

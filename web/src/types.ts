@@ -61,6 +61,7 @@ export interface Message {
     createdAt: string;
     edited_at?: string;
     deleted_at?: string;
+    readAt?: string;
     sender: {
         id: number;
         username: string;

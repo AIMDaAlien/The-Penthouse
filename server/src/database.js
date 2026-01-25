@@ -125,6 +125,17 @@ async function initializeDatabase() {
     )
   `);
 
+  // Read Receipts
+  db.run(`
+    CREATE TABLE IF NOT EXISTS read_receipts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      message_id INTEGER REFERENCES messages(id) ON DELETE CASCADE,
+      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      read_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(message_id, user_id)
+    )
+  `);
+
   // Custom emotes
   db.run(`
     CREATE TABLE IF NOT EXISTS emotes (
