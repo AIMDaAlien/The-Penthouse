@@ -381,4 +381,124 @@ router.delete('/:messageId/react/:emoji', authenticateToken, (req, res) => {
     }
 });
 
+// Get pinned messages for a chat
+router.get('/pins/:chatId', authenticateToken, (req, res) => {
+    try {
+        const { chatId } = req.params;
+
+        const pins = db.prepare(`
+            SELECT pm.id as pin_id, pm.pinned_at, pm.pinned_by,
+                   m.*, u.username, u.display_name, u.avatar_url,
+                   p_u.username as panner_username
+            FROM pinned_messages pm
+            JOIN messages m ON pm.message_id = m.id
+            LEFT JOIN users u ON m.user_id = u.id
+            LEFT JOIN users p_u ON pm.pinned_by = p_u.id
+            WHERE pm.chat_id = ?
+            ORDER BY pm.pinned_at DESC
+        `).all(chatId);
+
+        // Map to standard message format with pin metadata
+        const pinnedMessages = pins.map(p => ({
+            id: p.id,
+            content: p.content,
+            type: p.message_type,
+            metadata: p.metadata ? JSON.parse(p.metadata) : null,
+            createdAt: p.created_at + (p.created_at.endsWith('Z') ? '' : 'Z'), // Ensure UTC
+            sender: {
+                id: p.user_id,
+                username: p.username,
+                displayName: p.display_name,
+                avatarUrl: p.avatar_url
+            },
+            pinId: p.pin_id,
+            pinnedAt: p.pinned_at,
+            pinnedBy: p.panner_username
+        }));
+
+        res.json(pinnedMessages);
+    } catch (err) {
+        console.error('Get pins error:', err);
+        res.status(500).json({ error: 'Failed to get pinned messages' });
+    }
+});
+
+// Pin a message
+router.post('/:messageId/pin', authenticateToken, (req, res) => {
+    try {
+        const { messageId } = req.params;
+        const userId = req.user.userId;
+
+        const message = db.prepare('SELECT chat_id FROM messages WHERE id = ?').get(messageId);
+        if (!message) return res.status(404).json({ error: 'Message not found' });
+
+        // Insert pin (ignore if exists)
+        try {
+            db.prepare(
+                'INSERT INTO pinned_messages (chat_id, message_id, pinned_by) VALUES (?, ?, ?)'
+            ).run(message.chat_id, messageId, userId);
+        } catch (e) {
+            return res.json({ success: true }); // Already pinned
+        }
+
+        // Get full message details for broadcast
+        const pinnedMsg = db.prepare(`
+            SELECT m.*, u.username, u.display_name, u.avatar_url
+            FROM messages m
+            LEFT JOIN users u ON m.user_id = u.id
+            WHERE m.id = ?
+        `).get(messageId);
+
+        const payload = {
+            id: pinnedMsg.id,
+            content: pinnedMsg.content,
+            type: pinnedMsg.message_type,
+            metadata: pinnedMsg.metadata ? JSON.parse(pinnedMsg.metadata) : null,
+            createdAt: pinnedMsg.created_at + (pinnedMsg.created_at.endsWith('Z') ? '' : 'Z'),
+            sender: {
+                id: pinnedMsg.user_id,
+                username: pinnedMsg.username,
+                displayName: pinnedMsg.display_name,
+                avatarUrl: pinnedMsg.avatar_url
+            },
+            pinnedBy: req.user.username,
+            pinnedAt: new Date().toISOString()
+        };
+
+        const io = req.app.get('io');
+        io.to(`chat:${message.chat_id}`).emit('message_pinned', {
+            chatId: message.chat_id,
+            message: payload
+        });
+
+        res.json({ success: true, message: payload });
+    } catch (err) {
+        console.error('Pin message error:', err);
+        res.status(500).json({ error: 'Failed to pin message' });
+    }
+});
+
+// Unpin a message
+router.delete('/:messageId/pin', authenticateToken, (req, res) => {
+    try {
+        const { messageId } = req.params;
+
+        const message = db.prepare('SELECT chat_id FROM messages WHERE id = ?').get(messageId);
+        if (!message) return res.status(404).json({ error: 'Message not found' });
+
+        db.prepare('DELETE FROM pinned_messages WHERE message_id = ?').run(messageId);
+
+        const io = req.app.get('io');
+        io.to(`chat:${message.chat_id}`).emit('message_unpinned', {
+            chatId: message.chat_id,
+            messageId: parseInt(messageId)
+        });
+
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Unpin message error:', err);
+        res.status(500).json({ error: 'Failed to unpin message' });
+    }
+});
+
 module.exports = router;

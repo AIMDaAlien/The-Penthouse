@@ -145,6 +145,18 @@ async function initializeDatabase() {
     )
   `);
 
+  // Pinned Messages
+  db.run(`
+    CREATE TABLE IF NOT EXISTS pinned_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      chat_id INTEGER REFERENCES chats(id) ON DELETE CASCADE,
+      message_id INTEGER REFERENCES messages(id) ON DELETE CASCADE,
+      pinned_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      pinned_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(chat_id, message_id)
+    )
+  `);
+
   // Custom emotes
   db.run(`
     CREATE TABLE IF NOT EXISTS emotes (

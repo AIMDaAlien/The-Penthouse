@@ -13,7 +13,10 @@ import {
     addReaction,
     editMessage,
     deleteMessage,
-    markMessageRead
+    markMessageRead,
+    pinMessage,
+    unpinMessage,
+    getPinnedMessages
 } from '../services/api';
 import { getSocket, joinChat, leaveChat, sendTyping, stopTyping } from '../services/socket';
 import type { Chat, Message, User, Server, Channel } from '../types';
@@ -51,13 +54,25 @@ export default function ChatPage() {
     // Edit State
     const [editingMessage, setEditingMessage] = useState<Message | null>(null);
     const [editContent, setEditContent] = useState('');
+    const [pinnedMessages, setPinnedMessages] = useState<Message[]>([]);
+    const [showPins, setShowPins] = useState(false);
+
+    // Helpers
+    const getChatName = (chat: Chat) => {
+        if (chat.name) return chat.name;
+        if (chat.type === 'dm') {
+            const otherUser = chat.participants?.find(p => p.id !== user?.id);
+            return otherUser ? (otherUser.displayName || otherUser.username) : 'Unknown User';
+        }
+        return 'Untitled Chat';
+    };
 
     // Reply State
     const [replyingTo, setReplyingTo] = useState<Message | null>(null);
 
     // Hover State for Random Emoji
     const [hoveredMsgId, setHoveredMsgId] = useState<number | null>(null);
-    const [hoverEmoji, setHoverEmoji] = useState<string>('');
+
 
     // Long-press for mobile
     const longPressTimer = useRef<number | null>(null);
@@ -268,9 +283,9 @@ export default function ChatPage() {
         }
     };
 
-    const handleEditMessage = (message: Message) => {
-        setEditingMessage(message);
-        setEditContent(message.content);
+    const handleEditMessage = (msg: Message) => {
+        setEditingMessage(msg);
+        setEditContent(msg.content);
     };
 
     const handleCancelEdit = () => {
@@ -284,17 +299,33 @@ export default function ChatPage() {
             await editMessage(editingMessage.id, editContent);
             setEditingMessage(null);
             setEditContent('');
-        } catch (err) {
-            console.error('Failed to edit message:', err);
+        } catch (error) {
+            console.error('Failed to edit message:', error);
         }
     };
 
-    const handleDeleteMessage = async (message: Message) => {
+    const handleDeleteMessage = async (messageId: number) => {
         if (!window.confirm('Are you sure you want to delete this message?')) return;
         try {
-            await deleteMessage(message.id);
-        } catch (err) {
-            console.error('Failed to delete message:', err);
+            await deleteMessage(messageId);
+        } catch (error) {
+            console.error('Failed to delete message:', error);
+        }
+    };
+
+    const handlePinMessage = async (messageId: number) => {
+        try {
+            await pinMessage(messageId);
+        } catch (error) {
+            console.error('Failed to pin message:', error);
+        }
+    };
+
+    const handleUnpinMessage = async (messageId: number) => {
+        try {
+            await unpinMessage(messageId);
+        } catch (error) {
+            console.error('Failed to unpin message:', error);
         }
     };
 
@@ -456,17 +487,9 @@ export default function ChatPage() {
         }
     };
 
-    // Reply handler
-    const handleReply = (msg: Message) => {
-        setReplyingTo(msg);
-        // Focus input
-        document.querySelector<HTMLInputElement>('.input-wrapper input')?.focus();
-    };
-
     // Message hover handlers
     const handleMsgMouseEnter = (msgId: number) => {
         setHoveredMsgId(msgId);
-        setHoverEmoji(getRandomEmoji());
     };
 
     const handleMsgMouseLeave = () => {
@@ -477,7 +500,6 @@ export default function ChatPage() {
     const handleMsgTouchStart = (msgId: number) => {
         longPressTimer.current = setTimeout(() => {
             setLongPressedMsgId(msgId);
-            setHoverEmoji(getRandomEmoji());
         }, 500);
     };
 
@@ -684,19 +706,26 @@ export default function ChatPage() {
                     <>
                         <div className="chat-header">
                             <div className="header-left">
-                                <div className="header-title">
-                                    <h3>{selectedChat.name || 'Direct Message'}</h3>
-                                </div>
-                                {/* Hidden Toggle for Desktop Hover */}
-                                <button
-                                    className="toggle-sidebar-btn"
-                                    onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-                                    title="Toggle Sidebar"
-                                >
-                                    ☰
-                                </button>
+                                <h3>
+                                    {selectedChat.type === 'dm' ? '@' : '#'}
+                                    {getChatName(selectedChat)}
+                                </h3>
                             </div>
                             <div className="header-actions">
+                                <button
+                                    className={`header-action-btn ${showPins ? 'active' : ''}`}
+                                    onClick={() => {
+                                        setShowPins(!showPins);
+                                        if (!showPins) {
+                                            getPinnedMessages(selectedChat.id)
+                                                .then(response => setPinnedMessages(response.data))
+                                                .catch(console.error);
+                                        }
+                                    }}
+                                    title="Pinned Messages"
+                                >
+                                    📌
+                                </button>
                                 <button
                                     className={`toggle-sidebar-btn ${!membersCollapsed ? 'active' : ''}`}
                                     onClick={() => setMembersCollapsed(!membersCollapsed)}
@@ -707,6 +736,48 @@ export default function ChatPage() {
                             </div>
                         </div>
 
+                        {showPins && (
+                            <div className="pinned-messages-panel">
+                                <div className="pinned-header">
+                                    <h4>Pinned Messages</h4>
+                                    <button className="close-btn" onClick={() => setShowPins(false)}>×</button>
+                                </div>
+                                <div className="pinned-list">
+                                    {pinnedMessages.length === 0 ? (
+                                        <div className="no-pins">No pinned messages yet.</div>
+                                    ) : (
+                                        pinnedMessages.map(msg => (
+                                            <div key={msg.id} className="pinned-item">
+                                                <div className="pinned-meta">
+                                                    <span className="pinner">Pinned by {msg.pinnedBy || 'Unknown'}</span>
+                                                    <span className="pin-time">
+                                                        {msg.pinnedAt ? new Date(msg.pinnedAt).toLocaleDateString() : ''}
+                                                    </span>
+                                                    <button
+                                                        className="unpin-btn"
+                                                        onClick={() => msg.id && handleUnpinMessage(msg.id)}
+                                                        title="Unpin"
+                                                    >
+                                                        ×
+                                                    </button>
+                                                </div>
+                                                <div className="pinned-content">
+                                                    <div className="pinned-author">
+                                                        <img
+                                                            src={msg.sender.avatarUrl || `https://ui-avatars.com/api/?name=${msg.sender.username}&background=random`}
+                                                            alt={msg.sender.username}
+                                                        />
+                                                        <span>{msg.sender.displayName || msg.sender.username}</span>
+                                                    </div>
+                                                    <div className="pinned-text">{msg.content}</div>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+                        )
+                        }
                         <div className="messages-container timeline-view">
                             <div className="timeline-rail"></div>
                             <div className="timeline-messages">
@@ -790,22 +861,19 @@ export default function ChatPage() {
                                                             <i>Message deleted</i>
                                                         </div>
                                                     ) : editingMessage?.id === msg.id ? (
-                                                        <div className="edit-message-form">
+                                                        <div className="edit-message-container">
                                                             <input
+                                                                type="text"
                                                                 value={editContent}
                                                                 onChange={(e) => setEditContent(e.target.value)}
                                                                 onKeyDown={(e) => {
-                                                                    if (e.key === 'Enter' && !e.shiftKey) {
-                                                                        e.preventDefault();
-                                                                        handleSaveEdit();
-                                                                    }
+                                                                    if (e.key === 'Enter') handleSaveEdit();
                                                                     if (e.key === 'Escape') handleCancelEdit();
                                                                 }}
                                                                 autoFocus
-                                                                className="edit-message-input"
                                                             />
                                                             <div className="edit-actions">
-                                                                <span className="edit-hint">escape to cancel • enter to save</span>
+                                                                <span className="edit-hint">enter to save • esc to cancel</span>
                                                             </div>
                                                         </div>
                                                     ) : (
@@ -835,36 +903,27 @@ export default function ChatPage() {
 
                                                 {/* Hover/Long-press Actions */}
                                                 <div className="message-actions">
+                                                    <button onClick={() => addReaction(msg.id, '❤️')} title="Like">❤️</button>
+                                                    <button onClick={() => addReaction(msg.id, '😂')} title="Laugh">😂</button>
+                                                    <button onClick={() => addReaction(msg.id, '😮')} title="Wow">😮</button>
+                                                    <button onClick={() => addReaction(msg.id, '😢')} title="Sad">😢</button>
+                                                    <button onClick={() => addReaction(msg.id, '🔥')} title="Fire">🔥</button>
+                                                    <div className="action-separator"></div>
+                                                    <button onClick={() => setReplyingTo(msg)} title="Reply">↩️</button>
+
                                                     <button
-                                                        className="action-btn react-btn"
-                                                        onClick={() => handleReact(msg.id, hoverEmoji || '❤️')}
-                                                        title="React"
+                                                        onClick={() => msg.pinId ? handleUnpinMessage(msg.id) : handlePinMessage(msg.id)}
+                                                        title={msg.pinId ? "Unpin" : "Pin"}
+                                                        className={msg.pinId ? "active" : ""}
                                                     >
-                                                        {hoverEmoji || '❤️'}
+                                                        📌
                                                     </button>
-                                                    <button
-                                                        className="action-btn reply-btn"
-                                                        onClick={() => handleReply(msg)}
-                                                        title="Reply"
-                                                    >
-                                                        ↩
-                                                    </button>
-                                                    {!msg.deleted_at && msg.sender.id === user?.id && (
+
+                                                    {/* Edit/Delete only for own messages */}
+                                                    {msg.sender.id === user?.id && !msg.deleted_at && (
                                                         <>
-                                                            <button
-                                                                className="action-btn edit-btn"
-                                                                onClick={() => handleEditMessage(msg)}
-                                                                title="Edit"
-                                                            >
-                                                                ✏️
-                                                            </button>
-                                                            <button
-                                                                className="action-btn delete-btn"
-                                                                onClick={() => handleDeleteMessage(msg)}
-                                                                title="Delete"
-                                                            >
-                                                                🗑️
-                                                            </button>
+                                                            <button onClick={() => handleEditMessage(msg)} title="Edit">✏️</button>
+                                                            <button onClick={() => handleDeleteMessage(msg.id)} title="Delete">🗑️</button>
                                                         </>
                                                     )}
                                                 </div>
@@ -941,28 +1000,32 @@ export default function ChatPage() {
                         </form>
 
                         {/* Reply bar above input */}
-                        {replyingTo && (
-                            <div className="reply-bar">
-                                <div className="reply-bar-content">
-                                    <span className="reply-bar-line"></span>
-                                    <span className="reply-bar-text">
-                                        Replying to <strong>@{replyingTo.sender.displayName || replyingTo.sender.username}</strong>
-                                    </span>
-                                    <span className="reply-bar-preview">{replyingTo.content.slice(0, 50)}{replyingTo.content.length > 50 ? '...' : ''}</span>
+                        {
+                            replyingTo && (
+                                <div className="reply-bar">
+                                    <div className="reply-bar-content">
+                                        <span className="reply-bar-line"></span>
+                                        <span className="reply-bar-text">
+                                            Replying to <strong>@{replyingTo.sender.displayName || replyingTo.sender.username}</strong>
+                                        </span>
+                                        <span className="reply-bar-preview">{replyingTo.content.slice(0, 50)}{replyingTo.content.length > 50 ? '...' : ''}</span>
+                                    </div>
+                                    <button className="reply-bar-close" onClick={() => setReplyingTo(null)}>✕</button>
                                 </div>
-                                <button className="reply-bar-close" onClick={() => setReplyingTo(null)}>✕</button>
-                            </div>
-                        )}
+                            )
+                        }
 
                         {/* Typing indicator - below input like Discord/Instagram */}
-                        {typingUsers.size > 0 && (
-                            <div className="typing-indicator">
-                                <span className="typing-dots">●●●</span>
-                                <span className="typing-text">
-                                    {Array.from(typingUsers.values()).join(', ')} {typingUsers.size === 1 ? 'is' : 'are'} typing...
-                                </span>
-                            </div>
-                        )}
+                        {
+                            typingUsers.size > 0 && (
+                                <div className="typing-indicator">
+                                    <span className="typing-dots">●●●</span>
+                                    <span className="typing-text">
+                                        {Array.from(typingUsers.values()).join(', ')} {typingUsers.size === 1 ? 'is' : 'are'} typing...
+                                    </span>
+                                </div>
+                            )
+                        }
                     </>
                 ) : (
                     <div className="no-chat-selected">
@@ -974,76 +1037,90 @@ export default function ChatPage() {
                         </div>
                     </div>
                 )}
-            </main>
+            </main >
 
             {/* 4. Member List (Right Sidebar) */}
-            {selectedChat && (
-                <aside className={`members-sidebar ${membersCollapsed ? 'collapsed' : ''}`}>
-                    <div className="members-header">
-                        <h3>MEMBERS — {displayMembers.length}</h3>
-                    </div>
-                    <div className="members-list">
-                        {displayMembers.map((u) => (
-                            <div key={u.id} className="member-item">
-                                <div className="member-avatar">
-                                    {u.avatarUrl ? (
-                                        <img src={u.avatarUrl} alt="avatar" />
-                                    ) : (
-                                        u.username[0].toUpperCase()
-                                    )}
-                                    <div className="member-status-dot online"></div>
+            {
+                selectedChat && (
+                    <aside className={`members-sidebar ${membersCollapsed ? 'collapsed' : ''}`}>
+                        <div className="members-header">
+                            <h3>MEMBERS — {displayMembers.length}</h3>
+                        </div>
+                        <div className="members-list">
+                            {displayMembers.map((u) => (
+                                <div key={u.id} className="member-item">
+                                    <div className="member-avatar">
+                                        {u.avatarUrl ? (
+                                            <img src={u.avatarUrl} alt="avatar" />
+                                        ) : (
+                                            u.username[0].toUpperCase()
+                                        )}
+                                        <div className="member-status-dot online"></div>
+                                    </div>
+                                    <div className="member-info">
+                                        <span className="member-name">{u.displayName || u.username}</span>
+                                    </div>
                                 </div>
-                                <div className="member-info">
-                                    <span className="member-name">{u.displayName || u.username}</span>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </aside>
-            )}
+                            ))}
+                        </div>
+                    </aside>
+                )
+            }
 
             {/* Modals */}
-            {showGiphyPicker && (
-                <GifPicker
-                    onSelect={handleGifSelect}
-                    onClose={() => setShowGiphyPicker(false)}
-                />
-            )}
+            {
+                showGiphyPicker && (
+                    <GifPicker
+                        onSelect={handleGifSelect}
+                        onClose={() => setShowGiphyPicker(false)}
+                    />
+                )
+            }
 
-            {showKlipyPicker && (
-                <KlipyPicker
-                    onSelect={handleGifSelect}
-                    onClose={() => setShowKlipyPicker(false)}
-                />
-            )}
+            {
+                showKlipyPicker && (
+                    <KlipyPicker
+                        onSelect={handleGifSelect}
+                        onClose={() => setShowKlipyPicker(false)}
+                    />
+                )
+            }
 
-            {showEmojiPicker && (
-                <EmojiPicker
-                    onSelect={handleEmojiSelect}
-                    onClose={() => setShowEmojiPicker(false)}
-                />
-            )}
+            {
+                showEmojiPicker && (
+                    <EmojiPicker
+                        onSelect={handleEmojiSelect}
+                        onClose={() => setShowEmojiPicker(false)}
+                    />
+                )
+            }
 
-            {showProfileModal && (
-                <ProfileModal onClose={() => setShowProfileModal(false)} />
-            )}
+            {
+                showProfileModal && (
+                    <ProfileModal onClose={() => setShowProfileModal(false)} />
+                )
+            }
 
-            {lightboxImage && (
-                <ImageLightbox
-                    src={lightboxImage.src}
-                    alt={lightboxImage.alt}
-                    onClose={() => setLightboxImage(null)}
-                />
-            )}
+            {
+                lightboxImage && (
+                    <ImageLightbox
+                        src={lightboxImage.src}
+                        alt={lightboxImage.alt}
+                        onClose={() => setLightboxImage(null)}
+                    />
+                )
+            }
 
-            {previewFile && (
-                <FilePreview
-                    fileUrl={previewFile.url}
-                    fileName={previewFile.name}
-                    fileType={previewFile.type}
-                    onClose={() => setPreviewFile(null)}
-                />
-            )}
-        </div>
+            {
+                previewFile && (
+                    <FilePreview
+                        fileUrl={previewFile.url}
+                        fileName={previewFile.name}
+                        fileType={previewFile.type}
+                        onClose={() => setPreviewFile(null)}
+                    />
+                )
+            }
+        </div >
     );
 }

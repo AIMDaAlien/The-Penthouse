@@ -1,4 +1,5 @@
 import axios from 'axios';
+import type { Chat, Server, User, Message, Channel } from '../types';
 
 const API_URL = '/api';
 
@@ -50,6 +51,16 @@ export const deleteMessage = (messageId: number) =>
 
 export const markMessageRead = (messageId: number) =>
     api.post(`/messages/${messageId}/read`);
+
+// Pinning
+export const pinMessage = (messageId: number) =>
+    api.post(`/messages/${messageId}/pin`);
+
+export const unpinMessage = (messageId: number) =>
+    api.delete(`/messages/${messageId}/pin`);
+
+export const getPinnedMessages = (chatId: number) =>
+    api.get<Message[]>(`/messages/pins/${chatId}`);
 
 // Reactions
 export const addReaction = (messageId: number, emoji: string) =>

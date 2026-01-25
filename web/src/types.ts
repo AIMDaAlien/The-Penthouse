@@ -28,6 +28,7 @@ export interface Chat {
     type: 'dm' | 'group' | 'channel';
     serverId?: number;
     lastMessage?: string;
+    participants?: User[];
     lastMessageAt?: string;
     memberCount: number;
     nickname?: string;
@@ -62,6 +63,9 @@ export interface Message {
     edited_at?: string;
     deleted_at?: string;
     readAt?: string;
+    pinId?: number;
+    pinnedAt?: string;
+    pinnedBy?: string;
     sender: {
         id: number;
         username: string;
