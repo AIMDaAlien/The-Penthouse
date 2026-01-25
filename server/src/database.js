@@ -108,13 +108,19 @@ async function initializeDatabase() {
   // Migration: Add edited_at and deleted_at columns if they don't exist
   try {
     db.run('ALTER TABLE messages ADD COLUMN edited_at DATETIME DEFAULT NULL');
-  } catch (e) { /* Column may already exist */ }
+  } catch (e) {
+    if (!e.message.includes('duplicate column')) console.error('Migration error (edited_at):', e.message);
+  }
   try {
     db.run('ALTER TABLE messages ADD COLUMN deleted_at DATETIME DEFAULT NULL');
-  } catch (e) { /* Column may already exist */ }
+  } catch (e) {
+    if (!e.message.includes('duplicate column')) console.error('Migration error (deleted_at):', e.message);
+  }
   try {
     db.run('ALTER TABLE messages ADD COLUMN reply_to INTEGER REFERENCES messages(id) ON DELETE SET NULL');
-  } catch (e) { /* Column may already exist */ }
+  } catch (e) {
+    if (!e.message.includes('duplicate column')) console.error('Migration error (reply_to):', e.message);
+  }
 
   // Reactions (Instagram-style)
   db.run(`

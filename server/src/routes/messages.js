@@ -104,6 +104,12 @@ router.get('/:chatId', authenticateToken, (req, res) => {
             });
         }
 
+        // Helper to ensure UTC
+        const ensureUTC = (dateStr) => {
+            if (!dateStr) return null;
+            return dateStr.endsWith('Z') ? dateStr : dateStr + 'Z';
+        };
+
         // Return in chronological order
         res.json(messages.reverse().map(m => ({
             id: m.id,
@@ -113,10 +119,10 @@ router.get('/:chatId', authenticateToken, (req, res) => {
             replyTo: m.reply_to || null,
             replyToMessage: m.reply_to ? replyMap[m.reply_to] || null : null,
             reactions: reactionsMap[m.id] || [],
-            createdAt: m.created_at,
-            edited_at: m.edited_at,
-            deleted_at: m.deleted_at,
-            readAt: m.read_at,
+            createdAt: ensureUTC(m.created_at),
+            edited_at: ensureUTC(m.edited_at),
+            deleted_at: ensureUTC(m.deleted_at),
+            readAt: ensureUTC(m.read_at),
             sender: {
                 id: m.user_id,
                 username: m.username,
