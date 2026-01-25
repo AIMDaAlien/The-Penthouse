@@ -99,9 +99,19 @@ async function initializeDatabase() {
       message_type TEXT DEFAULT 'text',
       metadata TEXT,
       reply_to INTEGER REFERENCES messages(id) ON DELETE SET NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      edited_at DATETIME DEFAULT NULL,
+      deleted_at DATETIME DEFAULT NULL
     )
   `);
+
+  // Migration: Add edited_at and deleted_at columns if they don't exist
+  try {
+    db.run('ALTER TABLE messages ADD COLUMN edited_at DATETIME DEFAULT NULL');
+  } catch (e) { /* Column may already exist */ }
+  try {
+    db.run('ALTER TABLE messages ADD COLUMN deleted_at DATETIME DEFAULT NULL');
+  } catch (e) { /* Column may already exist */ }
 
   // Reactions (Instagram-style)
   db.run(`

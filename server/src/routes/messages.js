@@ -214,6 +214,49 @@ router.post('/:chatId', authenticateToken, (req, res) => {
     }
 });
 
+// Edit a message
+router.put('/:messageId', authenticateToken, (req, res) => {
+    try {
+        const { messageId } = req.params;
+        const { content } = req.body;
+
+        if (!content) {
+            return res.status(400).json({ error: 'Content is required' });
+        }
+
+        const message = db.prepare('SELECT * FROM messages WHERE id = ?').get(messageId);
+        if (!message) {
+            return res.status(404).json({ error: 'Message not found' });
+        }
+
+        if (message.user_id !== req.user.userId) {
+            return res.status(403).json({ error: 'Can only edit your own messages' });
+        }
+
+        if (message.deleted_at) {
+            return res.status(400).json({ error: 'Cannot edit a deleted message' });
+        }
+
+        db.prepare('UPDATE messages SET content = ?, edited_at = CURRENT_TIMESTAMP WHERE id = ?').run(content, messageId);
+
+        const updatedMessage = db.prepare('SELECT * FROM messages WHERE id = ?').get(messageId);
+
+        // Notify via WebSocket
+        const io = req.app.get('io');
+        io.to(`chat:${message.chat_id}`).emit('message_edited', {
+            messageId,
+            chatId: message.chat_id,
+            content,
+            editedAt: updatedMessage.edited_at
+        });
+
+        res.json(updatedMessage);
+    } catch (err) {
+        console.error('Edit message error:', err);
+        res.status(500).json({ error: 'Failed to edit message' });
+    }
+});
+
 // Delete a message (own messages only)
 router.delete('/:messageId', authenticateToken, (req, res) => {
     try {
@@ -229,7 +272,11 @@ router.delete('/:messageId', authenticateToken, (req, res) => {
             return res.status(403).json({ error: 'Can only delete your own messages' });
         }
 
-        db.prepare('DELETE FROM messages WHERE id = ?').run(messageId);
+        if (message.deleted_at) {
+            return res.status(400).json({ error: 'Message already deleted' });
+        }
+
+        db.prepare('UPDATE messages SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?').run(messageId);
 
         // Notify via WebSocket
         const io = req.app.get('io');

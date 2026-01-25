@@ -42,6 +42,12 @@ export const getMessages = (chatId: number, limit = 50, before?: number) =>
 export const sendMessage = (chatId: number, content: string, type = 'text', metadata?: object, replyTo?: number) =>
     api.post(`/messages/${chatId}`, { content, type, metadata, replyTo });
 
+export const editMessage = (messageId: number, content: string) =>
+    api.put(`/messages/${messageId}`, { content });
+
+export const deleteMessage = (messageId: number) =>
+    api.delete(`/messages/${messageId}`);
+
 // Reactions
 export const addReaction = (messageId: number, emoji: string) =>
     api.post(`/messages/${messageId}/react`, { emoji });

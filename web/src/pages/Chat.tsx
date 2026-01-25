@@ -10,7 +10,9 @@ import {
     createServer,
     getServerDetails,
     createChannel,
-    addReaction
+    addReaction,
+    editMessage,
+    deleteMessage
 } from '../services/api';
 import { getSocket, joinChat, leaveChat, sendTyping, stopTyping } from '../services/socket';
 import type { Chat, Message, User, Server, Channel } from '../types';
@@ -44,6 +46,10 @@ export default function ChatPage() {
     const [messages, setMessages] = useState<Message[]>([]);
     const [newMessage, setNewMessage] = useState('');
     const messagesEndRef = useRef<HTMLDivElement>(null);
+
+    // Edit State
+    const [editingMessage, setEditingMessage] = useState<Message | null>(null);
+    const [editContent, setEditContent] = useState('');
 
     // Reply State
     const [replyingTo, setReplyingTo] = useState<Message | null>(null);
@@ -165,6 +171,38 @@ export default function ChatPage() {
                         next.delete(data.userId);
                         return next;
                     });
+                }
+            });
+
+            socket.on('message_edited', (data: { messageId: number; chatId: number; content: string; editedAt: string }) => {
+                if (selectedChat?.id === data.chatId) {
+                    setMessages(prev => prev.map(msg =>
+                        msg.id === data.messageId
+                            ? { ...msg, content: data.content, edited_at: data.editedAt }
+                            : msg
+                    ));
+                }
+                loadChats();
+            });
+
+            socket.on('message_deleted', (data: { messageId: number; chatId: number; deletedAt: string }) => {
+                if (selectedChat?.id === data.chatId) {
+                    setMessages(prev => prev.map(msg =>
+                        msg.id === data.messageId
+                            ? { ...msg, deleted_at: data.deletedAt }
+                            : msg
+                    ));
+                }
+                loadChats();
+            });
+
+            socket.on('user_stop_typing', (data: { chatId: number; userId: number }) => {
+                if (selectedChat?.id === data.chatId) {
+                    setTypingUsers(prev => {
+                        const next = new Map(prev);
+                        next.delete(data.userId);
+                        return next;
+                    });
                     const existingTimeout = typingTimeouts.current.get(data.userId);
                     if (existingTimeout) clearTimeout(existingTimeout);
                 }
@@ -216,6 +254,36 @@ export default function ChatPage() {
             setMessages(data);
         } catch (err) {
             console.error('Failed to load messages:', err);
+        }
+    };
+
+    const handleEditMessage = (message: Message) => {
+        setEditingMessage(message);
+        setEditContent(message.content);
+    };
+
+    const handleCancelEdit = () => {
+        setEditingMessage(null);
+        setEditContent('');
+    };
+
+    const handleSaveEdit = async () => {
+        if (!editingMessage || !editContent.trim()) return;
+        try {
+            await editMessage(editingMessage.id, editContent);
+            setEditingMessage(null);
+            setEditContent('');
+        } catch (err) {
+            console.error('Failed to edit message:', err);
+        }
+    };
+
+    const handleDeleteMessage = async (message: Message) => {
+        if (!window.confirm('Are you sure you want to delete this message?')) return;
+        try {
+            await deleteMessage(message.id);
+        } catch (err) {
+            console.error('Failed to delete message:', err);
         }
     };
 
@@ -675,7 +743,36 @@ export default function ChatPage() {
                                                         <span className="sender">{msg.sender.displayName || msg.sender.username}</span>
                                                         <span className="time">{formatTime(msg.createdAt)}</span>
                                                     </div>
-                                                    {renderMessageContent(msg)}
+
+                                                    {msg.deleted_at ? (
+                                                        <div className="message-content deleted">
+                                                            <i>Message deleted</i>
+                                                        </div>
+                                                    ) : editingMessage?.id === msg.id ? (
+                                                        <div className="edit-message-form">
+                                                            <input
+                                                                value={editContent}
+                                                                onChange={(e) => setEditContent(e.target.value)}
+                                                                onKeyDown={(e) => {
+                                                                    if (e.key === 'Enter' && !e.shiftKey) {
+                                                                        e.preventDefault();
+                                                                        handleSaveEdit();
+                                                                    }
+                                                                    if (e.key === 'Escape') handleCancelEdit();
+                                                                }}
+                                                                autoFocus
+                                                                className="edit-message-input"
+                                                            />
+                                                            <div className="edit-actions">
+                                                                <span className="edit-hint">escape to cancel • enter to save</span>
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <>
+                                                            {renderMessageContent(msg)}
+                                                            {msg.edited_at && <span className="edited-label">(edited)</span>}
+                                                        </>
+                                                    )}
 
                                                     {/* Reactions display */}
                                                     {msg.reactions && msg.reactions.length > 0 && (
@@ -711,6 +808,24 @@ export default function ChatPage() {
                                                     >
                                                         ↩
                                                     </button>
+                                                    {!msg.deleted_at && msg.sender.id === user?.id && (
+                                                        <>
+                                                            <button
+                                                                className="action-btn edit-btn"
+                                                                onClick={() => handleEditMessage(msg)}
+                                                                title="Edit"
+                                                            >
+                                                                ✏️
+                                                            </button>
+                                                            <button
+                                                                className="action-btn delete-btn"
+                                                                onClick={() => handleDeleteMessage(msg)}
+                                                                title="Delete"
+                                                            >
+                                                                🗑️
+                                                            </button>
+                                                        </>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>

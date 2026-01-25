@@ -59,6 +59,8 @@ export interface Message {
     replyToMessage?: ReplyContext | null;
     reactions?: Reaction[];
     createdAt: string;
+    edited_at?: string;
+    deleted_at?: string;
     sender: {
         id: number;
         username: string;
