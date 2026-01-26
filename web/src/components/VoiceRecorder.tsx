@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { MicIcon, TrashIcon, PlayIcon, PauseIcon, StopIcon, SendIcon } from './Icons';
 import './VoiceRecorder.css';
 
 interface VoiceRecorderProps {
@@ -32,7 +33,14 @@ export default function VoiceRecorder({ onSend }: VoiceRecorderProps) {
     const startRecording = async () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            mediaRecorderRef.current = new MediaRecorder(stream);
+
+            // Prefer webm, fallback to whatever is supported
+            let mimeType = 'audio/webm';
+            if (!MediaRecorder.isTypeSupported(mimeType)) {
+                mimeType = ''; // Default
+            }
+
+            mediaRecorderRef.current = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
             chunksRef.current = [];
 
             mediaRecorderRef.current.ondataavailable = (e) => {
@@ -42,7 +50,7 @@ export default function VoiceRecorder({ onSend }: VoiceRecorderProps) {
             };
 
             mediaRecorderRef.current.onstop = () => {
-                const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+                const blob = new Blob(chunksRef.current, { type: mimeType || 'audio/webm' });
                 setAudioBlob(blob);
                 const url = URL.createObjectURL(blob);
                 setAudioUrl(url);
@@ -117,12 +125,12 @@ export default function VoiceRecorder({ onSend }: VoiceRecorderProps) {
                 // Preview Mode
                 <div className="preview-mode">
                     <button className="icon-btn delete-btn" onClick={resetRecorder} title="Discard">
-                        🗑️
+                        <TrashIcon size={18} />
                     </button>
 
                     <div className="playback-controls">
                         <button className="icon-btn play-btn" onClick={togglePlayback}>
-                            {isPlaying ? '⏸️' : '▶️'}
+                            {isPlaying ? <PauseIcon size={16} /> : <PlayIcon size={16} />}
                         </button>
                         <span className="duration">{formatTime(duration)}</span>
                         <audio
@@ -134,7 +142,7 @@ export default function VoiceRecorder({ onSend }: VoiceRecorderProps) {
                     </div>
 
                     <button className="icon-btn send-btn" onClick={handleSend} title="Send">
-                        📤
+                        <SendIcon size={18} />
                     </button>
                 </div>
             ) : isRecording ? (
@@ -145,13 +153,13 @@ export default function VoiceRecorder({ onSend }: VoiceRecorderProps) {
                         <span className="timer">{formatTime(recordingTime)}</span>
                     </div>
                     <button className="icon-btn stop-btn" onClick={stopRecording} title="Stop Recording">
-                        ⏹️
+                        <StopIcon size={18} />
                     </button>
                 </div>
             ) : (
                 // Idle Mode
                 <button className="icon-btn mic-btn" onClick={startRecording} title="Record Voice Message">
-                    🎙️
+                    <MicIcon size={20} />
                 </button>
             )}
         </div>

@@ -27,6 +27,8 @@ import KlipyPicker from '../components/KlipyPicker';
 import EmojiPicker from '../components/EmojiPicker';
 import FileUpload from '../components/FileUpload';
 import VoiceRecorder from '../components/VoiceRecorder';
+import AudioPlayer from '../components/AudioPlayer';
+import { EmojiIcon, GifIcon, AttachmentIcon, SendIcon } from '../components/Icons';
 import ProfileModal from '../components/ProfileModal';
 import InviteModal from '../components/InviteModal';
 import ImageLightbox from '../components/ImageLightbox';
@@ -504,7 +506,7 @@ export default function ChatPage() {
         if (msg.type === 'voice') {
             return (
                 <div className="message-voice">
-                    <audio controls src={msg.content} />
+                    <AudioPlayer src={msg.content} />
                 </div>
             );
         }
@@ -1024,7 +1026,7 @@ export default function ChatPage() {
                                         title="Upload file"
                                         onClick={() => setShowFileUpload(!showFileUpload)}
                                     >
-                                        +
+                                        <AttachmentIcon size={20} />
                                     </button>
                                     {showFileUpload && (
                                         <FileUpload
@@ -1058,7 +1060,7 @@ export default function ChatPage() {
                                     title="Emojis"
                                     onClick={() => setShowEmojiPicker(true)}
                                 >
-                                    😊
+                                    <EmojiIcon size={20} />
                                 </button>
                                 <button
                                     type="button"
@@ -1066,7 +1068,7 @@ export default function ChatPage() {
                                     onClick={() => setShowGiphyPicker(true)}
                                     title="GIPHY"
                                 >
-                                    GIPHY
+                                    <GifIcon size={20} />
                                 </button>
                                 <button
                                     type="button"
@@ -1074,7 +1076,7 @@ export default function ChatPage() {
                                     onClick={() => setShowKlipyPicker(true)}
                                     title="Klipy"
                                 >
-                                    KLIPY
+                                    <span style={{ fontSize: '10px', fontWeight: 'bold' }}>KLIPY</span>
                                 </button>
                                 <VoiceRecorder onSend={handleVoiceSend} />
                                 <button
@@ -1083,7 +1085,7 @@ export default function ChatPage() {
                                     disabled={!newMessage.trim()}
                                     title="Send"
                                 >
-                                    ➡️
+                                    <SendIcon size={20} />
                                 </button>
                             </div>
                         </form>
