@@ -17,7 +17,8 @@ import {
     pinMessage,
     unpinMessage,
     getPinnedMessages,
-    joinServer
+    joinServer,
+    uploadVoice
 } from '../services/api';
 import { getSocket, joinChat, leaveChat, sendTyping, stopTyping } from '../services/socket';
 import type { Chat, Message, User, Server, Channel } from '../types';
@@ -25,7 +26,7 @@ import GifPicker from '../components/GifPicker';
 import KlipyPicker from '../components/KlipyPicker';
 import EmojiPicker from '../components/EmojiPicker';
 import FileUpload from '../components/FileUpload';
-
+import VoiceRecorder from '../components/VoiceRecorder';
 import ProfileModal from '../components/ProfileModal';
 import InviteModal from '../components/InviteModal';
 import ImageLightbox from '../components/ImageLightbox';
@@ -33,8 +34,7 @@ import FilePreview from '../components/FilePreview';
 import './Chat.css';
 
 // Random emoji pool for quick reactions
-const REACTION_EMOJIS = ['❤️', '😂', '😮', '😢', '😡', '👍', '🔥', '🎉', '💯', '🙌', '👀', '✨', '💜', '🤔', '😍'];
-const getRandomEmoji = () => REACTION_EMOJIS[Math.floor(Math.random() * REACTION_EMOJIS.length)];
+
 
 export default function ChatPage() {
     const { user, logout } = useAuth();
@@ -384,6 +384,16 @@ export default function ChatPage() {
         }
     };
 
+    const handleVoiceSend = async (audioBlob: Blob, duration: number) => {
+        if (!selectedChat) return;
+        try {
+            const { data } = await uploadVoice(audioBlob, duration);
+            await sendMessage(selectedChat.id, data.url, 'voice', data.params);
+        } catch (err) {
+            console.error('Failed to send voice message:', err);
+        }
+    };
+
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!inputName.trim()) return;
@@ -488,6 +498,13 @@ export default function ChatPage() {
                     <span className="file-icon">{isPDF ? '📄' : '📎'}</span>
                     <span className="file-name">{meta.fileName}</span>
                     <span className="file-action">{isPDF ? 'View' : 'Download'}</span>
+                </div>
+            );
+        }
+        if (msg.type === 'voice') {
+            return (
+                <div className="message-voice">
+                    <audio controls src={msg.content} />
                 </div>
             );
         }
@@ -1058,6 +1075,15 @@ export default function ChatPage() {
                                     title="Klipy"
                                 >
                                     KLIPY
+                                </button>
+                                <VoiceRecorder onSend={handleVoiceSend} />
+                                <button
+                                    type="submit"
+                                    className="send-btn"
+                                    disabled={!newMessage.trim()}
+                                    title="Send"
+                                >
+                                    ➡️
                                 </button>
                             </div>
                         </form>

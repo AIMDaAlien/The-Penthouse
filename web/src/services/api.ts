@@ -17,6 +17,18 @@ export const createInvite = (serverId: number, maxUses?: number) =>
 export const getInvite = (code: string) =>
     api.get<{ code: string; serverName: string; memberCount: number; uses: number }>(`/invites/${code}`);
 
+export const uploadFile = (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post<{ url: string; type: 'image' | 'video' | 'file'; mimeType: string; filename: string }>('/media/upload', formData);
+};
+
+export const uploadVoice = (audioBlob: Blob, duration: number) => {
+    const formData = new FormData();
+    formData.append('voice', audioBlob, 'voice_message.webm');
+    formData.append('duration', duration.toString());
+    return api.post<{ url: string; params: { fileName: string; duration: number; mimeType: string } }>('/media/voice', formData);
+};
 export const joinServer = (code: string) =>
     api.post<{ success: true; serverId: number; channelId?: number; alreadyMember?: boolean }>(`/invites/${code}/join`);
 

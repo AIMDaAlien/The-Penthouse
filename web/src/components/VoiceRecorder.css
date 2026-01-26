@@ -1,0 +1,152 @@
+.voice-recorder {
+    display: flex;
+    align-items: center;
+    margin-right: 8px;
+}
+
+.icon-btn {
+    background: transparent;
+    border: none;
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 50%;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+}
+
+.icon-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+}
+
+/* Mic Button */
+.mic-btn:hover {
+    color: var(--accent-lavender);
+    background: rgba(166, 136, 250, 0.1);
+}
+
+/* Recording Mode */
+.recording-mode {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: rgba(255, 0, 0, 0.1);
+    padding: 4px 12px;
+    border-radius: 20px;
+    animation: slideIn 0.2s ease;
+    border: 1px solid rgba(255, 0, 0, 0.2);
+}
+
+.recording-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.pulse-dot {
+    width: 10px;
+    height: 10px;
+    background-color: #ff4444;
+    border-radius: 50%;
+    animation: pulse 1.5s infinite;
+}
+
+.timer {
+    font-family: monospace;
+    color: #ff4444;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.stop-btn {
+    color: #ff4444;
+}
+
+.stop-btn:hover {
+    background: rgba(255, 68, 68, 0.2);
+    color: #ff4444;
+}
+
+/* Preview Mode */
+.preview-mode {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(166, 136, 250, 0.1);
+    padding: 4px 8px;
+    border-radius: 20px;
+    animation: slideIn 0.2s ease;
+    border: 1px solid rgba(166, 136, 250, 0.2);
+}
+
+.playback-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 4px;
+}
+
+.play-btn {
+    font-size: 1rem;
+    color: var(--accent-lavender);
+    padding: 4px;
+}
+
+.duration {
+    font-family: monospace;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.delete-btn {
+    font-size: 1rem;
+    padding: 6px;
+}
+
+.delete-btn:hover {
+    color: #ff4444;
+    background: rgba(255, 68, 68, 0.1);
+}
+
+.send-btn {
+    color: var(--accent-lavender);
+    padding: 6px;
+}
+
+.send-btn:hover {
+    background: var(--accent-lavender);
+    color: #12101a;
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+        opacity: 1;
+    }
+
+    50% {
+        transform: scale(1.2);
+        opacity: 0.7;
+    }
+
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateX(-10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}

@@ -26,14 +26,38 @@ const upload = multer({
     storage,
     limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
     fileFilter: (req, file, cb) => {
-        const allowedTypes = /jpeg|jpg|png|gif|webp/;
+        const allowedTypes = /jpeg|jpg|png|gif|webp|webm|mp3|wav|ogg/;
         const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-        const mimetype = allowedTypes.test(file.mimetype);
+        const mimetype = /image\/.+|audio\/.+/.test(file.mimetype);
 
         if (extname && mimetype) {
             return cb(null, true);
         }
-        cb(new Error('Only image files are allowed'));
+        cb(new Error('Only image and audio files are allowed'));
+    }
+});
+
+// Upload voice message
+router.post('/voice', authenticateToken, upload.single('voice'), (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No voice file uploaded' });
+        }
+
+        const fileUrl = `/uploads/${req.file.filename}`;
+
+        // Return details needed for the message
+        res.json({
+            url: fileUrl,
+            params: {
+                fileName: req.file.originalname,
+                duration: req.body.duration || 0, // Frontend should send duration if possible
+                mimeType: req.file.mimetype
+            }
+        });
+    } catch (err) {
+        console.error('Upload voice error:', err);
+        res.status(500).json({ error: 'Failed to upload voice message' });
     }
 });
 
