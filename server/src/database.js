@@ -157,6 +157,19 @@ async function initializeDatabase() {
     )
   `);
 
+  // Server Invites
+  db.run(`
+    CREATE TABLE IF NOT EXISTS server_invites (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      server_id INTEGER REFERENCES servers(id) ON DELETE CASCADE,
+      code TEXT UNIQUE NOT NULL,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      uses INTEGER DEFAULT 0,
+      max_uses INTEGER DEFAULT NULL
+    )
+  `);
+
   // Custom emotes
   db.run(`
     CREATE TABLE IF NOT EXISTS emotes (

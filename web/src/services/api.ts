@@ -10,6 +10,16 @@ const api = axios.create({
     },
 });
 
+// Invites
+export const createInvite = (serverId: number, maxUses?: number) =>
+    api.post<{ success: true; code: string }>(`/invites/server/${serverId}`, { maxUses });
+
+export const getInvite = (code: string) =>
+    api.get<{ code: string; serverName: string; memberCount: number; uses: number }>(`/invites/${code}`);
+
+export const joinServer = (code: string) =>
+    api.post<{ success: true; serverId: number; channelId?: number; alreadyMember?: boolean }>(`/invites/${code}/join`);
+
 // Add token to requests
 api.interceptors.request.use((config) => {
     const token = localStorage.getItem('token');

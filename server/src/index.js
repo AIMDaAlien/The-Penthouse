@@ -36,6 +36,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/messages', messagesRoutes);
 app.use('/api/chats', chatsRoutes);
 app.use('/api/servers', serversRoutes);
+app.use('/api/invites', require('./routes/server_invites'));
 app.use('/api/media', mediaRoutes);
 
 // Health check

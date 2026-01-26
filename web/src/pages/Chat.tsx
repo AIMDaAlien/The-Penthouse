@@ -16,7 +16,8 @@ import {
     markMessageRead,
     pinMessage,
     unpinMessage,
-    getPinnedMessages
+    getPinnedMessages,
+    joinServer
 } from '../services/api';
 import { getSocket, joinChat, leaveChat, sendTyping, stopTyping } from '../services/socket';
 import type { Chat, Message, User, Server, Channel } from '../types';
@@ -24,7 +25,9 @@ import GifPicker from '../components/GifPicker';
 import KlipyPicker from '../components/KlipyPicker';
 import EmojiPicker from '../components/EmojiPicker';
 import FileUpload from '../components/FileUpload';
+
 import ProfileModal from '../components/ProfileModal';
+import InviteModal from '../components/InviteModal';
 import ImageLightbox from '../components/ImageLightbox';
 import FilePreview from '../components/FilePreview';
 import './Chat.css';
@@ -55,7 +58,11 @@ export default function ChatPage() {
     const [editingMessage, setEditingMessage] = useState<Message | null>(null);
     const [editContent, setEditContent] = useState('');
     const [pinnedMessages, setPinnedMessages] = useState<Message[]>([]);
+
     const [showPins, setShowPins] = useState(false);
+    const [showInviteModal, setShowInviteModal] = useState(false);
+    const [showJoinServer, setShowJoinServer] = useState(false);
+    const [joinCode, setJoinCode] = useState('');
 
     // Helpers
     const getChatName = (chat: Chat) => {
@@ -401,6 +408,29 @@ export default function ChatPage() {
         }
     };
 
+    const handleJoin = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!joinCode.trim()) return;
+
+        try {
+            const { data } = await joinServer(joinCode.trim());
+            if (data.success) {
+                setJoinCode('');
+                setShowJoinServer(false);
+                if (data.alreadyMember) {
+                    alert('You are already a member of this server!');
+                }
+                await loadServers();
+                if (data.serverId) {
+                    handleServerSelect(data.serverId);
+                }
+            }
+        } catch (err) {
+            console.error('Join failed:', err);
+            alert('Failed to join server. Check the code and try again.');
+        }
+    };
+
     const formatTime = (dateStr: string) => {
         const date = new Date(dateStr);
         return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -610,6 +640,16 @@ export default function ChatPage() {
             <aside className={`sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
                 <div className="sidebar-header">
                     <h2>{selectedServerId ? servers.find(s => s.id === selectedServerId)?.name : 'The Penthouse'}</h2>
+                    {selectedServerId && (
+                        <button
+                            className="collapse-btn"
+                            onClick={() => setShowInviteModal(true)}
+                            title="Invite People"
+                            style={{ marginLeft: 'auto', width: 'auto', padding: '0 8px' }}
+                        >
+                            + Invite
+                        </button>
+                    )}
                 </div>
 
                 {selectedServerId === null && (
@@ -634,9 +674,14 @@ export default function ChatPage() {
 
                 <div className="sidebar-actions">
                     {selectedServerId === null ? (
-                        <button onClick={() => { setShowNewGroup(true); setShowNewServer(false); }} className="action-btn">
-                            New Group
-                        </button>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                            <button onClick={() => { setShowNewGroup(true); setShowNewServer(false); setShowJoinServer(false); }} className="action-btn">
+                                New Group
+                            </button>
+                            <button onClick={() => { setShowJoinServer(true); setShowNewGroup(false); setShowNewServer(false); }} className="action-btn">
+                                Join Server
+                            </button>
+                        </div>
                     ) : (
                         <button onClick={() => { setShowNewChannel(true); setShowNewServer(false); }} className="action-btn">
                             Create Channel
@@ -644,27 +689,45 @@ export default function ChatPage() {
                     )}
                 </div>
 
-                {(showNewGroup || showNewServer || showNewChannel) && (
-                    <form onSubmit={handleCreate} className="creation-form">
-                        <input
-                            type="text"
-                            value={inputName}
-                            onChange={(e) => setInputName(e.target.value)}
-                            placeholder={
-                                showNewServer ? "Server name..." :
-                                    showNewGroup ? "Group name..." : "Channel name..."
-                            }
-                            autoFocus
-                        />
-                        <div className="form-actions">
-                            <button type="submit">Create</button>
-                            <button type="button" onClick={() => {
-                                setShowNewGroup(false);
-                                setShowNewServer(false);
-                                setShowNewChannel(false);
-                            }}>Cancel</button>
-                        </div>
-                    </form>
+                {(showNewGroup || showNewServer || showNewChannel || showJoinServer) && (
+                    <div className="creation-form-container">
+                        {showJoinServer ? (
+                            <form onSubmit={handleJoin} className="creation-form">
+                                <input
+                                    type="text"
+                                    value={joinCode}
+                                    onChange={(e) => setJoinCode(e.target.value)}
+                                    placeholder="Enter Invite Code..."
+                                    autoFocus
+                                />
+                                <div className="form-actions">
+                                    <button type="submit">Join</button>
+                                    <button type="button" onClick={() => setShowJoinServer(false)}>Cancel</button>
+                                </div>
+                            </form>
+                        ) : (
+                            <form onSubmit={handleCreate} className="creation-form">
+                                <input
+                                    type="text"
+                                    value={inputName}
+                                    onChange={(e) => setInputName(e.target.value)}
+                                    placeholder={
+                                        showNewServer ? "Server name..." :
+                                            showNewGroup ? "Group name..." : "Channel name..."
+                                    }
+                                    autoFocus
+                                />
+                                <div className="form-actions">
+                                    <button type="submit">Create</button>
+                                    <button type="button" onClick={() => {
+                                        setShowNewGroup(false);
+                                        setShowNewServer(false);
+                                        setShowNewChannel(false);
+                                    }}>Cancel</button>
+                                </div>
+                            </form>
+                        )}
+                    </div>
                 )}
 
                 <div className="channel-list">
@@ -1118,6 +1181,14 @@ export default function ChatPage() {
                         fileName={previewFile.name}
                         fileType={previewFile.type}
                         onClose={() => setPreviewFile(null)}
+                    />
+                )
+            }
+            {
+                showInviteModal && selectedServerId && (
+                    <InviteModal
+                        serverId={selectedServerId}
+                        onClose={() => setShowInviteModal(false)}
                     />
                 )
             }
