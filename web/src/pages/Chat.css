@@ -766,6 +766,41 @@
     display: inline-block;
 }
 
+/* Message highlight animation for reply scroll-to */
+.message.highlighted {
+    animation: message-highlight 2s ease-out;
+}
+
+@keyframes message-highlight {
+    0% {
+        background: rgba(166, 136, 250, 0.3);
+        box-shadow: 0 0 20px rgba(166, 136, 250, 0.4);
+    }
+
+    100% {
+        background: transparent;
+        box-shadow: none;
+    }
+}
+
+/* Reaction emoji picker positioning for message actions */
+.message-actions {
+    position: relative;
+}
+
+.message-actions .emoji-picker-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+}
+
+.message-actions .emoji-picker-container {
+    position: absolute;
+    bottom: 48px;
+    left: 0;
+    z-index: 1001;
+}
+
 /* Discord-style Reply Context above message */
 .reply-context {
     display: flex;
@@ -775,11 +810,14 @@
     margin-bottom: 4px;
     font-size: 0.8rem;
     cursor: pointer;
-    transition: opacity 0.2s;
+    transition: opacity 0.2s, background 0.2s;
+    border-radius: 4px;
+    padding: 6px 8px;
+    margin-left: -8px;
 }
 
 .reply-context:hover {
-    opacity: 0.7;
+    background: rgba(166, 136, 250, 0.1);
 }
 
 .reply-context .reply-line {

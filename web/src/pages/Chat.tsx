@@ -102,6 +102,8 @@ export default function ChatPage() {
     const [showProfileModal, setShowProfileModal] = useState(false);
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [membersCollapsed, setMembersCollapsed] = useState(false);
+    // Reaction emoji picker state - tracks which message's picker is open
+    const [reactionPickerMsgId, setReactionPickerMsgId] = useState<number | null>(null);
 
     // Lightbox and File Preview state
     const [lightboxImage, setLightboxImage] = useState<{ src: string; alt?: string } | null>(null);
@@ -922,7 +924,12 @@ export default function ChatPage() {
                                                     {msg.replyToMessage && (
                                                         <div className="reply-context" onClick={() => {
                                                             const el = document.getElementById(`msg-${msg.replyToMessage?.id}`);
-                                                            el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                                            if (el) {
+                                                                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                                                // Add highlight animation
+                                                                el.classList.add('highlighted');
+                                                                setTimeout(() => el.classList.remove('highlighted'), 2000);
+                                                            }
                                                         }}>
                                                             <span className="reply-line"></span>
                                                             <span className="reply-author">@{msg.replyToMessage.sender.displayName || msg.replyToMessage.sender.username}</span>
@@ -992,18 +999,32 @@ export default function ChatPage() {
 
                                                 {/* Hover/Long-press Actions */}
                                                 <div className="message-actions">
-                                                    <button onClick={() => addReaction(msg.id, '❤️')} title="Like">❤️</button>
-                                                    <button onClick={() => addReaction(msg.id, '😂')} title="Laugh">😂</button>
-                                                    <button onClick={() => addReaction(msg.id, '😮')} title="Wow">😮</button>
-                                                    <button onClick={() => addReaction(msg.id, '😢')} title="Sad">😢</button>
-                                                    <button onClick={() => addReaction(msg.id, '🔥')} title="Fire">🔥</button>
-                                                    <div className="action-separator"></div>
-                                                    <button onClick={() => setReplyingTo(msg)} title="Reply"><ReplyIcon size={16} /></button>
+                                                    {/* Single reaction button that opens picker */}
+                                                    <button
+                                                        onClick={() => setReactionPickerMsgId(reactionPickerMsgId === msg.id ? null : msg.id)}
+                                                        title="Add Reaction"
+                                                        className={`action-btn react-btn ${reactionPickerMsgId === msg.id ? 'active' : ''}`}
+                                                    >
+                                                        😊
+                                                    </button>
+
+                                                    {/* Reaction emoji picker for this message */}
+                                                    {reactionPickerMsgId === msg.id && (
+                                                        <EmojiPicker
+                                                            onSelect={(emoji) => {
+                                                                handleReact(msg.id, emoji);
+                                                                setReactionPickerMsgId(null);
+                                                            }}
+                                                            onClose={() => setReactionPickerMsgId(null)}
+                                                        />
+                                                    )}
+
+                                                    <button onClick={() => setReplyingTo(msg)} title="Reply" className="action-btn"><ReplyIcon size={16} /></button>
 
                                                     <button
                                                         onClick={() => msg.pinId ? handleUnpinMessage(msg.id) : handlePinMessage(msg.id)}
                                                         title={msg.pinId ? "Unpin" : "Pin"}
-                                                        className={msg.pinId ? "active" : ""}
+                                                        className={`action-btn ${msg.pinId ? "active" : ""}`}
                                                     >
                                                         {msg.pinId ? <UnpinIcon size={16} /> : <PinIcon size={16} />}
                                                     </button>
@@ -1011,8 +1032,8 @@ export default function ChatPage() {
                                                     {/* Edit/Delete only for own messages */}
                                                     {msg.sender.id === user?.id && !msg.deleted_at && (
                                                         <>
-                                                            <button onClick={() => handleEditMessage(msg)} title="Edit"><EditIcon size={16} /></button>
-                                                            <button onClick={() => handleDeleteMessage(msg.id)} title="Delete"><TrashIcon size={16} /></button>
+                                                            <button onClick={() => handleEditMessage(msg)} title="Edit" className="action-btn"><EditIcon size={16} /></button>
+                                                            <button onClick={() => handleDeleteMessage(msg.id)} title="Delete" className="action-btn"><TrashIcon size={16} /></button>
                                                         </>
                                                     )}
                                                 </div>
