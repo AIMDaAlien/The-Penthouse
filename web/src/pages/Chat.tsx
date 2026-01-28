@@ -11,6 +11,7 @@ import {
     getServerDetails,
     createChannel,
     addReaction,
+    removeReaction,
     editMessage,
     deleteMessage,
     markMessageRead,
@@ -482,6 +483,12 @@ export default function ChatPage() {
         return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     };
 
+    // Format exact time with seconds for message timestamp
+    const formatExactTime = (dateStr: string) => {
+        const date = new Date(dateStr);
+        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    };
+
     // Helper for Penthouse timeline - show time marker for first message or after 5+ minute gap
     const shouldShowTimeMarker = (msg: Message, index: number) => {
         if (index === 0) return true;
@@ -547,26 +554,42 @@ export default function ChatPage() {
         return <div className="message-content">{msg.content}</div>;
     };
 
-    // Reaction handler
+    // Reaction handler - toggles reaction (add if not reacted, remove if already reacted)
     const handleReact = async (messageId: number, emoji: string) => {
+        const message = messages.find(m => m.id === messageId);
+        const existingReactions = message?.reactions || [];
+        const hasReacted = existingReactions.some(r => r.emoji === emoji && r.userId === user?.id);
+
         try {
-            await addReaction(messageId, emoji);
-            // Optimistic update - socket will sync actual state
-            setMessages(prev => prev.map(m => {
-                if (m.id === messageId) {
-                    const existingReactions = m.reactions || [];
-                    const hasReacted = existingReactions.some(r => r.emoji === emoji && r.userId === user?.id);
-                    if (!hasReacted) {
+            if (hasReacted) {
+                // Remove reaction
+                await removeReaction(messageId, emoji);
+                // Optimistic update - remove this user's reaction
+                setMessages(prev => prev.map(m => {
+                    if (m.id === messageId) {
                         return {
                             ...m,
-                            reactions: [...existingReactions, { emoji, userId: user!.id, username: user!.username, displayName: user?.displayName }]
+                            reactions: (m.reactions || []).filter(r => !(r.emoji === emoji && r.userId === user?.id))
                         };
                     }
-                }
-                return m;
-            }));
+                    return m;
+                }));
+            } else {
+                // Add reaction
+                await addReaction(messageId, emoji);
+                // Optimistic update - add this user's reaction
+                setMessages(prev => prev.map(m => {
+                    if (m.id === messageId) {
+                        return {
+                            ...m,
+                            reactions: [...(m.reactions || []), { emoji, userId: user!.id, username: user!.username, displayName: user?.displayName }]
+                        };
+                    }
+                    return m;
+                }));
+            }
         } catch (err) {
-            console.error('Failed to add reaction:', err);
+            console.error('Failed to toggle reaction:', err);
         }
     };
 
@@ -947,6 +970,8 @@ export default function ChatPage() {
                                                 onTouchStart={() => handleMsgTouchStart(msg.id)}
                                                 onTouchEnd={handleMsgTouchEnd}
                                             >
+                                                {/* Exact timestamp on far right */}
+                                                <span className="exact-timestamp">{formatExactTime(msg.createdAt)}</span>
                                                 <div className="avatar">
                                                     {msg.sender.avatarUrl ? (
                                                         <img src={msg.sender.avatarUrl} alt="avatar" />

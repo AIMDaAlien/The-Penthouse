@@ -533,6 +533,8 @@
     gap: 16px;
     padding: 8px 0;
     border-radius: 4px;
+    position: relative;
+    /* For exact timestamp positioning */
     /* M3E Frosted entrance animation */
     animation: m3e-message-enter var(--m3e-duration-slow, 650ms) var(--m3e-motion-slow-spatial, cubic-bezier(0.39, 1.29, 0.35, 0.98));
     transition:
@@ -543,6 +545,19 @@
 .message:hover {
     background: rgba(255, 255, 255, 0.03);
     transform: translateY(-1px);
+}
+
+/* Exact timestamp on far right of each message */
+.exact-timestamp {
+    position: absolute;
+    right: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.7rem;
+    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+    color: rgba(255, 255, 255, 0.25);
+    pointer-events: none;
+    user-select: none;
 }
 
 .message .avatar {
