@@ -100,8 +100,12 @@ export default function ChatPage() {
     const [showFileUpload, setShowFileUpload] = useState(false);
     const [messageToDelete, setMessageToDelete] = useState<number | null>(null);
     const [showProfileModal, setShowProfileModal] = useState(false);
-    const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-    const [membersCollapsed, setMembersCollapsed] = useState(false);
+
+    // Mobile responsiveness state
+    const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
+    const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.innerWidth < 768);
+    const [membersCollapsed, setMembersCollapsed] = useState(() => window.innerWidth < 768);
+
     // Reaction emoji picker state - tracks which message's picker is open
     const [reactionPickerMsgId, setReactionPickerMsgId] = useState<number | null>(null);
 
@@ -113,6 +117,22 @@ export default function ChatPage() {
     const [typingUsers, setTypingUsers] = useState<Map<number, string>>(new Map());
     const typingTimeouts = useRef<Map<number, number>>(new Map());
     const lastTypingEmit = useRef<number>(0);
+
+    // Mobile viewport detection
+    useEffect(() => {
+        const handleResize = () => {
+            const mobile = window.innerWidth < 768;
+            setIsMobile(mobile);
+            // Auto-collapse sidebars when switching to mobile
+            if (mobile) {
+                setSidebarCollapsed(true);
+                setMembersCollapsed(true);
+            }
+        };
+
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     const loadServers = useCallback(async () => {
         try {
@@ -287,6 +307,11 @@ export default function ChatPage() {
 
         setSelectedChat(completeChat);
         joinChat(completeChat.id);
+
+        // Auto-collapse sidebar on mobile after selecting a chat
+        if (isMobile) {
+            setSidebarCollapsed(true);
+        }
 
         try {
             const { data } = await getMessages(completeChat.id);
@@ -797,6 +822,16 @@ export default function ChatPage() {
                     <>
                         <div className="chat-header">
                             <div className="header-left">
+                                {/* Mobile hamburger menu */}
+                                {isMobile && (
+                                    <button
+                                        className="mobile-menu-btn"
+                                        onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                                        title="Toggle Menu"
+                                    >
+                                        ☰
+                                    </button>
+                                )}
                                 <h3>
                                     {selectedChat.type === 'dm' ? '@' : '#'}
                                     {getChatName(selectedChat)}
