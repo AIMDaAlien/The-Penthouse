@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>POC 1: Liquid Glass Message Bubbles</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: linear-gradient(135deg, #0a0a12 0%, #1a1a2e 50%, #16213e 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            gap: 20px;
+        }
+
+        h1 {
+            color: white;
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            opacity: 0.8;
+        }
+
+        .messages-container {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            width: 100%;
+            max-width: 500px;
+        }
+
+        /* Base Message Bubble - Liquid Glass Effect */
+        .message {
+            padding: 14px 18px;
+            border-radius: 18px;
+            max-width: 80%;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            position: relative;
+
+            /* Liquid Glass Base */
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow:
+                0 4px 30px rgba(0, 0, 0, 0.3),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+
+            /* M3 Expression - Spring Entrance */
+            animation: messageSlideIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+            transform-origin: bottom left;
+
+            /* Hover state with subtle glow */
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        .message.sent {
+            align-self: flex-end;
+            transform-origin: bottom right;
+            background: linear-gradient(135deg, rgba(166, 136, 250, 0.2) 0%, rgba(166, 136, 250, 0.1) 100%);
+            border-color: rgba(166, 136, 250, 0.3);
+            color: #e0d4ff;
+        }
+
+        .message.received {
+            align-self: flex-start;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        /* Hover - Subtle lift with glow */
+        .message:hover {
+            transform: translateY(-2px) scale(1.01);
+            box-shadow:
+                0 8px 40px rgba(0, 0, 0, 0.4),
+                0 0 20px rgba(166, 136, 250, 0.15),
+                inset 0 1px 0 rgba(255, 255, 255, 0.15);
+        }
+
+        /* Entrance Animation - M3 Spring Physics */
+        @keyframes messageSlideIn {
+            0% {
+                opacity: 0;
+                transform: translateY(20px) scale(0.9);
+            }
+
+            60% {
+                transform: translateY(-4px) scale(1.02);
+            }
+
+            100% {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        /* Staggered entrance for demo */
+        .message:nth-child(1) {
+            animation-delay: 0s;
+        }
+
+        .message:nth-child(2) {
+            animation-delay: 0.15s;
+        }
+
+        .message:nth-child(3) {
+            animation-delay: 0.3s;
+        }
+
+        .message:nth-child(4) {
+            animation-delay: 0.45s;
+        }
+
+        /* Send Button Demo */
+        .send-demo {
+            margin-top: 30px;
+            display: flex;
+            gap: 12px;
+            width: 100%;
+            max-width: 500px;
+        }
+
+        .input-demo {
+            flex: 1;
+            padding: 14px 18px;
+            border-radius: 24px;
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            font-size: 0.95rem;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+
+        .input-demo:focus {
+            border-color: rgba(166, 136, 250, 0.5);
+            box-shadow: 0 0 0 3px rgba(166, 136, 250, 0.1);
+        }
+
+        .send-btn {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #a688fa 0%, #8b6af0 100%);
+            border: none;
+            color: #12101a;
+            font-size: 1.2rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+            box-shadow: 0 4px 20px rgba(166, 136, 250, 0.4);
+        }
+
+        .send-btn:hover {
+            transform: scale(1.08);
+            box-shadow: 0 6px 30px rgba(166, 136, 250, 0.5);
+        }
+
+        .send-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* Sent animation for button */
+        .send-btn.sending {
+            animation: sendPulse 0.4s ease;
+        }
+
+        @keyframes sendPulse {
+            0% {
+                transform: scale(1);
+            }
+
+            30% {
+                transform: scale(0.85);
+            }
+
+            60% {
+                transform: scale(1.1);
+            }
+
+            100% {
+                transform: scale(1);
+            }
+        }
+
+        .description {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.85rem;
+            text-align: center;
+            margin-top: 30px;
+            max-width: 500px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>POC 1: Liquid Glass + Spring Entrance</h1>
+
+    <div class="messages-container">
+        <div class="message received">
+            Hey! Have you seen the new design system?
+        </div>
+        <div class="message sent">
+            Yes! The glassmorphism looks incredible ✨
+        </div>
+        <div class="message received">
+            The animations feel so alive, like they have personality
+        </div>
+        <div class="message sent">
+            M3 Expression + Apple glass = chef's kiss 👨‍🍳
+        </div>
+    </div>
+
+    <div class="send-demo">
+        <input type="text" class="input-demo" placeholder="Type a message...">
+        <button class="send-btn" onclick="sendDemo(this)">→</button>
+    </div>
+
+    <p class="description">
+        Hover over messages to see the lift effect. Click send to see the pulse animation.
+        <br>Messages have spring-physics entrance with overshoot.
+    </p>
+
+    <script>
+        function sendDemo(btn) {
+            btn.classList.add('sending');
+            setTimeout(() => btn.classList.remove('sending'), 400);
+        }
+    </script>
+</body>
+
+</html>

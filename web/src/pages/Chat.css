@@ -276,24 +276,34 @@
     padding: 16px;
 }
 
+/* M3E Soft Button Style */
 .action-btn {
     width: 100%;
-    background: rgba(166, 136, 250, 0.1);
+    background: rgba(166, 136, 250, 0.15);
     border: 1px solid rgba(166, 136, 250, 0.3);
-    color: var(--accent-lavender);
-    padding: 10px;
-    border-radius: 6px;
+    color: var(--accent-lavender-light);
+    padding: 12px 20px;
+    border-radius: 9999px;
     cursor: pointer;
-    transition: all 0.2s;
-    font-weight: 600;
+    font-weight: 500;
     font-family: 'Ubuntu', sans-serif;
+
+    /* M3E Motion */
+    transition:
+        transform var(--m3e-duration-default, 500ms) var(--m3e-motion-default-spatial, cubic-bezier(0.38, 1.21, 0.22, 1.00)),
+        background var(--m3e-duration-default, 500ms) var(--m3e-motion-default-effects, cubic-bezier(0.34, 0.80, 0.34, 1.00)),
+        border-color var(--m3e-duration-default, 500ms) var(--m3e-motion-default-effects, cubic-bezier(0.34, 0.80, 0.34, 1.00));
 }
 
 .action-btn:hover {
-    background: rgba(166, 136, 250, 0.2);
-    border-color: var(--accent-lavender);
-    transform: none;
-    box-shadow: 0 0 10px var(--accent-lavender-glow);
+    transform: translateY(-2px);
+    background: rgba(166, 136, 250, 0.25);
+    border-color: rgba(166, 136, 250, 0.5);
+}
+
+.action-btn:active {
+    transform: translateY(0) scale(0.98);
+    transition-duration: 100ms;
 }
 
 .creation-form {
@@ -523,11 +533,16 @@
     gap: 16px;
     padding: 8px 0;
     border-radius: 4px;
-    transition: background 0.15s;
+    /* M3E Frosted entrance animation */
+    animation: m3e-message-enter var(--m3e-duration-slow, 650ms) var(--m3e-motion-slow-spatial, cubic-bezier(0.39, 1.29, 0.35, 0.98));
+    transition:
+        background var(--m3e-duration-default, 500ms) var(--m3e-motion-default-effects, cubic-bezier(0.34, 0.80, 0.34, 1.00)),
+        transform var(--m3e-duration-default, 500ms) var(--m3e-motion-default-spatial, cubic-bezier(0.38, 1.21, 0.22, 1.00));
 }
 
 .message:hover {
-    background: rgba(255, 255, 255, 0.02);
+    background: rgba(255, 255, 255, 0.03);
+    transform: translateY(-1px);
 }
 
 .message .avatar {
@@ -576,6 +591,15 @@
     color: var(--accent-lavender);
 }
 
+/* M3E Frosted accent tint for own messages */
+.message.own .message-content {
+    background: linear-gradient(145deg,
+            rgba(166, 136, 250, 0.1) 0%,
+            rgba(166, 136, 250, 0.04) 100%);
+    border-color: rgba(166, 136, 250, 0.15);
+    color: #d8ccff;
+}
+
 .time {
     font-size: 0.7rem;
     color: var(--text-muted);
@@ -586,6 +610,21 @@
     line-height: 1.5;
     white-space: pre-wrap;
     word-wrap: break-word;
+
+    /* M3E Frosted glass styling for message content */
+    padding: 12px 16px;
+    background: linear-gradient(145deg,
+            rgba(255, 255, 255, 0.06) 0%,
+            rgba(255, 255, 255, 0.02) 100%);
+    backdrop-filter: blur(32px) saturate(1.2);
+    -webkit-backdrop-filter: blur(32px) saturate(1.2);
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.35),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+    max-width: fit-content;
 }
 
 .message-gif {
@@ -665,25 +704,51 @@
     transform: translateX(0);
 }
 
+/* M3E Breathing Dot style for message actions */
 .message-actions .action-btn {
     width: 32px;
     height: 32px;
-    border-radius: 8px;
+    border-radius: 50%;
     border: none;
-    background: rgba(255, 255, 255, 0.05);
+    background: transparent;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 1rem;
-    transition: all 0.2s;
-    color: var(--text-muted);
+    color: rgba(255, 255, 255, 0.5);
+    position: relative;
+    transition: color var(--m3e-duration-default, 500ms) var(--m3e-motion-default-effects, cubic-bezier(0.34, 0.80, 0.34, 1.00));
+}
+
+.message-actions .action-btn::before {
+    content: '';
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    bottom: 2px;
+    right: 2px;
+    background: var(--accent-lavender);
+    border-radius: 50%;
+    opacity: 0;
+    transform: scale(0);
+    transition:
+        opacity var(--m3e-duration-default, 500ms) var(--m3e-motion-default-effects, cubic-bezier(0.34, 0.80, 0.34, 1.00)),
+        transform var(--m3e-duration-fast, 350ms) var(--m3e-motion-fast-spatial, cubic-bezier(0.42, 1.67, 0.21, 0.90));
 }
 
 .message-actions .action-btn:hover {
-    background: rgba(255, 255, 255, 0.15);
-    color: var(--text-primary);
-    transform: scale(1.1);
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.message-actions .action-btn:hover::before {
+    opacity: 1;
+    transform: scale(1);
+    animation: m3e-dot-pulse 1.5s ease-in-out infinite;
+}
+
+.message-actions .action-btn:active {
+    color: var(--accent-lavender);
 }
 
 .message-actions .react-btn {
@@ -803,20 +868,46 @@
     padding: 16px 24px 24px;
 }
 
+/* M3E Contained Fusion Input */
 .input-wrapper {
-    background: rgba(255, 255, 255, 0.07);
+    background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 10px;
+    border-radius: 12px 12px 0 0;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.1);
     display: flex;
     align-items: center;
     padding: 4px 16px;
-    transition: border-color 0.2s, box-shadow 0.2s;
     gap: 8px;
+    position: relative;
+
+    /* M3E Motion */
+    transition:
+        background var(--m3e-duration-default, 500ms) var(--m3e-motion-default-effects, cubic-bezier(0.34, 0.80, 0.34, 1.00)),
+        border-color var(--m3e-duration-default, 500ms) var(--m3e-motion-default-effects, cubic-bezier(0.34, 0.80, 0.34, 1.00)),
+        box-shadow var(--m3e-duration-slow, 650ms) var(--m3e-motion-slow-effects, cubic-bezier(0.34, 0.88, 0.34, 1.00));
+}
+
+/* Expanding underline indicator */
+.input-wrapper::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    width: 0;
+    height: 2px;
+    background: var(--accent-lavender);
+    border-radius: 0 0 2px 2px;
+    transition: width var(--m3e-duration-default, 500ms) var(--m3e-motion-default-spatial, cubic-bezier(0.38, 1.21, 0.22, 1.00));
 }
 
 .input-wrapper:focus-within {
-    border-color: rgba(180, 160, 220, 0.35);
-    box-shadow: 0 0 0 3px rgba(180, 160, 220, 0.1);
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(166, 136, 250, 0.2);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.input-wrapper:focus-within::after {
+    width: 100%;
 }
 
 .input-wrapper input {
@@ -836,52 +927,104 @@
 
 .input-wrapper input::placeholder {
     color: var(--text-muted);
+    transition:
+        opacity var(--m3e-duration-fast, 350ms) var(--m3e-motion-fast-effects, cubic-bezier(0.31, 0.94, 0.34, 1.00)),
+        transform var(--m3e-duration-fast, 350ms) var(--m3e-motion-fast-spatial, cubic-bezier(0.42, 1.67, 0.21, 0.90));
 }
 
+.input-wrapper:focus-within input::placeholder {
+    opacity: 0.6;
+    transform: translateX(4px);
+}
+
+/* M3E Breathing Dot Icon Buttons */
 .chat-action-btn {
-    width: 36px;
-    height: 36px;
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    color: var(--text-muted);
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.5);
     cursor: pointer;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     padding: 0;
     flex-shrink: 0;
+    position: relative;
+
+    /* M3E Effects motion */
+    transition: color var(--m3e-duration-default, 500ms) var(--m3e-motion-default-effects, cubic-bezier(0.34, 0.80, 0.34, 1.00));
+}
+
+/* Breathing dot indicator */
+.chat-action-btn::before {
+    content: '';
+    position: absolute;
+    width: 5px;
+    height: 5px;
+    bottom: 3px;
+    right: 3px;
+    background: var(--accent-lavender);
+    border-radius: 50%;
+    opacity: 0;
+    transform: scale(0);
+    transition:
+        opacity var(--m3e-duration-default, 500ms) var(--m3e-motion-default-effects, cubic-bezier(0.34, 0.80, 0.34, 1.00)),
+        transform var(--m3e-duration-fast, 350ms) var(--m3e-motion-fast-spatial, cubic-bezier(0.42, 1.67, 0.21, 0.90));
 }
 
 .chat-action-btn:hover {
-    background: rgba(255, 255, 255, 0.12);
-    border-color: rgba(255, 255, 255, 0.2);
-    color: var(--text-primary);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.chat-action-btn:hover::before {
+    opacity: 1;
+    transform: scale(1);
+    animation: m3e-dot-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes m3e-dot-pulse {
+
+    0%,
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+
+    50% {
+        transform: scale(1.3);
+        opacity: 0.7;
+    }
 }
 
 .chat-action-btn:active {
-    transform: translateY(0);
-}
-
-.chat-action-btn.send-btn {
-    background: rgba(166, 136, 250, 0.1);
-    border-color: rgba(166, 136, 250, 0.3);
     color: var(--accent-lavender);
 }
 
+.chat-action-btn.send-btn {
+    background: rgba(166, 136, 250, 0.15);
+    border: 1px solid rgba(166, 136, 250, 0.3);
+    color: var(--accent-lavender-light);
+}
+
 .chat-action-btn.send-btn:hover:not(:disabled) {
-    background: var(--accent-lavender);
-    color: #12101a;
-    box-shadow: 0 0 15px var(--accent-lavender-glow);
+    background: rgba(166, 136, 250, 0.25);
+    border-color: rgba(166, 136, 250, 0.5);
+    color: var(--accent-lavender-light);
+}
+
+.chat-action-btn.send-btn:hover:not(:disabled)::before {
+    background: var(--accent-lavender-light);
 }
 
 .chat-action-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
-    transform: none;
+}
+
+.chat-action-btn:disabled::before {
+    display: none;
 }
 
 
