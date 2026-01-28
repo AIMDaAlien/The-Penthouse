@@ -7,17 +7,22 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "remotion": "npx remotion studio src/remotion/index.ts",
+    "remotion:render": "npx remotion render src/remotion/index.ts"
   },
   "dependencies": {
     "@emoji-mart/data": "^1.2.1",
     "@emoji-mart/react": "^1.1.1",
     "@giphy/js-fetch-api": "^5.7.0",
     "@giphy/react-components": "^10.1.1",
+    "@remotion/cli": "4.0.410",
+    "@remotion/player": "4.0.410",
     "axios": "^1.13.2",
     "emoji-mart": "^5.6.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "remotion": "4.0.410",
     "socket.io-client": "^4.8.3"
   },
   "devDependencies": {
