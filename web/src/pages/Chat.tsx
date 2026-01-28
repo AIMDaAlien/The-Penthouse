@@ -28,11 +28,12 @@ import EmojiPicker from '../components/EmojiPicker';
 import FileUpload from '../components/FileUpload';
 import VoiceRecorder from '../components/VoiceRecorder';
 import AudioPlayer from '../components/AudioPlayer';
-import { EmojiIcon, GifIcon, AttachmentIcon, SendIcon } from '../components/Icons';
+import { EmojiIcon, GifIcon, AttachmentIcon, SendIcon, EditIcon, TrashIcon, PinIcon, UnpinIcon, ReplyIcon, UsersIcon, KlipyIcon } from '../components/Icons';
 import ProfileModal from '../components/ProfileModal';
 import InviteModal from '../components/InviteModal';
 import ImageLightbox from '../components/ImageLightbox';
 import FilePreview from '../components/FilePreview';
+import ConfirmModal from '../components/ConfirmModal';
 import './Chat.css';
 
 // Random emoji pool for quick reactions
@@ -97,6 +98,7 @@ export default function ChatPage() {
     const [showKlipyPicker, setShowKlipyPicker] = useState(false);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [showFileUpload, setShowFileUpload] = useState(false);
+    const [messageToDelete, setMessageToDelete] = useState<number | null>(null);
     const [showProfileModal, setShowProfileModal] = useState(false);
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [membersCollapsed, setMembersCollapsed] = useState(false);
@@ -313,10 +315,15 @@ export default function ChatPage() {
         }
     };
 
-    const handleDeleteMessage = async (messageId: number) => {
-        if (!window.confirm('Are you sure you want to delete this message?')) return;
+    const handleDeleteMessage = (messageId: number) => {
+        setMessageToDelete(messageId);
+    };
+
+    const handleConfirmDelete = async () => {
+        if (!messageToDelete) return;
         try {
-            await deleteMessage(messageId);
+            await deleteMessage(messageToDelete);
+            setMessageToDelete(null);
         } catch (error) {
             console.error('Failed to delete message:', error);
         }
@@ -386,10 +393,10 @@ export default function ChatPage() {
         }
     };
 
-    const handleVoiceSend = async (audioBlob: Blob, duration: number) => {
+    const handleVoiceSend = async (audioBlob: Blob, duration: number, mimeType: string) => {
         if (!selectedChat) return;
         try {
-            const { data } = await uploadVoice(audioBlob, duration);
+            const { data } = await uploadVoice(audioBlob, duration, mimeType);
             await sendMessage(selectedChat.id, data.url, 'voice', data.params);
         } catch (err) {
             console.error('Failed to send voice message:', err);
@@ -806,14 +813,14 @@ export default function ChatPage() {
                                     }}
                                     title="Pinned Messages"
                                 >
-                                    📌
+                                    <PinIcon size={18} />
                                 </button>
                                 <button
                                     className={`toggle-sidebar-btn ${!membersCollapsed ? 'active' : ''}`}
                                     onClick={() => setMembersCollapsed(!membersCollapsed)}
                                     title="Toggle Members"
                                 >
-                                    👥
+                                    <UsersIcon size={18} />
                                 </button>
                             </div>
                         </div>
@@ -840,7 +847,7 @@ export default function ChatPage() {
                                                         onClick={() => msg.id && handleUnpinMessage(msg.id)}
                                                         title="Unpin"
                                                     >
-                                                        ×
+                                                        <UnpinIcon size={14} />
                                                     </button>
                                                 </div>
                                                 <div className="pinned-content">
@@ -991,21 +998,21 @@ export default function ChatPage() {
                                                     <button onClick={() => addReaction(msg.id, '😢')} title="Sad">😢</button>
                                                     <button onClick={() => addReaction(msg.id, '🔥')} title="Fire">🔥</button>
                                                     <div className="action-separator"></div>
-                                                    <button onClick={() => setReplyingTo(msg)} title="Reply">↩️</button>
+                                                    <button onClick={() => setReplyingTo(msg)} title="Reply"><ReplyIcon size={16} /></button>
 
                                                     <button
                                                         onClick={() => msg.pinId ? handleUnpinMessage(msg.id) : handlePinMessage(msg.id)}
                                                         title={msg.pinId ? "Unpin" : "Pin"}
                                                         className={msg.pinId ? "active" : ""}
                                                     >
-                                                        📌
+                                                        {msg.pinId ? <UnpinIcon size={16} /> : <PinIcon size={16} />}
                                                     </button>
 
                                                     {/* Edit/Delete only for own messages */}
                                                     {msg.sender.id === user?.id && !msg.deleted_at && (
                                                         <>
-                                                            <button onClick={() => handleEditMessage(msg)} title="Edit">✏️</button>
-                                                            <button onClick={() => handleDeleteMessage(msg.id)} title="Delete">🗑️</button>
+                                                            <button onClick={() => handleEditMessage(msg)} title="Edit"><EditIcon size={16} /></button>
+                                                            <button onClick={() => handleDeleteMessage(msg.id)} title="Delete"><TrashIcon size={16} /></button>
                                                         </>
                                                     )}
                                                 </div>
@@ -1022,7 +1029,7 @@ export default function ChatPage() {
                                 <div className="attach-wrapper">
                                     <button
                                         type="button"
-                                        className="attach-btn"
+                                        className="chat-action-btn"
                                         title="Upload file"
                                         onClick={() => setShowFileUpload(!showFileUpload)}
                                     >
@@ -1056,7 +1063,7 @@ export default function ChatPage() {
                                 />
                                 <button
                                     type="button"
-                                    className="emoji-btn"
+                                    className="chat-action-btn"
                                     title="Emojis"
                                     onClick={() => setShowEmojiPicker(true)}
                                 >
@@ -1064,7 +1071,7 @@ export default function ChatPage() {
                                 </button>
                                 <button
                                     type="button"
-                                    className="gif-btn giphy"
+                                    className="chat-action-btn"
                                     onClick={() => setShowGiphyPicker(true)}
                                     title="GIPHY"
                                 >
@@ -1072,16 +1079,16 @@ export default function ChatPage() {
                                 </button>
                                 <button
                                     type="button"
-                                    className="gif-btn klipy"
+                                    className="chat-action-btn"
                                     onClick={() => setShowKlipyPicker(true)}
                                     title="Klipy"
                                 >
-                                    <span style={{ fontSize: '10px', fontWeight: 'bold' }}>KLIPY</span>
+                                    <KlipyIcon size={20} />
                                 </button>
                                 <VoiceRecorder onSend={handleVoiceSend} />
                                 <button
                                     type="submit"
-                                    className="send-btn"
+                                    className="chat-action-btn send-btn"
                                     disabled={!newMessage.trim()}
                                     title="Send"
                                 >
@@ -1220,6 +1227,16 @@ export default function ChatPage() {
                     />
                 )
             }
-        </div >
+
+
+            <ConfirmModal
+                isOpen={messageToDelete !== null}
+                onClose={() => setMessageToDelete(null)}
+                onConfirm={handleConfirmDelete}
+                title="Delete Message"
+                message="Are you sure you want to delete this message? This action cannot be undone."
+                confirmText="Delete"
+            />
+        </div>
     );
 }

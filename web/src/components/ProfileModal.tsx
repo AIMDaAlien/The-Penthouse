@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import ImageCropper from './ImageCropper';
 import './ProfileModal.css';
 
 interface ProfileModalProps {
@@ -14,17 +15,30 @@ export default function ProfileModal({ onClose }: ProfileModalProps) {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
+    const [showCropper, setShowCropper] = useState(false);
+    const [tempAvatarSrc, setTempAvatarSrc] = useState<string | null>(null);
 
     const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
-            setAvatarFile(file);
             const reader = new FileReader();
             reader.onloadend = () => {
-                setAvatarPreview(reader.result as string);
+                setTempAvatarSrc(reader.result as string);
+                setShowCropper(true);
             };
             reader.readAsDataURL(file);
+            // Reset input so same file can be selected again
+            e.target.value = '';
         }
+    };
+
+    const handleCrop = (croppedBlob: Blob) => {
+        // Convert blob to file
+        const file = new File([croppedBlob], "avatar.png", { type: "image/png" });
+        setAvatarFile(file);
+        setAvatarPreview(URL.createObjectURL(croppedBlob));
+        setShowCropper(false);
+        setTempAvatarSrc(null);
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -70,7 +84,7 @@ export default function ProfileModal({ onClose }: ProfileModalProps) {
     };
 
     return (
-        <div className="profile-modal-overlay" onClick={onClose}>
+        <div className="profile-modal-overlay" onClick={showCropper ? undefined : onClose}>
             <div className="profile-modal" onClick={(e) => e.stopPropagation()}>
                 <div className="profile-modal-header">
                     <h2>Edit Profile</h2>
@@ -131,7 +145,21 @@ export default function ProfileModal({ onClose }: ProfileModalProps) {
                         </button>
                     </div>
                 </form>
+
             </div>
-        </div>
+
+            {
+                showCropper && tempAvatarSrc && (
+                    <ImageCropper
+                        imageSrc={tempAvatarSrc}
+                        onCrop={handleCrop}
+                        onCancel={() => {
+                            setShowCropper(false);
+                            setTempAvatarSrc(null);
+                        }}
+                    />
+                )
+            }
+        </div >
     );
 }

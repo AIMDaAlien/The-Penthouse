@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { PlayIcon, PauseIcon } from './Icons';
 import './AudioPlayer.css';
 
@@ -11,6 +11,14 @@ export default function AudioPlayer({ src }: AudioPlayerProps) {
     const [progress, setProgress] = useState(0);
     const [duration, setDuration] = useState(0);
     const audioRef = useRef<HTMLAudioElement | null>(null);
+
+    // Generate stable random bars for visualization
+    const visualizerBars = useMemo(() =>
+        [...Array(20)].map((_, i) => ({
+            key: i,
+            height: 30 + Math.random() * 70
+        })),
+        []);
 
     useEffect(() => {
         const audio = audioRef.current;
@@ -67,17 +75,41 @@ export default function AudioPlayer({ src }: AudioPlayerProps) {
     };
 
     return (
-        <div className="custom-audio-player">
+        <div className="custom-audio-player discord-style">
             <button className="player-btn" onClick={togglePlay}>
-                {isPlaying ? <PauseIcon size={16} /> : <PlayIcon size={16} />}
+                {isPlaying ? <PauseIcon size={20} /> : <PlayIcon size={20} />}
             </button>
 
-            <div className="progress-container" onClick={handleSeek}>
-                <div className="progress-bar" style={{ width: `${progress}%` }}></div>
+            <div className="audio-visualizer-container" onClick={handleSeek}>
+                {/* Simulated Waveform Background */}
+                <div className="waveform-bg">
+                    {visualizerBars.map(bar => (
+                        <div
+                            key={bar.key}
+                            className="wave-bar"
+                            style={{
+                                height: `${bar.height}%`,
+                                opacity: 0.3
+                            }}
+                        ></div>
+                    ))}
+                </div>
+                {/* Active Waveform (masked by progress) */}
+                <div className="waveform-active" style={{ width: `${progress}%` }}>
+                    {visualizerBars.map(bar => (
+                        <div
+                            key={bar.key}
+                            className="wave-bar"
+                            style={{
+                                height: `${bar.height}%`
+                            }}
+                        ></div>
+                    ))}
+                </div>
             </div>
 
             <span className="time-display">
-                {formatTime(duration || 0)}
+                {formatTime(duration)}
             </span>
 
             <audio ref={audioRef} src={src} preload="metadata" />

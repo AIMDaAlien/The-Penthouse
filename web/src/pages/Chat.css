@@ -811,6 +811,7 @@
     align-items: center;
     padding: 4px 16px;
     transition: border-color 0.2s, box-shadow 0.2s;
+    gap: 8px;
 }
 
 .input-wrapper:focus-within {
@@ -826,6 +827,7 @@
     color: white;
     font-size: 0.95rem;
     font-family: 'Ubuntu', sans-serif;
+    min-width: 0;
 }
 
 .input-wrapper input:focus {
@@ -836,52 +838,50 @@
     color: var(--text-muted);
 }
 
-.attach-btn,
-.emoji-btn {
-    background: transparent;
-    border: none;
+.chat-action-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     color: var(--text-muted);
     cursor: pointer;
-    font-weight: 600;
-    padding: 8px;
-    transition: all 0.2s;
-    border-radius: 4px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    padding: 0;
+    flex-shrink: 0;
 }
 
-.attach-btn:hover,
-.emoji-btn:hover {
+.chat-action-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.2);
     color: var(--text-primary);
-    background: rgba(255, 255, 255, 0.08);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
-.gif-btn {
-    padding: 5px 10px;
-    border-radius: 4px;
-    font-size: 0.7rem;
-    font-weight: 700;
-    cursor: pointer;
-    border: none;
-    transition: all 0.2s;
-    font-family: 'Ubuntu', sans-serif;
-    margin-left: 4px;
+.chat-action-btn:active {
+    transform: translateY(0);
 }
 
-.gif-btn.giphy {
-    background: rgba(255, 0, 128, 0.2);
-    color: var(--accent-fuchsia);
-}
-
-.gif-btn.giphy:hover {
-    background: rgba(255, 0, 128, 0.35);
-}
-
-.gif-btn.klipy {
-    background: rgba(180, 160, 220, 0.2);
+.chat-action-btn.send-btn {
+    background: rgba(166, 136, 250, 0.1);
+    border-color: rgba(166, 136, 250, 0.3);
     color: var(--accent-lavender);
 }
 
-.gif-btn.klipy:hover {
-    background: rgba(180, 160, 220, 0.35);
+.chat-action-btn.send-btn:hover:not(:disabled) {
+    background: var(--accent-lavender);
+    color: #12101a;
+    box-shadow: 0 0 15px var(--accent-lavender-glow);
+}
+
+.chat-action-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
 }
 
 
@@ -1279,14 +1279,15 @@
 }
 
 .timeline-time {
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     color: var(--accent-lavender);
     font-weight: 500;
     background: var(--bg-secondary);
-    padding: 2px 8px;
-    border-radius: 10px;
+    padding: 6px 12px;
+    border-radius: 12px;
     border: 1px solid rgba(180, 160, 220, 0.2);
     position: relative;
+    letter-spacing: 0.5px;
 }
 
 /* Dot on the timeline for time markers */

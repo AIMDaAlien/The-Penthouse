@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { Chat, Server, User, Message, Channel } from '../types';
+import type { Message } from '../types';
 
 const API_URL = '/api';
 
@@ -23,9 +23,13 @@ export const uploadFile = (file: File) => {
     return api.post<{ url: string; type: 'image' | 'video' | 'file'; mimeType: string; filename: string }>('/media/upload', formData);
 };
 
-export const uploadVoice = (audioBlob: Blob, duration: number) => {
+export const uploadVoice = (audioBlob: Blob, duration: number, mimeType = 'audio/webm') => {
     const formData = new FormData();
-    formData.append('voice', audioBlob, 'voice_message.webm');
+    // Map mimeType to extension
+    const ext = mimeType.includes('mp4') ? 'mp4' :
+        mimeType.includes('ogg') ? 'ogg' : 'webm';
+
+    formData.append('voice', audioBlob, `voice_message.${ext}`);
     formData.append('duration', duration.toString());
     return api.post<{ url: string; params: { fileName: string; duration: number; mimeType: string } }>('/media/voice', formData);
 };

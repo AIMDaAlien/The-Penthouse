@@ -1,9 +1,9 @@
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { MicIcon, TrashIcon, PlayIcon, PauseIcon, StopIcon, SendIcon } from './Icons';
 import './VoiceRecorder.css';
 
 interface VoiceRecorderProps {
-    onSend: (audioBlob: Blob, duration: number) => void;
+    onSend: (audioBlob: Blob, duration: number, mimeType: string) => void;
 }
 
 export default function VoiceRecorder({ onSend }: VoiceRecorderProps) {
@@ -13,6 +13,7 @@ export default function VoiceRecorder({ onSend }: VoiceRecorderProps) {
     const [recordingTime, setRecordingTime] = useState(0);
     const [isPlaying, setIsPlaying] = useState(false);
     const [audioUrl, setAudioUrl] = useState<string | null>(null);
+    const [mimeType, setMimeType] = useState<string>('audio/webm');
 
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const chunksRef = useRef<Blob[]>([]);
@@ -21,12 +22,8 @@ export default function VoiceRecorder({ onSend }: VoiceRecorderProps) {
 
     useEffect(() => {
         return () => {
-            if (audioUrl) {
-                URL.revokeObjectURL(audioUrl);
-            }
-            if (timerRef.current) {
-                clearInterval(timerRef.current);
-            }
+            if (audioUrl) URL.revokeObjectURL(audioUrl);
+            if (timerRef.current) clearInterval(timerRef.current);
         };
     }, [audioUrl]);
 
@@ -34,28 +31,29 @@ export default function VoiceRecorder({ onSend }: VoiceRecorderProps) {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-            // Prefer webm, fallback to whatever is supported
-            let mimeType = 'audio/webm';
-            if (!MediaRecorder.isTypeSupported(mimeType)) {
-                mimeType = ''; // Default
-            }
+            // Detect supported mime type
+            const types = [
+                'audio/webm;codecs=opus',
+                'audio/webm',
+                'audio/mp4',
+                'audio/ogg;codecs=opus',
+                'audio/ogg'
+            ];
+            const supportedType = types.find(type => MediaRecorder.isTypeSupported(type)) || '';
+            setMimeType(supportedType);
 
-            mediaRecorderRef.current = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+            mediaRecorderRef.current = new MediaRecorder(stream, supportedType ? { mimeType: supportedType } : undefined);
             chunksRef.current = [];
 
             mediaRecorderRef.current.ondataavailable = (e) => {
-                if (e.data.size > 0) {
-                    chunksRef.current.push(e.data);
-                }
+                if (e.data.size > 0) chunksRef.current.push(e.data);
             };
 
             mediaRecorderRef.current.onstop = () => {
-                const blob = new Blob(chunksRef.current, { type: mimeType || 'audio/webm' });
+                const blob = new Blob(chunksRef.current, { type: supportedType || 'audio/webm' });
                 setAudioBlob(blob);
                 const url = URL.createObjectURL(blob);
                 setAudioUrl(url);
-
-                // Stop all tracks
                 stream.getTracks().forEach(track => track.stop());
             };
 
@@ -63,7 +61,7 @@ export default function VoiceRecorder({ onSend }: VoiceRecorderProps) {
             setIsRecording(true);
             setRecordingTime(0);
 
-            timerRef.current = setInterval(() => {
+            timerRef.current = window.setInterval(() => {
                 setRecordingTime(prev => prev + 1);
             }, 1000);
 
@@ -77,7 +75,7 @@ export default function VoiceRecorder({ onSend }: VoiceRecorderProps) {
         if (mediaRecorderRef.current && isRecording) {
             mediaRecorderRef.current.stop();
             setIsRecording(false);
-            setDuration(recordingTime); // Capture final duration
+            setDuration(recordingTime);
             if (timerRef.current) {
                 clearInterval(timerRef.current);
                 timerRef.current = null;
@@ -87,7 +85,7 @@ export default function VoiceRecorder({ onSend }: VoiceRecorderProps) {
 
     const handleSend = () => {
         if (audioBlob) {
-            onSend(audioBlob, duration);
+            onSend(audioBlob, duration, mimeType);
             resetRecorder();
         }
     };
@@ -104,7 +102,6 @@ export default function VoiceRecorder({ onSend }: VoiceRecorderProps) {
 
     const togglePlayback = () => {
         if (!audioRef.current || !audioUrl) return;
-
         if (isPlaying) {
             audioRef.current.pause();
         } else {
@@ -119,10 +116,13 @@ export default function VoiceRecorder({ onSend }: VoiceRecorderProps) {
         return `${mins}:${secs.toString().padStart(2, '0')}`;
     };
 
+    const visualizerBars = React.useMemo(() =>
+        [...Array(10)].map((_, i) => ({ key: i, height: Math.random() * 100 })),
+        []);
+
     return (
         <div className={`voice-recorder ${isRecording ? 'recording' : ''}`}>
             {audioBlob ? (
-                // Preview Mode
                 <div className="preview-mode">
                     <button className="icon-btn delete-btn" onClick={resetRecorder} title="Discard">
                         <TrashIcon size={18} />
@@ -133,6 +133,12 @@ export default function VoiceRecorder({ onSend }: VoiceRecorderProps) {
                             {isPlaying ? <PauseIcon size={16} /> : <PlayIcon size={16} />}
                         </button>
                         <span className="duration">{formatTime(duration)}</span>
+                        {/* Visualizer Placeholder */}
+                        <div className="mini-visualizer">
+                            {visualizerBars.map(bar => (
+                                <div key={bar.key} className="bar" style={{ height: bar.height + '%' }}></div>
+                            ))}
+                        </div>
                         <audio
                             ref={audioRef}
                             src={audioUrl!}
@@ -146,7 +152,6 @@ export default function VoiceRecorder({ onSend }: VoiceRecorderProps) {
                     </button>
                 </div>
             ) : isRecording ? (
-                // Recording Mode
                 <div className="recording-mode">
                     <div className="recording-indicator">
                         <span className="pulse-dot"></span>
@@ -157,7 +162,6 @@ export default function VoiceRecorder({ onSend }: VoiceRecorderProps) {
                     </button>
                 </div>
             ) : (
-                // Idle Mode
                 <button className="icon-btn mic-btn" onClick={startRecording} title="Record Voice Message">
                     <MicIcon size={20} />
                 </button>
