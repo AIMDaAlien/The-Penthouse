@@ -44,6 +44,22 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', app: 'The Penthouse', version: '1.0.0' });
 });
 
+// Serve frontend in production
+if (process.env.NODE_ENV === 'production') {
+  const path = require('path');
+  const frontendPath = path.join(__dirname, '../../web/dist');
+
+  // Serve static files
+  app.use(express.static(frontendPath));
+
+  // SPA fallback - serve index.html for all non-API routes
+  app.get('*', (req, res) => {
+    if (!req.path.startsWith('/api') && !req.path.startsWith('/uploads')) {
+      res.sendFile(path.join(frontendPath, 'index.html'));
+    }
+  });
+}
+
 // Initialize database and start server
 const PORT = process.env.PORT || 3000;
 

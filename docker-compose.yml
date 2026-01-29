@@ -1,23 +1,28 @@
 version: '3.8'
 
 services:
-  penthouse-api:
-    build: ./server
-    container_name: penthouse-api
+  penthouse-app:
+    build:
+      context: .
+      dockerfile: Dockerfile.production
+    container_name: penthouse-app
     restart: unless-stopped
     ports:
       - "3000:3000"
     volumes:
-      - ./server/data:/app/data
+      - ./server/data:/app/server/data
     environment:
       - NODE_ENV=production
       - PORT=3000
       - JWT_SECRET=${JWT_SECRET:-change-this-secret-in-production}
       - GIPHY_API_KEY=${GIPHY_API_KEY}
       - KLIPY_API_KEY=${KLIPY_API_KEY}
-    networks:
-      - penthouse-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 networks:
-  penthouse-network:
-    driver: bridge
+  default:
+    name: penthouse-network
