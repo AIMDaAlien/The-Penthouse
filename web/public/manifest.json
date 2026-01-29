@@ -1,0 +1,41 @@
+{
+    "name": "The Penthouse",
+    "short_name": "Penthouse",
+    "description": "Private social media for the elite",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#0f0c15",
+    "theme_color": "#a688fa",
+    "orientation": "portrait-primary",
+    "icons": [
+        {
+            "src": "/icons/icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "/icons/icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
+        }
+    ],
+    "categories": [
+        "social",
+        "communication"
+    ],
+    "screenshots": [],
+    "shortcuts": [
+        {
+            "name": "Open Chat",
+            "url": "/chat",
+            "icons": [
+                {
+                    "src": "/icons/icon-192.png",
+                    "sizes": "192x192"
+                }
+            ]
+        }
+    ]
+}
