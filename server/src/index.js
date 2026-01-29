@@ -20,7 +20,23 @@ const server = http.createServer(app);
 const io = initializeWebSocket(server);
 
 // Middleware
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
+      imgSrc: ["'self'", "data:", "blob:", "https:", "http:"],
+      mediaSrc: ["'self'", "data:", "blob:"],
+      connectSrc: ["'self'", "wss:", "ws:", "https://api.giphy.com", "https://api.klipy.com", "https://fonts.googleapis.com"],
+      objectSrc: ["'none'"],
+      frameSrc: ["'self'"],
+      workerSrc: ["'self'", "blob:"],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+}));
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
