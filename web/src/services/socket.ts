@@ -1,6 +1,9 @@
 import { io, Socket } from 'socket.io-client';
 
-const SOCKET_URL = 'http://localhost:3000';
+// In production, connect to the same origin. In development, use localhost:3000
+const SOCKET_URL = import.meta.env.PROD
+    ? window.location.origin
+    : 'http://localhost:3000';
 
 let socket: Socket | null = null;
 
@@ -11,6 +14,7 @@ export const connectSocket = (token: string): Socket => {
 
     socket = io(SOCKET_URL, {
         auth: { token },
+        transports: ['websocket', 'polling'], // Try websocket first, fallback to polling
     });
 
     socket.on('connect', () => {
