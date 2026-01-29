@@ -360,6 +360,20 @@ export default function ChatPage() {
     const handlePinMessage = async (messageId: number) => {
         try {
             await pinMessage(messageId);
+            // If pins view is open, add the message to the list or refresh
+            if (showPins && selectedChat) {
+                const msg = messages.find(m => m.id === messageId);
+                if (msg) {
+                    setPinnedMessages(prev => {
+                        if (prev.some(p => p.id === messageId)) return prev;
+                        return [...prev, msg];
+                    });
+                } else {
+                    getPinnedMessages(selectedChat.id)
+                        .then(res => setPinnedMessages(res.data))
+                        .catch(console.error);
+                }
+            }
         } catch (error) {
             console.error('Failed to pin message:', error);
         }
@@ -368,6 +382,7 @@ export default function ChatPage() {
     const handleUnpinMessage = async (messageId: number) => {
         try {
             await unpinMessage(messageId);
+            setPinnedMessages(prev => prev.filter(msg => msg.id !== messageId));
         } catch (error) {
             console.error('Failed to unpin message:', error);
         }

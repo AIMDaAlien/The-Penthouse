@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import { login as apiLogin, register as apiRegister, getProfile } from '../services/api';
 import { connectSocket, disconnectSocket } from '../services/socket';
 

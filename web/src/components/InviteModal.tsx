@@ -29,7 +29,7 @@ export default function InviteModal({ serverId, onClose }: InviteModalProps) {
             // For now, let's copy just the code. 
             // In a real app, this might be a full URL like https://app.com/invite/CODE
             // Assuming the join flow asks for the code.
-            const inviteLink = `Invite Code: ${inviteCode}`;
+
             navigator.clipboard.writeText(inviteCode);
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);

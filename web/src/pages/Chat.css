@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;500;700&display=swap');
+
 /* Global variables - Premium Lavender Theme */
 :root {
     --bg-primary: #0f0c15;
@@ -19,7 +21,7 @@
     --success-green: #37d67a;
 }
 
-@import url('https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;500;700&display=swap');
+
 
 .app-container {
     display: flex;
@@ -233,6 +235,7 @@
 
 .status-indicator.online {
     background: var(--success-green);
+    box-shadow: 0 0 8px rgba(55, 214, 122, 0.6);
 }
 
 .user-details {
@@ -390,12 +393,22 @@
     cursor: pointer;
     color: var(--text-secondary);
     margin-bottom: 2px;
-    transition: all 0.15s;
+    transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+    border-left: 2px solid transparent;
+    /* Prepare for active state */
 }
 
 .channel-item:hover {
-    background: var(--glass-bg-hover);
+    background: linear-gradient(90deg, var(--glass-bg-hover) 0%, rgba(255, 255, 255, 0.02) 100%);
     color: var(--text-primary);
+    transform: translateX(4px);
+    box-shadow: -2px 0 10px -5px var(--accent-lavender-glow);
+}
+
+.channel-item:hover .channel-icon {
+    color: var(--accent-lavender-light);
+    transform: scale(1.1);
+    transition: all 0.2s ease;
 }
 
 .channel-item.active {
@@ -1195,11 +1208,15 @@
     padding: 6px 8px;
     border-radius: 6px;
     cursor: pointer;
-    transition: background 0.15s;
+    transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+    border: 1px solid transparent;
 }
 
 .member-item:hover {
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--glass-bg-hover);
+    transform: translateX(-2px);
+    border-color: rgba(255, 255, 255, 0.05);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .member-avatar {
@@ -1234,6 +1251,7 @@
 
 .member-status-dot.online {
     background: var(--success-green);
+    box-shadow: 0 0 6px rgba(55, 214, 122, 0.5);
 }
 
 .member-info {
@@ -1707,4 +1725,40 @@
     .server-rail {
         width: 64px;
     }
+}
+
+/* ===========================================
+   PREMIUM UI: SKELETON LOADING
+   =========================================== */
+
+@keyframes shimmer {
+    0% {
+        background-position: -200% 0;
+    }
+
+    100% {
+        background-position: 200% 0;
+    }
+}
+
+.skeleton {
+    background: linear-gradient(90deg,
+            rgba(255, 255, 255, 0.03) 25%,
+            rgba(255, 255, 255, 0.08) 50%,
+            rgba(255, 255, 255, 0.03) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite linear;
+    border-radius: 4px;
+}
+
+.skeleton-text {
+    height: 1em;
+    width: 100%;
+    margin-bottom: 0.5em;
+}
+
+.skeleton-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
 }
