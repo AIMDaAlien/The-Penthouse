@@ -780,46 +780,7 @@ export default function ChatPage() {
                     )}
                 </div>
 
-                {(showNewGroup || showNewServer || showNewChannel || showJoinServer) && (
-                    <div className="creation-form-container">
-                        {showJoinServer ? (
-                            <form onSubmit={handleJoin} className="creation-form">
-                                <input
-                                    type="text"
-                                    value={joinCode}
-                                    onChange={(e) => setJoinCode(e.target.value)}
-                                    placeholder="Enter Invite Code..."
-                                    autoFocus
-                                />
-                                <div className="form-actions">
-                                    <button type="submit">Join</button>
-                                    <button type="button" onClick={() => setShowJoinServer(false)}>Cancel</button>
-                                </div>
-                            </form>
-                        ) : (
-                            <form onSubmit={handleCreate} className="creation-form">
-                                <input
-                                    type="text"
-                                    value={inputName}
-                                    onChange={(e) => setInputName(e.target.value)}
-                                    placeholder={
-                                        showNewServer ? "Server name..." :
-                                            showNewGroup ? "Group name..." : "Channel name..."
-                                    }
-                                    autoFocus
-                                />
-                                <div className="form-actions">
-                                    <button type="submit">Create</button>
-                                    <button type="button" onClick={() => {
-                                        setShowNewGroup(false);
-                                        setShowNewServer(false);
-                                        setShowNewChannel(false);
-                                    }}>Cancel</button>
-                                </div>
-                            </form>
-                        )}
-                    </div>
-                )}
+
 
                 <div className="channel-list">
                     <h3>{selectedServerId ? 'CHANNELS' : 'DIRECT MESSAGES'}</h3>
@@ -1324,6 +1285,61 @@ export default function ChatPage() {
                 )
             }
 
+
+            {
+                (showNewGroup || showNewServer || showNewChannel || showJoinServer) && (
+                    <div className="creation-form-container" onClick={() => {
+                        setShowNewGroup(false);
+                        setShowNewServer(false);
+                        setShowNewChannel(false);
+                        setShowJoinServer(false);
+                    }}>
+                        <div className="creation-form-modal" onClick={e => e.stopPropagation()}>
+                            <h3>
+                                {showNewServer ? "Create Server" :
+                                    showNewGroup ? "Create Group" :
+                                        showJoinServer ? "Join Server" : "Create Channel"}
+                            </h3>
+                            {showJoinServer ? (
+                                <form onSubmit={handleJoin} className="creation-form">
+                                    <input
+                                        type="text"
+                                        value={joinCode}
+                                        onChange={(e) => setJoinCode(e.target.value)}
+                                        placeholder="Enter Invite Code..."
+                                        autoFocus
+                                    />
+                                    <div className="form-actions">
+                                        <button type="submit">Join</button>
+                                        <button type="button" onClick={() => setShowJoinServer(false)}>Cancel</button>
+                                    </div>
+                                </form>
+                            ) : (
+                                <form onSubmit={handleCreate} className="creation-form">
+                                    <input
+                                        type="text"
+                                        value={inputName}
+                                        onChange={(e) => setInputName(e.target.value)}
+                                        placeholder={
+                                            showNewServer ? "Server name..." :
+                                                showNewGroup ? "Group name..." : "Channel name..."
+                                        }
+                                        autoFocus
+                                    />
+                                    <div className="form-actions">
+                                        <button type="submit">Create</button>
+                                        <button type="button" onClick={() => {
+                                            setShowNewGroup(false);
+                                            setShowNewServer(false);
+                                            setShowNewChannel(false);
+                                        }}>Cancel</button>
+                                    </div>
+                                </form>
+                            )}
+                        </div>
+                    </div>
+                )
+            }
 
             <ConfirmModal
                 isOpen={messageToDelete !== null}
