@@ -32,6 +32,7 @@ import InviteModal from '../components/InviteModal';
 import ImageLightbox from '../components/ImageLightbox';
 import FilePreview from '../components/FilePreview';
 import ConfirmModal from '../components/ConfirmModal';
+// MessageInput component is available at ../components/MessageInput.tsx for future refactoring
 import './Chat.css';
 
 // Random emoji pool for quick reactions

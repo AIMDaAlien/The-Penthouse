@@ -10,9 +10,8 @@ import type { Message, Chat } from '../types';
 
 interface MessageInputProps {
     selectedChat: Chat;
-    onSend: (content: string, replyToId?: number) => Promise<void>;
-    onGifSelect: (gifUrl: string) => Promise<void>;
-    onFileSelect: (file: File) => Promise<void>;
+    onSendMessage: (content: string, type: 'text' | 'gif' | 'image' | 'file' | 'voice', metadata?: object, replyToId?: number) => Promise<void>;
+    onFileUpload: (file: File) => Promise<void>;
     onVoiceSend: (blob: Blob, duration: number, mimeType: string) => Promise<void>;
     replyingTo: Message | null;
     onCancelReply: () => void;
@@ -20,9 +19,8 @@ interface MessageInputProps {
 
 export default function MessageInput({
     selectedChat,
-    onSend,
-    onGifSelect,
-    onFileSelect,
+    onSendMessage,
+    onFileUpload,
     onVoiceSend,
     replyingTo,
     onCancelReply,
@@ -39,8 +37,9 @@ export default function MessageInput({
         if (!newMessage.trim()) return;
 
         stopTyping(selectedChat.id);
-        await onSend(newMessage.trim(), replyingTo?.id);
+        await onSendMessage(newMessage.trim(), 'text', undefined, replyingTo?.id);
         setNewMessage('');
+        onCancelReply();
     };
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -65,13 +64,14 @@ export default function MessageInput({
     };
 
     const handleGifSelect = async (gifUrl: string) => {
-        await onGifSelect(gifUrl);
+        await onSendMessage(gifUrl, 'gif', { gifUrl });
         setShowGiphyPicker(false);
+        setShowKlipyPicker(false);
     };
 
-    const handleKlipySelect = async (gifUrl: string) => {
-        await onGifSelect(gifUrl);
-        setShowKlipyPicker(false);
+    const handleFileSelect = async (file: File) => {
+        await onFileUpload(file);
+        setShowFileUpload(false);
     };
 
     return (
@@ -89,7 +89,7 @@ export default function MessageInput({
                         </button>
                         {showFileUpload && (
                             <FileUpload
-                                onFileSelect={onFileSelect}
+                                onFileSelect={handleFileSelect}
                                 onClose={() => setShowFileUpload(false)}
                             />
                         )}
@@ -153,22 +153,26 @@ export default function MessageInput({
                 </div>
             )}
 
-            {/* Pickers */}
+            {/* Emoji Picker */}
             {showEmojiPicker && (
                 <EmojiPicker
                     onSelect={handleEmojiSelect}
                     onClose={() => setShowEmojiPicker(false)}
                 />
             )}
+
+            {/* GIF Picker */}
             {showGiphyPicker && (
                 <GifPicker
                     onSelect={handleGifSelect}
                     onClose={() => setShowGiphyPicker(false)}
                 />
             )}
+
+            {/* Klipy Picker */}
             {showKlipyPicker && (
                 <KlipyPicker
-                    onSelect={handleKlipySelect}
+                    onSelect={handleGifSelect}
                     onClose={() => setShowKlipyPicker(false)}
                 />
             )}
