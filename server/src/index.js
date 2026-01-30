@@ -29,7 +29,7 @@ app.use(helmet({
       fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
       imgSrc: ["'self'", "data:", "blob:", "https:", "http:"],
       mediaSrc: ["'self'", "data:", "blob:"],
-      connectSrc: ["'self'", "wss:", "ws:", "https://api.giphy.com", "https://api.klipy.com", "https://fonts.googleapis.com"],
+      connectSrc: ["'self'", "wss:", "ws:", "https://api.giphy.com", "https://api.klipy.com", "https://fonts.googleapis.com", "https://fonts.gstatic.com"],
       objectSrc: ["'none'"],
       frameSrc: ["'self'"],
       workerSrc: ["'self'", "blob:"],
