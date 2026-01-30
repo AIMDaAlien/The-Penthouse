@@ -6,10 +6,6 @@ import {
     sendMessage,
     createGroup,
     searchUsers,
-    getServers,
-    createServer,
-    getServerDetails,
-    createChannel,
     addReaction,
     removeReaction,
     editMessage,
@@ -18,12 +14,12 @@ import {
     pinMessage,
     unpinMessage,
     getPinnedMessages,
-    joinServer,
     uploadVoice
 } from '../services/api';
 import { getSocket, joinChat, leaveChat, sendTyping, stopTyping } from '../services/socket';
-import type { Chat, Message, User, Server, Channel } from '../types';
+import type { Chat, Message, User } from '../types';
 import { useMobileGestures } from '../hooks/useMobileGestures';
+import { useServers } from '../hooks/useServers';
 import GifPicker from '../components/GifPicker';
 import KlipyPicker from '../components/KlipyPicker';
 import EmojiPicker from '../components/EmojiPicker';
@@ -44,15 +40,31 @@ import './Chat.css';
 export default function ChatPage() {
     const { user, logout } = useAuth();
 
-    // Global State
-    const [servers, setServers] = useState<Server[]>([]);
-    const [selectedServerId, setSelectedServerId] = useState<number | null>(null);
+    // Server state (from hook)
+    const {
+        servers,
+        selectedServerId,
+        serverChannels,
+        serverMembers,
+        showNewServer,
+        showNewChannel,
+        showJoinServer,
+        joinCode,
+        loadServers,
+        loadServerDetails,
+        handleServerSelect: baseHandleServerSelect,
+        setShowNewServer,
+        setShowNewChannel,
+        setShowJoinServer,
+        setJoinCode,
+        handleCreateServer,
+        handleCreateChannel,
+        handleJoinServer,
+    } = useServers();
 
     // Chat/Channel State
     const [chats, setChats] = useState<Chat[]>([]);
-    const [serverChannels, setServerChannels] = useState<Channel[]>([]);
     const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
-    const [serverMembers, setServerMembers] = useState<User[]>([]);
 
     // Messages State
     const [messages, setMessages] = useState<Message[]>([]);
@@ -66,8 +78,6 @@ export default function ChatPage() {
 
     const [showPins, setShowPins] = useState(false);
     const [showInviteModal, setShowInviteModal] = useState(false);
-    const [showJoinServer, setShowJoinServer] = useState(false);
-    const [joinCode, setJoinCode] = useState('');
 
     // Helpers
     const getChatName = (chat: Chat) => {
@@ -94,8 +104,6 @@ export default function ChatPage() {
     // UI State
     const [users, setUsers] = useState<User[]>([]);
     const [showNewGroup, setShowNewGroup] = useState(false);
-    const [showNewServer, setShowNewServer] = useState(false);
-    const [showNewChannel, setShowNewChannel] = useState(false);
     const [inputName, setInputName] = useState('');
     const [showGiphyPicker, setShowGiphyPicker] = useState(false);
     const [showKlipyPicker, setShowKlipyPicker] = useState(false);
@@ -129,24 +137,6 @@ export default function ChatPage() {
     const lastTypingEmit = useRef<number>(0);
 
 
-    const loadServers = useCallback(async () => {
-        try {
-            const { data } = await getServers();
-            setServers(data);
-        } catch (err) {
-            console.error('Failed to load servers:', err);
-        }
-    }, []);
-
-    const loadServerDetails = useCallback(async (serverId: number) => {
-        try {
-            const { data } = await getServerDetails(serverId);
-            setServerChannels(data.channels);
-            setServerMembers(data.members || []);
-        } catch (err) {
-            console.error('Failed to load server details:', err);
-        }
-    }, []);
 
     const loadChats = useCallback(async () => {
         try {
@@ -280,13 +270,10 @@ export default function ChatPage() {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
 
+    // Wrapper for handleServerSelect that also clears selectedChat
     const handleServerSelect = (serverId: number | null) => {
-        setSelectedServerId(serverId);
+        baseHandleServerSelect(serverId);
         setSelectedChat(null);
-        if (!serverId) {
-            setServerChannels([]);
-            setServerMembers([]);
-        }
     };
 
     const selectChat = async (chat: Chat) => {
@@ -446,17 +433,13 @@ export default function ChatPage() {
 
         try {
             if (showNewServer) {
-                await createServer(inputName.trim());
-                setShowNewServer(false);
-                loadServers();
+                await handleCreateServer(inputName);
             } else if (showNewGroup) {
                 await createGroup(inputName.trim());
                 setShowNewGroup(false);
                 loadChats();
             } else if (showNewChannel && selectedServerId) {
-                await createChannel(selectedServerId, inputName.trim());
-                setShowNewChannel(false);
-                loadServerDetails(selectedServerId);
+                await handleCreateChannel(inputName);
             }
             setInputName('');
         } catch (err) {
@@ -468,22 +451,9 @@ export default function ChatPage() {
         e.preventDefault();
         if (!joinCode.trim()) return;
 
-        try {
-            const { data } = await joinServer(joinCode.trim());
-            if (data.success) {
-                setJoinCode('');
-                setShowJoinServer(false);
-                if (data.alreadyMember) {
-                    alert('You are already a member of this server!');
-                }
-                await loadServers();
-                if (data.serverId) {
-                    handleServerSelect(data.serverId);
-                }
-            }
-        } catch (err) {
-            console.error('Join failed:', err);
-            alert('Failed to join server. Check the code and try again.');
+        const result = await handleJoinServer(joinCode);
+        if (result.success && result.serverId) {
+            handleServerSelect(result.serverId);
         }
     };
 
