@@ -53,6 +53,7 @@ export interface ReplyContext {
 
 export interface Message {
     id: number;
+    chatId?: number; // Used by socket events
     content: string;
     type: string;
     metadata?: Record<string, unknown>;
@@ -66,6 +67,7 @@ export interface Message {
     pinId?: number;
     pinnedAt?: string;
     pinnedBy?: string;
+    isPinned?: boolean;
     sender: {
         id: number;
         username: string;
