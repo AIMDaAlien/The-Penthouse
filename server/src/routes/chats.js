@@ -7,28 +7,46 @@ const router = express.Router();
 // Get all chats for current user (DMs and Groups only, channels via servers)
 router.get('/', authenticateToken, (req, res) => {
     try {
+        // Query now includes fetching the OTHER user's info for DMs
         const chats = db.prepare(`
       SELECT c.*, cm.nickname,
         (SELECT COUNT(*) FROM chat_members WHERE chat_id = c.id) as member_count,
         (SELECT m.content FROM messages m WHERE m.chat_id = c.id ORDER BY m.created_at DESC LIMIT 1) as last_message,
-        (SELECT m.created_at FROM messages m WHERE m.chat_id = c.id ORDER BY m.created_at DESC LIMIT 1) as last_message_at
+        (SELECT m.created_at FROM messages m WHERE m.chat_id = c.id ORDER BY m.created_at DESC LIMIT 1) as last_message_at,
+        -- For DMs, fetch the other user's name
+        (SELECT u.display_name FROM chat_members cm2 JOIN users u ON cm2.user_id = u.id WHERE cm2.chat_id = c.id AND cm2.user_id != ? LIMIT 1) as other_display_name,
+        (SELECT u.username FROM chat_members cm2 JOIN users u ON cm2.user_id = u.id WHERE cm2.chat_id = c.id AND cm2.user_id != ? LIMIT 1) as other_username
       FROM chats c
       INNER JOIN chat_members cm ON c.id = cm.chat_id
       WHERE cm.user_id = ? AND c.server_id IS NULL
       ORDER BY last_message_at DESC
-    `).all(req.user.userId);
+    `).all(req.user.userId, req.user.userId, req.user.userId);
 
-        res.json(chats.map(c => ({
-            id: c.id,
-            name: c.name,
-            isGroup: c.type === 'group',
-            type: c.type,
-            nickname: c.nickname,
-            memberCount: c.member_count,
-            lastMessage: c.last_message,
-            lastMessageAt: c.last_message_at,
-            createdAt: c.created_at
-        })));
+        res.json(chats.map(c => {
+            let name = c.name;
+            if (c.type === 'dm' && !name) {
+                // If we found another user, use their name. If not (and count is 1), it's a self-DM.
+                if (c.other_display_name || c.other_username) {
+                    name = c.other_display_name || c.other_username;
+                } else if (c.member_count === 1) {
+                    name = 'Note to Self';
+                } else {
+                    name = 'Unknown User';
+                }
+            }
+
+            return {
+                id: c.id,
+                name: name,
+                isGroup: c.type === 'group',
+                type: c.type,
+                nickname: c.nickname,
+                memberCount: c.member_count,
+                lastMessage: c.last_message,
+                lastMessageAt: c.last_message_at,
+                createdAt: c.created_at
+            };
+        }));
     } catch (err) {
         console.error('Get chats error:', err);
         res.status(500).json({ error: 'Failed to get chats' });
@@ -86,29 +104,46 @@ router.post('/dm', authenticateToken, (req, res) => {
             return res.status(400).json({ error: 'User ID is required' });
         }
 
-        if (userId === req.user.userId) {
-            return res.status(400).json({ error: 'Cannot DM yourself' });
-        }
+        const isSelf = userId === req.user.userId;
 
-        // Check if DM already exists between these two users
-        // DM has type='dm' and server_id IS NULL
-        const existingDm = db.prepare(`
-      SELECT c.id FROM chats c
-      WHERE c.type = 'dm'
-      AND c.server_id IS NULL
-      AND EXISTS (SELECT 1 FROM chat_members WHERE chat_id = c.id AND user_id = ?)
-      AND EXISTS (SELECT 1 FROM chat_members WHERE chat_id = c.id AND user_id = ?)
-      AND (SELECT COUNT(*) FROM chat_members WHERE chat_id = c.id) = 2
-    `).get(req.user.userId, userId);
+        // Check if DM already exists
+        let existingDm;
+        if (isSelf) {
+            existingDm = db.prepare(`
+                SELECT c.id FROM chats c
+                WHERE c.type = 'dm'
+                AND c.server_id IS NULL
+                AND EXISTS (SELECT 1 FROM chat_members WHERE chat_id = c.id AND user_id = ?)
+                AND (SELECT COUNT(*) FROM chat_members WHERE chat_id = c.id) = 1
+            `).get(req.user.userId);
+        } else {
+            existingDm = db.prepare(`
+                SELECT c.id FROM chats c
+                WHERE c.type = 'dm'
+                AND c.server_id IS NULL
+                AND EXISTS (SELECT 1 FROM chat_members WHERE chat_id = c.id AND user_id = ?)
+                AND EXISTS (SELECT 1 FROM chat_members WHERE chat_id = c.id AND user_id = ?)
+                AND (SELECT COUNT(*) FROM chat_members WHERE chat_id = c.id) = 2
+            `).get(req.user.userId, userId);
+        }
 
         if (existingDm) {
             return res.json({ id: existingDm.id, existing: true });
         }
 
-        // Get other user's info
-        const otherUser = db.prepare('SELECT username, display_name FROM users WHERE id = ?').get(userId);
-        if (!otherUser) {
-            return res.status(404).json({ error: 'User not found' });
+        // Get other user's info (if not self)
+        let otherUser = null;
+        if (!isSelf) {
+            otherUser = db.prepare('SELECT username, display_name FROM users WHERE id = ?').get(userId);
+            if (!otherUser) {
+                return res.status(404).json({ error: 'User not found' });
+            }
+        } else {
+            // For self DM, we can just return "Note to Self" as name, or current user info
+            otherUser = {
+                username: req.user.username,
+                display_name: 'Note to Self'
+            };
         }
 
         // Create new DM
@@ -118,9 +153,11 @@ router.post('/dm', authenticateToken, (req, res) => {
 
         const chatId = result.lastInsertRowid;
 
-        // Add both users
+        // Add members
         db.prepare('INSERT INTO chat_members (chat_id, user_id) VALUES (?, ?)').run(chatId, req.user.userId);
-        db.prepare('INSERT INTO chat_members (chat_id, user_id) VALUES (?, ?)').run(chatId, userId);
+        if (!isSelf) {
+            db.prepare('INSERT INTO chat_members (chat_id, user_id) VALUES (?, ?)').run(chatId, userId);
+        }
 
         res.status(201).json({
             id: chatId,

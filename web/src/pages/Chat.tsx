@@ -71,9 +71,10 @@ export default function ChatPage() {
     // Helpers
     const getChatName = (chat: Chat) => {
         if (chat.name) return chat.name;
+        // Fallback for older chats or if backend name logic misses something
         if (chat.type === 'dm') {
             const otherUser = chat.participants?.find(p => p.id !== user?.id);
-            return otherUser ? (otherUser.displayName || otherUser.username) : 'Unknown User';
+            return otherUser ? (otherUser.displayName || otherUser.username) : 'Note to Self';
         }
         return 'Untitled Chat';
     };
