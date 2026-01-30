@@ -23,6 +23,7 @@ import {
 } from '../services/api';
 import { getSocket, joinChat, leaveChat, sendTyping, stopTyping } from '../services/socket';
 import type { Chat, Message, User, Server, Channel } from '../types';
+import { useMobileGestures } from '../hooks/useMobileGestures';
 import GifPicker from '../components/GifPicker';
 import KlipyPicker from '../components/KlipyPicker';
 import EmojiPicker from '../components/EmojiPicker';
@@ -103,10 +104,17 @@ export default function ChatPage() {
     const [messageToDelete, setMessageToDelete] = useState<number | null>(null);
     const [showProfileModal, setShowProfileModal] = useState(false);
 
-    // Mobile responsiveness state
-    const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
-    const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.innerWidth < 768);
-    const [membersCollapsed, setMembersCollapsed] = useState(() => window.innerWidth < 768);
+    // Mobile responsiveness (from hook)
+    const {
+        isMobile,
+        sidebarCollapsed,
+        membersCollapsed,
+        setSidebarCollapsed,
+        setMembersCollapsed,
+        onTouchStart,
+        onTouchMove,
+        onTouchEnd,
+    } = useMobileGestures();
 
     // Reaction emoji picker state - tracks which message's picker is open
     const [reactionPickerMsgId, setReactionPickerMsgId] = useState<number | null>(null);
@@ -120,21 +128,6 @@ export default function ChatPage() {
     const typingTimeouts = useRef<Map<number, number>>(new Map());
     const lastTypingEmit = useRef<number>(0);
 
-    // Mobile viewport detection
-    useEffect(() => {
-        const handleResize = () => {
-            const mobile = window.innerWidth < 768;
-            setIsMobile(mobile);
-            // Auto-collapse sidebars when switching to mobile
-            if (mobile) {
-                setSidebarCollapsed(true);
-                setMembersCollapsed(true);
-            }
-        };
-
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
-    }, []);
 
     const loadServers = useCallback(async () => {
         try {
@@ -649,43 +642,6 @@ export default function ChatPage() {
 
     const displayMembers = selectedServerId ? serverMembers : users;
 
-    // Touch Handling for Mobile Gestures
-    const touchStart = useRef<number | null>(null);
-    const touchEnd = useRef<number | null>(null);
-
-    const onTouchStart = (e: React.TouchEvent) => {
-        touchEnd.current = null;
-        touchStart.current = e.targetTouches[0].clientX;
-    };
-
-    const onTouchMove = (e: React.TouchEvent) => {
-        touchEnd.current = e.targetTouches[0].clientX;
-    };
-
-    const onTouchEnd = () => {
-        if (!touchStart.current || !touchEnd.current) return;
-        const distance = touchStart.current - touchEnd.current;
-        const isLeftSwipe = distance > 50;
-        const isRightSwipe = distance < -50;
-
-        if (isLeftSwipe) {
-            // Swiped Left: Open Members or Close Channels (if open)
-            if (!sidebarCollapsed) {
-                setSidebarCollapsed(true); // Close left sidebar
-            } else if (membersCollapsed) {
-                setMembersCollapsed(false); // Open right sidebar
-            }
-        }
-
-        if (isRightSwipe) {
-            // Swiped Right: Open Channels or Close Members (if open)
-            if (!membersCollapsed) {
-                setMembersCollapsed(true); // Close right sidebar
-            } else if (sidebarCollapsed) {
-                setSidebarCollapsed(false); // Open left sidebar
-            }
-        }
-    };
 
     return (
         <div
