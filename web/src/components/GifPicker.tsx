@@ -39,7 +39,10 @@ export default function GifPicker({ onSelect, onClose }: GifPickerProps) {
     }, []);
 
     useEffect(() => {
-        loadTrending();
+        const init = async () => {
+             await loadTrending();
+        };
+        init();
     }, [loadTrending]);
 
     useEffect(() => {

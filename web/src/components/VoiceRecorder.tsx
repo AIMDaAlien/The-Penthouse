@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { MicIcon, TrashIcon, PlayIcon, PauseIcon, StopIcon, SendIcon } from './Icons';
 import './VoiceRecorder.css';
 
@@ -116,9 +116,9 @@ export default function VoiceRecorder({ onSend }: VoiceRecorderProps) {
         return `${mins}:${secs.toString().padStart(2, '0')}`;
     };
 
-    const visualizerBars = React.useMemo(() =>
-        [...Array(10)].map((_, i) => ({ key: i, height: Math.random() * 100 })),
-        []);
+    const [visualizerBars] = useState(() =>
+        [...Array(10)].map((_, i) => ({ key: i, height: Math.random() * 100 }))
+    );
 
     return (
         <div className={`voice-recorder ${isRecording ? 'recording' : ''}`}>

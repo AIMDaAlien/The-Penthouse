@@ -12,10 +12,13 @@ interface ModalProps {
 export default function Modal({ isOpen, onClose, title, children }: ModalProps) {
     const [active, setActive] = useState(false);
 
+    if (isOpen && !active) {
+        setActive(true);
+    }
+
     useEffect(() => {
         if (isOpen) {
-            setActive(true);
-            document.body.style.overflow = 'hidden';
+             document.body.style.overflow = 'hidden';
         } else {
             const timer = setTimeout(() => setActive(false), 300); // Wait for animation
             document.body.style.overflow = 'unset';

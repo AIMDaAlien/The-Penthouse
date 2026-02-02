@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { PlayIcon, PauseIcon } from './Icons';
 import './AudioPlayer.css';
 
@@ -12,13 +12,13 @@ export default function AudioPlayer({ src }: AudioPlayerProps) {
     const [duration, setDuration] = useState(0);
     const audioRef = useRef<HTMLAudioElement | null>(null);
 
-    // Generate stable random bars for visualization
-    const visualizerBars = useMemo(() =>
+    // Generate stable random bars for visualization using useState to ensure purity
+    const [visualizerBars] = useState(() =>
         [...Array(20)].map((_, i) => ({
             key: i,
             height: 30 + Math.random() * 70
-        })),
-        []);
+        }))
+    );
 
     useEffect(() => {
         const audio = audioRef.current;

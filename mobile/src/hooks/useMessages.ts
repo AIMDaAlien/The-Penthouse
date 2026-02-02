@@ -9,7 +9,8 @@ import {
     unpinMessage,
     addReaction,
     removeReaction,
-    uploadVoice
+    uploadVoice,
+    uploadFile
 } from '../services/api';
 import { getSocket, stopTyping } from '../services/socket';
 import type { Chat, Message, User } from '../types';
@@ -28,8 +29,8 @@ interface UseMessagesReturn {
     // Actions
     loadMessages: (chatId: number) => Promise<void>;
     sendMessage: (content: string, type: 'text' | 'gif' | 'image' | 'file' | 'voice', metadata?: object, replyToId?: number) => Promise<void>;
-    handleFileSelect: (file: File) => Promise<void>;
-    handleVoiceSend: (audioBlob: Blob, duration: number, mimeType: string) => Promise<void>;
+    handleFileSelect: (file: any) => Promise<void>;
+    handleVoiceSend: (audioUri: string, duration: number, mimeType: string) => Promise<void>;
     handleEditMessage: (msg: Message) => void;
     handleSaveEdit: () => Promise<void>;
     handleCancelEdit: () => void;
@@ -41,8 +42,8 @@ interface UseMessagesReturn {
     loadPinnedMessages: (chatId: number) => Promise<void>;
     clearMessages: () => void;
 
-    // Refs
-    messagesEndRef: React.RefObject<HTMLDivElement | null>;
+    // Refs (Mobile: Use FlatList Ref manually in component)
+    // messagesEndRef: React.RefObject<HTMLDivElement | null>; 
 }
 
 export function useMessages(
@@ -52,7 +53,6 @@ export function useMessages(
 ): UseMessagesReturn {
     // Messages state
     const [messages, setMessages] = useState<Message[]>([]);
-    const messagesEndRef = useRef<HTMLDivElement>(null);
 
     // Edit state
     const [editingMessage, setEditingMessage] = useState<Message | null>(null);
@@ -103,7 +103,6 @@ export function useMessages(
         const handleNewMessage = (message: Message) => {
             if (selectedChat && message.chatId === selectedChat.id) {
                 setMessages(prev => [...prev, message]);
-                // Clear typing indicator when message received
                 setTypingUsers(prev => {
                     const next = new Map(prev);
                     next.delete(message.sender.id);
@@ -120,16 +119,15 @@ export function useMessages(
                     next.set(data.userId, data.username);
                     return next;
                 });
-                // Auto-clear after 3 seconds
                 const existingTimeout = typingTimeouts.current.get(data.userId);
                 if (existingTimeout) clearTimeout(existingTimeout);
-                const timeout = window.setTimeout(() => {
+                const timeout = setTimeout(() => {
                     setTypingUsers(prev => {
                         const next = new Map(prev);
                         next.delete(data.userId);
                         return next;
                     });
-                }, 3000);
+                }, 3000) as unknown as number;
                 typingTimeouts.current.set(data.userId, timeout);
             }
         };
@@ -195,12 +193,6 @@ export function useMessages(
         };
     }, [selectedChat, onChatUpdate]);
 
-    // Scroll to bottom when messages change
-    useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages]);
-
-    // Send generic message
     const sendMessage = useCallback(async (content: string, type: 'text' | 'gif' | 'image' | 'file' | 'voice', metadata?: object, replyToId?: number) => {
         if (!selectedChat) return;
 
@@ -213,35 +205,30 @@ export function useMessages(
         }
     }, [selectedChat]);
 
-    // Send file/image
-    const handleFileSelect = useCallback(async (file: File) => {
+    const handleFileSelect = useCallback(async (file: any) => {
         if (!selectedChat) return;
-        const fileUrl = URL.createObjectURL(file);
-        const isImage = file.type.startsWith('image/');
-
+        // Mobile file handling
         try {
-            if (isImage) {
-                await apiSendMessage(selectedChat.id, fileUrl, 'image', { fileName: file.name });
-            } else {
-                await apiSendMessage(selectedChat.id, `📎 ${file.name}`, 'file', { fileName: file.name, fileUrl });
-            }
+            const uploadRes = await uploadFile(file);
+            await apiSendMessage(selectedChat.id, `📎 ${file.name}`, 'file', { 
+                fileName: file.name, 
+                fileUrl: uploadRes.data.url 
+            });
         } catch (err) {
-            console.error('Failed to send file:', err);
+             console.error('Failed to send file:', err);
         }
     }, [selectedChat]);
 
-    // Send voice message
-    const handleVoiceSend = useCallback(async (audioBlob: Blob, duration: number, mimeType: string) => {
+    const handleVoiceSend = useCallback(async (audioUri: string, duration: number, mimeType: string) => {
         if (!selectedChat) return;
         try {
-            const { data } = await uploadVoice(audioBlob, duration, mimeType);
+            const { data } = await uploadVoice(audioUri, duration, mimeType);
             await apiSendMessage(selectedChat.id, data.url, 'voice', data.params);
         } catch (err) {
             console.error('Failed to send voice message:', err);
         }
     }, [selectedChat]);
 
-    // Edit handlers
     const handleEditMessage = useCallback((msg: Message) => {
         setEditingMessage(msg);
         setEditContent(msg.content);
@@ -268,7 +255,6 @@ export function useMessages(
         }
     }, [editingMessage, editContent]);
 
-    // Delete handlers
     const handleDeleteMessage = useCallback((msgId: number) => {
         setDeleteMessageId(msgId);
     }, []);
@@ -288,38 +274,29 @@ export function useMessages(
         setDeleteMessageId(null);
     }, [deleteMessageId]);
 
-    // Pin handlers
     const handlePinMessage = useCallback(async (msgId: number) => {
         if (!selectedChat) return;
         try {
             await pinMessage(msgId);
-            const message = messages.find(m => m.id === msgId);
-            if (message) {
-                setPinnedMessages(prev => [...prev, { ...message, isPinned: true }]);
-                setMessages(prev => prev.map(m =>
-                    m.id === msgId ? { ...m, isPinned: true } : m
-                ));
-            }
+             // Optimistic update?
+            await loadPinnedMessages(selectedChat.id);
         } catch (err) {
             console.error('Failed to pin message:', err);
         }
-    }, [selectedChat, messages]);
+    }, [selectedChat, loadPinnedMessages]);
 
     const handleUnpinMessage = useCallback(async (msgId: number) => {
         if (!selectedChat) return;
         try {
             await unpinMessage(msgId);
             setPinnedMessages(prev => prev.filter(m => m.id !== msgId));
-            setMessages(prev => prev.map(m =>
-                m.id === msgId ? { ...m, isPinned: false } : m
-            ));
         } catch (err) {
             console.error('Failed to unpin message:', err);
         }
     }, [selectedChat]);
 
-    // Reaction handler
     const handleReact = useCallback(async (messageId: number, emoji: string) => {
+        // Optimistic update logic similar to web
         const message = messages.find(m => m.id === messageId);
         const existingReactions = message?.reactions || [];
         const hasReacted = existingReactions.some(r => r.emoji === emoji && r.userId === user?.id);
@@ -339,7 +316,7 @@ export function useMessages(
             } else {
                 await addReaction(messageId, emoji);
                 setMessages(prev => prev.map(m => {
-                    if (m.id === messageId) {
+                     if (m.id === messageId) {
                         return {
                             ...m,
                             reactions: [...(m.reactions || []), { emoji, userId: user!.id, username: user!.username, displayName: user?.displayName }]
@@ -376,6 +353,5 @@ export function useMessages(
         handleReact,
         loadPinnedMessages,
         clearMessages,
-        messagesEndRef,
     };
 }
