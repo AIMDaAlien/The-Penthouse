@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import * as SecureStore from 'expo-secure-store';
+import { DeviceEventEmitter } from 'react-native';
 import api, { login as apiLogin, register as apiRegister, getProfile } from '../services/api';
-import { authEvents } from '../services/events';
 import { connectSocket, disconnectSocket } from '../services/socket';
 
 export interface User {
@@ -59,11 +59,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             logout();
         };
 
-        authEvents.addEventListener('unauthorized', handleUnauthorized);
+        const subscription = DeviceEventEmitter.addListener('auth:unauthorized', handleUnauthorized);
         initAuth();
 
         return () => {
-             authEvents.removeEventListener('unauthorized', handleUnauthorized);
+             subscription.remove();
         };
     }, []);
 

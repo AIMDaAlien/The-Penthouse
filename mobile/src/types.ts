@@ -62,12 +62,15 @@ export interface Message {
     reactions?: Reaction[];
     createdAt: string;
     edited_at?: string;
+    editedAt?: string; // Alternative casing
     deleted_at?: string;
+    deletedAt?: string; // Alternative casing
     readAt?: string;
     pinId?: number;
     pinnedAt?: string;
     pinnedBy?: string;
     isPinned?: boolean;
+    nonce?: string; // For optimistic updates
     sender: {
         id: number;
         username: string;

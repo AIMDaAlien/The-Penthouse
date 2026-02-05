@@ -1,3 +1,8 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Apply Ubuntu font globally */
+* {
+  font-family: Ubuntu_400Regular;
+}

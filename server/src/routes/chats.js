@@ -179,32 +179,54 @@ router.get('/:chatId', authenticateToken, (req, res) => {
     try {
         const { chatId } = req.params;
 
-        // Verify membership (simple check for DMs/Groups)
-        // Note: For DMs/Groups, user must be in chat_members.
-        // We aren't fully handling server channels here via this endpoint unless we decide to.
-        // But let's keep it safe.
-        const membership = db.prepare(
-            'SELECT * FROM chat_members WHERE chat_id = ? AND user_id = ?'
-        ).get(chatId, req.user.userId);
-
-        if (!membership) {
-            return res.status(403).json({ error: 'Not a member of this chat' });
+        const chat = db.prepare('SELECT * FROM chats WHERE id = ?').get(chatId);
+        if (!chat) {
+            return res.status(404).json({ error: 'Chat not found' });
         }
 
-        const chat = db.prepare('SELECT * FROM chats WHERE id = ?').get(chatId);
+        let members = [];
 
-        const members = db.prepare(`
-      SELECT u.id, u.username, u.display_name, u.avatar_url, cm.nickname
-      FROM chat_members cm
-      INNER JOIN users u ON cm.user_id = u.id
-      WHERE cm.chat_id = ?
-    `).all(chatId);
+        if (chat.server_id) {
+            // Server channel - check server membership
+            const serverMembership = db.prepare(
+                'SELECT * FROM server_members WHERE server_id = ? AND user_id = ?'
+            ).get(chat.server_id, req.user.userId);
+
+            if (!serverMembership) {
+                return res.status(403).json({ error: 'Not a member of this server' });
+            }
+
+            // Get all server members for the channel
+            members = db.prepare(`
+                SELECT u.id, u.username, u.display_name, u.avatar_url, sm.nickname
+                FROM server_members sm
+                INNER JOIN users u ON sm.user_id = u.id
+                WHERE sm.server_id = ?
+            `).all(chat.server_id);
+        } else {
+            // DM or group chat - check chat membership
+            const membership = db.prepare(
+                'SELECT * FROM chat_members WHERE chat_id = ? AND user_id = ?'
+            ).get(chatId, req.user.userId);
+
+            if (!membership) {
+                return res.status(403).json({ error: 'Not a member of this chat' });
+            }
+
+            members = db.prepare(`
+                SELECT u.id, u.username, u.display_name, u.avatar_url, cm.nickname
+                FROM chat_members cm
+                INNER JOIN users u ON cm.user_id = u.id
+                WHERE cm.chat_id = ?
+            `).all(chatId);
+        }
 
         res.json({
             id: chat.id,
             name: chat.name,
             isGroup: chat.type === 'group',
             type: chat.type,
+            serverId: chat.server_id,
             createdAt: chat.created_at,
             members: members.map(m => ({
                 id: m.id,

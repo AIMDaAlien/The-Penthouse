@@ -24,16 +24,49 @@ const storage = multer.diskStorage({
 
 const upload = multer({
     storage,
-    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
     fileFilter: (req, file, cb) => {
-        const allowedTypes = /jpeg|jpg|png|gif|webp|webm|mp3|wav|ogg/;
-        const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-        const mimetype = /image\/.+|audio\/.+/.test(file.mimetype);
+        // Allow common image and audio formats
+        const allowedExtensions = /jpeg|jpg|png|gif|webp|webm|mp3|wav|ogg|m4a|aac|mp4|caf|3gp/;
+        const extname = allowedExtensions.test(path.extname(file.originalname).toLowerCase());
+        // Accept image/*, audio/*, and video/* mime types
+        const mimetype = /^(image|audio|video)\/.+/.test(file.mimetype);
 
-        if (extname && mimetype) {
+        console.log(`File filter check: name=${file.originalname}, ext=${path.extname(file.originalname)}, mime=${file.mimetype}, extOk=${extname}, mimeOk=${mimetype}`);
+
+        if (extname || mimetype) {
             return cb(null, true);
         }
-        cb(new Error('Only image and audio files are allowed'));
+        const error = new Error(`File type not allowed. Got: ${file.mimetype}, ext: ${path.extname(file.originalname)}`);
+        console.error('File rejected:', error.message);
+        cb(error);
+    }
+});
+
+// Generic file upload
+router.post('/upload', authenticateToken, upload.single('file'), (req, res) => {
+    try {
+        if (!req.file) {
+            console.error('Upload error: No file received. Body:', req.body);
+            return res.status(400).json({ error: 'No file uploaded' });
+        }
+
+        const fileUrl = `/uploads/${req.file.filename}`;
+        const mimeType = req.file.mimetype;
+        const type = mimeType.startsWith('image/') ? 'image' :
+                     mimeType.startsWith('video/') ? 'video' : 'file';
+
+        console.log(`File uploaded: ${req.file.filename}, MIME: ${mimeType}, Type: ${type}`);
+
+        res.json({
+            url: fileUrl,
+            type: type,
+            mimeType: mimeType,
+            filename: req.file.originalname
+        });
+    } catch (err) {
+        console.error('Upload file error:', err);
+        res.status(500).json({ error: 'Failed to upload file', details: err.message });
     }
 });
 

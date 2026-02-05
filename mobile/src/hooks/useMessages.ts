@@ -12,7 +12,7 @@ import {
     uploadVoice,
     uploadFile
 } from '../services/api';
-import { getSocket, stopTyping } from '../services/socket';
+import { getSocket, stopTyping, joinChat, leaveChat } from '../services/socket';
 import type { Chat, Message, User } from '../types';
 
 interface UseMessagesReturn {
@@ -95,14 +95,56 @@ export function useMessages(
         }
     }, []);
 
+    // Join/leave socket room when chat changes (CRITICAL for real-time updates)
+    useEffect(() => {
+        if (!selectedChat) return;
+
+        console.log('🔌 Joining chat room:', selectedChat.id);
+        joinChat(selectedChat.id);
+
+        return () => {
+            console.log('🔌 Leaving chat room:', selectedChat.id);
+            leaveChat(selectedChat.id);
+        };
+    }, [selectedChat?.id]);
+
     // Socket event listeners
     useEffect(() => {
         const socket = getSocket();
         if (!socket) return;
 
         const handleNewMessage = (message: Message) => {
-            if (selectedChat && message.chatId === selectedChat.id) {
-                setMessages(prev => [...prev, message]);
+            if (selectedChat && Number(message.chatId) === Number(selectedChat.id)) {
+                setMessages(prev => {
+                    // Check for duplicates by:
+                    // 1. Same message ID
+                    // 2. Same nonce (for optimistic updates)
+                    // 3. Same sender, content, and recent timestamp (fallback)
+                    const isDuplicate = prev.some(m => {
+                        if (m.id === message.id) return true;
+                        if (m.nonce && message.nonce && m.nonce === message.nonce) return true;
+                        // Check for optimistic message by matching sender+content within 5 seconds
+                        if (m.sender?.id === message.sender?.id &&
+                            m.content === message.content &&
+                            m.id > 1000000000000 && // Temp IDs are timestamps (large numbers)
+                            Math.abs(new Date(m.createdAt).getTime() - new Date(message.createdAt).getTime()) < 5000) {
+                            return true;
+                        }
+                        return false;
+                    });
+
+                    if (isDuplicate) {
+                        // Replace optimistic message with real message
+                        return prev.map(m => {
+                            if (m.nonce && message.nonce && m.nonce === message.nonce) return message;
+                            if (m.id > 1000000000000 &&
+                                m.sender?.id === message.sender?.id &&
+                                m.content === message.content) return message;
+                            return m;
+                        });
+                    }
+                    return [...prev, message];
+                });
                 setTypingUsers(prev => {
                     const next = new Map(prev);
                     next.delete(message.sender.id);
@@ -148,7 +190,7 @@ export function useMessages(
             if (selectedChat?.id === data.chatId) {
                 setMessages(prev => prev.map(msg =>
                     msg.id === data.messageId
-                        ? { ...msg, content: data.content, edited_at: data.editedAt }
+                        ? { ...msg, content: data.content, editedAt: data.editedAt }
                         : msg
                 ));
             }
@@ -159,7 +201,7 @@ export function useMessages(
             if (selectedChat?.id === data.chatId) {
                 setMessages(prev => prev.map(msg =>
                     msg.id === data.messageId
-                        ? { ...msg, deleted_at: data.deletedAt }
+                        ? { ...msg, deletedAt: data.deletedAt }
                         : msg
                 ));
             }
@@ -176,12 +218,23 @@ export function useMessages(
             }
         };
 
+        const handleReactionUpdate = (data: { messageId: number; chatId: number; reactions: Array<{ emoji: string; userId: number; username: string; displayName?: string }> }) => {
+            if (selectedChat?.id === data.chatId) {
+                setMessages(prev => prev.map(msg =>
+                    msg.id === data.messageId
+                        ? { ...msg, reactions: data.reactions }
+                        : msg
+                ));
+            }
+        };
+
         socket.on('new_message', handleNewMessage);
         socket.on('user_typing', handleUserTyping);
         socket.on('user_stop_typing', handleUserStopTyping);
         socket.on('message_edited', handleMessageEdited);
         socket.on('message_deleted', handleMessageDeleted);
         socket.on('message_read', handleMessageRead);
+        socket.on('reaction_update', handleReactionUpdate);
 
         return () => {
             socket.off('new_message', handleNewMessage);
@@ -190,30 +243,64 @@ export function useMessages(
             socket.off('message_edited', handleMessageEdited);
             socket.off('message_deleted', handleMessageDeleted);
             socket.off('message_read', handleMessageRead);
+            socket.off('reaction_update', handleReactionUpdate);
         };
     }, [selectedChat, onChatUpdate]);
 
     const sendMessage = useCallback(async (content: string, type: 'text' | 'gif' | 'image' | 'file' | 'voice', metadata?: object, replyToId?: number) => {
-        if (!selectedChat) return;
+        if (!selectedChat || !user) return;
+
+        const tempId = Date.now();
+        const nonce = `${tempId}`;
+        
+        // Optimistic Message
+        const optimisticMessage: any = {
+            id: tempId,
+            chatId: selectedChat.id,
+            senderId: user.id,
+            content,
+            type,
+            metadata: metadata || {},
+            replyToId,
+            createdAt: new Date().toISOString(),
+            sender: user,
+            reactions: [],
+            nonce // Custom field to track optimistic messages
+        };
+
+        setMessages(prev => [...prev, optimisticMessage]);
 
         try {
             stopTyping(selectedChat.id);
-            await apiSendMessage(selectedChat.id, content, type, metadata, replyToId);
+            // Pass nonce if API supports it, otherwise we rely on socket to replace it or we filter duplicates
+            await apiSendMessage(selectedChat.id, content, type, { ...metadata, nonce }, replyToId);
             setReplyingTo(null);
         } catch (err) {
             console.error('Failed to send message:', err);
+            // Optionally mark message as failed in UI
+            setMessages(prev => prev.filter(m => m.id !== tempId)); // Revert on failure
         }
-    }, [selectedChat]);
+    }, [selectedChat, user]);
 
     const handleFileSelect = useCallback(async (file: any) => {
         if (!selectedChat) return;
-        // Mobile file handling
         try {
             const uploadRes = await uploadFile(file);
-            await apiSendMessage(selectedChat.id, `📎 ${file.name}`, 'file', { 
-                fileName: file.name, 
-                fileUrl: uploadRes.data.url 
-            });
+            const isImage = file.type && file.type.startsWith('image/');
+
+            if (isImage) {
+                // Send as image message with URL as content
+                await apiSendMessage(selectedChat.id, uploadRes.data.url, 'image', {
+                    fileName: file.name,
+                    mimeType: file.type
+                });
+            } else {
+                // Send as file message
+                await apiSendMessage(selectedChat.id, `📎 ${file.name}`, 'file', {
+                    fileName: file.name,
+                    fileUrl: uploadRes.data.url
+                });
+            }
         } catch (err) {
              console.error('Failed to send file:', err);
         }
@@ -245,7 +332,7 @@ export function useMessages(
             await editMessage(editingMessage.id, editContent);
             setMessages(prev => prev.map(msg =>
                 msg.id === editingMessage.id
-                    ? { ...msg, content: editContent, edited_at: new Date().toISOString() }
+                    ? { ...msg, content: editContent, editedAt: new Date().toISOString() }
                     : msg
             ));
             setEditingMessage(null);
@@ -265,7 +352,7 @@ export function useMessages(
             await deleteMessage(deleteMessageId);
             setMessages(prev => prev.map(msg =>
                 msg.id === deleteMessageId
-                    ? { ...msg, deleted_at: new Date().toISOString() }
+                    ? { ...msg, deletedAt: new Date().toISOString() }
                     : msg
             ));
         } catch (err) {

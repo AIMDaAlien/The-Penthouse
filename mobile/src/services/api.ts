@@ -2,13 +2,24 @@ import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import Constants from 'expo-constants';
 import type { Message } from '../types';
-import { authEvents } from './events';
 
 // Detect machine IP for development (localhost doesn't work on Android)
 const origin = Constants.expoConfig?.hostUri?.split(':')[0] || 'localhost';
-const API_URL = `http://${origin}:3000/api`;
+const BASE_URL = `http://${origin}:3000`;
+const API_URL = `${BASE_URL}/api`;
 
 console.log('API URL:', API_URL);
+
+// Helper to convert relative upload paths to absolute URLs
+export const getMediaUrl = (path: string | undefined | null): string => {
+    if (!path) return '';
+    // Already absolute URL (e.g., GIPHY URLs)
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+        return path;
+    }
+    // Relative path from server (e.g., /uploads/file.jpg)
+    return `${BASE_URL}${path}`;
+};
 
 const api = axios.create({
     baseURL: API_URL,
@@ -27,13 +38,15 @@ api.interceptors.request.use(async (config) => {
     return config;
 });
 
+import { DeviceEventEmitter } from 'react-native';
+
 // Handle 401
 api.interceptors.response.use(
     (response) => response,
     async (error) => {
         if (error.response?.status === 401) {
             await SecureStore.deleteItemAsync('token');
-            authEvents.dispatchEvent(new Event('unauthorized'));
+            DeviceEventEmitter.emit('auth:unauthorized');
             console.log('401 detected, token deleted');
         }
         return Promise.reject(error);
@@ -54,34 +67,66 @@ export interface RNFile {
     type?: string;
 }
 
-export const uploadFile = (file: RNFile) => {
+export const uploadFile = async (file: RNFile): Promise<{ data: { url: string; type: 'image' | 'video' | 'file'; mimeType: string; filename: string } }> => {
     const formData = new FormData();
-    // React Native expects: { uri, name, type }
+    // React Native expects: { uri, type, name }
     formData.append('file', {
         uri: file.uri,
-        name: file.name,
-        type: file.mimeType || file.type || 'application/octet-stream'
+        type: file.mimeType || file.type || 'application/octet-stream',
+        name: file.name
     } as any);
-    
-    return api.post<{ url: string; type: 'image' | 'video' | 'file'; mimeType: string; filename: string }>('/media/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+
+    // Use native fetch for file uploads (more reliable in React Native)
+    const token = await SecureStore.getItemAsync('token');
+    const response = await fetch(`${API_URL}/media/upload`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            // Let fetch auto-set Content-Type with boundary for FormData
+        },
+        body: formData,
     });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Upload failed:', response.status, errorText);
+        throw new Error(`Upload failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return { data };
 };
 
-export const uploadVoice = (audioUri: string, duration: number, mimeType = 'audio/x-m4a') => {
+export const uploadVoice = async (audioUri: string, duration: number, mimeType = 'audio/x-m4a'): Promise<{ data: { url: string; params: { fileName: string; duration: number; mimeType: string } } }> => {
     const formData = new FormData();
     const ext = mimeType.includes('mp4') || mimeType.includes('m4a') ? 'm4a' : 'webm';
-    
+
     formData.append('voice', {
         uri: audioUri,
         name: `voice_message.${ext}`,
         type: mimeType
     } as any);
-    
+
     formData.append('duration', duration.toString());
-    return api.post<{ url: string; params: { fileName: string; duration: number; mimeType: string } }>('/media/voice', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+
+    // Use native fetch for file uploads (more reliable in React Native)
+    const token = await SecureStore.getItemAsync('token');
+    const response = await fetch(`${API_URL}/media/voice`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${token}`,
+        },
+        body: formData,
     });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Voice upload failed:', response.status, errorText);
+        throw new Error(`Voice upload failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return { data };
 };
 
 export const joinServer = (code: string) =>
@@ -95,6 +140,36 @@ export const login = (username: string, password: string) =>
     api.post('/auth/login', { username, password });
 
 export const getProfile = () => api.get('/auth/me');
+
+export const updateProfile = (displayName?: string, avatarUrl?: string) =>
+    api.put('/auth/profile', { displayName, avatarUrl });
+
+export const uploadAvatar = async (file: RNFile): Promise<{ data: { avatarUrl: string } }> => {
+    const formData = new FormData();
+    formData.append('avatar', {
+        uri: file.uri,
+        type: file.mimeType || file.type || 'image/jpeg',
+        name: file.name
+    } as any);
+
+    const token = await SecureStore.getItemAsync('token');
+    const response = await fetch(`${API_URL}/media/avatar`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${token}`,
+        },
+        body: formData,
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Avatar upload failed:', response.status, errorText);
+        throw new Error(`Avatar upload failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return { data };
+};
 
 // Chats
 export const getChats = () => api.get('/chats');
