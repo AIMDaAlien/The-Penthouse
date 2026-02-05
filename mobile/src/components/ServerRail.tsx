@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, Image, ScrollView } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { Colors } from '../designsystem/Colors';
 import { Radius, Spacing } from '../designsystem/Spacing';
 import { useServerContext } from '../context/ServerContext';
 import { getMediaUrl } from '../services/api';
 import { Ionicons } from '@expo/vector-icons';
+import { SpringConfig } from '../designsystem/Animations';
 
 // Note: Using existing Context logic, just styling update.
 // We might need to implement the "Create/Join" modals if they were inside ServerSidebar.
@@ -12,6 +14,42 @@ import { Ionicons } from '@expo/vector-icons';
 
 interface ServerRailProps {
     onAddServer?: () => void;
+}
+
+interface ServerButtonProps {
+    server: any;
+    isSelected: boolean;
+    onPress: () => void;
+}
+
+// Animated Server Button with morph effect
+function ServerButton({ server, isSelected, onPress }: ServerButtonProps) {
+    const borderRadiusProgress = useSharedValue(isSelected ? 1 : 0);
+
+    useEffect(() => {
+        borderRadiusProgress.value = withSpring(isSelected ? 1 : 0, SpringConfig.MICRO);
+    }, [isSelected]);
+
+    const animatedStyle = useAnimatedStyle(() => ({
+        borderRadius: 24 - (borderRadiusProgress.value * 8), // 24 (circle) → 16 (squircle)
+    }));
+
+    return (
+        <View style={styles.itemWrapper}>
+            {isSelected && <View style={styles.activePill} />}
+            <Animated.View style={[styles.serverBtn, animatedStyle, isSelected && styles.serverBtnSelected]}>
+                <Pressable onPress={onPress} style={styles.innerPressable}>
+                    {server.iconUrl ? (
+                        <Image source={{ uri: getMediaUrl(server.iconUrl) }} style={styles.icon} />
+                    ) : (
+                        <Text style={[styles.initials, isSelected && { color: Colors.CRUST }]}>
+                            {server.name.substring(0, 2).toUpperCase()}
+                        </Text>
+                    )}
+                </Pressable>
+            </Animated.View>
+        </View>
+    );
 }
 
 export function ServerRail({ onAddServer }: ServerRailProps) {
@@ -41,24 +79,12 @@ export function ServerRail({ onAddServer }: ServerRailProps) {
             {servers.map(server => {
                 const isSelected = server.id === selectedServerId;
                 return (
-                    <View key={server.id} style={styles.itemWrapper}>
-                        {isSelected && <View style={styles.activePill} />}
-                        <Pressable 
-                            onPress={() => handleServerSelect(server.id)}
-                            style={[
-                                styles.serverBtn,
-                                isSelected && styles.serverBtnSelected
-                            ]}
-                        >
-                            {server.iconUrl ? (
-                                <Image source={{ uri: getMediaUrl(server.iconUrl) }} style={styles.icon} />
-                            ) : (
-                                <Text style={[styles.initials, isSelected && { color: Colors.CRUST }]}>
-                                    {server.name.substring(0, 2).toUpperCase()}
-                                </Text>
-                            )}
-                        </Pressable>
-                    </View>
+                    <ServerButton 
+                        key={server.id} 
+                        server={server} 
+                        isSelected={isSelected}
+                        onPress={() => handleServerSelect(server.id)}
+                    />
                 );
             })}
 
@@ -119,7 +145,14 @@ const styles = StyleSheet.create({
     },
     serverBtnSelected: {
         backgroundColor: Colors.LAVENDER,
-        borderRadius: 16, // Squircle on select (Discord style)
+        // borderRadius handled by animation
+    },
+    innerPressable: {
+        width: '100%',
+        height: '100%',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: 16, // Match max radius
     },
     icon: {
         width: '100%',

@@ -7,7 +7,7 @@ import { Colors } from '../designsystem/Colors';
 const { width, height } = Dimensions.get('window');
 
 // Use require for local asset
-const bgSource = require('../../assets/lounge-bg.png');
+const bgSource = require('../../assets/lounge-bg.webp');
 
 export function BackgroundLayer() {
     return (
