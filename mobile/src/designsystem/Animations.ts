@@ -1,44 +1,102 @@
+/**
+ * Animation Design System
+ * 
+ * Spring configurations for smooth, natural motion.
+ * All animations use springs (no linear/tween) per design rules.
+ */
+
 import { WithSpringConfig } from 'react-native-reanimated';
 
-// Material 3 Expressive Springs - Custom Interpretation for React Native Reanimated
+// ─────────────────────────────────────────────────────────────
+// SPRING CONFIGURATIONS
+// ─────────────────────────────────────────────────────────────
+
 export const SpringConfig = {
-    // Fast, responsive, high bounce (Micro-interactions, toggles)
-    MICRO: {
-        damping: 10,
-        stiffness: 300,
-        mass: 0.8,
-    } as WithSpringConfig,
+  /** Fast, snappy - toggles, checkboxes, small elements */
+  MICRO: {
+    damping: 15,
+    stiffness: 400,
+    mass: 0.8,
+  } as WithSpringConfig,
 
-    // Standard UI movement (Cards, Lists)
-    STANDARD: {
-        damping: 20,
-        stiffness: 250,
-        mass: 1,
-    } as WithSpringConfig,
+  /** Standard UI - buttons, cards, most interactions */
+  STANDARD: {
+    damping: 20,
+    stiffness: 300,
+    mass: 1,
+  } as WithSpringConfig,
 
-    // Heavy panels sliding in
-    PANEL: {
-        damping: 30, // Higher damping for less oscillation on large moves
-        stiffness: 200, // Lower stiffness for "weight"
-        mass: 1.2,
-    } as WithSpringConfig,
+  /** Smooth panels - sidebars, modals sliding in */
+  PANEL: {
+    damping: 25,
+    stiffness: 200,
+    mass: 1.2,
+  } as WithSpringConfig,
 
-    // Bouncy playful moments
-    BOUNCY: {
-        damping: 12,
-        stiffness: 200,
-        mass: 1,
-    } as WithSpringConfig,
+  /** Bouncy - playful elements, reactions, animations */
+  BOUNCY: {
+    damping: 12,
+    stiffness: 180,
+    mass: 1,
+  } as WithSpringConfig,
 
-    // Slow ambient drifts
-    AMBIENT: {
-        damping: 100,
-        stiffness: 50,
-        mass: 3,
-    } as WithSpringConfig,
+  /** Gentle - slow reveals, ambient motion */
+  GENTLE: {
+    damping: 30,
+    stiffness: 100,
+    mass: 1.5,
+  } as WithSpringConfig,
+
+  /** Selection morphs - server icon circle → squircle */
+  MORPH: {
+    damping: 18,
+    stiffness: 250,
+    mass: 1,
+  } as WithSpringConfig,
 } as const;
 
-export const Tokens = {
-    STAGGER: 30, // ms
-    TAP_SCALE: 0.97,
+// ─────────────────────────────────────────────────────────────
+// ANIMATION TOKENS
+// ─────────────────────────────────────────────────────────────
+
+export const AnimationTokens = {
+  /** Stagger delay between list items (ms) */
+  STAGGER_DELAY: 30,
+
+  /** Scale factor for tap feedback */
+  TAP_SCALE: 0.97,
+
+  /** Entry animation initial opacity */
+  ENTRY_OPACITY: 0,
+
+  /** Entry animation initial offset (pixels) */
+  ENTRY_OFFSET: 16,
 } as const;
+
+// ─────────────────────────────────────────────────────────────
+// SPRING PRESETS (for withSpring shorthand)
+// ─────────────────────────────────────────────────────────────
+
+export const Springs = {
+  /** Quick response spring */
+  quick: (value: number) => ({ 
+    value, 
+    config: SpringConfig.MICRO 
+  }),
+
+  /** Standard spring */
+  standard: (value: number) => ({ 
+    value, 
+    config: SpringConfig.STANDARD 
+  }),
+
+  /** Bouncy spring */
+  bouncy: (value: number) => ({ 
+    value, 
+    config: SpringConfig.BOUNCY 
+  }),
+} as const;
+
+// Legacy alias
+/** @deprecated Use AnimationTokens */
+export const Tokens = AnimationTokens;
