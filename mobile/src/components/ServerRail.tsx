@@ -1,172 +1,285 @@
+/**
+ * ServerRail - Discord-style server navigation column
+ * 
+ * Features:
+ * - Morphing circle → squircle on selection
+ * - Glow effect on active server
+ * - Active pill indicator
+ * - Home button, divider, server list, add button
+ */
+
 import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, Image, ScrollView } from 'react-native';
-import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
-import { Colors } from '../designsystem/Colors';
-import { Radius, Spacing } from '../designsystem/Spacing';
+import Animated, { 
+  useSharedValue, 
+  useAnimatedStyle, 
+  withSpring,
+  interpolate 
+} from 'react-native-reanimated';
+import { Ionicons } from '@expo/vector-icons';
+import { Colors, Spacing, Sizes, SpringConfig, Glows } from '../designsystem';
 import { useServerContext } from '../context/ServerContext';
 import { getMediaUrl } from '../services/api';
-import { Ionicons } from '@expo/vector-icons';
-import { SpringConfig } from '../designsystem/Animations';
 
-// Note: Using existing Context logic, just styling update.
-// We might need to implement the "Create/Join" modals if they were inside ServerSidebar.
-// For now, removing them to focus on Rail UI, will re-add slot for them.
+// ─────────────────────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────────────────────
 
 interface ServerRailProps {
-    onAddServer?: () => void;
+  onAddServer?: () => void;
 }
 
 interface ServerButtonProps {
-    server: any;
-    isSelected: boolean;
-    onPress: () => void;
+  server: any;
+  isSelected: boolean;
+  hasUnread?: boolean;
+  onPress: () => void;
 }
 
-// Animated Server Button with morph effect
-function ServerButton({ server, isSelected, onPress }: ServerButtonProps) {
-    const borderRadiusProgress = useSharedValue(isSelected ? 1 : 0);
+// ─────────────────────────────────────────────────────────────
+// Server Button with Morph + Glow
+// ─────────────────────────────────────────────────────────────
 
-    useEffect(() => {
-        borderRadiusProgress.value = withSpring(isSelected ? 1 : 0, SpringConfig.MICRO);
-    }, [isSelected]);
+function ServerButton({ server, isSelected, hasUnread, onPress }: ServerButtonProps) {
+  const morph = useSharedValue(isSelected ? 1 : 0);
+  const scale = useSharedValue(1);
 
-    const animatedStyle = useAnimatedStyle(() => ({
-        borderRadius: 24 - (borderRadiusProgress.value * 8), // 24 (circle) → 16 (squircle)
-    }));
+  useEffect(() => {
+    morph.value = withSpring(isSelected ? 1 : 0, SpringConfig.MORPH);
+  }, [isSelected]);
 
-    return (
-        <View style={styles.itemWrapper}>
-            {isSelected && <View style={styles.activePill} />}
-            <Animated.View style={[styles.serverBtn, animatedStyle, isSelected && styles.serverBtnSelected]}>
-                <Pressable onPress={onPress} style={styles.innerPressable}>
-                    {server.iconUrl ? (
-                        <Image source={{ uri: getMediaUrl(server.iconUrl) }} style={styles.icon} />
-                    ) : (
-                        <Text style={[styles.initials, isSelected && { color: Colors.CRUST }]}>
-                            {server.name.substring(0, 2).toUpperCase()}
-                        </Text>
-                    )}
-                </Pressable>
-            </Animated.View>
-        </View>
-    );
+  const animatedContainer = useAnimatedStyle(() => ({
+    borderRadius: interpolate(morph.value, [0, 1], [24, 16]),
+    transform: [{ scale: scale.value }],
+  }));
+
+  const animatedGlow = useAnimatedStyle(() => ({
+    opacity: interpolate(morph.value, [0, 1], [0, 1]),
+  }));
+
+  const handlePressIn = () => {
+    scale.value = withSpring(0.92, SpringConfig.MICRO);
+  };
+
+  const handlePressOut = () => {
+    scale.value = withSpring(1, SpringConfig.MICRO);
+  };
+
+  return (
+    <View style={styles.buttonWrapper}>
+      {/* Active pill indicator */}
+      <Animated.View 
+        style={[
+          styles.activePill,
+          {
+            height: isSelected ? 36 : hasUnread ? 8 : 0,
+            opacity: isSelected || hasUnread ? 1 : 0,
+          }
+        ]} 
+      />
+      
+      {/* Server button with glow */}
+      <Pressable
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+      >
+        {/* Glow layer */}
+        <Animated.View style={[styles.glowLayer, animatedGlow]} />
+        
+        <Animated.View 
+          style={[
+            styles.serverBtn,
+            animatedContainer,
+            isSelected && styles.serverBtnSelected,
+          ]}
+        >
+          {server.iconUrl ? (
+            <Image 
+              source={{ uri: getMediaUrl(server.iconUrl) }} 
+              style={styles.icon} 
+            />
+          ) : (
+            <Text style={[
+              styles.initials,
+              isSelected && { color: Colors.TERTIARY }
+            ]}>
+              {server.name.substring(0, 2).toUpperCase()}
+            </Text>
+          )}
+        </Animated.View>
+      </Pressable>
+    </View>
+  );
 }
+
+// ─────────────────────────────────────────────────────────────
+// Home Button
+// ─────────────────────────────────────────────────────────────
+
+interface HomeButtonProps {
+  isSelected: boolean;
+  onPress: () => void;
+}
+
+function HomeButton({ isSelected, onPress }: HomeButtonProps) {
+  const morph = useSharedValue(isSelected ? 1 : 0);
+  const scale = useSharedValue(1);
+
+  useEffect(() => {
+    morph.value = withSpring(isSelected ? 1 : 0, SpringConfig.MORPH);
+  }, [isSelected]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    borderRadius: interpolate(morph.value, [0, 1], [24, 16]),
+    transform: [{ scale: scale.value }],
+    backgroundColor: isSelected ? Colors.ACCENT : Colors.EFFECTS.CARD_BG,
+  }));
+
+  return (
+    <View style={styles.buttonWrapper}>
+      <Animated.View 
+        style={[
+          styles.activePill,
+          { height: isSelected ? 36 : 0, opacity: isSelected ? 1 : 0 }
+        ]} 
+      />
+      
+      <Pressable
+        onPress={onPress}
+        onPressIn={() => { scale.value = withSpring(0.92, SpringConfig.MICRO); }}
+        onPressOut={() => { scale.value = withSpring(1, SpringConfig.MICRO); }}
+      >
+        <Animated.View style={[styles.serverBtn, animatedStyle]}>
+          <Ionicons 
+            name="chatbubbles" 
+            size={24} 
+            color={isSelected ? Colors.TERTIARY : Colors.INTERACTIVE_NORMAL} 
+          />
+        </Animated.View>
+      </Pressable>
+    </View>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Main Component
+// ─────────────────────────────────────────────────────────────
 
 export function ServerRail({ onAddServer }: ServerRailProps) {
-    const { servers, selectedServerId, handleServerSelect } = useServerContext();
+  const { servers, selectedServerId, handleServerSelect } = useServerContext();
 
-    return (
-        <ScrollView 
-            style={styles.container} 
-            contentContainerStyle={styles.contentContainer}
-            showsVerticalScrollIndicator={false}
-        >
-            {/* Home / DMs */}
-            <Pressable 
-                onPress={() => handleServerSelect(0)}
-                style={[styles.serverBtn, selectedServerId === 0 && styles.serverBtnSelected]}
-            >
-                <Ionicons 
-                    name="chatbubbles" 
-                    size={24} 
-                    color={selectedServerId === 0 ? Colors.MANTLE : Colors.OVERLAY1} 
-                />
-            </Pressable>
+  return (
+    <ScrollView 
+      style={styles.container} 
+      contentContainerStyle={styles.content}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* Home / DMs */}
+      <HomeButton 
+        isSelected={selectedServerId === 0}
+        onPress={() => handleServerSelect(0)}
+      />
 
-            <View style={styles.divider} />
+      {/* Divider */}
+      <View style={styles.divider} />
 
-            {/* Server List */}
-            {servers.map(server => {
-                const isSelected = server.id === selectedServerId;
-                return (
-                    <ServerButton 
-                        key={server.id} 
-                        server={server} 
-                        isSelected={isSelected}
-                        onPress={() => handleServerSelect(server.id)}
-                    />
-                );
-            })}
+      {/* Server List */}
+      {servers.map(server => (
+        <ServerButton 
+          key={server.id} 
+          server={server} 
+          isSelected={server.id === selectedServerId}
+          hasUnread={false} // TODO: Connect to unread state
+          onPress={() => handleServerSelect(server.id)}
+        />
+      ))}
 
-            {/* Add Server */}
-            <Pressable 
-                onPress={onAddServer}
-                style={[styles.serverBtn, styles.addBtn]}
-            >
-                 <Ionicons name="add" size={24} color={Colors.SUCCESS} />
-            </Pressable>
-
-        </ScrollView>
-    );
+      {/* Add Server */}
+      <Pressable 
+        onPress={onAddServer}
+        style={[styles.serverBtn, styles.addBtn]}
+      >
+        <Ionicons name="add" size={24} color={Colors.SUCCESS} />
+      </Pressable>
+    </ScrollView>
+  );
 }
 
+// ─────────────────────────────────────────────────────────────
+// Styles
+// ─────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
-    container: {
-        width: 72, // Fixed width Rail
-        flex: 1,
-        // Background handled by LobbyPanel's rail container or transparent
-    },
-    contentContainer: {
-        alignItems: 'center',
-        paddingVertical: Spacing.L,
-        paddingBottom: Spacing.XXXL,
-    },
-    divider: {
-        width: 32,
-        height: 2,
-        backgroundColor: Colors.GLASS.PANEL_BORDER,
-        marginVertical: Spacing.M,
-        borderRadius: 1,
-    },
-    itemWrapper: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: Spacing.M,
-        position: 'relative', 
-    },
-    activePill: {
-        position: 'absolute',
-        left: -12, // Pull stick to edge
-        width: 4,
-        height: 32,
-        backgroundColor: Colors.LAVENDER,
-        borderTopRightRadius: 4,
-        borderBottomRightRadius: 4,
-    },
-    serverBtn: {
-        width: 48,
-        height: 48,
-        borderRadius: 24, // Circle by default
-        backgroundColor: Colors.GLASS.CARD_BG,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: 1,
-        borderColor: Colors.GLASS.CARD_BORDER,
-    },
-    serverBtnSelected: {
-        backgroundColor: Colors.LAVENDER,
-        // borderRadius handled by animation
-    },
-    innerPressable: {
-        width: '100%',
-        height: '100%',
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderRadius: 16, // Match max radius
-    },
-    icon: {
-        width: '100%',
-        height: '100%',
-        borderRadius: 16, // Matches squircle
-    },
-    initials: {
-        color: Colors.TEXT,
-        fontWeight: 'bold',
-        fontSize: 14,
-    },
-    addBtn: {
-        borderStyle: 'dashed',
-        borderColor: Colors.SUCCESS,
-        marginTop: Spacing.S,
-    }
+  container: {
+    width: Sizes.SERVER_RAIL_WIDTH,
+    backgroundColor: Colors.TERTIARY,
+  },
+  content: {
+    alignItems: 'center',
+    paddingVertical: Spacing.L,
+    paddingBottom: Spacing.XXXL,
+  },
+  buttonWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.S,
+    position: 'relative',
+  },
+  activePill: {
+    position: 'absolute',
+    left: 0,
+    width: 4,
+    backgroundColor: Colors.ACCENT_LIGHT,
+    borderTopRightRadius: 4,
+    borderBottomRightRadius: 4,
+  },
+  glowLayer: {
+    position: 'absolute',
+    top: -4,
+    left: 8, // Account for pill
+    width: Sizes.SERVER_ICON + 8,
+    height: Sizes.SERVER_ICON + 8,
+    borderRadius: 20,
+    ...Glows.SELECTED,
+  },
+  serverBtn: {
+    width: Sizes.SERVER_ICON,
+    height: Sizes.SERVER_ICON,
+    borderRadius: 24,
+    backgroundColor: Colors.EFFECTS.CARD_BG,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: Spacing.SM,
+    overflow: 'hidden',
+  },
+  serverBtnSelected: {
+    backgroundColor: Colors.ACCENT,
+  },
+  icon: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 16,
+  },
+  initials: {
+    color: Colors.TEXT_NORMAL,
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  divider: {
+    width: 32,
+    height: 2,
+    backgroundColor: Colors.EFFECTS.PANEL_BORDER,
+    marginVertical: Spacing.M,
+    borderRadius: 1,
+  },
+  addBtn: {
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: Colors.SUCCESS,
+    backgroundColor: 'transparent',
+    marginTop: Spacing.S,
+  },
 });
+
+export default ServerRail;
