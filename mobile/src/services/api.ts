@@ -223,4 +223,31 @@ export const getServerDetails = (serverId: number) => api.get(`/servers/${server
 export const createChannel = (serverId: number, name: string) =>
     api.post(`/servers/${serverId}/channels`, { name });
 
+export const uploadServerIcon = async (file: RNFile): Promise<{ data: { iconUrl: string } }> => {
+    const formData = new FormData();
+    formData.append('icon', {
+        uri: file.uri,
+        type: file.type || 'image/jpeg',
+        name: file.name || 'server-icon.jpg'
+    } as any);
+
+    const token = await SecureStore.getItemAsync('token');
+    const response = await fetch(`${API_URL}/media/server-icon`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${token}`,
+        },
+        body: formData,
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Server icon upload failed:', response.status, errorText);
+        throw new Error(`Server icon upload failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return { data };
+};
+
 export default api;

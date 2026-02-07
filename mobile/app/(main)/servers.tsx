@@ -16,6 +16,7 @@ import Animated, {
 import { Colors, Typography, Spacing, Radius, SpringConfig, Glows } from '../../src/designsystem';
 import { useServerContext } from '../../src/context/ServerContext';
 import JoinServerModal from '../../src/components/JoinServerModal';
+import CreateServerModal from '../../src/components/CreateServerModal';
 import InviteModal from '../../src/components/InviteModal';
 
 export default function ServersScreen() {
@@ -23,6 +24,7 @@ export default function ServersScreen() {
   const { servers, selectedServerId, handleServerSelect, loadServers, loadServerDetails } = useServerContext();
   const [refreshing, setRefreshing] = useState(false);
   const [showJoinModal, setShowJoinModal] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const [inviteServer, setInviteServer] = useState<{ id: number; name: string } | null>(null);
 
   const onRefresh = async () => {
@@ -63,7 +65,7 @@ export default function ServersScreen() {
           icon="add"
           label="Create Server"
           color={Colors.SUCCESS}
-          onPress={() => {/* TODO: Create server modal */}}
+          onPress={() => setShowCreateModal(true)}
         />
       </View>
 
@@ -108,6 +110,18 @@ export default function ServersScreen() {
           onClose={() => setInviteServer(null)}
         />
       )}
+
+      {/* Create Server Modal */}
+      <CreateServerModal
+        visible={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onCreated={async (serverId, serverName) => {
+          await loadServers();
+          await handleServerSelect(serverId);
+          await loadServerDetails(serverId);
+          router.push('/(main)');
+        }}
+      />
     </View>
   );
 }
