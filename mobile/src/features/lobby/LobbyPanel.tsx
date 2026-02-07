@@ -1,128 +1,250 @@
+/**
+ * LobbyPanel - Main server/channel browser
+ * 
+ * Discord-style layout:
+ * - Server rail on left
+ * - Channel list on right
+ * - Transparent background (shows BackgroundLayer)
+ */
+
 import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, Text } from 'react-native';
-import { GlassPanel } from '../../components/glass/GlassPanel';
-import { GlassInput } from '../../components/glass/GlassInput';
-import { GlassRow } from '../../components/glass/GlassRow';
-import { Typography } from '../../designsystem/Typography';
-import { Spacing } from '../../designsystem/Spacing';
-import { Colors } from '../../designsystem/Colors';
+import { View, StyleSheet, ScrollView, Text, TextInput, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
+import { Colors, Typography, Spacing, Radius } from '../../designsystem';
 import { useServerContext } from '../../context/ServerContext';
 import { ServerRail } from '../../components/ServerRail';
+import { Panel } from '../../components/Panel';
 
 interface LobbyPanelProps {
-    onChannelSelect: (channelId: string) => void;
+  onChannelSelect: (channelId: string) => void;
 }
 
 export function LobbyPanel({ onChannelSelect }: LobbyPanelProps) {
-    const { serverChannels, selectedServerId } = useServerContext();
-    const [searchQuery, setSearchQuery] = useState('');
+  const { serverChannels, selectedServerId } = useServerContext();
+  const [searchQuery, setSearchQuery] = useState('');
 
-    // Filter channels
-    const textChannels = serverChannels.filter(c => c.type !== 'voice');
-    const voiceChannels = serverChannels.filter(c => c.type === 'voice');
+  // Filter channels
+  const textChannels = serverChannels.filter(c => c.type !== 'voice');
+  const voiceChannels = serverChannels.filter(c => c.type === 'voice');
 
-    return (
-        <View style={styles.container}>
-            {/* Left Rail (Server List) */}
-            <View style={styles.rail}>
-                 <ServerRail onAddServer={() => {}} /> 
-            </View>
+  // Filter by search
+  const filteredChannels = searchQuery
+    ? textChannels.filter(c => 
+        c.name.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : textChannels;
 
-            {/* Main Content (Channel List) */}
-            <View style={styles.main}>
-                <View style={styles.header}>
-                    <GlassInput 
-                        placeholder="Find a room..." 
-                        value={searchQuery}
-                        onChangeText={setSearchQuery}
-                        icon={<Ionicons name="search" size={16} color={Colors.OVERLAY1} />}
-                        style={{ fontSize: 14 }}
-                        containerStyle={{ height: 44, backgroundColor: Colors.GLASS.INPUT_BG }}
-                    />
-                </View>
+  return (
+    <View style={styles.container}>
+      {/* Left Rail (Server List) */}
+      <View style={styles.rail}>
+        <ServerRail onAddServer={() => {}} />
+      </View>
 
-                <ScrollView contentContainerStyle={styles.scrollContent}>
-                    {selectedServerId ? (
-                        <>
-                            <Text style={[Typography.MICRO, styles.sectionTitle]}>TONIGHT</Text>
-                            {textChannels.map(channel => (
-                                <GlassRow 
-                                    key={channel.id} 
-                                    onPress={() => onChannelSelect(channel.id.toString())}
-                                >
-                                    <View style={styles.channelIcon}>
-                                        <Text style={{color: Colors.OVERLAY1}}>#</Text>
-                                    </View>
-                                    <Text style={[Typography.BODY, {color: Colors.TEXT}]}>{channel.name}</Text>
-                                </GlassRow>
-                            ))}
-
-                            {voiceChannels.length > 0 && (
-                                <>
-                                    <View style={{height: Spacing.L}} />
-                                    <Text style={[Typography.MICRO, styles.sectionTitle]}>VOICE</Text>
-                                    {voiceChannels.map(channel => (
-                                        <GlassRow 
-                                            key={channel.id} 
-                                            onPress={() => {}} // Voice disabled for now per user check
-                                            style={{ opacity: 0.6 }}
-                                        >
-                                            <View style={styles.channelIcon}>
-                                                <Ionicons name="mic" size={14} color={Colors.OVERLAY1} />
-                                            </View>
-                                            <Text style={[Typography.BODY, {color: Colors.TEXT}]}>{channel.name} (Lounge)</Text>
-                                        </GlassRow>
-                                    ))}
-                                </>
-                            )}
-                        </>
-                    ) : (
-                        <View style={styles.emptyState}>
-                            <Text style={[Typography.H2, {color: Colors.OVERLAY1, textAlign: 'center'}]}>
-                                Select a server to join the lounge.
-                            </Text>
-                        </View>
-                    )}
-                </ScrollView>
-            </View>
+      {/* Main Content (Channel List) */}
+      <View style={styles.main}>
+        {/* Search Input */}
+        <View style={styles.searchContainer}>
+          <BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFill} />
+          <View style={styles.searchInner}>
+            <Ionicons name="search" size={16} color={Colors.TEXT_MUTED} />
+            <TextInput
+              placeholder="Find a room..."
+              placeholderTextColor={Colors.TEXT_MUTED}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              style={styles.searchInput}
+            />
+          </View>
         </View>
-    );
+
+        <ScrollView 
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {selectedServerId ? (
+            <>
+              {/* Text Channels */}
+              <Text style={styles.sectionTitle}>CHANNELS</Text>
+              {filteredChannels.map(channel => (
+                <ChannelRow
+                  key={channel.id}
+                  name={channel.name}
+                  type="text"
+                  onPress={() => onChannelSelect(channel.id.toString())}
+                />
+              ))}
+
+              {/* Voice Channels */}
+              {voiceChannels.length > 0 && (
+                <>
+                  <View style={{ height: Spacing.L }} />
+                  <Text style={styles.sectionTitle}>VOICE</Text>
+                  {voiceChannels.map(channel => (
+                    <ChannelRow
+                      key={channel.id}
+                      name={channel.name}
+                      type="voice"
+                      disabled
+                      onPress={() => {}}
+                    />
+                  ))}
+                </>
+              )}
+            </>
+          ) : (
+            <View style={styles.emptyState}>
+              <Ionicons 
+                name="chatbubbles-outline" 
+                size={48} 
+                color={Colors.TEXT_MUTED} 
+              />
+              <Text style={styles.emptyText}>
+                Select a server to join the lounge.
+              </Text>
+            </View>
+          )}
+        </ScrollView>
+      </View>
+    </View>
+  );
 }
 
+// ─────────────────────────────────────────────────────────────
+// Channel Row Component
+// ─────────────────────────────────────────────────────────────
+
+interface ChannelRowProps {
+  name: string;
+  type: 'text' | 'voice';
+  disabled?: boolean;
+  hasUnread?: boolean;
+  onPress: () => void;
+}
+
+function ChannelRow({ name, type, disabled, hasUnread, onPress }: ChannelRowProps) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      style={({ pressed }) => [
+        styles.channelRow,
+        pressed && styles.channelRowPressed,
+        disabled && styles.channelRowDisabled,
+      ]}
+    >
+      <View style={styles.channelIcon}>
+        {type === 'text' ? (
+          <Text style={styles.hashIcon}>#</Text>
+        ) : (
+          <Ionicons name="mic" size={16} color={Colors.INTERACTIVE_NORMAL} />
+        )}
+      </View>
+      <Text 
+        style={[
+          styles.channelName,
+          hasUnread && styles.channelNameUnread,
+        ]}
+      >
+        {name}
+      </Text>
+    </Pressable>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Styles
+// ─────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        flexDirection: 'row',
-    },
-    rail: {
-        width: 80, // Matches existing logic, spec says 72dp
-        paddingTop: Spacing.L,
-        alignItems: 'center',
-    },
-    main: {
-        flex: 1,
-        paddingTop: Spacing.XL, // Match rail padding + header spacing
-        paddingRight: Spacing.M,
-    },
-    header: {
-        marginBottom: Spacing.L,
-    },
-    scrollContent: {
-        paddingBottom: 100,
-    },
-    sectionTitle: {
-        marginBottom: Spacing.S,
-        marginLeft: Spacing.S,
-        color: Colors.OVERLAY1,
-    },
-    channelIcon: {
-        width: 24,
-        alignItems: 'center',
-        marginRight: Spacing.S,
-    },
-    emptyState: {
-        marginTop: Spacing.XXL,
-        opacity: 0.7,
-    }
+  container: {
+    flex: 1,
+    flexDirection: 'row',
+    backgroundColor: 'transparent', // Show BackgroundLayer through
+  },
+  rail: {
+    // ServerRail handles its own width
+  },
+  main: {
+    flex: 1,
+    backgroundColor: Colors.SECONDARY, // Dark but slightly lighter than rail
+    borderTopLeftRadius: Radius.L,
+    overflow: 'hidden',
+  },
+  searchContainer: {
+    marginHorizontal: Spacing.SM,
+    marginTop: Spacing.SM,
+    marginBottom: Spacing.M,
+    borderRadius: Radius.S,
+    overflow: 'hidden',
+    backgroundColor: Colors.EFFECTS.INPUT_BG,
+  },
+  searchInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.SM,
+    paddingVertical: Spacing.S,
+  },
+  searchInput: {
+    flex: 1,
+    marginLeft: Spacing.S,
+    color: Colors.TEXT_NORMAL,
+    fontSize: 14,
+  },
+  scrollContent: {
+    paddingHorizontal: Spacing.SM,
+    paddingBottom: 100,
+  },
+  sectionTitle: {
+    ...Typography.OVERLINE,
+    color: Colors.TEXT_MUTED,
+    marginBottom: Spacing.XS,
+    marginLeft: Spacing.S,
+  },
+  channelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: Spacing.S,
+    paddingHorizontal: Spacing.SM,
+    borderRadius: Radius.S,
+    marginBottom: 2,
+  },
+  channelRowPressed: {
+    backgroundColor: Colors.SURFACE_HOVER,
+  },
+  channelRowDisabled: {
+    opacity: 0.5,
+  },
+  channelIcon: {
+    width: 24,
+    alignItems: 'center',
+    marginRight: Spacing.S,
+  },
+  hashIcon: {
+    color: Colors.INTERACTIVE_NORMAL,
+    fontSize: 18,
+    fontWeight: '500',
+  },
+  channelName: {
+    ...Typography.CHANNEL,
+    color: Colors.CHANNEL_DEFAULT,
+  },
+  channelNameUnread: {
+    color: Colors.TEXT_NORMAL,
+    fontWeight: '600',
+  },
+  emptyState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: Spacing.XXXL,
+    opacity: 0.7,
+  },
+  emptyText: {
+    ...Typography.BODY,
+    color: Colors.TEXT_MUTED,
+    marginTop: Spacing.M,
+    textAlign: 'center',
+  },
 });

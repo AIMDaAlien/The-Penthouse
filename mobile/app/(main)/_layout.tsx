@@ -158,7 +158,7 @@ export default function MainLayout() {
       tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={{
         headerStyle: { 
-          backgroundColor: Colors.EFFECTS.PANEL_BG,
+          backgroundColor: Colors.SECONDARY,
           borderBottomColor: Colors.EFFECTS.PANEL_BORDER,
           borderBottomWidth: 1,
         },

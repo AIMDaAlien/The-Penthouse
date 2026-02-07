@@ -1,221 +1,308 @@
-import { View, Text, FlatList, TouchableOpacity, RefreshControl, Image, StyleSheet } from 'react-native';
+/**
+ * Servers Screen - Server browser and management
+ * 
+ * Discord-style design with dark theme
+ */
+
+import React, { useState } from 'react';
+import { View, Text, FlatList, Pressable, RefreshControl, Image, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useServerContext } from '../../src/context/ServerContext';
-import { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, { 
+  useSharedValue, 
+  useAnimatedStyle, 
+  withSpring 
+} from 'react-native-reanimated';
+import { Colors, Typography, Spacing, Radius, SpringConfig, Glows } from '../../src/designsystem';
+import { useServerContext } from '../../src/context/ServerContext';
 import JoinServerModal from '../../src/components/JoinServerModal';
 import InviteModal from '../../src/components/InviteModal';
 
 export default function ServersScreen() {
-    const router = useRouter();
-    const { servers, selectedServerId, handleServerSelect, loadServers, loadServerDetails } = useServerContext();
-    const [refreshing, setRefreshing] = useState(false);
-    const [showJoinModal, setShowJoinModal] = useState(false);
-    const [inviteServer, setInviteServer] = useState<{ id: number; name: string } | null>(null);
+  const router = useRouter();
+  const { servers, selectedServerId, handleServerSelect, loadServers, loadServerDetails } = useServerContext();
+  const [refreshing, setRefreshing] = useState(false);
+  const [showJoinModal, setShowJoinModal] = useState(false);
+  const [inviteServer, setInviteServer] = useState<{ id: number; name: string } | null>(null);
 
-    const onRefresh = async () => {
-        setRefreshing(true);
-        await loadServers();
-        setRefreshing(false);
-    };
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadServers();
+    setRefreshing(false);
+  };
 
-    const handleServerPress = async (serverId: number) => {
-        await handleServerSelect(serverId);
-        await loadServerDetails(serverId);
-        router.push('/(main)');
-    };
+  const handleServerPress = async (serverId: number) => {
+    await handleServerSelect(serverId);
+    await loadServerDetails(serverId);
+    router.push('/(main)');
+  };
 
-    const renderServer = ({ item }: { item: any }) => {
-        const isSelected = item.id === selectedServerId;
-        return (
-            <TouchableOpacity
-                onPress={() => handleServerPress(item.id)}
-                onLongPress={() => setInviteServer({ id: item.id, name: item.name })}
-                style={[styles.serverCard, isSelected && styles.serverCardSelected]}
-            >
-                <View style={[styles.serverIcon, isSelected && styles.serverIconSelected]}>
-                    {item.iconUrl ? (
-                        <Image source={{ uri: item.iconUrl }} style={styles.serverImage} />
-                    ) : (
-                        <Text style={styles.serverInitials}>
-                            {item.name.substring(0, 2).toUpperCase()}
-                        </Text>
-                    )}
-                </View>
-                <View style={styles.serverInfo}>
-                    <Text style={styles.serverName} numberOfLines={1}>{item.name}</Text>
-                    <Text style={styles.serverMeta}>
-                        {item.memberCount || 0} members
-                    </Text>
-                </View>
-                {isSelected && (
-                    <View style={styles.selectedIndicator}>
-                        <Ionicons name="checkmark-circle" size={20} color="#cba6f7" />
-                    </View>
-                )}
-            </TouchableOpacity>
-        );
-    };
-
+  const renderServer = ({ item }: { item: any }) => {
+    const isSelected = item.id === selectedServerId;
     return (
-        <View style={styles.container}>
-            {/* Action buttons */}
-            <View style={styles.actionRow}>
-                <TouchableOpacity
-                    style={styles.actionButton}
-                    onPress={() => setShowJoinModal(true)}
-                >
-                    <Ionicons name="enter-outline" size={20} color="#3b82f6" />
-                    <Text style={styles.actionText}>Join Server</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={[styles.actionButton, styles.createButton]}
-                    onPress={() => {/* TODO: Create server modal */}}
-                >
-                    <Ionicons name="add" size={20} color="#22c55e" />
-                    <Text style={[styles.actionText, { color: '#22c55e' }]}>Create Server</Text>
-                </TouchableOpacity>
-            </View>
-
-            <FlatList
-                data={servers}
-                keyExtractor={(item) => String(item.id)}
-                renderItem={renderServer}
-                refreshControl={
-                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#cba6f7" />
-                }
-                contentContainerStyle={styles.list}
-                ListEmptyComponent={
-                    <View style={styles.emptyState}>
-                        <Ionicons name="planet-outline" size={64} color="#3f3f46" />
-                        <Text style={styles.emptyTitle}>No Servers Yet</Text>
-                        <Text style={styles.emptyText}>Join or create a server to get started</Text>
-                    </View>
-                }
-            />
-
-            {/* Join Server Modal */}
-            <JoinServerModal
-                visible={showJoinModal}
-                onClose={() => setShowJoinModal(false)}
-                onJoined={async (serverId) => {
-                    await loadServers();
-                    await handleServerSelect(serverId);
-                    router.push('/(main)');
-                }}
-            />
-
-            {/* Invite Modal */}
-            {inviteServer && (
-                <InviteModal
-                    visible={!!inviteServer}
-                    serverId={inviteServer.id}
-                    serverName={inviteServer.name}
-                    onClose={() => setInviteServer(null)}
-                />
-            )}
-        </View>
+      <ServerCard
+        server={item}
+        isSelected={isSelected}
+        onPress={() => handleServerPress(item.id)}
+        onLongPress={() => setInviteServer({ id: item.id, name: item.name })}
+      />
     );
+  };
+
+  return (
+    <View style={styles.container}>
+      {/* Action buttons */}
+      <View style={styles.actionRow}>
+        <ActionButton
+          icon="enter-outline"
+          label="Join Server"
+          color={Colors.INFO}
+          onPress={() => setShowJoinModal(true)}
+        />
+        <ActionButton
+          icon="add"
+          label="Create Server"
+          color={Colors.SUCCESS}
+          onPress={() => {/* TODO: Create server modal */}}
+        />
+      </View>
+
+      <FlatList
+        data={servers}
+        keyExtractor={(item) => String(item.id)}
+        renderItem={renderServer}
+        refreshControl={
+          <RefreshControl 
+            refreshing={refreshing} 
+            onRefresh={onRefresh} 
+            tintColor={Colors.ACCENT} 
+          />
+        }
+        contentContainerStyle={styles.list}
+        ListEmptyComponent={
+          <View style={styles.emptyState}>
+            <Ionicons name="planet-outline" size={64} color={Colors.TEXT_MUTED} />
+            <Text style={styles.emptyTitle}>No Servers Yet</Text>
+            <Text style={styles.emptyText}>Join or create a server to get started</Text>
+          </View>
+        }
+      />
+
+      {/* Join Server Modal */}
+      <JoinServerModal
+        visible={showJoinModal}
+        onClose={() => setShowJoinModal(false)}
+        onJoined={async (serverId) => {
+          await loadServers();
+          await handleServerSelect(serverId);
+          router.push('/(main)');
+        }}
+      />
+
+      {/* Invite Modal */}
+      {inviteServer && (
+        <InviteModal
+          visible={!!inviteServer}
+          serverId={inviteServer.id}
+          serverName={inviteServer.name}
+          onClose={() => setInviteServer(null)}
+        />
+      )}
+    </View>
+  );
 }
 
+// ─────────────────────────────────────────────────────────────
+// Action Button
+// ─────────────────────────────────────────────────────────────
+
+interface ActionButtonProps {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  color: string;
+  onPress: () => void;
+}
+
+function ActionButton({ icon, label, color, onPress }: ActionButtonProps) {
+  const scale = useSharedValue(1);
+  
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  return (
+    <Pressable
+      onPress={onPress}
+      onPressIn={() => { scale.value = withSpring(0.95, SpringConfig.MICRO); }}
+      onPressOut={() => { scale.value = withSpring(1, SpringConfig.MICRO); }}
+      style={styles.actionButtonWrapper}
+    >
+      <Animated.View style={[styles.actionButton, { borderColor: color }, animatedStyle]}>
+        <Ionicons name={icon} size={20} color={color} />
+        <Text style={[styles.actionText, { color }]}>{label}</Text>
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Server Card
+// ─────────────────────────────────────────────────────────────
+
+interface ServerCardProps {
+  server: any;
+  isSelected: boolean;
+  onPress: () => void;
+  onLongPress: () => void;
+}
+
+function ServerCard({ server, isSelected, onPress, onLongPress }: ServerCardProps) {
+  const scale = useSharedValue(1);
+  
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  return (
+    <Pressable
+      onPress={onPress}
+      onLongPress={onLongPress}
+      onPressIn={() => { scale.value = withSpring(0.98, SpringConfig.MICRO); }}
+      onPressOut={() => { scale.value = withSpring(1, SpringConfig.MICRO); }}
+    >
+      <Animated.View 
+        style={[
+          styles.serverCard, 
+          isSelected && styles.serverCardSelected,
+          animatedStyle
+        ]}
+      >
+        <View style={[styles.serverIcon, isSelected && styles.serverIconSelected]}>
+          {server.iconUrl ? (
+            <Image source={{ uri: server.iconUrl }} style={styles.serverImage} />
+          ) : (
+            <Text style={styles.serverInitials}>
+              {server.name.substring(0, 2).toUpperCase()}
+            </Text>
+          )}
+        </View>
+        <View style={styles.serverInfo}>
+          <Text style={styles.serverName} numberOfLines={1}>{server.name}</Text>
+          <Text style={styles.serverMeta}>
+            {server.memberCount || 0} members
+          </Text>
+        </View>
+        {isSelected && (
+          <View style={styles.selectedIndicator}>
+            <Ionicons name="checkmark-circle" size={20} color={Colors.ACCENT} />
+          </View>
+        )}
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Styles
+// ─────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#09090b',
-    },
-    actionRow: {
-        flexDirection: 'row',
-        padding: 12,
-        gap: 12,
-    },
-    actionButton: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 8,
-        paddingVertical: 12,
-        backgroundColor: '#27272a',
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: '#3b82f6',
-        borderStyle: 'dashed',
-    },
-    createButton: {
-        borderColor: '#22c55e',
-    },
-    actionText: {
-        color: '#3b82f6',
-        fontWeight: '600',
-    },
-    list: {
-        padding: 12,
-    },
-    serverCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: 12,
-        backgroundColor: '#18181b',
-        borderRadius: 16,
-        marginBottom: 8,
-        borderWidth: 1,
-        borderColor: '#27272a',
-    },
-    serverCardSelected: {
-        borderColor: '#cba6f7',
-        backgroundColor: '#1f1f23',
-    },
-    serverIcon: {
-        width: 48,
-        height: 48,
-        borderRadius: 12,
-        backgroundColor: '#27272a',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: 12,
-    },
-    serverIconSelected: {
-        backgroundColor: '#4f46e5',
-    },
-    serverImage: {
-        width: '100%',
-        height: '100%',
-        borderRadius: 12,
-    },
-    serverInitials: {
-        color: '#a1a1aa',
-        fontWeight: 'bold',
-        fontSize: 16,
-    },
-    serverInfo: {
-        flex: 1,
-    },
-    serverName: {
-        color: '#fff',
-        fontWeight: 'bold',
-        fontSize: 16,
-    },
-    serverMeta: {
-        color: '#71717a',
-        fontSize: 12,
-        marginTop: 2,
-    },
-    selectedIndicator: {
-        marginLeft: 8,
-    },
-    emptyState: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 60,
-    },
-    emptyTitle: {
-        color: '#fff',
-        fontSize: 18,
-        fontWeight: 'bold',
-        marginTop: 16,
-    },
-    emptyText: {
-        color: '#71717a',
-        marginTop: 4,
-    },
+  container: {
+    flex: 1,
+    backgroundColor: Colors.PRIMARY,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    padding: Spacing.SM,
+    gap: Spacing.SM,
+  },
+  actionButtonWrapper: {
+    flex: 1,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.S,
+    paddingVertical: Spacing.SM,
+    backgroundColor: Colors.SURFACE,
+    borderRadius: Radius.M,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+  },
+  actionText: {
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  list: {
+    padding: Spacing.SM,
+  },
+  serverCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: Spacing.SM,
+    backgroundColor: Colors.SURFACE,
+    borderRadius: Radius.L,
+    marginBottom: Spacing.S,
+    borderWidth: 1,
+    borderColor: Colors.EFFECTS.PANEL_BORDER,
+  },
+  serverCardSelected: {
+    borderColor: Colors.ACCENT,
+    backgroundColor: Colors.SURFACE_HOVER,
+  },
+  serverIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: Radius.M,
+    backgroundColor: Colors.SECONDARY,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Spacing.SM,
+    overflow: 'hidden',
+  },
+  serverIconSelected: {
+    backgroundColor: Colors.ACCENT,
+  },
+  serverImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: Radius.M,
+  },
+  serverInitials: {
+    color: Colors.TEXT_MUTED,
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  serverInfo: {
+    flex: 1,
+  },
+  serverName: {
+    color: Colors.TEXT_NORMAL,
+    fontWeight: '600',
+    fontSize: 16,
+  },
+  serverMeta: {
+    color: Colors.TEXT_MUTED,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  selectedIndicator: {
+    marginLeft: Spacing.S,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+  },
+  emptyTitle: {
+    color: Colors.TEXT_NORMAL,
+    fontSize: 18,
+    fontWeight: '700',
+    marginTop: Spacing.M,
+  },
+  emptyText: {
+    color: Colors.TEXT_MUTED,
+    marginTop: Spacing.XS,
+  },
 });
