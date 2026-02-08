@@ -9,6 +9,7 @@ import { useFonts, Ubuntu_300Light, Ubuntu_400Regular, Ubuntu_500Medium, Ubuntu_
 import { JetBrainsMono_400Regular, JetBrainsMono_500Medium } from '@expo-google-fonts/jetbrains-mono';
 import '../global.css';
 import { BackgroundLayer } from '../src/components/BackgroundLayer';
+import { ToastProvider } from '../src/components/Toast';
 
 // Configure Reanimated logger to suppress false positive warnings from third-party libs
 // See: https://docs.swmansion.com/react-native-reanimated/docs/debugging/logger-configuration/
@@ -96,16 +97,17 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <AuthProvider>
         <ServerProvider>
-          <StatusBar style="light" />
-          
-          {/* Persistent Background Layer at the very root */}
-          <BackgroundLayer />
-          
-          {/* Navigation Overlay */}
-          <View style={StyleSheet.absoluteFill}>
-             <RootNavigation />
-          </View>
-          
+          <ToastProvider>
+            <StatusBar style="light" />
+            
+            {/* Persistent Background Layer at the very root */}
+            <BackgroundLayer />
+            
+            {/* Navigation Overlay */}
+            <View style={StyleSheet.absoluteFill}>
+               <RootNavigation />
+            </View>
+          </ToastProvider>
         </ServerProvider>
       </AuthProvider>
     </SafeAreaProvider>

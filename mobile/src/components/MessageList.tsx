@@ -137,15 +137,19 @@ function MessageItem({ message, isMe, userId, onImagePress, onLongPress, onReact
                     </View>
                 )}
 
-                <Pressable
-                    onLongPress={handleLongPress}
-                    delayLongPress={300}
-                    style={[
-                        styles.bubbleBase,
-                        isMe ? styles.bubbleMe : styles.bubbleOther,
-                        { maxWidth: '80%' }
-                    ]}
-                >
+                {/* Determine if this is a media-only message (no text content) */}
+                {(() => {
+                    const isMediaOnly = isImage || isVideo;
+                    const bubbleStyles = isMediaOnly 
+                        ? [styles.mediaBubble, { maxWidth: '80%' as const }]
+                        : [styles.bubbleBase, isMe ? styles.bubbleMe : styles.bubbleOther, { maxWidth: '80%' as const }];
+                    
+                    return (
+                        <Pressable
+                            onLongPress={handleLongPress}
+                            delayLongPress={300}
+                            style={bubbleStyles}
+                        >
                     {!isMe && (
                         <Text style={[Typography.MICRO, styles.senderName]}>
                             {message.sender.displayName || message.sender.username}
@@ -199,21 +203,27 @@ function MessageItem({ message, isMe, userId, onImagePress, onLongPress, onReact
                         </Text>
                     )}
 
-                    {/* Timestamp and status */}
-                    <View style={styles.metaRow}>
-                        {(message.editedAt || message.edited_at) && (
-                            <Text style={styles.editedText}>edited</Text>
-                        )}
-                        <Text style={styles.timestamp}>
-                            {format(new Date(message.createdAt), 'h:mm a')}
-                        </Text>
-                        {isMe && (
-                            <Text style={[styles.readStatus, { color: message.readAt ? Colors.PERIWINKLE : Colors.OVERLAY1 }]}>
-                                {message.readAt ? '✓✓' : '✓'}
-                            </Text>
-                        )}
-                    </View>
-                </Pressable>
+                            {/* Timestamp and status */}
+                            <View style={[styles.metaRow, isMediaOnly && styles.mediaMetaRow]}>
+                                {(message.editedAt || message.edited_at) && (
+                                    <Text style={[styles.editedText, isMediaOnly && styles.mediaText]}>edited</Text>
+                                )}
+                                <Text style={[styles.timestamp, isMediaOnly && styles.mediaText]}>
+                                    {format(new Date(message.createdAt), 'h:mm a')}
+                                </Text>
+                                {isMe && (
+                                    <Text style={[
+                                        styles.readStatus, 
+                                        { color: message.readAt ? Colors.PERIWINKLE : Colors.OVERLAY1 },
+                                        isMediaOnly && styles.mediaText
+                                    ]}>
+                                        {message.readAt ? '✓✓' : '✓'}
+                                    </Text>
+                                )}
+                            </View>
+                        </Pressable>
+                    );
+                })()}
             </View>
 
             {/* Reactions display */}
@@ -508,5 +518,24 @@ const styles = StyleSheet.create({
         height: 32,
         alignItems: 'center',
         justifyContent: 'center',
-    }
+    },
+    mediaBubble: {
+        // Transparent bubble for media-only messages
+        padding: Spacing.XS,
+    },
+    mediaMetaRow: {
+        position: 'absolute',
+        bottom: 8,
+        right: 8,
+        backgroundColor: 'rgba(0, 0, 0, 0.6)',
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: Radius.PILL,
+    },
+    mediaText: {
+        color: '#fff',
+        textShadowColor: 'rgba(0, 0, 0, 0.75)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 2,
+    },
 });
