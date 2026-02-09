@@ -17,6 +17,8 @@ import { useServerContext } from '../../context/ServerContext';
 import { ServerRail } from '../../components/ServerRail';
 import { Panel } from '../../components/Panel';
 import CreateServerModal from '../../components/CreateServerModal';
+import { DMList } from '../../components/DMList';
+import { NewDMModal } from '../../components/NewDMModal';
 
 interface LobbyPanelProps {
   onChannelSelect: (channelId: string) => void;
@@ -26,6 +28,7 @@ export function LobbyPanel({ onChannelSelect }: LobbyPanelProps) {
   const { serverChannels, selectedServerId, handleServerSelect, loadServers } = useServerContext();
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateServer, setShowCreateServer] = useState(false);
+  const [showNewDM, setShowNewDM] = useState(false);
   const router = useRouter();
 
   // Filter channels
@@ -44,6 +47,17 @@ export function LobbyPanel({ onChannelSelect }: LobbyPanelProps) {
     setShowCreateServer(false);
     loadServers();
     handleServerSelect(serverId);
+  };
+
+  // Handle DM selection - navigate to chat
+  const handleSelectDM = (chatId: number) => {
+    router.push(`/chat/${chatId}`);
+  };
+
+  // Handle new DM created
+  const handleDMCreated = (chatId: number) => {
+    setShowNewDM(false);
+    router.push(`/chat/${chatId}`);
   };
 
   return (
@@ -105,16 +119,11 @@ export function LobbyPanel({ onChannelSelect }: LobbyPanelProps) {
               )}
             </>
           ) : (
-            <View style={styles.emptyState}>
-              <Ionicons 
-                name="chatbubbles-outline" 
-                size={48} 
-                color={Colors.TEXT_MUTED} 
-              />
-              <Text style={styles.emptyText}>
-                Select a server to join the lounge.
-              </Text>
-            </View>
+            /* Show DM List when no server selected */
+            <DMList
+              onSelectDM={handleSelectDM}
+              onNewDM={() => setShowNewDM(true)}
+            />
           )}
         </ScrollView>
       </View>
@@ -124,6 +133,13 @@ export function LobbyPanel({ onChannelSelect }: LobbyPanelProps) {
         visible={showCreateServer}
         onClose={() => setShowCreateServer(false)}
         onCreated={handleServerCreated}
+      />
+
+      {/* New DM Modal */}
+      <NewDMModal
+        visible={showNewDM}
+        onClose={() => setShowNewDM(false)}
+        onDMCreated={handleDMCreated}
       />
     </View>
   );
