@@ -1,5 +1,5 @@
 import axios from 'axios';
-import * as SecureStore from 'expo-secure-store';
+import { storage } from './storage';
 import Constants from 'expo-constants';
 import type { Message } from '../types';
 
@@ -31,7 +31,7 @@ const api = axios.create({
 
 // Add token to requests
 api.interceptors.request.use(async (config) => {
-    const token = await SecureStore.getItemAsync('token');
+    const token = await storage.getItem('token');
     if (token) {
         config.headers.Authorization = `Bearer ${token}`;
     }
@@ -45,7 +45,7 @@ api.interceptors.response.use(
     (response) => response,
     async (error) => {
         if (error.response?.status === 401) {
-            await SecureStore.deleteItemAsync('token');
+            await storage.deleteItem('token');
             DeviceEventEmitter.emit('auth:unauthorized');
             console.log('401 detected, token deleted');
         }
@@ -77,7 +77,7 @@ export const uploadFile = async (file: RNFile): Promise<{ data: { url: string; t
     } as any);
 
     // Use native fetch for file uploads (more reliable in React Native)
-    const token = await SecureStore.getItemAsync('token');
+    const token = await storage.getItem('token');
     const response = await fetch(`${API_URL}/media/upload`, {
         method: 'POST',
         headers: {
@@ -110,7 +110,7 @@ export const uploadVoice = async (audioUri: string, duration: number, mimeType =
     formData.append('duration', duration.toString());
 
     // Use native fetch for file uploads (more reliable in React Native)
-    const token = await SecureStore.getItemAsync('token');
+    const token = await storage.getItem('token');
     const response = await fetch(`${API_URL}/media/voice`, {
         method: 'POST',
         headers: {
@@ -152,7 +152,7 @@ export const uploadAvatar = async (file: RNFile): Promise<{ data: { avatarUrl: s
         name: file.name
     } as any);
 
-    const token = await SecureStore.getItemAsync('token');
+    const token = await storage.getItem('token');
     const response = await fetch(`${API_URL}/media/avatar`, {
         method: 'POST',
         headers: {
@@ -232,7 +232,7 @@ export const uploadServerIcon = async (file: RNFile): Promise<{ data: { iconUrl:
         name: file.name || 'server-icon.jpg'
     } as any);
 
-    const token = await SecureStore.getItemAsync('token');
+    const token = await storage.getItem('token');
     const response = await fetch(`${API_URL}/media/server-icon`, {
         method: 'POST',
         headers: {

@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
-import * as SecureStore from 'expo-secure-store';
+import { storage } from '../services/storage';
 import { DeviceEventEmitter } from 'react-native';
 import api, { login as apiLogin, register as apiRegister, getProfile } from '../services/api';
 import { connectSocket, disconnectSocket } from '../services/socket';
@@ -31,7 +31,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         const initAuth = async () => {
             try {
-                const savedToken = await SecureStore.getItemAsync('token');
+                const savedToken = await storage.getItem('token');
                 if (savedToken) {
                     // Set token temporarily for the request (interceptor handles it usually, but initial request might race?)
                     // The interceptor reads from SecureStore, so it should be fine.
@@ -43,7 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                         connectSocket(savedToken);
                     } catch (err) {
                         console.log('Profile fetch failed, clearing token');
-                        await SecureStore.deleteItemAsync('token');
+                        await storage.deleteItem('token');
                         setToken(null);
                     }
                 }
@@ -69,7 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const login = async (username: string, password: string) => {
         const { data } = await apiLogin(username, password);
-        await SecureStore.setItemAsync('token', data.token);
+        await storage.setItem('token', data.token);
         setToken(data.token);
         setUser(data.user);
         connectSocket(data.token);
@@ -79,14 +79,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log('AuthContext: Calling apiRegister...');
         const { data } = await apiRegister(username, password, displayName);
         console.log('AuthContext: Registration successful, received data:', data);
-        await SecureStore.setItemAsync('token', data.token);
+        await storage.setItem('token', data.token);
         setToken(data.token);
         setUser(data.user);
         connectSocket(data.token);
     };
 
     const logout = async () => {
-        await SecureStore.deleteItemAsync('token');
+        await storage.deleteItem('token');
         setToken(null);
         setUser(null);
         disconnectSocket();
