@@ -181,6 +181,18 @@ async function initializeDatabase() {
     )
   `);
 
+  // Push notification tokens
+  db.run(`
+    CREATE TABLE IF NOT EXISTS push_tokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      token TEXT NOT NULL,
+      device_type TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(user_id, token)
+    )
+  `);
+
   // Save to disk
   saveDatabase();
 
