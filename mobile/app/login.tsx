@@ -6,6 +6,18 @@ import Input from '../src/components/Input';
 import Button from '../src/components/Button';
 import { useAuth } from '../src/context/AuthContext';
 
+// Wrapper that dismisses keyboard on native, but not on web (where it steals focus)
+const DismissKeyboardView = ({ children }: { children: React.ReactNode }) => {
+  if (Platform.OS === 'web') {
+    return <View className="flex-1">{children}</View>;
+  }
+  return (
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+      {children}
+    </TouchableWithoutFeedback>
+  );
+};
+
 export default function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -39,7 +51,7 @@ export default function Login() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         className="flex-1"
       >
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <DismissKeyboardView>
           <View className="flex-1 justify-center px-10 pb-10">
             
             <View className="items-center mb-16">
@@ -109,7 +121,7 @@ export default function Login() {
             </View>
 
           </View>
-        </TouchableWithoutFeedback>
+        </DismissKeyboardView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
