@@ -251,4 +251,43 @@ export const uploadServerIcon = async (file: RNFile): Promise<{ data: { iconUrl:
     return { data };
 };
 
+// Friends
+export const sendFriendRequest = (userId: number) =>
+    api.post('/friends/request', { userId });
+
+export const getFriendRequests = () =>
+    api.get('/friends/requests');
+
+export const getSentFriendRequests = () =>
+    api.get('/friends/requests/sent');
+
+export const acceptFriendRequest = (requestId: number) =>
+    api.post(`/friends/accept/${requestId}`);
+
+export const declineFriendRequest = (requestId: number) =>
+    api.post(`/friends/decline/${requestId}`);
+
+export const cancelFriendRequest = (userId: number) =>
+    api.delete(`/friends/request/${userId}`);
+
+export const getFriends = () =>
+    api.get('/friends');
+
+export const removeFriend = (userId: number) =>
+    api.delete(`/friends/${userId}`);
+
+export const getFriendshipStatus = (userId: number) =>
+    api.get(`/friends/status/${userId}`);
+
+// Blocking
+export const blockUser = (userId: number) =>
+    api.post(`/friends/block/${userId}`);
+
+export const unblockUser = (userId: number) =>
+    api.delete(`/friends/block/${userId}`);
+
+export const getBlockedUsers = () =>
+    api.get('/friends/blocked');
+
 export default api;
+

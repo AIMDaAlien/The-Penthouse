@@ -13,6 +13,7 @@ const chatsRoutes = require('./routes/chats');
 const serversRoutes = require('./routes/servers');
 const mediaRoutes = require('./routes/media');
 const pushRoutes = require('./routes/push');
+const friendsRoutes = require('./routes/friends');
 
 const app = express();
 const server = http.createServer(app);
@@ -56,6 +57,7 @@ app.use('/api/servers', serversRoutes);
 app.use('/api/invites', require('./routes/server_invites'));
 app.use('/api/media', mediaRoutes);
 app.use('/api/push', pushRoutes);
+app.use('/api/friends', friendsRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
