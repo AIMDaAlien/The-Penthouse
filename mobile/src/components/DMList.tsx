@@ -11,7 +11,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, FlatList, RefreshControl, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, Radius, SpringConfig } from '../designsystem';
-import { getChats, getMediaUrl } from '../services/api';
+import { getChats, getMediaUrl, getUnreadCounts } from '../services/api';
 import { formatDistanceToNow } from 'date-fns';
 import Animated, { FadeIn, useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 
@@ -33,7 +33,6 @@ interface DM {
 interface DMListProps {
   onSelectDM: (chatId: number) => void;
   onNewDM: () => void;
-  unreadCounts?: Map<number, number>;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -118,16 +117,21 @@ function DMRow({ dm, onPress, unreadCount }: DMRowProps) {
 // Main Component
 // ─────────────────────────────────────────────────────────────
 
-export function DMList({ onSelectDM, onNewDM, unreadCounts = new Map() }: DMListProps) {
+export function DMList({ onSelectDM, onNewDM }: DMListProps) {
   const [dms, setDMs] = useState<DM[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [unreadCounts, setUnreadCounts] = useState<Map<number, number>>(new Map());
 
   const loadDMs = useCallback(async () => {
     try {
-      const { data } = await getChats();
+      const [chatsRes, unreadRes] = await Promise.all([
+        getChats(),
+        getUnreadCounts()
+      ]);
+      
       // Filter to only DMs and sort by last message
-      const dmList = (data as any[])
+      const dmList = (chatsRes.data as any[])
         .filter(c => c.type === 'dm' || c.type === 'group')
         .sort((a, b) => {
           if (!a.lastMessageAt) return 1;
@@ -135,6 +139,13 @@ export function DMList({ onSelectDM, onNewDM, unreadCounts = new Map() }: DMList
           return new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime();
         });
       setDMs(dmList);
+      
+      // Convert unread array to Map
+      const counts = new Map<number, number>();
+      for (const item of unreadRes.data.unread) {
+        counts.set(item.chatId, item.count);
+      }
+      setUnreadCounts(counts);
     } catch (err) {
       console.error('Failed to load DMs:', err);
     } finally {

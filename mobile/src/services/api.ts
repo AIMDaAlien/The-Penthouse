@@ -178,6 +178,7 @@ export const createGroup = (name: string, memberIds?: number[]) =>
 export const startDm = (userId: number) => api.post('/chats/dm', { userId });
 export const getChatDetails = (chatId: number) => api.get(`/chats/${chatId}`);
 export const searchUsers = (q?: string) => api.get('/chats/users/search', { params: { q } });
+export const getUnreadCounts = () => api.get<{ unread: Array<{ chatId: number; count: number }> }>('/chats/unread');
 
 // Messages
 export const getMessages = (chatId: number, limit = 50, before?: number) =>

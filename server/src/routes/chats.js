@@ -53,6 +53,40 @@ router.get('/', authenticateToken, (req, res) => {
     }
 });
 
+// Get unread message counts for all chats
+router.get('/unread', authenticateToken, (req, res) => {
+    try {
+        // Count messages in each chat where:
+        // 1. User is a member of the chat
+        // 2. Message was not sent by this user
+        // 3. User has no read receipt for the message
+        const unreadCounts = db.prepare(`
+            SELECT 
+                c.id as chatId,
+                COUNT(DISTINCT m.id) as count
+            FROM chats c
+            INNER JOIN chat_members cm ON c.id = cm.chat_id
+            INNER JOIN messages m ON m.chat_id = c.id
+            LEFT JOIN read_receipts rr ON rr.message_id = m.id AND rr.user_id = ?
+            WHERE cm.user_id = ?
+              AND m.user_id != ?
+              AND rr.id IS NULL
+            GROUP BY c.id
+            HAVING count > 0
+        `).all(req.user.userId, req.user.userId, req.user.userId);
+
+        res.json({
+            unread: unreadCounts.map(row => ({
+                chatId: row.chatId,
+                count: row.count
+            }))
+        });
+    } catch (err) {
+        console.error('Get unread counts error:', err);
+        res.status(500).json({ error: 'Failed to get unread counts' });
+    }
+});
+
 // Create a new group chat
 router.post('/group', authenticateToken, (req, res) => {
     try {
