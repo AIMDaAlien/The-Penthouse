@@ -11,18 +11,22 @@ import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, Text, TextInput, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
+import { useRouter } from 'expo-router';
 import { Colors, Typography, Spacing, Radius } from '../../designsystem';
 import { useServerContext } from '../../context/ServerContext';
 import { ServerRail } from '../../components/ServerRail';
 import { Panel } from '../../components/Panel';
+import CreateServerModal from '../../components/CreateServerModal';
 
 interface LobbyPanelProps {
   onChannelSelect: (channelId: string) => void;
 }
 
 export function LobbyPanel({ onChannelSelect }: LobbyPanelProps) {
-  const { serverChannels, selectedServerId } = useServerContext();
+  const { serverChannels, selectedServerId, handleServerSelect, loadServers } = useServerContext();
   const [searchQuery, setSearchQuery] = useState('');
+  const [showCreateServer, setShowCreateServer] = useState(false);
+  const router = useRouter();
 
   // Filter channels
   const textChannels = serverChannels.filter(c => c.type !== 'voice');
@@ -35,11 +39,18 @@ export function LobbyPanel({ onChannelSelect }: LobbyPanelProps) {
       )
     : textChannels;
 
+  // Handle server creation success
+  const handleServerCreated = (serverId: number, _serverName: string) => {
+    setShowCreateServer(false);
+    loadServers();
+    handleServerSelect(serverId);
+  };
+
   return (
     <View style={styles.container}>
       {/* Left Rail (Server List) */}
       <View style={styles.rail}>
-        <ServerRail onAddServer={() => {}} />
+        <ServerRail onAddServer={() => setShowCreateServer(true)} />
       </View>
 
       {/* Main Content (Channel List) */}
@@ -107,6 +118,13 @@ export function LobbyPanel({ onChannelSelect }: LobbyPanelProps) {
           )}
         </ScrollView>
       </View>
+
+      {/* Create Server Modal */}
+      <CreateServerModal
+        visible={showCreateServer}
+        onClose={() => setShowCreateServer(false)}
+        onCreated={handleServerCreated}
+      />
     </View>
   );
 }
@@ -161,10 +179,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     flexDirection: 'row',
-    backgroundColor: 'transparent', // Show BackgroundLayer through
+    backgroundColor: Colors.BASE, // Fill behind the rounded corner
   },
   rail: {
-    // ServerRail handles its own width
+    backgroundColor: Colors.BASE, // Match the background to prevent white space
   },
   main: {
     flex: 1,
