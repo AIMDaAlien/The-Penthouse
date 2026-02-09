@@ -16,8 +16,8 @@ import { Colors } from '../designsystem';
 
 const { width, height } = Dimensions.get('window');
 
-// Default background (bundled asset)
-const DEFAULT_BG = require('../../assets/lounge-bg.webp');
+// Default background - moody penthouse at night
+const DEFAULT_BG = require('../../assets/penthouse-bg.png');
 
 interface BackgroundLayerProps {
   /** Custom background image source (for user uploads) */
@@ -30,8 +30,8 @@ interface BackgroundLayerProps {
 
 export function BackgroundLayer({ 
   source = DEFAULT_BG,
-  blurIntensity = 15,
-  tintOpacity = 0.06,
+  blurIntensity = 30,
+  tintOpacity = 0.05,
 }: BackgroundLayerProps) {
   return (
     <View style={styles.container}>
@@ -40,7 +40,7 @@ export function BackgroundLayer({
         source={source} 
         style={styles.image} 
         resizeMode="cover"
-        blurRadius={Platform.OS === 'android' ? 4 : 0}
+        blurRadius={Platform.OS === 'android' ? 8 : (Platform.OS === 'web' ? 12 : 0)}
       />
       
       {/* 2. Blur Layer (iOS quality blur) */}
