@@ -1,8 +1,28 @@
 const express = require('express');
 const { db } = require('../database');
 const { authenticateToken } = require('../middleware/auth');
+const { sendPushNotification } = require('../services/push');
 
 const router = express.Router();
+
+// Send test notification (for debugging)
+router.post('/test', authenticateToken, async (req, res) => {
+    try {
+        const { title = 'Test', body = 'This is a test notification' } = req.body;
+        
+        const result = await sendPushNotification(
+            req.user.userId,
+            title,
+            body,
+            { type: 'test' }
+        );
+
+        res.json(result);
+    } catch (err) {
+        console.error('Test push error:', err);
+        res.status(500).json({ error: 'Failed to send test notification' });
+    }
+});
 
 // Register push token
 router.post('/register', authenticateToken, (req, res) => {

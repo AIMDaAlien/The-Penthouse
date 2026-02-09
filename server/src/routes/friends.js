@@ -17,22 +17,25 @@ router.use(authenticateToken);
 // ─────────────────────────────────────────────────────────────
 // Friend Requests
 // ─────────────────────────────────────────────────────────────
+const { sendPushNotification } = require('../services/push');
 
 /**
  * POST /api/friends/request
  * Send a friend request
  */
-router.post('/request', friendRequestLimiter, validateFriendRequest, (req, res) => {
+router.post('/request', friendRequestLimiter, validateFriendRequest, async (req, res) => {
   try {
     const senderId = req.user.id;
     const { userId } = req.body;
+    
+    // ... validation checks (userId required, self-check, blocked check, existing friendship/request) ...
 
     if (userId === senderId) {
       return res.status(400).json({ error: 'Cannot send friend request to yourself' });
     }
 
     // Check if user exists
-    const targetUser = db.prepare('SELECT id FROM users WHERE id = ?').get(userId);
+    const targetUser = db.prepare('SELECT id, username FROM users WHERE id = ?').get(userId);
     if (!targetUser) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -71,6 +74,15 @@ router.post('/request', friendRequestLimiter, validateFriendRequest, (req, res) 
           db.prepare('DELETE FROM friend_requests WHERE id = ?').run(existingRequest.id);
           db.prepare('INSERT INTO friendships (user_id, friend_id) VALUES (?, ?)').run(senderId, userId);
           db.prepare('INSERT INTO friendships (user_id, friend_id) VALUES (?, ?)').run(userId, senderId);
+          
+          // Notify sender that request was accepted
+          sendPushNotification(
+            userId,
+            'Friend Request Accepted',
+            `${req.user.username} accepted your friend request!`,
+            { type: 'friend_request_accepted', userId: senderId }
+          );
+
           return res.json({ message: 'Friend request accepted', status: 'friends' });
         }
         return res.status(400).json({ error: 'Friend request already sent' });
@@ -82,6 +94,14 @@ router.post('/request', friendRequestLimiter, validateFriendRequest, (req, res) 
       INSERT INTO friend_requests (sender_id, receiver_id, status)
       VALUES (?, ?, 'pending')
     `).run(senderId, userId);
+
+    // Send push notification to receiver
+    sendPushNotification(
+      userId,
+      'New Friend Request',
+      `${req.user.username} sent you a friend request`,
+      { type: 'friend_request', requestId: result.lastInsertRowid, senderId }
+    );
 
     res.status(201).json({ 
       message: 'Friend request sent',

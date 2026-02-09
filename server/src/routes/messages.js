@@ -227,6 +227,55 @@ router.post('/:chatId', authenticateToken, messageLimiter, validateMessage, (req
         const io = req.app.get('io');
         io.to(`chat:${chatId}`).emit('new_message', message);
 
+        // Send Push Notifications (async, don't wait for it)
+        (async () => {
+            try {
+                let recipients = [];
+                if (chat.server_id) {
+                    // Server channel: Get all server members except sender
+                    recipients = db.prepare(`
+                        SELECT user_id FROM server_members 
+                        WHERE server_id = ? AND user_id != ?
+                    `).all(chat.server_id, req.user.userId);
+                } else {
+                    // DM/Group: Get all chat members except sender
+                    recipients = db.prepare(`
+                        SELECT user_id FROM chat_members 
+                        WHERE chat_id = ? AND user_id != ?
+                    `).all(chatId, req.user.userId);
+                }
+
+                if (recipients.length > 0) {
+                    const { sendGroupPushNotification } = require('../services/push');
+                    const recipientIds = recipients.map(r => r.user_id);
+                    
+                    // Format notification body
+                    let title = req.user.displayName || req.user.username;
+                    let body = type === 'text' ? content : `Sent a ${type}`;
+                    
+                    // For group chats/servers, prepend chat name
+                    if (chat.server_id || (chat.name && !chat.server_id)) {
+                        const chatName = chat.name || 'Channel'; // You might want to fetch channel name if needed
+                        title = `${title} in ${chatName}`;
+                    }
+
+                    await sendGroupPushNotification(
+                        recipientIds,
+                        title,
+                        body,
+                        { 
+                            type: 'new_message', 
+                            chatId: parseInt(chatId), 
+                            messageId: message.id,
+                            serverId: chat.server_id
+                        }
+                    );
+                }
+            } catch (pushErr) {
+                console.error('Error sending push notifications:', pushErr);
+            }
+        })();
+
         res.status(201).json(message);
     } catch (err) {
         console.error('Send message error:', err);
