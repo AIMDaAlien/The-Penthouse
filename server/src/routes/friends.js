@@ -8,6 +8,8 @@ const express = require('express');
 const router = express.Router();
 const { db } = require('../database');
 const { authenticateToken } = require('../middleware/auth');
+const { friendRequestLimiter } = require('../middleware/rateLimit');
+const { validateFriendRequest, validateUserId, validateRequestId } = require('../middleware/validation');
 
 // All routes require authentication
 router.use(authenticateToken);
@@ -20,14 +22,10 @@ router.use(authenticateToken);
  * POST /api/friends/request
  * Send a friend request
  */
-router.post('/request', (req, res) => {
+router.post('/request', friendRequestLimiter, validateFriendRequest, (req, res) => {
   try {
     const senderId = req.user.id;
     const { userId } = req.body;
-
-    if (!userId) {
-      return res.status(400).json({ error: 'User ID is required' });
-    }
 
     if (userId === senderId) {
       return res.status(400).json({ error: 'Cannot send friend request to yourself' });

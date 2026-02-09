@@ -3,25 +3,15 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { db } = require('../database');
 const { authenticateToken } = require('../middleware/auth');
+const { authLimiter, registerLimiter } = require('../middleware/rateLimit');
+const { validateLogin, validateRegister } = require('../middleware/validation');
 
 const router = express.Router();
 
 // Register new user
-router.post('/register', async (req, res) => {
+router.post('/register', registerLimiter, validateRegister, async (req, res) => {
     try {
         const { username, password, displayName } = req.body;
-
-        if (!username || !password) {
-            return res.status(400).json({ error: 'Username and password are required' });
-        }
-
-        if (username.length < 3 || username.length > 20) {
-            return res.status(400).json({ error: 'Username must be 3-20 characters' });
-        }
-
-        if (password.length < 6) {
-            return res.status(400).json({ error: 'Password must be at least 6 characters' });
-        }
 
         // Check if username exists
         const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(username);
@@ -29,8 +19,8 @@ router.post('/register', async (req, res) => {
             return res.status(409).json({ error: 'Username already taken' });
         }
 
-        // Hash password
-        const hashedPassword = await bcrypt.hash(password, 10);
+        // Hash password with 12 rounds (more secure than default 10)
+        const hashedPassword = await bcrypt.hash(password, 12);
 
         // Insert user
         const result = db.prepare(
@@ -60,13 +50,9 @@ router.post('/register', async (req, res) => {
 });
 
 // Login
-router.post('/login', async (req, res) => {
+router.post('/login', authLimiter, validateLogin, async (req, res) => {
     try {
         const { username, password } = req.body;
-
-        if (!username || !password) {
-            return res.status(400).json({ error: 'Username and password are required' });
-        }
 
         console.log('Login attempt for:', username);
 

@@ -1,6 +1,8 @@
 const express = require('express');
 const { db } = require('../database');
 const { authenticateToken } = require('../middleware/auth');
+const { messageLimiter } = require('../middleware/rateLimit');
+const { validateMessage, validateEditMessage, sanitizeMessageContent } = require('../middleware/validation');
 
 const router = express.Router();
 
@@ -137,10 +139,15 @@ router.get('/:chatId', authenticateToken, (req, res) => {
 });
 
 // Send a message
-router.post('/:chatId', authenticateToken, (req, res) => {
+router.post('/:chatId', authenticateToken, messageLimiter, validateMessage, (req, res) => {
     try {
         const { chatId } = req.params;
-        const { content, type = 'text', metadata, replyTo } = req.body;
+        let { content, type = 'text', metadata, replyTo } = req.body;
+
+        // Sanitize text content
+        if (type === 'text' && content) {
+            content = sanitizeMessageContent(content);
+        }
 
         if (!content && type === 'text') {
             return res.status(400).json({ error: 'Message content is required' });
