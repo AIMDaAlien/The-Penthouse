@@ -53,7 +53,7 @@ router.get('/:chatId', authenticateToken, (req, res) => {
             params.push(before);
         }
 
-        query += ' ORDER BY m.created_at DESC LIMIT ?';
+        query += ' ORDER BY m.created_at DESC, m.id DESC LIMIT ?';
         params.push(parseInt(limit));
 
         const messages = db.prepare(query).all(...params);

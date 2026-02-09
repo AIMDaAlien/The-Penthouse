@@ -48,8 +48,8 @@ const validateRegister = [
     .trim()
     .isLength({ min: 3, max: 20 })
     .withMessage('Username must be 3-20 characters')
-    .matches(/^[a-zA-Z0-9_]+$/)
-    .withMessage('Username can only contain letters, numbers, and underscores'),
+    .matches(/^[a-zA-Z0-9_@.-]+$/)
+    .withMessage('Username can only contain letters, numbers, underscores, @, ., and -'),
   
   body('password')
     .isLength({ min: 8 })
@@ -74,6 +74,19 @@ const validateLogin = [
     .notEmpty()
     .withMessage('Password is required'),
   
+  handleValidation
+];
+
+const validateForgotPassword = [
+  body('email').isEmail().withMessage('Valid email is required'),
+  handleValidation
+];
+
+const validateResetPassword = [
+  body('token').notEmpty().withMessage('Token is required'),
+  body('newPassword')
+    .isLength({ min: 6 })
+    .withMessage('Password must be at least 6 characters long'),
   handleValidation
 ];
 
@@ -212,6 +225,8 @@ module.exports = {
   // Auth
   validateRegister,
   validateLogin,
+  validateForgotPassword,
+  validateResetPassword,
   
   // Messages
   validateMessage,

@@ -144,6 +144,13 @@ export const getProfile = () => api.get('/auth/me');
 export const updateProfile = (displayName?: string, avatarUrl?: string) =>
     api.put('/auth/profile', { displayName, avatarUrl });
 
+// Password Recovery
+export const forgotPassword = (email: string) =>
+    api.post('/auth/forgot-password', { email });
+
+export const resetPassword = (token: string, newPassword: string) =>
+    api.post('/auth/reset-password', { token, newPassword });
+
 export const uploadAvatar = async (file: RNFile): Promise<{ data: { avatarUrl: string } }> => {
     const formData = new FormData();
     formData.append('avatar', {

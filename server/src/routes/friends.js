@@ -25,7 +25,7 @@ const { sendPushNotification } = require('../services/push');
  */
 router.post('/request', friendRequestLimiter, validateFriendRequest, async (req, res) => {
   try {
-    const senderId = req.user.id;
+    const senderId = req.user.id || req.user.userId;
     const { userId } = req.body;
     
     // ... validation checks (userId required, self-check, blocked check, existing friendship/request) ...
@@ -119,7 +119,7 @@ router.post('/request', friendRequestLimiter, validateFriendRequest, async (req,
  */
 router.get('/requests', (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user.userId;
 
     const requests = db.prepare(`
       SELECT 
@@ -148,7 +148,7 @@ router.get('/requests', (req, res) => {
  */
 router.get('/requests/sent', (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user.userId;
 
     const requests = db.prepare(`
       SELECT 
@@ -177,7 +177,7 @@ router.get('/requests/sent', (req, res) => {
  */
 router.post('/accept/:id', (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user.userId;
     const requestId = req.params.id;
 
     const request = db.prepare(`
@@ -209,7 +209,7 @@ router.post('/accept/:id', (req, res) => {
  */
 router.post('/decline/:id', (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user.userId;
     const requestId = req.params.id;
 
     const result = db.prepare(`
@@ -259,7 +259,7 @@ router.delete('/request/:userId', (req, res) => {
  */
 router.get('/', (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user.userId;
 
     const friends = db.prepare(`
       SELECT 
@@ -288,7 +288,7 @@ router.get('/', (req, res) => {
  */
 router.delete('/:userId', (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user.userId;
     const friendId = req.params.userId;
 
     // Remove bidirectional friendship
@@ -308,7 +308,7 @@ router.delete('/:userId', (req, res) => {
  */
 router.get('/status/:userId', (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user.userId;
     const targetId = req.params.userId;
 
     // Check if friends
@@ -426,7 +426,7 @@ router.delete('/block/:userId', (req, res) => {
  */
 router.get('/blocked', (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user.userId;
 
     const blocked = db.prepare(`
       SELECT 

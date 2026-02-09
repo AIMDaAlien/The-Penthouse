@@ -106,8 +106,16 @@ export default function Login() {
                 title="LOG IN"
                 onPress={handleLogin}
                 isLoading={isLoading}
-                className="mb-8 shadow-xl shadow-[#cba6f7]/20"
+                className="mb-4 shadow-xl shadow-[#cba6f7]/20"
               />
+
+              <Link href="/forgot-password" asChild>
+                <Pressable className="mb-8">
+                  <Text className="text-zinc-500 text-center text-xs font-semibold">
+                    Forgot your password?
+                  </Text>
+                </Pressable>
+              </Link>
 
               <View className="flex-row justify-center items-center gap-3">
                 <View className="h-[1px] flex-1 bg-zinc-800" />

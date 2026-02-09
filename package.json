@@ -2,7 +2,12 @@
   "dependencies": {
     "@babel/core": "^7.29.0",
     "@expo-google-fonts/jetbrains-mono": "^0.4.1",
+    "expo": "^54.0.33",
     "react-native-reanimated": "~4.2.1",
     "react-native-screens": "~4.22.0"
+  },
+  "devDependencies": {
+    "@types/react": "~19.1.10",
+    "typescript": "~5.9.2"
   }
 }

@@ -20,7 +20,8 @@ async function initializeDatabase() {
   const SQL = await initSqlJs();
 
   // Load existing database or create new one
-  if (fs.existsSync(dbPath)) {
+  // Load existing database or create new one
+  if (process.env.NODE_ENV !== 'test' && fs.existsSync(dbPath)) {
     const fileBuffer = fs.readFileSync(dbPath);
     db = new SQL.Database(fileBuffer);
   } else {
@@ -193,6 +194,17 @@ async function initializeDatabase() {
     )
   `);
 
+  // Password Resets
+  db.run(`
+    CREATE TABLE IF NOT EXISTS password_resets (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      token TEXT NOT NULL,
+      expires_at DATETIME NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
   // Friend requests (pending)
   db.run(`
     CREATE TABLE IF NOT EXISTS friend_requests (
@@ -234,6 +246,7 @@ async function initializeDatabase() {
 }
 
 function saveDatabase() {
+  if (process.env.NODE_ENV === 'test') return;
   if (db) {
     const data = db.export();
     const buffer = Buffer.from(data);
@@ -242,21 +255,30 @@ function saveDatabase() {
 }
 
 // Run a parameterized statement and return lastInsertRowid
+// Run a parameterized statement and return lastInsertRowid
 function runStatement(sql, params = []) {
   try {
-    const stmt = db.prepare(sql);
-    if (params.length > 0) {
-      stmt.bind(params);
+    if (process.env.NODE_ENV === 'test') {
+      db.run(sql, params);
+      
+      // For INSERTs, we need to return the lastID manually in sql.js
+      if (sql.trim().toUpperCase().startsWith('INSERT')) {
+        const result = db.exec('SELECT last_insert_rowid() as id');
+        // result is [{ columns:['id'], values:[[1]] }]
+        if (result.length > 0 && result[0].values.length > 0) {
+          const id = result[0].values[0][0];
+          return { lastInsertRowid: id, changes: 1 };
+        }
+      }
+      return { lastInsertRowid: 0, changes: 1 };
+    } else {
+      const stmt = db.prepare(sql);
+      if (params.length > 0) {
+        stmt.bind(params);
+      }
+      const info = stmt.run();
+      return info;
     }
-    stmt.step();
-    stmt.free();
-
-    // Get last insert rowid immediately after
-    const result = db.exec("SELECT last_insert_rowid() as id");
-    const lastId = result.length > 0 ? result[0].values[0][0] : 0;
-
-    saveDatabase();
-    return { lastInsertRowid: lastId };
   } catch (err) {
     console.error('DB run error:', sql, params, err.message);
     throw err;

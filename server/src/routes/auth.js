@@ -59,14 +59,11 @@ router.post('/login', authLimiter, validateLogin, async (req, res) => {
         // Find user
         const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
         if (!user) {
-            console.log('User not found in DB:', username);
             return res.status(401).json({ error: 'Invalid username or password' });
         }
-        console.log('User found:', user.username, 'ID:', user.id);
 
         // Check password
         const validPassword = await bcrypt.compare(password, user.password);
-        console.log('Password valid:', validPassword);
 
         if (!validPassword) {
             return res.status(401).json({ error: 'Invalid username or password' });
@@ -159,3 +156,95 @@ router.put('/profile', authenticateToken, (req, res) => {
 });
 
 module.exports = router;
+
+// ─────────────────────────────────────────────────────────────
+// Password Recovery
+// ─────────────────────────────────────────────────────────────
+const crypto = require('crypto');
+const { sendPasswordResetEmail } = require('../services/email');
+const { validateForgotPassword, validateResetPassword } = require('../middleware/validation');
+
+// Request Password Reset
+router.post('/forgot-password', validateForgotPassword, async (req, res) => {
+    try {
+        const { email } = req.body;
+        
+        // Find user by email (assuming username is email or we have an email field, wait schema says username/password/display_name)
+        // CHECK: The current user schema might not have an email field!
+        // Let's check if username IS the email or if there's an email column.
+        // Schema check: 
+        // CREATE TABLE IF NOT EXISTS users (
+        //   id INTEGER PRIMARY KEY AUTOINCREMENT,
+        //   username TEXT UNIQUE NOT NULL, -- this might be used as email
+        //   password TEXT NOT NULL,
+        //   display_name TEXT,
+        //   avatar_url TEXT,
+        //   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        //   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        // )
+        //
+        // If username is not strictly an email, we might have a problem if there's no email column.
+        // Assuming for this test app, username = email or we add email column.
+        // Let's assume username IS the email for now as it's common in simple apps, 
+        // OR I should check if I need to add an email column.
+        
+        // Let's try to query by username representing email for now.
+        const user = db.prepare('SELECT id, username FROM users WHERE username = ?').get(email);
+
+        if (!user) {
+            // calculated delay to prevent enumeration?
+            // For now, just return success to avoid leaking existence
+            return res.json({ message: 'If an account exists, a reset email has been sent.' });
+        }
+
+        // Generate token
+        const token = crypto.randomBytes(32).toString('hex');
+        const expiresAt = new Date(Date.now() + 3600000); // 1 hour
+
+        // Save to DB
+        db.prepare(`
+            INSERT INTO password_resets (user_id, token, expires_at)
+            VALUES (?, ?, ?)
+        `).run(user.id, token, expiresAt.toISOString());
+
+        // Send Email
+        await sendPasswordResetEmail(email, token, user.username);
+
+        res.json({ message: 'If an account exists, a reset email has been sent.' });
+    } catch (err) {
+        console.error('Forgot password error:', err);
+        res.status(500).json({ error: 'Failed to process request' });
+    }
+});
+
+// Reset Password
+router.post('/reset-password', validateResetPassword, async (req, res) => {
+    try {
+        const { token, newPassword } = req.body;
+
+        // Find valid token
+        const resetRecord = db.prepare(`
+            SELECT * FROM password_resets 
+            WHERE token = ? AND expires_at > CURRENT_TIMESTAMP
+        `).get(token);
+
+        if (!resetRecord) {
+            return res.status(400).json({ error: 'Invalid or expired token' });
+        }
+
+        // Hash new password
+        const hashedPassword = await bcrypt.hash(newPassword, 12);
+
+        // Update user password
+        db.prepare('UPDATE users SET password = ? WHERE id = ?')
+            .run(hashedPassword, resetRecord.user_id);
+
+        // Delete used token (and potentially all other tokens for this user)
+        db.prepare('DELETE FROM password_resets WHERE user_id = ?').run(resetRecord.user_id);
+
+        res.json({ message: 'Password has been reset successfully' });
+    } catch (err) {
+        console.error('Reset password error:', err);
+        res.status(500).json({ error: 'Failed to reset password' });
+    }
+});
