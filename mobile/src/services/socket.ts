@@ -3,7 +3,7 @@ import Constants from 'expo-constants';
 
 // Detect machine IP for development
 const origin = Constants.expoConfig?.hostUri?.split(':')[0] || 'localhost';
-const SOCKET_URL = `http://${origin}:3000`;
+const SOCKET_URL = `http://${origin}:3001`;
 
 console.log('Socket URL:', SOCKET_URL);
 

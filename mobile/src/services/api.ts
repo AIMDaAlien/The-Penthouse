@@ -5,7 +5,7 @@ import type { Message } from '../types';
 
 // Detect machine IP for development (localhost doesn't work on Android)
 const origin = Constants.expoConfig?.hostUri?.split(':')[0] || 'localhost';
-const BASE_URL = `http://${origin}:3000`;
+const BASE_URL = `http://${origin}:3001`;
 const API_URL = `${BASE_URL}/api`;
 
 console.log('API URL:', API_URL);
