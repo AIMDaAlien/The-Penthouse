@@ -22,6 +22,9 @@ const server = http.createServer(app);
 const io = initializeWebSocket(server);
 
 // Middleware
+const { apiLimiter } = require('./middleware/rateLimit');
+const errorHandler = require('./middleware/errorHandler');
+
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
@@ -43,6 +46,9 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Global Rate Limiting for API routes
+app.use('/api', apiLimiter);
+
 // Make io available to routes
 app.set('io', io);
 
@@ -58,6 +64,9 @@ app.use('/api/invites', require('./routes/server_invites'));
 app.use('/api/media', mediaRoutes);
 app.use('/api/push', pushRoutes);
 app.use('/api/friends', friendsRoutes);
+
+// Global Error Handler
+app.use(errorHandler);
 
 // Health check
 app.get('/api/health', (req, res) => {

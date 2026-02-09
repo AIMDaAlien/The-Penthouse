@@ -1,0 +1,42 @@
+/**
+ * Global Error Handling Middleware
+ * 
+ * Centralizes error handling for the entire application.
+ * Ensures consistent error responses and proper logging.
+ */
+
+const errorHandler = (err, req, res, next) => {
+  console.error('Unhandled Error:', err.stack);
+
+  // Default error status and message
+  let status = 500;
+  let message = 'Internal Server Error';
+  let error = 'Something went wrong';
+
+  // Handle specific error types
+  if (err.type === 'entity.parse.failed') {
+    // JSON parsing error
+    status = 400;
+    message = 'Invalid JSON payload';
+    error = 'Bad Request';
+  } else if (err.code === 'SQLITE_CONSTRAINT') {
+    // Database constraint violation
+    status = 409;
+    message = 'Data conflict occurred';
+    error = 'Conflict';
+  } else if (err.name === 'ValidationError') {
+    // Mongoose/Sequelize style validation error (future proofing)
+    status = 400;
+    message = err.message;
+    error = 'Validation Error';
+  }
+
+  // Send response
+  res.status(status).json({
+    error,
+    message,
+    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+  });
+};
+
+module.exports = errorHandler;
