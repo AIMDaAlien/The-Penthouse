@@ -99,17 +99,13 @@ export const uploadFile = async (file: RNFile): Promise<{ data: { url: string; t
 
 export const uploadVoice = async (audioUri: string, duration: number, mimeType = 'audio/x-m4a'): Promise<{ data: { url: string; params: { fileName: string; duration: number; mimeType: string } } }> => {
     const formData = new FormData();
-    const ext = mimeType.includes('mp4') || mimeType.includes('m4a') ? 'm4a' : 'webm';
-
     formData.append('voice', {
         uri: audioUri,
-        name: `voice_message.${ext}`,
-        type: mimeType
+        type: mimeType,
+        name: `voice-${Date.now()}.m4a`
     } as any);
-
     formData.append('duration', duration.toString());
 
-    // Use native fetch for file uploads (more reliable in React Native)
     const token = await storage.getItem('token');
     const response = await fetch(`${API_URL}/media/voice`, {
         method: 'POST',
@@ -120,14 +116,34 @@ export const uploadVoice = async (audioUri: string, duration: number, mimeType =
     });
 
     if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Voice upload failed:', response.status, errorText);
-        throw new Error(`Voice upload failed: ${response.status}`);
+        throw new Error(`Upload failed: ${response.status}`);
     }
 
     const data = await response.json();
     return { data };
 };
+
+/**
+ * Helper to handle API calls with consistent error logging
+ */
+export const safeApiCall = async <T>(
+    apiPromise: Promise<T>,
+    onSuccess: (data: T extends { data: infer U } ? U : T) => void,
+    onError?: (err: any) => void
+) => {
+    try {
+        const result = await apiPromise;
+        // If result has .data property (AxiosResponse), pass that. Otherwise pass result itself.
+        // This is a bit of a heuristic to support both Axios and custom fetch wrappers if they return {data}
+        const data = (result as any).data !== undefined ? (result as any).data : result;
+        onSuccess(data);
+    } catch (err) {
+        console.error('API Error:', err);
+        if (onError) onError(err);
+    }
+};
+
+
 
 export const joinServer = (code: string) =>
     api.post<{ success: true; serverId: number; channelId?: number; alreadyMember?: boolean }>(`/invites/${code}/join`);

@@ -6,6 +6,7 @@ import {
     createServer,
     createChannel,
     joinServer as joinServerApi,
+    safeApiCall,
 } from '../services/api';
 import type { Server, Channel, User } from '../types';
 
@@ -46,22 +47,20 @@ export function useServers(): UseServersReturn {
     const [joinCode, setJoinCode] = useState('');
 
     const loadServers = useCallback(async () => {
-        try {
-            const { data } = await getServers();
-            setServers(data);
-        } catch (err) {
-            console.error('Failed to load servers:', err);
-        }
+        await safeApiCall(
+            getServers(),
+            (data) => setServers(data)
+        );
     }, []);
 
     const loadServerDetails = useCallback(async (serverId: number) => {
-        try {
-            const { data } = await getServerDetails(serverId);
-            setServerChannels(data.channels);
-            setServerMembers(data.members || []);
-        } catch (err) {
-            console.error('Failed to load server details:', err);
-        }
+        await safeApiCall(
+            getServerDetails(serverId),
+            (data) => {
+                setServerChannels(data.channels);
+                setServerMembers(data.members || []);
+            }
+        );
     }, []);
 
     const handleServerSelect = useCallback((serverId: number | null) => {
@@ -73,44 +72,51 @@ export function useServers(): UseServersReturn {
     }, []);
 
     const handleCreateServer = useCallback(async (name: string) => {
-        try {
-            await createServer(name.trim());
-            setShowNewServer(false);
-            await loadServers();
-        } catch (err) {
-            console.error('Server creation failed:', err);
-        }
+        await safeApiCall(
+            createServer(name.trim()),
+            async () => {
+                setShowNewServer(false);
+                await loadServers();
+            },
+            (err) => console.error('Server creation failed:', err)
+        );
     }, [loadServers]);
 
     const handleCreateChannel = useCallback(async (name: string) => {
         if (!selectedServerId) return;
-        try {
-            await createChannel(selectedServerId, name.trim());
-            setShowNewChannel(false);
-            await loadServerDetails(selectedServerId);
-        } catch (err) {
-            console.error('Channel creation failed:', err);
-        }
+        await safeApiCall(
+            createChannel(selectedServerId, name.trim()),
+            async () => {
+                setShowNewChannel(false);
+                await loadServerDetails(selectedServerId);
+            },
+            (err) => console.error('Channel creation failed:', err)
+        );
     }, [selectedServerId, loadServerDetails]);
 
     const handleJoinServer = useCallback(async (code: string): Promise<{ success: boolean; serverId?: number }> => {
-        try {
-            const { data } = await joinServerApi(code.trim());
-            if (data.success) {
-                setJoinCode('');
-                setShowJoinServer(false);
-                if (data.alreadyMember) {
-                    Alert.alert('Info', 'You are already a member of this server!');
+        let result = { success: false, serverId: undefined as number | undefined };
+        
+        await safeApiCall(
+            joinServerApi(code.trim()),
+            async (data) => {
+                if (data.success) {
+                    setJoinCode('');
+                    setShowJoinServer(false);
+                    if (data.alreadyMember) {
+                        Alert.alert('Info', 'You are already a member of this server!');
+                    }
+                    await loadServers();
+                    result = { success: true, serverId: data.serverId };
                 }
-                await loadServers();
-                return { success: true, serverId: data.serverId };
+            },
+            (err) => {
+                console.error('Join failed:', err);
+                Alert.alert('Error', 'Failed to join server. Check the code and try again.');
             }
-            return { success: false };
-        } catch (err) {
-            console.error('Join failed:', err);
-            Alert.alert('Error', 'Failed to join server. Check the code and try again.');
-            return { success: false };
-        }
+        );
+        
+        return result;
     }, [loadServers]);
 
     return {

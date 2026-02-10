@@ -10,6 +10,8 @@ const { db } = require('../database');
 const { authenticateToken } = require('../middleware/auth');
 const { friendRequestLimiter } = require('../middleware/rateLimit');
 const { validateFriendRequest, validateUserId, validateRequestId } = require('../middleware/validation');
+const { sendPushNotification } = require('../services/push');
+const asyncHandler = require('../utils/asyncHandler');
 
 // All routes require authentication
 router.use(authenticateToken);
@@ -17,14 +19,12 @@ router.use(authenticateToken);
 // ─────────────────────────────────────────────────────────────
 // Friend Requests
 // ─────────────────────────────────────────────────────────────
-const { sendPushNotification } = require('../services/push');
 
 /**
  * POST /api/friends/request
  * Send a friend request
  */
-router.post('/request', friendRequestLimiter, validateFriendRequest, async (req, res) => {
-  try {
+router.post('/request', friendRequestLimiter, validateFriendRequest, asyncHandler(async (req, res) => {
     const senderId = req.user.userId;
     const { userId } = req.body;
     
@@ -76,7 +76,7 @@ router.post('/request', friendRequestLimiter, validateFriendRequest, async (req,
           db.prepare('INSERT INTO friendships (user_id, friend_id) VALUES (?, ?)').run(userId, senderId);
           
           // Notify sender that request was accepted
-          sendPushNotification(
+          await sendPushNotification(
             userId,
             'Friend Request Accepted',
             `${req.user.username} accepted your friend request!`,
@@ -96,7 +96,7 @@ router.post('/request', friendRequestLimiter, validateFriendRequest, async (req,
     `).run(senderId, userId);
 
     // Send push notification to receiver
-    sendPushNotification(
+    await sendPushNotification(
       userId,
       'New Friend Request',
       `${req.user.username} sent you a friend request`,
@@ -107,18 +107,13 @@ router.post('/request', friendRequestLimiter, validateFriendRequest, async (req,
       message: 'Friend request sent',
       requestId: result.lastInsertRowid
     });
-  } catch (error) {
-    console.error('Error sending friend request:', error);
-    res.status(500).json({ error: 'Failed to send friend request' });
-  }
-});
+}));
 
 /**
  * GET /api/friends/requests
  * Get pending friend requests (incoming)
  */
-router.get('/requests', (req, res) => {
-  try {
+router.get('/requests', asyncHandler(async (req, res) => {
     const userId = req.user.userId;
 
     const requests = db.prepare(`
@@ -136,18 +131,13 @@ router.get('/requests', (req, res) => {
     `).all(userId);
 
     res.json(requests);
-  } catch (error) {
-    console.error('Error getting friend requests:', error);
-    res.status(500).json({ error: 'Failed to get friend requests' });
-  }
-});
+}));
 
 /**
  * GET /api/friends/requests/sent
  * Get outgoing friend requests
  */
-router.get('/requests/sent', (req, res) => {
-  try {
+router.get('/requests/sent', asyncHandler(async (req, res) => {
     const userId = req.user.userId;
 
     const requests = db.prepare(`
@@ -165,18 +155,13 @@ router.get('/requests/sent', (req, res) => {
     `).all(userId);
 
     res.json(requests);
-  } catch (error) {
-    console.error('Error getting sent requests:', error);
-    res.status(500).json({ error: 'Failed to get sent requests' });
-  }
-});
+}));
 
 /**
  * POST /api/friends/accept/:id
  * Accept a friend request
  */
-router.post('/accept/:id', (req, res) => {
-  try {
+router.post('/accept/:id', asyncHandler(async (req, res) => {
     const userId = req.user.userId;
     const requestId = req.params.id;
 
@@ -197,18 +182,13 @@ router.post('/accept/:id', (req, res) => {
     db.prepare('INSERT INTO friendships (user_id, friend_id) VALUES (?, ?)').run(request.sender_id, userId);
 
     res.json({ message: 'Friend request accepted' });
-  } catch (error) {
-    console.error('Error accepting friend request:', error);
-    res.status(500).json({ error: 'Failed to accept friend request' });
-  }
-});
+}));
 
 /**
  * POST /api/friends/decline/:id
  * Decline a friend request
  */
-router.post('/decline/:id', (req, res) => {
-  try {
+router.post('/decline/:id', asyncHandler(async (req, res) => {
     const userId = req.user.userId;
     const requestId = req.params.id;
 
@@ -222,18 +202,13 @@ router.post('/decline/:id', (req, res) => {
     }
 
     res.json({ message: 'Friend request declined' });
-  } catch (error) {
-    console.error('Error declining friend request:', error);
-    res.status(500).json({ error: 'Failed to decline friend request' });
-  }
-});
+}));
 
 /**
  * DELETE /api/friends/request/:userId
  * Cancel a sent friend request
  */
-router.delete('/request/:userId', (req, res) => {
-  try {
+router.delete('/request/:userId', asyncHandler(async (req, res) => {
     const senderId = req.user.userId;
     const receiverId = req.params.userId;
 
@@ -243,11 +218,7 @@ router.delete('/request/:userId', (req, res) => {
     `).run(senderId, receiverId);
 
     res.json({ message: 'Friend request cancelled' });
-  } catch (error) {
-    console.error('Error cancelling friend request:', error);
-    res.status(500).json({ error: 'Failed to cancel friend request' });
-  }
-});
+}));
 
 // ─────────────────────────────────────────────────────────────
 // Friends List
@@ -257,8 +228,7 @@ router.delete('/request/:userId', (req, res) => {
  * GET /api/friends
  * Get friends list
  */
-router.get('/', (req, res) => {
-  try {
+router.get('/', asyncHandler(async (req, res) => {
     const userId = req.user.userId;
 
     const friends = db.prepare(`
@@ -276,18 +246,13 @@ router.get('/', (req, res) => {
     `).all(userId);
 
     res.json(friends);
-  } catch (error) {
-    console.error('Error getting friends:', error);
-    res.status(500).json({ error: 'Failed to get friends list' });
-  }
-});
+}));
 
 /**
  * DELETE /api/friends/:userId
  * Remove a friend
  */
-router.delete('/:userId', (req, res) => {
-  try {
+router.delete('/:userId', asyncHandler(async (req, res) => {
     const userId = req.user.userId;
     const friendId = req.params.userId;
 
@@ -296,18 +261,13 @@ router.delete('/:userId', (req, res) => {
     db.prepare('DELETE FROM friendships WHERE user_id = ? AND friend_id = ?').run(friendId, userId);
 
     res.json({ message: 'Friend removed' });
-  } catch (error) {
-    console.error('Error removing friend:', error);
-    res.status(500).json({ error: 'Failed to remove friend' });
-  }
-});
+}));
 
 /**
  * GET /api/friends/status/:userId
  * Get friendship status with a user
  */
-router.get('/status/:userId', (req, res) => {
-  try {
+router.get('/status/:userId', asyncHandler(async (req, res) => {
     const userId = req.user.userId;
     const targetId = req.params.userId;
 
@@ -349,11 +309,7 @@ router.get('/status/:userId', (req, res) => {
     }
 
     res.json({ status: 'none' });
-  } catch (error) {
-    console.error('Error getting friendship status:', error);
-    res.status(500).json({ error: 'Failed to get friendship status' });
-  }
-});
+}));
 
 // ─────────────────────────────────────────────────────────────
 // Blocking
@@ -363,8 +319,7 @@ router.get('/status/:userId', (req, res) => {
  * POST /api/friends/block/:userId
  * Block a user
  */
-router.post('/block/:userId', (req, res) => {
-  try {
+router.post('/block/:userId', asyncHandler(async (req, res) => {
     const blockerId = req.user.userId;
     const blockedId = req.params.userId;
 
@@ -396,36 +351,26 @@ router.post('/block/:userId', (req, res) => {
     }
 
     res.json({ message: 'User blocked' });
-  } catch (error) {
-    console.error('Error blocking user:', error);
-    res.status(500).json({ error: 'Failed to block user' });
-  }
-});
+}));
 
 /**
  * DELETE /api/friends/block/:userId
  * Unblock a user
  */
-router.delete('/block/:userId', (req, res) => {
-  try {
+router.delete('/block/:userId', asyncHandler(async (req, res) => {
     const blockerId = req.user.userId;
     const blockedId = req.params.userId;
 
     db.prepare('DELETE FROM blocked_users WHERE blocker_id = ? AND blocked_id = ?').run(blockerId, blockedId);
 
     res.json({ message: 'User unblocked' });
-  } catch (error) {
-    console.error('Error unblocking user:', error);
-    res.status(500).json({ error: 'Failed to unblock user' });
-  }
-});
+}));
 
 /**
  * GET /api/friends/blocked
  * Get list of blocked users
  */
-router.get('/blocked', (req, res) => {
-  try {
+router.get('/blocked', asyncHandler(async (req, res) => {
     const userId = req.user.userId;
 
     const blocked = db.prepare(`
@@ -443,10 +388,6 @@ router.get('/blocked', (req, res) => {
     `).all(userId);
 
     res.json(blocked);
-  } catch (error) {
-    console.error('Error getting blocked users:', error);
-    res.status(500).json({ error: 'Failed to get blocked users' });
-  }
-});
+}));
 
 module.exports = router;

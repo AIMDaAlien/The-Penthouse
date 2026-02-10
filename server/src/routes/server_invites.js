@@ -3,6 +3,7 @@ const router = express.Router();
 const { db } = require('../database');
 const { authenticateToken } = require('../middleware/auth');
 const crypto = require('crypto');
+const asyncHandler = require('../utils/asyncHandler');
 
 // Generate a random invite code
 const generateCode = () => {
@@ -10,10 +11,9 @@ const generateCode = () => {
 };
 
 // Get invite info (public)
-router.get('/:code', (req, res) => {
-    try {
-        const { code } = req.params;
-        const invite = db.prepare(`
+router.get('/:code', asyncHandler(async (req, res) => {
+    const { code } = req.params;
+    const invite = db.prepare(`
             SELECT i.*, s.name as server_name,
               (SELECT COUNT(*) FROM server_members WHERE server_id = s.id) as member_count
             FROM server_invites i
@@ -21,94 +21,80 @@ router.get('/:code', (req, res) => {
             WHERE i.code = ?
         `).get(code);
 
-        if (!invite) {
-            return res.status(404).json({ error: 'Invite not found' });
-        }
-
-        res.json({
-            code: invite.code,
-            serverName: invite.server_name,
-            memberCount: invite.member_count,
-            uses: invite.uses,
-            maxUses: invite.max_uses
-        });
-    } catch (err) {
-        console.error('Get invite error:', err);
-        res.status(500).json({ error: 'Failed to get invite info' });
+    if (!invite) {
+        return res.status(404).json({ error: 'Invite not found' });
     }
-});
+
+    res.json({
+        code: invite.code,
+        serverName: invite.server_name,
+        memberCount: invite.member_count,
+        uses: invite.uses,
+        maxUses: invite.max_uses
+    });
+}));
 
 // Create an invite for a server
-router.post('/server/:serverId', authenticateToken, (req, res) => {
-    try {
-        const { serverId } = req.params;
-        const userId = req.user.userId;
-        const { maxUses } = req.body;
+router.post('/server/:serverId', authenticateToken, asyncHandler(async (req, res) => {
+    const { serverId } = req.params;
+    const userId = req.user.userId;
+    const { maxUses } = req.body;
 
-        // Verify user is a member of the server
-        const member = db.prepare('SELECT * FROM server_members WHERE server_id = ? AND user_id = ?')
-            .get(serverId, userId);
+    // Verify user is a member of the server
+    const member = db.prepare('SELECT * FROM server_members WHERE server_id = ? AND user_id = ?')
+        .get(serverId, userId);
 
-        if (!member) {
-            return res.status(403).json({ error: 'You are not a member of this server' });
-        }
+    if (!member) {
+        return res.status(403).json({ error: 'You are not a member of this server' });
+    }
 
-        const code = generateCode();
+    const code = generateCode();
 
-        db.prepare(`
+    db.prepare(`
             INSERT INTO server_invites (server_id, code, created_by, max_uses)
             VALUES (?, ?, ?, ?)
         `).run(serverId, code, userId, maxUses || null);
 
-        res.json({ success: true, code });
-    } catch (err) {
-        console.error('Create invite error:', err);
-        res.status(500).json({ error: 'Failed to create invite' });
-    }
-});
+    res.json({ success: true, code });
+}));
 
 // Join server using invite
-router.post('/:code/join', authenticateToken, (req, res) => {
-    try {
-        const { code } = req.params;
-        const userId = req.user.userId;
+router.post('/:code/join', authenticateToken, asyncHandler(async (req, res) => {
+    const { code } = req.params;
+    const userId = req.user.userId;
 
-        const invite = db.prepare('SELECT * FROM server_invites WHERE code = ?').get(code);
-        if (!invite) {
-            return res.status(404).json({ error: 'Invite not found' });
-        }
+    const invite = db.prepare('SELECT * FROM server_invites WHERE code = ?').get(code);
+    if (!invite) {
+        return res.status(404).json({ error: 'Invite not found' });
+    }
 
-        // Check if user is already a member
-        const existingMember = db.prepare('SELECT * FROM server_members WHERE server_id = ? AND user_id = ?')
-            .get(invite.server_id, userId);
+    // Check if user is already a member
+    const existingMember = db.prepare('SELECT * FROM server_members WHERE server_id = ? AND user_id = ?')
+        .get(invite.server_id, userId);
 
-        if (existingMember) {
-            return res.json({ success: true, alreadyMember: true, serverId: invite.server_id });
-        }
+    if (existingMember) {
+        return res.json({ success: true, alreadyMember: true, serverId: invite.server_id });
+    }
 
-        // Add user to server
-        db.prepare('INSERT INTO server_members (server_id, user_id) VALUES (?, ?)')
-            .run(invite.server_id, userId);
+    // Add user to server
+    db.prepare('INSERT INTO server_members (server_id, user_id) VALUES (?, ?)')
+        .run(invite.server_id, userId);
 
-        // Update invite uses
-        db.prepare('UPDATE server_invites SET uses = uses + 1 WHERE id = ?')
-            .run(invite.id);
+    // Update invite uses
+    db.prepare('UPDATE server_invites SET uses = uses + 1 WHERE id = ?')
+        .run(invite.id);
 
-        // Get the General channel to return for redirection
-        const generalChannel = db.prepare(`
+    // Get the General channel to return for redirection
+    const generalChannel = db.prepare(`
             SELECT id FROM chats 
             WHERE server_id = ? AND name = 'general' AND type = 'channel'
         `).get(invite.server_id);
 
-        res.json({
-            success: true,
-            serverId: invite.server_id,
-            channelId: generalChannel ? generalChannel.id : null
-        });
-    } catch (err) {
-        console.error('Join invite error:', err);
-        res.status(500).json({ error: 'Failed to join server' });
-    }
-});
+    res.json({
+        success: true,
+        serverId: invite.server_id,
+        channelId: generalChannel ? generalChannel.id : null
+    });
+}));
 
 module.exports = router;
