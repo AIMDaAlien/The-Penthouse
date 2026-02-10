@@ -123,6 +123,46 @@ router.post('/avatar', authenticateToken, upload.single('avatar'), (req, res) =>
     }
 });
 
+// Upload server icon
+router.post('/server-icon', authenticateToken, upload.single('icon'), (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No file uploaded' });
+        }
+
+        const iconUrl = `/uploads/${req.file.filename}`;
+
+        // If serverId is provided, update that server's icon
+        const { serverId } = req.body;
+        if (serverId) {
+            // Verify user is the server owner
+            const server = db.prepare('SELECT owner_id, icon_url FROM servers WHERE id = ?').get(serverId);
+            if (!server) {
+                return res.status(404).json({ error: 'Server not found' });
+            }
+            if (server.owner_id !== req.user.userId) {
+                return res.status(403).json({ error: 'Only the server owner can update the icon' });
+            }
+
+            // Delete old icon if exists
+            if (server.icon_url) {
+                const oldPath = path.join(__dirname, '..', '..', 'data', server.icon_url);
+                if (fs.existsSync(oldPath)) {
+                    fs.unlinkSync(oldPath);
+                }
+            }
+
+            db.prepare('UPDATE servers SET icon_url = ? WHERE id = ?')
+                .run(iconUrl, serverId);
+        }
+
+        res.json({ iconUrl });
+    } catch (err) {
+        console.error('Upload server icon error:', err);
+        res.status(500).json({ error: 'Failed to upload server icon' });
+    }
+});
+
 // Upload custom emote
 router.post('/emotes', authenticateToken, upload.single('emote'), (req, res) => {
     try {

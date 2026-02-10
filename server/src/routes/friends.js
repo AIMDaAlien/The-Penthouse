@@ -25,7 +25,7 @@ const { sendPushNotification } = require('../services/push');
  */
 router.post('/request', friendRequestLimiter, validateFriendRequest, async (req, res) => {
   try {
-    const senderId = req.user.id || req.user.userId;
+    const senderId = req.user.userId;
     const { userId } = req.body;
     
     // ... validation checks (userId required, self-check, blocked check, existing friendship/request) ...
@@ -217,7 +217,7 @@ router.post('/decline/:id', (req, res) => {
       WHERE id = ? AND receiver_id = ? AND status = 'pending'
     `).run(requestId, userId);
 
-    if (result.lastInsertRowid === 0) {
+    if (result.changes === 0) {
       return res.status(404).json({ error: 'Friend request not found' });
     }
 
@@ -234,7 +234,7 @@ router.post('/decline/:id', (req, res) => {
  */
 router.delete('/request/:userId', (req, res) => {
   try {
-    const senderId = req.user.id;
+    const senderId = req.user.userId;
     const receiverId = req.params.userId;
 
     db.prepare(`
@@ -365,7 +365,7 @@ router.get('/status/:userId', (req, res) => {
  */
 router.post('/block/:userId', (req, res) => {
   try {
-    const blockerId = req.user.id;
+    const blockerId = req.user.userId;
     const blockedId = req.params.userId;
 
     if (blockerId === parseInt(blockedId)) {
@@ -408,7 +408,7 @@ router.post('/block/:userId', (req, res) => {
  */
 router.delete('/block/:userId', (req, res) => {
   try {
-    const blockerId = req.user.id;
+    const blockerId = req.user.userId;
     const blockedId = req.params.userId;
 
     db.prepare('DELETE FROM blocked_users WHERE blocker_id = ? AND blocked_id = ?').run(blockerId, blockedId);

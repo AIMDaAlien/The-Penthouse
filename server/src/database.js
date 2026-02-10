@@ -254,8 +254,7 @@ function saveDatabase() {
   }
 }
 
-// Run a parameterized statement and return lastInsertRowid
-// Run a parameterized statement and return lastInsertRowid
+// Run a parameterized statement and return lastInsertRowid and changes
 function runStatement(sql, params = []) {
   try {
     const stmt = db.prepare(sql);
@@ -275,8 +274,10 @@ function runStatement(sql, params = []) {
       }
     }
 
+    // For UPDATE/DELETE, get actual rows modified
+    const changes = db.getRowsModified();
     saveDatabase();
-    return { lastInsertRowid: 0, changes: 1 };
+    return { lastInsertRowid: 0, changes };
   } catch (err) {
     console.error('DB run error:', sql, params, err.message);
     throw err;

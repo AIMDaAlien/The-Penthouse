@@ -14,7 +14,8 @@ router.get('/:code', (req, res) => {
     try {
         const { code } = req.params;
         const invite = db.prepare(`
-            SELECT i.*, s.name as server_name, s.member_count 
+            SELECT i.*, s.name as server_name,
+              (SELECT COUNT(*) FROM server_members WHERE server_id = s.id) as member_count
             FROM server_invites i
             JOIN servers s ON i.server_id = s.id
             WHERE i.code = ?
@@ -89,18 +90,14 @@ router.post('/:code/join', authenticateToken, (req, res) => {
         db.prepare('INSERT INTO server_members (server_id, user_id) VALUES (?, ?)')
             .run(invite.server_id, userId);
 
-        // Update server member count
-        db.prepare('UPDATE servers SET member_count = member_count + 1 WHERE id = ?')
-            .run(invite.server_id);
-
         // Update invite uses
         db.prepare('UPDATE server_invites SET uses = uses + 1 WHERE id = ?')
             .run(invite.id);
 
         // Get the General channel to return for redirection
         const generalChannel = db.prepare(`
-            SELECT id FROM channels 
-            WHERE server_id = ? AND name = 'general'
+            SELECT id FROM chats 
+            WHERE server_id = ? AND name = 'general' AND type = 'channel'
         `).get(invite.server_id);
 
         res.json({

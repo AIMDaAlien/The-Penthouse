@@ -1232,7 +1232,7 @@ res/
 
 ---
 
-## APPENDIX: QUICK REFERENCE
+## APPENDIX A: QUICK REFERENCE
 
 ### Color Quick Ref
 | Use | Hex | RGBA |
@@ -1264,6 +1264,335 @@ res/
 
 ---
 
+## APPENDIX B: CURRENT IMPLEMENTATION ARCHITECTURE
+
+> **Important:** Parts 1–10 above describe the **aspirational native** vision (SwiftUI + Jetpack Compose). The application is **currently built** with React Native (Expo) for cross-platform delivery. This appendix documents the real, shipping architecture so that design specs above can be translated accurately to the current stack.
+
+### B.1 Technology Stack
+
+| Layer | Technology | Notes |
+|-------|-----------|-------|
+| Mobile Framework | React Native (Expo SDK) | Cross-platform iOS + Android |
+| Navigation | Expo Router (file-based) | Replaces native panel state machine |
+| State Management | React Context + Hooks | `AuthContext`, `ServerContext` |
+| Real-time | Socket.IO client | WebSocket for messages, typing, presence |
+| HTTP Client | Axios | With JWT interceptor + 401 auto-logout |
+| Storage | AsyncStorage (via `expo-secure-store`) | Token persistence |
+| Backend | Node.js + Express | REST API + WebSocket server |
+| Database | sql.js (SQLite in-process) | Single-file persistence to disk |
+| Deployment | Docker + docker-compose | On-premises TrueNAS target |
+
+### B.2 Mobile File Structure (Actual)
+
+```
+mobile/
+├── app/                            # Expo Router pages
+│   ├── _layout.tsx                 # Root layout (auth guard, providers)
+│   ├── login.tsx                   # Auth screen
+│   ├── register.tsx                # Auth screen
+│   ├── forgot-password.tsx         # Auth screen
+│   ├── reset-password.tsx          # Auth screen
+│   ├── settings.tsx                # Settings (glass panel)
+│   ├── (main)/                     # Authenticated routes
+│   │   └── index.tsx               # PanelOrchestrator (Welcome → Lobby)
+│   └── chat/
+│       └── [id].tsx                # Chat screen
+├── src/
+│   ├── components/                 # Shared UI components
+│   │   ├── glass/                  # Glassmorphism primitives
+│   │   │   ├── GlassButton.tsx
+│   │   │   ├── GlassCard.tsx
+│   │   │   ├── GlassInput.tsx
+│   │   │   ├── GlassPanel.tsx
+│   │   │   └── GlassRow.tsx
+│   │   ├── BackgroundLayer.tsx     # Persistent lounge background
+│   │   ├── PanelTransition.tsx     # Spring-animated panel wrapper
+│   │   ├── Panel.tsx               # Base panel container
+│   │   ├── Avatar.tsx              # User avatar with status dot
+│   │   ├── BottomTabs.tsx          # Navigation tabs
+│   │   ├── ServerRail.tsx          # Server icon sidebar
+│   │   ├── DMList.tsx              # Direct message list
+│   │   ├── MessageList.tsx         # Chat message list
+│   │   ├── MessageRow.tsx          # Individual message bubble
+│   │   ├── MessageInput.tsx        # Composer with attachments
+│   │   ├── MemberSidebar.tsx       # Member list drawer
+│   │   ├── ProfileDrawer.tsx       # User profile sheet
+│   │   ├── Toast.tsx               # Toast notifications
+│   │   ├── EmojiKeyboard.tsx       # Emoji picker
+│   │   ├── UnifiedGifPicker.tsx    # GIF/Klipy picker
+│   │   ├── KlipyPicker.tsx         # Klipy integration
+│   │   ├── ImageViewer.tsx         # Full-screen image viewer
+│   │   ├── VideoPlayer.tsx         # Video playback
+│   │   ├── VoicePlayer.tsx         # Voice message playback
+│   │   ├── VoiceRecorder.tsx       # Voice message recording
+│   │   ├── CreateServerModal.tsx   # Server creation flow
+│   │   ├── JoinServerModal.tsx     # Join via invite code
+│   │   ├── InviteModal.tsx         # Generate invite link
+│   │   ├── AddMembersModal.tsx     # Add members to group
+│   │   ├── NewDMModal.tsx          # Start new DM
+│   │   ├── Button.tsx              # Basic button (auth screens)
+│   │   └── Input.tsx               # Basic input (auth screens)
+│   ├── hooks/                      # Custom React hooks
+│   │   ├── useChats.ts             # Chat list state
+│   │   ├── useFriends.ts           # Friends/requests/blocks
+│   │   ├── useMessages.ts          # Message CRUD + WebSocket
+│   │   └── useServers.ts           # Server list + channels
+│   ├── services/                   # API + network layer
+│   │   ├── api.ts                  # Axios instance + all API calls
+│   │   ├── socket.ts               # Socket.IO client config
+│   │   ├── storage.ts              # AsyncStorage wrapper
+│   │   └── pushNotifications.ts    # Expo push notification setup
+│   ├── context/                    # React Context providers
+│   │   ├── AuthContext.tsx          # Auth state + token management
+│   │   └── ServerContext.tsx        # Selected server state
+│   ├── designsystem/               # Design tokens (maps to Part 1)
+│   │   ├── Colors.ts               # Catppuccin Mocha palette
+│   │   ├── Typography.ts           # Ubuntu font scale
+│   │   ├── Spacing.ts              # 8dp grid system
+│   │   ├── Animations.ts           # Spring configs
+│   │   ├── Effects.ts              # Glass blur/shadow presets
+│   │   ├── Shadows.ts              # Elevation tokens
+│   │   └── index.ts                # Barrel export
+│   ├── features/                   # Feature modules
+│   │   ├── welcome/
+│   │   │   └── WelcomePanel.tsx    # Mood-aware entry screen
+│   │   └── lobby/
+│   │       └── LobbyPanel.tsx      # Server/channel navigation
+│   └── types.ts                    # TypeScript interfaces
+└── assets/                         # Images, fonts, splash
+```
+
+### B.3 Mapping Spec → Implementation
+
+| Spec Concept (Parts 1-10) | Current Implementation |
+|---------------------------|------------------------|
+| SwiftUI `GlassPanel` | `glass/GlassPanel.tsx` (React Native `View` + blur) |
+| Jetpack Compose `GlassButton` | `glass/GlassButton.tsx` |
+| `UISpringTimingParameters` | `Animated.spring()` via `designsystem/Animations.ts` |
+| `@State private var currentPanel` | `useState` in `PanelOrchestrator` (Expo Router) |
+| `AppState: ObservableObject` | `AuthContext` + `ServerContext` |
+| `SpringAnimation` (Android) | `withSpring` from `react-native-reanimated` |
+| `CALayer` cached blur | `expo-blur` `BlurView` component |
+| Native Nav Stack | Expo Router file-based routing |
+
+### B.4 Design System Token Usage
+
+The design tokens in `src/designsystem/` directly implement Part 1 of this spec:
+
+- **Colors.ts** → Section 1.1 (Catppuccin Mocha + Accent Palette)
+- **Typography.ts** → Section 1.3 (Ubuntu type scale)
+- **Spacing.ts** → Section 1.5 (8dp grid)
+- **Animations.ts** → Part 2 (Spring physics configs)
+- **Effects.ts** → Section 1.2 (Glass panel/card/row/input formulas)
+
+---
+
+## APPENDIX C: BACKEND ARCHITECTURE & API SURFACE
+
+### C.1 Server Stack
+
+```
+server/
+├── src/
+│   ├── index.js              # Express app + Socket.IO init
+│   ├── database.js           # sql.js wrapper + schema + helpers
+│   ├── websocket.js          # Socket.IO event handlers
+│   ├── routes/
+│   │   ├── auth.js           # Registration, login, password reset
+│   │   ├── chats.js          # DMs, groups, chat management
+│   │   ├── messages.js       # Message CRUD, reactions, pins, read receipts
+│   │   ├── servers.js        # Server + channel management
+│   │   ├── server_invites.js # Invite code generation + join flow
+│   │   ├── friends.js        # Friend requests, blocking
+│   │   ├── media.js          # File, voice, avatar, server icon, emote uploads
+│   │   └── push.js           # Push notification token management
+│   ├── middleware/
+│   │   ├── auth.js           # JWT verification middleware
+│   │   ├── validation.js     # express-validator rules
+│   │   ├── rateLimiter.js    # Rate limiting per endpoint
+│   │   └── errorHandler.js   # Global error handler
+│   └── services/
+│       ├── push.js           # Expo push notification delivery
+│       └── email.js          # SMTP email (password reset)
+├── data/                     # Runtime data (gitignored)
+│   ├── penthouse.db          # SQLite database file
+│   └── uploads/              # User-uploaded media
+├── Dockerfile                # Backend container image
+└── package.json
+```
+
+### C.2 REST API Endpoints
+
+#### Auth (`/api/auth`)
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| POST | `/register` | No | Create account |
+| POST | `/login` | No | Get JWT token |
+| GET | `/me` | Yes | Get current user profile |
+| PUT | `/profile` | Yes | Update display name / avatar |
+| POST | `/forgot-password` | No | Request password reset email |
+| POST | `/reset-password` | No | Reset password with token |
+
+#### Chats (`/api/chats`)
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/` | Yes | List all chats for current user |
+| POST | `/dm` | Yes | Start or get existing DM |
+| POST | `/group` | Yes | Create group chat |
+| GET | `/:chatId` | Yes | Get chat details + members |
+| GET | `/users/search` | Yes | Search users by username |
+| GET | `/unread` | Yes | Get unread counts per chat |
+
+#### Messages (`/api/messages`)
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/:chatId` | Yes | Get messages (paginated, `?limit=&before=`) |
+| POST | `/:chatId` | Yes | Send message |
+| PUT | `/:messageId` | Yes | Edit message (author only) |
+| DELETE | `/:messageId` | Yes | Delete message (author only) |
+| POST | `/:messageId/read` | Yes | Mark message as read |
+| POST | `/:messageId/react` | Yes | Add emoji reaction |
+| DELETE | `/:messageId/react/:emoji` | Yes | Remove reaction |
+| GET | `/pins/:chatId` | Yes | Get pinned messages |
+| POST | `/:messageId/pin` | Yes | Pin a message |
+| DELETE | `/:messageId/pin` | Yes | Unpin a message |
+
+#### Servers (`/api/servers`)
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/` | Yes | List servers for current user |
+| POST | `/` | Yes | Create server (+ default "general" channel) |
+| GET | `/:serverId` | Yes | Get server details + channels |
+| POST | `/:serverId/channels` | Yes | Create channel in server |
+
+#### Server Invites (`/api/invites`)
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/:code` | No | Get invite info (server name, member count) |
+| POST | `/server/:serverId` | Yes | Generate invite code |
+| POST | `/:code/join` | Yes | Join server via invite code |
+
+#### Friends (`/api/friends`)
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/` | Yes | List friends |
+| POST | `/request` | Yes | Send friend request |
+| GET | `/requests` | Yes | List incoming requests |
+| GET | `/requests/sent` | Yes | List sent requests |
+| POST | `/accept/:id` | Yes | Accept friend request |
+| POST | `/decline/:id` | Yes | Decline friend request |
+| DELETE | `/request/:userId` | Yes | Cancel sent request |
+| DELETE | `/:userId` | Yes | Remove friend |
+| GET | `/status/:userId` | Yes | Get friendship status |
+| POST | `/block/:userId` | Yes | Block user |
+| DELETE | `/block/:userId` | Yes | Unblock user |
+| GET | `/blocked` | Yes | List blocked users |
+
+#### Media (`/api/media`)
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| POST | `/upload` | Yes | Upload file (image/video/audio) |
+| POST | `/voice` | Yes | Upload voice message |
+| POST | `/avatar` | Yes | Upload profile picture |
+| POST | `/server-icon` | Yes | Upload server icon |
+| POST | `/emotes` | Yes | Upload custom emote |
+| GET | `/emotes` | Yes | List all emotes |
+| DELETE | `/emotes/:id` | Yes | Delete emote (creator only) |
+
+#### Push Notifications (`/api/push`)
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| POST | `/register` | Yes | Register Expo push token |
+| DELETE | `/unregister` | Yes | Remove push token(s) |
+| GET | `/tokens` | Yes | List user's push tokens |
+| POST | `/test` | Yes | Send test notification |
+
+### C.3 WebSocket Events
+
+| Event | Direction | Payload | Description |
+|-------|-----------|---------|-------------|
+| `join_chat` | Client → Server | `{ chatId }` | Join chat room |
+| `leave_chat` | Client → Server | `{ chatId }` | Leave chat room |
+| `new_message` | Server → Client | `Message` | New message broadcast |
+| `message_edited` | Server → Client | `{ messageId, content }` | Edit broadcast |
+| `message_deleted` | Server → Client | `{ messageId, chatId }` | Delete broadcast |
+| `reaction_update` | Server → Client | `{ messageId, reactions }` | Reaction change |
+| `message_read` | Server → Client | `{ messageId, userId, readAt }` | Read receipt |
+| `typing` | Bidirectional | `{ chatId, userId, username }` | Typing indicator |
+| `stop_typing` | Bidirectional | `{ chatId, userId }` | Stop typing |
+
+---
+
+## APPENDIX D: DATABASE SCHEMA
+
+```sql
+-- Core tables
+users (id, username, password_hash, display_name, avatar_url, email, status, created_at, updated_at)
+servers (id, name, icon_url, owner_id → users, created_at)
+server_members (id, server_id → servers, user_id → users, joined_at, UNIQUE(server_id, user_id))
+chats (id, type ['dm','group','channel'], name, server_id → servers, created_at, updated_at)
+chat_members (id, chat_id → chats, user_id → users, joined_at, UNIQUE(chat_id, user_id))
+messages (id, chat_id → chats, user_id → users, content, type, metadata, reply_to_id → messages, created_at, updated_at, is_edited)
+
+-- Social features
+reactions (id, message_id → messages, user_id → users, emoji, UNIQUE(message_id, user_id, emoji))
+read_receipts (id, message_id → messages, user_id → users, read_at, UNIQUE(message_id, user_id))
+pinned_messages (id, message_id → messages, chat_id → chats, pinned_by → users, pinned_at)
+friend_requests (id, sender_id → users, receiver_id → users, status, created_at)
+friendships (id, user_id_1 → users, user_id_2 → users, created_at, UNIQUE(user_id_1, user_id_2))
+blocked_users (id, blocker_id → users, blocked_id → users, created_at, UNIQUE(blocker_id, blocked_id))
+
+-- Infrastructure
+server_invites (id, server_id → servers, code UNIQUE, created_by → users, uses, max_uses, created_at)
+emotes (id, name UNIQUE, image_url, created_by → users, created_at)
+push_tokens (id, user_id → users, token, device_type, created_at, UNIQUE(user_id, token))
+password_resets (id, user_id → users, token, expires_at, used, created_at)
+```
+
+---
+
+## APPENDIX E: DEPLOYMENT ARCHITECTURE
+
+### E.1 On-Premises (TrueNAS)
+
+```
+┌─────────────────────────────────────────────┐
+│  TrueNAS Server                             │
+│  ┌────────────────────────────────────────┐  │
+│  │  Docker Container                      │  │
+│  │  ┌──────────────────────────────────┐  │  │
+│  │  │  Node.js Express Server          │  │  │
+│  │  │  Port 3000                       │  │  │
+│  │  │  ├─ REST API (/api/*)            │  │  │
+│  │  │  ├─ WebSocket (Socket.IO)        │  │  │
+│  │  │  └─ Static files (/uploads/*)    │  │  │
+│  │  └──────────────────────────────────┘  │  │
+│  │  Volume: ./server/data → /app/data     │  │
+│  │  (penthouse.db + uploads/)             │  │
+│  └────────────────────────────────────────┘  │
+└─────────────────────────────────────────────┘
+
+Mobile clients connect via local network IP:3000
+```
+
+### E.2 Environment Variables
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `PORT` | No | `3000` | Server port |
+| `JWT_SECRET` | **Yes** | - | JWT signing key |
+| `NODE_ENV` | No | `development` | `production` for Docker |
+| `GIPHY_API_KEY` | No | - | Giphy integration |
+| `KLIPY_API_KEY` | No | - | Klipy integration |
+| `SMTP_HOST` | No | - | Email server (password reset) |
+| `SMTP_PORT` | No | - | Email port |
+| `SMTP_USER` | No | - | Email username |
+| `SMTP_PASS` | No | - | Email password |
+| `SMTP_FROM` | No | - | Sender address |
+| `FRONTEND_URL` | No | - | For password reset links |
+
+---
+
 ## FINAL NOTES FOR ARCHITECTS
 
 1. **The background NEVER changes.** All screens are glass panels sliding over it.
@@ -1282,8 +1611,12 @@ res/
 
 8. **Accessibility is required.** The app must work with VoiceOver/TalkBack and Reduce Motion.
 
+9. **Parts 1–10 are the design north star.** The native SwiftUI/Compose specs remain the aspirational target. Appendices B–E document the current Expo/React Native implementation that maps to those specs.
+
+10. **Database is single-file SQLite.** The `sql.js` wrapper writes the entire database to disk on mutation. For multi-user production, consider migrating to `better-sqlite3` for native performance.
+
 ---
 
-**Document Version:** 1.0  
-**Last Updated:** 2026-02-04  
+**Document Version:** 2.0
+**Last Updated:** 2026-02-09
 **Author:** The Penthouse Design System

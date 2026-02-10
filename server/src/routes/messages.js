@@ -437,6 +437,38 @@ router.delete('/:messageId/react/:emoji', authenticateToken, (req, res) => {
     }
 });
 
+// Mark a message as read (insert read receipt)
+router.post('/:messageId/read', authenticateToken, (req, res) => {
+    try {
+        const { messageId } = req.params;
+        const userId = req.user.userId;
+
+        const message = db.prepare('SELECT chat_id FROM messages WHERE id = ?').get(messageId);
+        if (!message) {
+            return res.status(404).json({ error: 'Message not found' });
+        }
+
+        // Insert or ignore if already read
+        db.prepare(
+            'INSERT OR IGNORE INTO read_receipts (message_id, user_id) VALUES (?, ?)'
+        ).run(messageId, userId);
+
+        // Broadcast read receipt
+        const io = req.app.get('io');
+        io.to(`chat:${message.chat_id}`).emit('message_read', {
+            messageId: parseInt(messageId),
+            chatId: message.chat_id,
+            userId,
+            readAt: new Date().toISOString()
+        });
+
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Mark message read error:', err);
+        res.status(500).json({ error: 'Failed to mark message as read' });
+    }
+});
+
 // Get pinned messages for a chat
 router.get('/pins/:chatId', authenticateToken, (req, res) => {
     try {
