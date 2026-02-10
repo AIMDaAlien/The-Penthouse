@@ -26,23 +26,17 @@ const { apiLimiter } = require('./middleware/rateLimit');
 const errorHandler = require('./middleware/errorHandler');
 
 app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-      fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
-      imgSrc: ["'self'", "data:", "blob:", "https:", "http:"],
-      mediaSrc: ["'self'", "data:", "blob:"],
-      connectSrc: ["'self'", "wss:", "ws:", "https://api.giphy.com", "https://api.klipy.com", "https://fonts.googleapis.com", "https://fonts.gstatic.com"],
-      objectSrc: ["'none'"],
-      frameSrc: ["'self'"],
-      workerSrc: ["'self'", "blob:"],
-    },
-  },
+  contentSecurityPolicy: false, // Disable CSP for API-only mode
   crossOriginEmbedderPolicy: false,
 }));
-app.use(cors());
+// CORS Configuration
+const corsOptions = {
+  origin: process.env.CORS_ORIGIN || '*', // Allow all by default for mobile app, or strict via env
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+};
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

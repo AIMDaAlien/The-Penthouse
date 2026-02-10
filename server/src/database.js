@@ -234,23 +234,52 @@ async function initializeDatabase() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       blocker_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
       blocked_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(blocker_id, blocked_id)
     )
   `);
 
-  // Save to disk
-  saveDatabase();
+  // Save to disk (initial save)
+  saveDatabase(true);
 
   console.log('📦 Database initialized');
+
+  // Handle graceful shutdown
+  const handleExit = () => {
+    console.log('Hyperspace closing... saving database...');
+    saveDatabase(true);
+    process.exit(0);
+  };
+  process.on('SIGINT', handleExit);
+  process.on('SIGTERM', handleExit);
 }
 
-function saveDatabase() {
+let saveTimeout = null;
+const SAVE_DELAY_MS = 5000;
+
+function saveDatabase(immediate = false) {
   if (process.env.NODE_ENV === 'test') return;
-  if (db) {
-    const data = db.export();
-    const buffer = Buffer.from(data);
-    fs.writeFileSync(dbPath, buffer);
+  
+  if (immediate) {
+    if (saveTimeout) clearTimeout(saveTimeout);
+    if (db) {
+      try {
+        const data = db.export();
+        const buffer = Buffer.from(data);
+        fs.writeFileSync(dbPath, buffer);
+        // console.log('💾 Database synced to disk');
+      } catch (err) {
+        console.error('Failed to save database:', err);
+      }
+    }
+    return;
+  }
+
+  // Debounced save
+  if (!saveTimeout) {
+    saveTimeout = setTimeout(() => {
+      saveDatabase(true);
+      saveTimeout = null;
+    }, SAVE_DELAY_MS);
   }
 }
 

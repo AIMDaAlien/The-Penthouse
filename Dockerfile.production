@@ -1,41 +1,27 @@
 # Production Dockerfile
-# Builds frontend + backend into a single container
+# Server-only build (Mobile app is distributed separately)
 
-# Stage 1: Build frontend
-FROM node:20-alpine AS frontend-builder
-WORKDIR /build
-COPY web/package*.json ./
-RUN npm ci --legacy-peer-deps
-COPY web/ ./
-RUN npm run build
-
-# Stage 2: Build backend
-FROM node:20-alpine AS backend-builder
+FROM node:20-alpine AS builder
 WORKDIR /build
 RUN apk add --no-cache python3 make g++
 COPY server/package*.json ./
 RUN npm ci --only=production
 
-# Stage 3: Production image
 FROM node:20-alpine
 WORKDIR /app
 
 # Install wget for healthcheck
 RUN apk add --no-cache wget
 
-# Copy backend
-COPY --from=backend-builder /build/node_modules ./server/node_modules
-COPY server/src ./server/src
-COPY server/package.json ./server/
+# Copy dependencies
+COPY --from=builder /build/node_modules ./node_modules
+COPY server/package.json ./
 
-# Copy frontend build
-COPY --from=frontend-builder /build/dist ./web/dist
+# Copy source
+COPY server/src ./src
 
 # Create data directory
-RUN mkdir -p server/data/uploads
-
-# Set working directory to server
-WORKDIR /app/server
+RUN mkdir -p data/uploads
 
 EXPOSE 3000
 
