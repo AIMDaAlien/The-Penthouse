@@ -258,27 +258,25 @@ function saveDatabase() {
 // Run a parameterized statement and return lastInsertRowid
 function runStatement(sql, params = []) {
   try {
-    if (process.env.NODE_ENV === 'test') {
-      db.run(sql, params);
-      
-      // For INSERTs, we need to return the lastID manually in sql.js
-      if (sql.trim().toUpperCase().startsWith('INSERT')) {
-        const result = db.exec('SELECT last_insert_rowid() as id');
-        // result is [{ columns:['id'], values:[[1]] }]
-        if (result.length > 0 && result[0].values.length > 0) {
-          const id = result[0].values[0][0];
-          return { lastInsertRowid: id, changes: 1 };
-        }
-      }
-      return { lastInsertRowid: 0, changes: 1 };
-    } else {
-      const stmt = db.prepare(sql);
-      if (params.length > 0) {
-        stmt.bind(params);
-      }
-      const info = stmt.run();
-      return info;
+    const stmt = db.prepare(sql);
+    if (params.length > 0) {
+      stmt.bind(params);
     }
+    stmt.step();
+    stmt.free();
+
+    // For INSERTs, get the lastInsertRowid via sql.js
+    if (sql.trim().toUpperCase().startsWith('INSERT')) {
+      const result = db.exec('SELECT last_insert_rowid() as id');
+      if (result.length > 0 && result[0].values.length > 0) {
+        const id = result[0].values[0][0];
+        saveDatabase();
+        return { lastInsertRowid: id, changes: 1 };
+      }
+    }
+
+    saveDatabase();
+    return { lastInsertRowid: 0, changes: 1 };
   } catch (err) {
     console.error('DB run error:', sql, params, err.message);
     throw err;
