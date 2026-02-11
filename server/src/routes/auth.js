@@ -13,12 +13,12 @@ const router = express.Router();
 
 // Register new user
 router.post('/register', registerLimiter, validateRegister, asyncHandler(async (req, res) => {
-    const { username, password, displayName } = req.body;
+    const { username, email, password, displayName } = req.body;
 
-    // Check if username exists
-    const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(username);
+    // Check if username or email exists
+    const existing = db.prepare('SELECT id FROM users WHERE username = ? OR email = ?').get(username, email);
     if (existing) {
-        return res.status(409).json({ error: 'Username already taken' });
+        return res.status(409).json({ error: 'Username or email already taken' });
     }
 
     // Hash password with 12 rounds (more secure than default 10)
@@ -26,8 +26,8 @@ router.post('/register', registerLimiter, validateRegister, asyncHandler(async (
 
     // Insert user
     const result = db.prepare(
-        'INSERT INTO users (username, password, display_name) VALUES (?, ?, ?)'
-    ).run(username, hashedPassword, displayName || username);
+        'INSERT INTO users (username, email, password, display_name) VALUES (?, ?, ?, ?)'
+    ).run(username, email, hashedPassword, displayName || username);
 
     // Generate token
     const token = jwt.sign(
@@ -141,8 +141,8 @@ router.put('/profile', authenticateToken, asyncHandler(async (req, res) => {
 router.post('/forgot-password', validateForgotPassword, asyncHandler(async (req, res) => {
     const { email } = req.body;
     
-    // Find user by username (acting as email alias for now)
-    const user = db.prepare('SELECT id, username FROM users WHERE username = ?').get(email);
+    // Find user by email
+    const user = db.prepare('SELECT id, username, email FROM users WHERE email = ?').get(email);
 
     if (!user) {
         // For now, just return success to avoid leaking existence

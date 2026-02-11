@@ -20,6 +20,7 @@ const DismissKeyboardView = ({ children }: { children: React.ReactNode }) => {
 
 export default function Register() {
   const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -30,7 +31,7 @@ export default function Register() {
   const router = useRouter();
 
   const handleRegister = async () => {
-    if (!username || !password || !confirmPassword) {
+    if (!username || !email || !password || !confirmPassword) {
         setError('Please fill in all required fields');
         return;
     }
@@ -44,7 +45,7 @@ export default function Register() {
       setError('');
       setIsLoading(true);
       console.log('Attempting registration for:', username);
-      await register(username, password, displayName);
+      await register(username, email, password, displayName);
       console.log('Registration successful');
     } catch (err: any) {
       console.error('Registration error detail:', err.response?.data || err.message || err);
@@ -103,6 +104,15 @@ export default function Register() {
                 value={username}
                 onChangeText={setUsername}
                 autoCapitalize="none"
+              />
+
+              <Input
+                label="Contact"
+                placeholder="Email Address"
+                value={email}
+                onChangeText={setEmail}
+                autoCapitalize="none"
+                keyboardType="email-address"
               />
 
               <Input

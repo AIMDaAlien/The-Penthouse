@@ -16,7 +16,7 @@ interface AuthContextType {
     token: string | null;
     isLoading: boolean;
     login: (username: string, password: string) => Promise<void>;
-    register: (username: string, password: string, displayName?: string) => Promise<void>;
+    register: (username: string, email: string, password: string, displayName?: string) => Promise<void>;
     logout: () => void;
     updateProfile: (displayName?: string, avatarUrl?: string) => Promise<void>;
 }
@@ -75,9 +75,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         connectSocket(data.token);
     };
 
-    const register = async (username: string, password: string, displayName?: string) => {
+    const register = async (username: string, email: string, password: string, displayName?: string) => {
         console.log('AuthContext: Calling apiRegister...');
-        const { data } = await apiRegister(username, password, displayName);
+        const { data } = await apiRegister(username, email, password, displayName);
         console.log('AuthContext: Registration successful, received data:', data);
         await storage.setItem('token', data.token);
         setToken(data.token);

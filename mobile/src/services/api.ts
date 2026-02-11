@@ -149,8 +149,8 @@ export const joinServer = (code: string) =>
     api.post<{ success: true; serverId: number; channelId?: number; alreadyMember?: boolean }>(`/invites/${code}/join`);
 
 // Auth
-export const register = (username: string, password: string, displayName?: string) =>
-    api.post('/auth/register', { username, password, displayName });
+export const register = (username: string, email: string, password: string, displayName?: string) =>
+    api.post('/auth/register', { username, email, password, displayName });
 
 export const login = (username: string, password: string) =>
     api.post('/auth/login', { username, password });

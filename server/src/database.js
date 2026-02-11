@@ -36,6 +36,7 @@ async function initializeDatabase() {
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT UNIQUE NOT NULL,
+      email TEXT UNIQUE,
       password TEXT NOT NULL,
       display_name TEXT,
       avatar_url TEXT,
@@ -43,6 +44,13 @@ async function initializeDatabase() {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
+
+  // Migration: Add email column if it doesn't exist
+  try {
+    db.run('ALTER TABLE users ADD COLUMN email TEXT UNIQUE');
+  } catch (e) {
+    if (!e.message.includes('duplicate column')) console.error('Migration error (email):', e.message);
+  }
 
   // Servers (Communities)
   db.run(`

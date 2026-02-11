@@ -580,7 +580,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   tabActive: {
-    backgroundColor: Colors.EFFECTS.GLASS_BG,
+    backgroundColor: Colors.EFFECTS.PANEL_BG,
     borderWidth: 1,
     borderColor: Colors.ACCENT + '40',
   },
