@@ -15,6 +15,13 @@ router.get('/', authenticateToken, asyncHandler(async (req, res) => {
         (SELECT COUNT(*) FROM chat_members WHERE chat_id = c.id) as member_count,
         (SELECT m.content FROM messages m WHERE m.chat_id = c.id ORDER BY m.created_at DESC LIMIT 1) as last_message,
         (SELECT m.created_at FROM messages m WHERE m.chat_id = c.id ORDER BY m.created_at DESC LIMIT 1) as last_message_at,
+        -- Unread count: messages in this chat, not sent by me, with no read receipt from me
+        (SELECT COUNT(*) 
+         FROM messages m2 
+         LEFT JOIN read_receipts rr ON rr.message_id = m2.id AND rr.user_id = ? 
+         WHERE m2.chat_id = c.id 
+         AND m2.user_id != ? 
+         AND rr.id IS NULL) as unread_count,
         -- For DMs, fetch the other user's name
         (SELECT u.display_name FROM chat_members cm2 JOIN users u ON cm2.user_id = u.id WHERE cm2.chat_id = c.id AND cm2.user_id != ? LIMIT 1) as other_display_name,
         (SELECT u.username FROM chat_members cm2 JOIN users u ON cm2.user_id = u.id WHERE cm2.chat_id = c.id AND cm2.user_id != ? LIMIT 1) as other_username
@@ -22,7 +29,7 @@ router.get('/', authenticateToken, asyncHandler(async (req, res) => {
       INNER JOIN chat_members cm ON c.id = cm.chat_id
       WHERE cm.user_id = ? AND c.server_id IS NULL
       ORDER BY last_message_at DESC
-    `).all(req.user.userId, req.user.userId, req.user.userId);
+    `).all(req.user.userId, req.user.userId, req.user.userId, req.user.userId, req.user.userId);
 
     res.json(chats.map(c => {
         let name = c.name;
@@ -46,6 +53,7 @@ router.get('/', authenticateToken, asyncHandler(async (req, res) => {
             memberCount: c.member_count,
             lastMessage: c.last_message,
             lastMessageAt: c.last_message_at,
+            unreadCount: c.unread_count || 0,
             createdAt: c.created_at
         };
     }));

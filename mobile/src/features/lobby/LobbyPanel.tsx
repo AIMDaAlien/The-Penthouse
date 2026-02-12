@@ -97,6 +97,7 @@ export function LobbyPanel({ onChannelSelect }: LobbyPanelProps) {
                   key={channel.id}
                   name={channel.name}
                   type="text"
+                  hasUnread={(channel.unreadCount || 0) > 0}
                   onPress={() => onChannelSelect(channel.id.toString())}
                 />
               ))}
@@ -168,6 +169,7 @@ function ChannelRow({ name, type, disabled, hasUnread, onPress }: ChannelRowProp
         disabled && styles.channelRowDisabled,
       ]}
     >
+      {hasUnread && <View style={styles.unreadPill} />}
       <View style={styles.channelIcon}>
         {type === 'text' ? (
           <Text style={styles.hashIcon}>#</Text>
@@ -280,5 +282,13 @@ const styles = StyleSheet.create({
     color: Colors.TEXT_MUTED,
     marginTop: Spacing.M,
     textAlign: 'center',
+  },
+  unreadPill: {
+    width: 4,
+    height: 8,
+    borderRadius: Radius.PILL,
+    backgroundColor: Colors.TEXT_NORMAL,
+    position: 'absolute',
+    left: 4,
   },
 });

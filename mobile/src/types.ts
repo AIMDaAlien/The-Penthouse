@@ -11,6 +11,7 @@ export interface Server {
     iconUrl?: string;
     ownerId: number;
     memberCount?: number;
+    unreadCount?: number;
 }
 
 export interface Channel {
@@ -19,6 +20,7 @@ export interface Channel {
     type: 'text' | 'voice' | 'dm' | 'group' | 'channel'; // Unified type
     serverId?: number;
     lastMessage?: string;
+    unreadCount?: number;
 }
 
 export interface Chat {
@@ -32,6 +34,7 @@ export interface Chat {
     lastMessageAt?: string;
     memberCount: number;
     nickname?: string;
+    unreadCount?: number;
 }
 
 export interface Reaction {

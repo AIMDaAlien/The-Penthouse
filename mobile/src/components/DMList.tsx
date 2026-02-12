@@ -11,7 +11,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, FlatList, RefreshControl, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, Radius, SpringConfig } from '../designsystem';
-import { getChats, getMediaUrl, getUnreadCounts } from '../services/api';
+import { getChats, getMediaUrl } from '../services/api';
 import { formatDistanceToNow } from 'date-fns';
 import Animated, { FadeIn, useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 
@@ -125,13 +125,10 @@ export function DMList({ onSelectDM, onNewDM }: DMListProps) {
 
   const loadDMs = useCallback(async () => {
     try {
-      const [chatsRes, unreadRes] = await Promise.all([
-        getChats(),
-        getUnreadCounts()
-      ]);
+      const { data } = await getChats();
       
       // Filter to only DMs and sort by last message
-      const dmList = (chatsRes.data as any[])
+      const dmList = (data as any[])
         .filter(c => c.type === 'dm' || c.type === 'group')
         .sort((a, b) => {
           if (!a.lastMessageAt) return 1;
@@ -140,10 +137,12 @@ export function DMList({ onSelectDM, onNewDM }: DMListProps) {
         });
       setDMs(dmList);
       
-      // Convert unread array to Map
+      // Map unread counts from chat objects
       const counts = new Map<number, number>();
-      for (const item of unreadRes.data.unread) {
-        counts.set(item.chatId, item.count);
+      for (const chat of dmList) {
+        if (chat.unreadCount) {
+          counts.set(chat.id, chat.unreadCount);
+        }
       }
       setUnreadCounts(counts);
     } catch (err) {

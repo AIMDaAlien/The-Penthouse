@@ -190,7 +190,7 @@ export function ServerRail({ onAddServer }: ServerRailProps) {
           key={server.id} 
           server={server} 
           isSelected={server.id === selectedServerId}
-          hasUnread={false} // TODO: Connect to unread state
+          hasUnread={(server.unreadCount || 0) > 0} 
           onPress={() => handleServerSelect(server.id)}
         />
       ))}

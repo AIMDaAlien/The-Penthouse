@@ -86,10 +86,17 @@ router.get('/:serverId', authenticateToken, (req, res) => {
 
         // Get channels for this server
         const channels = db.prepare(`
-      SELECT * FROM chats 
-      WHERE server_id = ? AND type = 'channel'
-      ORDER BY created_at ASC
-    `).all(serverId);
+      SELECT c.*,
+        (SELECT COUNT(*) 
+         FROM messages m 
+         LEFT JOIN read_receipts rr ON rr.message_id = m.id AND rr.user_id = ? 
+         WHERE m.chat_id = c.id 
+         AND m.user_id != ? 
+         AND rr.id IS NULL) as unread_count
+      FROM chats c
+      WHERE c.server_id = ? AND c.type = 'channel'
+      ORDER BY c.created_at ASC
+    `).all(req.user.userId, req.user.userId, serverId);
 
         // Get members
         const members = db.prepare(`
@@ -108,7 +115,8 @@ router.get('/:serverId', authenticateToken, (req, res) => {
                 id: c.id,
                 name: c.name,
                 type: c.type,
-                serverId: c.server_id
+                serverId: c.server_id,
+                unreadCount: c.unread_count || 0
             })),
             members: members.map(m => ({
                 id: m.id,
