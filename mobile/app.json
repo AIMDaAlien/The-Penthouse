@@ -17,6 +17,7 @@
     },
     "android": {
       "package": "com.aimdaalien.thepenthouse",
+      "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -29,6 +30,11 @@
     },
     "plugins": [
       "expo-secure-store"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "ff3ecbc9-277a-48cf-9162-f85f03e976aa"
+      }
+    }
   }
 }

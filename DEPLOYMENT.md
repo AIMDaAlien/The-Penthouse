@@ -119,6 +119,8 @@ For secure access outside your local network, set up a reverse proxy with SSL.
 
 ### Using Nginx Proxy Manager (recommended for TrueNAS)
 
+> **Note**: If Nginx Proxy Manager freezes or fails to install (common on some TrueNAS setups), **skip this step**. You can use the app directly via `http://192.168.0.120:3000`.
+
 1. Install Nginx Proxy Manager from TrueNAS Apps catalog
 2. Add a new Proxy Host:
    - **Domain**: `chat.yourdomain.com`
