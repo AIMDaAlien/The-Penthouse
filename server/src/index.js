@@ -67,21 +67,21 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', app: 'The Penthouse', version: '1.0.0' });
 });
 
-// Serve frontend in production
-if (process.env.NODE_ENV === 'production') {
-  const path = require('path');
-  const frontendPath = path.join(__dirname, '../../web/dist');
+// Serve landing page and APK downloads
+const path = require('path');
+const publicPath = path.join(__dirname, '../public');
+const downloadsPath = path.join(__dirname, '../data/downloads');
 
-  // Serve static files
-  app.use(express.static(frontendPath));
+// Serve static assets (landing page CSS/JS/images)
+app.use(express.static(publicPath));
 
-  // SPA fallback - serve index.html for all non-API routes
-  app.get('*', (req, res) => {
-    if (!req.path.startsWith('/api') && !req.path.startsWith('/uploads')) {
-      res.sendFile(path.join(frontendPath, 'index.html'));
-    }
-  });
-}
+// Serve APK downloads
+app.use('/downloads', express.static(downloadsPath));
+
+// Landing page for root URL
+app.get('/', (req, res) => {
+  res.sendFile(path.join(publicPath, 'index.html'));
+});
 
 // Initialize database and start server
 const PORT = process.env.PORT || 3000;

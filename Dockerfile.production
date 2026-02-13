@@ -20,8 +20,11 @@ COPY server/package.json ./
 # Copy source
 COPY server/src ./src
 
-# Create data directory
-RUN mkdir -p data/uploads
+# Copy landing page
+COPY server/public ./public
+
+# Create data directories
+RUN mkdir -p data/uploads data/downloads
 
 EXPOSE 3000
 
