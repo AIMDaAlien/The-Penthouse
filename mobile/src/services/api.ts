@@ -4,8 +4,10 @@ import Constants from 'expo-constants';
 import type { Message } from '../types';
 
 // Detect machine IP for development (localhost doesn't work on Android)
-const origin = Constants.expoConfig?.hostUri?.split(':')[0] || 'localhost';
-const BASE_URL = `http://${origin}:3000`;
+// Detect machine IP for development (localhost doesn't work on Android)
+// In standalone builds (APK), hostUri will be undefined, so we default to the production domain.
+const origin = Constants.expoConfig?.hostUri?.split(':')[0];
+const BASE_URL = origin ? `http://${origin}:3000` : 'https://penthouse.blog';
 const API_URL = `${BASE_URL}/api`;
 
 console.log('API URL:', API_URL);

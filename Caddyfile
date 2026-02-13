@@ -1,0 +1,8 @@
+{
+    # Enable automatic HTTPS
+    email amasud.tech@gmail.com
+}
+
+penthouse.blog {
+    reverse_proxy penthouse-app:3000
+}

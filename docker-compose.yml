@@ -30,6 +30,23 @@ services:
       timeout: 10s
       retries: 3
 
+  caddy:
+    image: caddy:alpine
+    restart: unless-stopped
+    ports:
+      - "9080:80"
+      - "9443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - default
+
+volumes:
+  caddy_data:
+  caddy_config:
+
 networks:
   default:
     name: penthouse-network

@@ -134,15 +134,24 @@ For secure access outside your local network, set up a reverse proxy with SSL.
    CORS_ORIGIN=https://chat.yourdomain.com
    ```
 
-### Using Caddy (alternative)
+### Option 3: Custom Domain (Built-in Caddy) — Recommended for 'penthouse.blog'
 
-Create a `Caddyfile`:
+Since you have a domain (`penthouse.blog`), we can use the built-in Caddy server to handle HTTPS automatically.
 
-```
-chat.yourdomain.com {
-    reverse_proxy penthouse-app:3000
-}
-```
+1. **Configure DNS**:
+   - Go to your domain registrar (Namecheap, GoDaddy, etc.).
+   - Create an **A Record** for `penthouse.blog` pointing to your **Home Public IP**.
+   - (Optional) Create a CNAME for `www` pointing to `penthouse.blog`.
+
+2. **Configure Router Port Forwarding**:
+   - Access your router settings (usually `192.168.0.1` or `192.168.1.1`).
+   - Forward external port **80** to your TrueNAS IP **9080**.
+   - Forward external port **443** to your TrueNAS IP **9443**.
+
+   > **Why 9080/9443?** TrueNAS uses ports 80/443 for its own UI, so we map them to alternate ports on the NAS, but the outside world sees standard 80/443.
+
+3. **Verify**:
+   - Visit `https://penthouse.blog` in your browser. It should show the landing page secure with SSL!
 
 ---
 
