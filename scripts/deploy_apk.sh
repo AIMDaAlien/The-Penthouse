@@ -20,8 +20,18 @@ fi
 
 echo "Deploying $APK_FILE to $SERVER_IP..."
 
-# Use sshpass to scp the file
-sshpass -p "$SERVER_PASS" scp -o StrictHostKeyChecking=no "$APK_FILE" "$SERVER_USER@$SERVER_IP:$DEST_PATH"
+REMOTE_DIR=$(dirname "$DEST_PATH")
+
+if ! command -v sshpass &> /dev/null; then
+    echo "⚠️  sshpass not found. Falling back to interactive login."
+    echo "1. Creating remote directory (enter password if prompted)..."
+    ssh "$SERVER_USER@$SERVER_IP" "mkdir -p $REMOTE_DIR"
+    echo "2. Uploading APK (enter password if prompted)..."
+    scp "$APK_FILE" "$SERVER_USER@$SERVER_IP:$DEST_PATH"
+else
+    sshpass -p "$SERVER_PASS" ssh -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_IP" "mkdir -p $REMOTE_DIR"
+    sshpass -p "$SERVER_PASS" scp -o StrictHostKeyChecking=no "$APK_FILE" "$SERVER_USER@$SERVER_IP:$DEST_PATH"
+fi
 
 if [ $? -eq 0 ]; then
     echo "✅ deployment successful!"
