@@ -10,13 +10,20 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./server/data:/app/server/data
+      - ./data:/app/data
     environment:
       - NODE_ENV=production
       - PORT=3000
       - JWT_SECRET=${JWT_SECRET:-change-this-secret-in-production}
+      - CORS_ORIGIN=${CORS_ORIGIN:-*}
+      - DOMAIN=${DOMAIN:-localhost}
       - GIPHY_API_KEY=${GIPHY_API_KEY}
       - KLIPY_API_KEY=${KLIPY_API_KEY}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+      - SMTP_FROM=${SMTP_FROM}
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api/health"]
       interval: 30s

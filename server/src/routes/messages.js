@@ -193,44 +193,44 @@ router.post('/:chatId', authenticateToken, messageLimiter, validateMessage, asyn
     (async () => {
         try {
             // Get recipients excluding sender
-            // We need to implement getChatMembers in ChatService properly or reuse existing logic
-            // For now, let's reuse the logic but maybe in future move to ChatService completely
-            let recipients = [];
-            if (chat.server_id) {
-                recipients = db.prepare(`
-                    SELECT user_id FROM server_members 
-                    WHERE server_id = ? AND user_id != ?
-                `).all(chat.server_id, req.user.userId);
-            } else {
-                recipients = db.prepare(`
-                    SELECT user_id FROM chat_members 
-                    WHERE chat_id = ? AND user_id != ?
-                `).all(chatId, req.user.userId);
-            }
+            const members = ChatService.getChatMembers(chat, req.user.userId);
 
-            if (recipients.length > 0) {
+            if (members.length > 0) {
+                // Filter out users who are actively in the chat socket room
+                const chatRoom = `chat:${chatId}`;
+                const socketsInRoom = await io.in(chatRoom).fetchSockets();
+                const activeUserIds = new Set(socketsInRoom.map(s => s.userId));
+
+                const offlineRecipientIds = members
+                    .map(m => m.id)
+                    .filter(id => !activeUserIds.has(id));
+
+                if (offlineRecipientIds.length === 0) return;
+
                 const { sendGroupPushNotification } = require('../services/push');
-                const recipientIds = recipients.map(r => r.user_id);
                 
-                // Format notification body
-                let title = req.user.displayName || req.user.username;
-                let body = type === 'text' ? content : `Sent a ${type}`;
+                // Fetch sender's display name from DB (JWT only has userId/username)
+                const senderRow = db.prepare('SELECT display_name FROM users WHERE id = ?').get(req.user.userId);
+                const senderName = senderRow?.display_name || req.user.username;
+
+                let title = senderName;
+                let body = type === 'text' ? (content.length > 100 ? content.slice(0, 100) + '…' : content) : `Sent a ${type}`;
                 
-                // For group chats/servers, prepend chat name
+                // For group chats/servers, append chat context
                 if (chat.server_id || (chat.name && !chat.server_id)) {
                     const chatName = chat.name || 'Channel'; 
-                    title = `${title} in ${chatName}`;
+                    title = `${senderName} in ${chatName}`;
                 }
 
                 await sendGroupPushNotification(
-                    recipientIds,
+                    offlineRecipientIds,
                     title,
                     body,
                     { 
                         type: 'new_message', 
                         chatId: parseInt(chatId), 
                         messageId: message.id,
-                        serverId: chat.server_id
+                        serverId: chat.server_id || null
                     }
                 );
             }
