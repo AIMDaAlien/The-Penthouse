@@ -1,9 +1,15 @@
 import { io, Socket } from 'socket.io-client';
 import Constants from 'expo-constants';
 
+import { Platform } from 'react-native';
+
 // Detect machine IP for development
-const origin = Constants.expoConfig?.hostUri?.split(':')[0] || 'localhost';
-const SOCKET_URL = `http://${origin}:3000`;
+const origin = Constants.expoConfig?.hostUri?.split(':')[0];
+const SOCKET_URL = origin 
+  ? `http://${origin}:3000` 
+  : (Platform.OS === 'web' && __DEV__) 
+    ? 'http://localhost:3000' 
+    : 'https://penthouse.blog';
 
 console.log('Socket URL:', SOCKET_URL);
 

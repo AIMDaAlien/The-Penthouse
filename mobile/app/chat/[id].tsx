@@ -8,6 +8,8 @@ import AddMembersModal from '../../src/components/AddMembersModal';
 import { useEffect, useMemo, useCallback, useState } from 'react';
 import { markMessageRead, getChatDetails, startDm } from '../../src/services/api';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Colors } from '../../src/designsystem';
 import type { Chat, Message } from '../../src/types';
 
 export default function ChatScreen() {
@@ -132,14 +134,31 @@ export default function ChatScreen() {
         return `${users.length} people are typing...`;
     }, [typingUsers]);
 
+    // Vibe styling
+    const vibe = chatDetails?.vibe || 'default';
+    
+    const getGradientColors = (v: string) => {
+        switch(v) {
+            case 'chill': return ['#0f172a', '#1e293b']; // Slate 900 -> 800
+            case 'hype': return ['#2e1065', '#4c1d95']; // Violet 900 -> 800
+            case 'serious': return ['#18181b', '#27272a']; // Zinc 900 -> 800
+            default: return ['#18181b', '#18181b']; // Zinc 900
+        }
+    };
+
     if (!user || !id) return <View className="flex-1 bg-zinc-900" />;
 
     return (
-        <View className="flex-1 bg-zinc-900">
+        <LinearGradient
+            colors={getGradientColors(vibe) as any}
+            style={{ flex: 1 }}
+        >
             <Stack.Screen
                 options={{
                     title: name || 'Chat',
-                    headerStyle: { backgroundColor: '#18181b' },
+                    headerStyle: { backgroundColor: 'transparent' },
+                    headerTransparent: true,
+                    headerBlurEffect: 'dark',
                     headerTintColor: '#fff',
                     headerRight: () => (
                         <Pressable onPress={showHeaderMenu} className="pr-2">
@@ -154,14 +173,18 @@ export default function ChatScreen() {
                 className="flex-1"
                 keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
             >
-                <MessageList
-                    messages={messages}
-                    onReply={(msg: Message) => setReplyingTo(msg)}
-                    onEdit={handleEditMessage}
-                    onDelete={handleConfirmDelete}
-                    onReact={handleReact}
-                    onMarkRead={handleMarkRead}
-                />
+                <View style={{ flex: 1, marginTop: 100 }}> 
+                 {/* Margin top for transparent header */}
+                    <MessageList
+                        messages={messages}
+                        vibe={vibe}
+                        onReply={(msg: Message) => setReplyingTo(msg)}
+                        onEdit={handleEditMessage}
+                        onDelete={handleConfirmDelete}
+                        onReact={handleReact}
+                        onMarkRead={handleMarkRead}
+                    />
+                </View>
 
                 {/* Typing indicator */}
                 {typingDisplay && (
@@ -195,6 +218,6 @@ export default function ChatScreen() {
                 existingMemberIds={members.map((m: any) => m.id)}
                 title="Start Conversation"
             />
-        </View>
+        </LinearGradient>
     );
 }

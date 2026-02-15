@@ -1,10 +1,14 @@
-import { View, Text, Modal, TextInput, FlatList, Image, Pressable, ActivityIndicator, Dimensions } from 'react-native';
-import { useState, useEffect, useCallback } from 'react';
+import { View, Text, Modal, TextInput, Image, Pressable, ActivityIndicator, Dimensions, StyleSheet } from 'react-native';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { FlashList } from '@shopify/flash-list';
+import Constants from 'expo-constants';
+import { Colors } from '../designsystem/Colors';
 
-const GIPHY_API_KEY = 'H2jGWv5wskQcoU1gMU2f3YuLCYYLHqjN';
-const KLIPY_API_KEY = 'tc14Tax6viWl5Cenp2rpn9Dj5WbIA4VPTHF0skyutWomHQUfNSSxn4bInYvUaLc0';
+// Get keys from Expo config (fallback to empty string to prevent crash, but should be set in app.json)
+const GIPHY_API_KEY = Constants.expoConfig?.extra?.giphyApiKey || '';
+const KLIPY_API_KEY = Constants.expoConfig?.extra?.klipyApiKey || '';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GIF_SIZE = (SCREEN_WIDTH - 48) / 2;
@@ -91,7 +95,6 @@ export default function UnifiedGifPicker({ visible, onClose, onSelect }: Unified
 
         const response = await fetch(url);
         const json = await response.json();
-        // Klipy returns: { result: true, data: { data: [...], current_page, per_page, has_next } }
         const results = json?.data?.data || json?.data || [];
 
         if (!Array.isArray(results)) {
@@ -172,18 +175,28 @@ export default function UnifiedGifPicker({ visible, onClose, onSelect }: Unified
         }
     };
 
-    const renderGif = ({ item }: { item: GifItem }) => (
+    const renderGif = useCallback(({ item }: { item: GifItem }) => (
         <Pressable
             onPress={() => handleSelect(item)}
-            style={{ width: GIF_SIZE, height: GIF_SIZE, margin: 4, overflow: 'hidden', backgroundColor: '#18181b' }}
+            style={styles.gifItem}
         >
             <Image
                 source={{ uri: item.previewUrl }}
-                style={{ width: '100%', height: '100%' }}
+                style={styles.gifImage}
                 resizeMode="cover"
             />
         </Pressable>
-    );
+    ), [handleSelect]);
+
+    const keyExtractor = useCallback((item: GifItem, index: number) => 
+        `${item.source}-${item.id}-${index}`, []);
+
+    // Empty component
+    const ListEmptyComponent = useMemo(() => (
+        <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>No GIFs found</Text>
+        </View>
+    ), []);
 
     return (
         <Modal
@@ -192,55 +205,49 @@ export default function UnifiedGifPicker({ visible, onClose, onSelect }: Unified
             presentationStyle="pageSheet"
             onRequestClose={handleClose}
         >
-            <SafeAreaView style={{ flex: 1, backgroundColor: '#09090b' }} edges={['top']}>
+            <SafeAreaView style={styles.container} edges={['top']}>
                 {/* Header */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 }}>
-                    <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold' }}>GIFs</Text>
-                    <Pressable onPress={handleClose} style={{ padding: 8 }}>
+                <View style={styles.header}>
+                    <Text style={styles.headerTitle}>GIFs</Text>
+                    <Pressable onPress={handleClose} style={styles.closeButton}>
                         <Ionicons name="close" size={24} color="#fff" />
                     </Pressable>
                 </View>
 
                 {/* Tabs */}
-                <View style={{ flexDirection: 'row', paddingHorizontal: 16, marginBottom: 12 }}>
+                <View style={styles.tabContainer}>
                     <Pressable
                         onPress={() => handleTabChange('giphy')}
-                        style={{
-                            flex: 1,
-                            paddingVertical: 10,
-                            alignItems: 'center',
-                            backgroundColor: activeTab === 'giphy' ? '#4f46e5' : '#27272a',
-                            borderTopLeftRadius: 8,
-                            borderBottomLeftRadius: 8,
-                        }}
+                        style={[
+                            styles.tab,
+                            styles.tabLeft,
+                            { backgroundColor: activeTab === 'giphy' ? '#4f46e5' : '#27272a' }
+                        ]}
                     >
                         <Text style={{ color: '#fff', fontWeight: activeTab === 'giphy' ? 'bold' : 'normal' }}>GIPHY</Text>
                     </Pressable>
                     <Pressable
                         onPress={() => handleTabChange('klipy')}
-                        style={{
-                            flex: 1,
-                            paddingVertical: 10,
-                            alignItems: 'center',
-                            backgroundColor: activeTab === 'klipy' ? '#4f46e5' : '#27272a',
-                            borderTopRightRadius: 8,
-                            borderBottomRightRadius: 8,
-                        }}
+                        style={[
+                            styles.tab,
+                            styles.tabRight,
+                            { backgroundColor: activeTab === 'klipy' ? '#4f46e5' : '#27272a' }
+                        ]}
                     >
                         <Text style={{ color: '#fff', fontWeight: activeTab === 'klipy' ? 'bold' : 'normal' }}>Klipy</Text>
                     </Pressable>
                 </View>
 
                 {/* Search Input */}
-                <View style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#27272a', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8 }}>
+                <View style={styles.searchContainer}>
+                    <View style={styles.searchBar}>
                         <Ionicons name="search" size={20} color="#71717a" />
                         <TextInput
                             value={searchQuery}
                             onChangeText={setSearchQuery}
                             placeholder={`Search ${activeTab === 'giphy' ? 'GIPHY' : 'Klipy'}...`}
                             placeholderTextColor="#71717a"
-                            style={{ flex: 1, marginLeft: 8, color: '#fff', fontSize: 16 }}
+                            style={styles.searchInput}
                             autoCapitalize="none"
                             autoCorrect={false}
                         />
@@ -254,36 +261,35 @@ export default function UnifiedGifPicker({ visible, onClose, onSelect }: Unified
 
                 {/* GIF Grid */}
                 {loading && gifs.length === 0 ? (
-                    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                    <View style={styles.centerContainer}>
                         <ActivityIndicator size="large" color="#cba6f7" />
                     </View>
                 ) : error ? (
-                    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                    <View style={styles.centerContainer}>
                         <Ionicons name="cloud-offline" size={48} color="#71717a" />
-                        <Text style={{ color: '#71717a', marginTop: 8 }}>{error}</Text>
-                        <Pressable onPress={fetchTrending} style={{ marginTop: 16, paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#4f46e5', borderRadius: 8 }}>
-                            <Text style={{ color: '#fff', fontWeight: '600' }}>Retry</Text>
+                        <Text style={styles.errorText}>{error}</Text>
+                        <Pressable onPress={fetchTrending} style={styles.retryButton}>
+                            <Text style={styles.retryText}>Retry</Text>
                         </Pressable>
                     </View>
                 ) : (
-                    <FlatList
-                        data={gifs}
-                        renderItem={renderGif}
-                        keyExtractor={(item, index) => `${item.source}-${item.id}-${index}`}
-                        numColumns={2}
-                        contentContainerStyle={{ padding: 8 }}
-                        showsVerticalScrollIndicator={false}
-                        ListEmptyComponent={
-                            <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 80 }}>
-                                <Text style={{ color: '#71717a' }}>No GIFs found</Text>
-                            </View>
-                        }
-                    />
+                    <View style={styles.listContainer}>
+                        <FlashList
+                            data={gifs}
+                            renderItem={renderGif}
+                            keyExtractor={keyExtractor}
+                            numColumns={2}
+                            estimatedItemSize={GIF_SIZE}
+                            contentContainerStyle={styles.listContent}
+                            showsVerticalScrollIndicator={false}
+                            ListEmptyComponent={ListEmptyComponent}
+                        />
+                    </View>
                 )}
 
                 {/* Powered by */}
-                <View style={{ paddingHorizontal: 16, paddingVertical: 8, alignItems: 'center', borderTopWidth: 1, borderTopColor: '#27272a' }}>
-                    <Text style={{ color: '#52525b', fontSize: 12 }}>
+                <View style={styles.footer}>
+                    <Text style={styles.footerText}>
                         Powered by {activeTab === 'giphy' ? 'GIPHY' : 'Klipy'}
                     </Text>
                 </View>
@@ -291,3 +297,119 @@ export default function UnifiedGifPicker({ visible, onClose, onSelect }: Unified
         </Modal>
     );
 }
+
+const styles = StyleSheet.create({
+    container: {
+        flex: 1,
+        backgroundColor: '#09090b',
+    },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+    },
+    headerTitle: {
+        color: '#fff',
+        fontSize: 18,
+        fontWeight: 'bold',
+    },
+    closeButton: {
+        padding: 8,
+    },
+    tabContainer: {
+        flexDirection: 'row',
+        paddingHorizontal: 16,
+        marginBottom: 12,
+    },
+    tab: {
+        flex: 1,
+        paddingVertical: 10,
+        alignItems: 'center',
+    },
+    tabLeft: {
+        borderTopLeftRadius: 8,
+        borderBottomLeftRadius: 8,
+    },
+    tabRight: {
+        borderTopRightRadius: 8,
+        borderBottomRightRadius: 8,
+    },
+    searchContainer: {
+        paddingHorizontal: 16,
+        paddingBottom: 12,
+    },
+    searchBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#27272a',
+        borderRadius: 12,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+    },
+    searchInput: {
+        flex: 1,
+        marginLeft: 8,
+        color: '#fff',
+        fontSize: 16,
+    },
+    centerContainer: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    errorText: {
+        color: '#71717a',
+        marginTop: 8,
+    },
+    retryButton: {
+        marginTop: 16,
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        backgroundColor: '#4f46e5',
+        borderRadius: 8,
+    },
+    retryText: {
+        color: '#fff',
+        fontWeight: '600',
+    },
+    listContainer: {
+        flex: 1,
+        minHeight: 2, // Ensure FlashList has size
+    },
+    listContent: {
+        padding: 8,
+    },
+    gifItem: {
+        width: GIF_SIZE,
+        height: GIF_SIZE,
+        margin: 4,
+        overflow: 'hidden',
+        backgroundColor: '#18181b',
+        borderRadius: 4,
+    },
+    gifImage: {
+        width: '100%',
+        height: '100%',
+    },
+    emptyContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 80,
+    },
+    emptyText: {
+        color: '#71717a',
+    },
+    footer: {
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        alignItems: 'center',
+        borderTopWidth: 1,
+        borderTopColor: '#27272a',
+    },
+    footerText: {
+        color: '#52525b',
+        fontSize: 12,
+    },
+});

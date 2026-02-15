@@ -17,7 +17,7 @@ interface AuthContextType {
     isLoading: boolean;
     login: (username: string, password: string) => Promise<void>;
     register: (username: string, email: string, password: string, displayName?: string) => Promise<void>;
-    logout: () => void;
+    logout: () => Promise<void>;
     updateProfile: (displayName?: string, avatarUrl?: string) => Promise<void>;
 }
 
@@ -68,21 +68,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, []);
 
     const login = async (username: string, password: string) => {
-        const { data } = await apiLogin(username, password);
-        await storage.setItem('token', data.token);
-        setToken(data.token);
-        setUser(data.user);
-        connectSocket(data.token);
+        try {
+            const { data } = await apiLogin(username, password);
+            console.log('[AuthContext] Login successful');
+            await storage.setItem('token', data.token);
+            setToken(data.token);
+            setUser(data.user);
+            connectSocket(data.token);
+        } catch (error) {
+            console.error('[AuthContext] Login failed:', error);
+            throw error;
+        }
     };
 
     const register = async (username: string, email: string, password: string, displayName?: string) => {
-        console.log('AuthContext: Calling apiRegister...');
-        const { data } = await apiRegister(username, email, password, displayName);
-        console.log('AuthContext: Registration successful, received data:', data);
-        await storage.setItem('token', data.token);
-        setToken(data.token);
-        setUser(data.user);
-        connectSocket(data.token);
+        try {
+            const { data } = await apiRegister(username, email, password, displayName);
+            console.log('[AuthContext] Registration successful');
+            await storage.setItem('token', data.token);
+            setToken(data.token);
+            setUser(data.user);
+            connectSocket(data.token);
+        } catch (error) {
+            console.error('[AuthContext] Registration failed:', error);
+            throw error;
+        }
     };
 
     const logout = async () => {

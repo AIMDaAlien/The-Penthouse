@@ -38,7 +38,9 @@ export interface ToastConfig {
   variant?: ToastVariant;
   duration?: number;
   title?: string;
+  action?: () => void;
 }
+
 
 interface ToastState extends ToastConfig {
   id: number;
@@ -103,7 +105,12 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
       exiting={SlideOutUp.duration(200)}
       style={[styles.container, { top: insets.top + Spacing.SM }]}
     >
-      <Pressable onPress={onDismiss}>
+      <Pressable onPress={() => {
+        if (toast.action) {
+          toast.action();
+        }
+        onDismiss();
+      }}>
         <BlurView intensity={40} tint="dark" style={styles.blur}>
           <View style={[styles.inner, { shadowColor: config.glow }]}>
             {/* Accent bar */}

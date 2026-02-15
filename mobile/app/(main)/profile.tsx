@@ -14,7 +14,8 @@ import {
   Alert, 
   ActivityIndicator, 
   ScrollView, 
-  StyleSheet 
+  StyleSheet,
+  Platform
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,6 +28,7 @@ import Animated, {
 import { Colors, Typography, Spacing, Radius, SpringConfig, Glows } from '../../src/designsystem';
 import { useAuth } from '../../src/context/AuthContext';
 import { uploadAvatar, updateProfile, getMediaUrl } from '../../src/services/api';
+import { storage } from '../../src/services/storage';
 import { Avatar } from '../../src/components/Avatar';
 
 export default function ProfileScreen() {
@@ -92,6 +94,13 @@ export default function ProfileScreen() {
   };
 
   const handleLogout = () => {
+    if (Platform.OS === 'web') {
+      if (window.confirm('Are you sure you want to logout?')) {
+        logout().then(() => router.replace('/login'));
+      }
+      return;
+    }
+
     Alert.alert(
       'Logout',
       'Are you sure you want to logout?',
@@ -103,6 +112,57 @@ export default function ProfileScreen() {
           onPress: async () => {
             await logout();
             router.replace('/login');
+          },
+        },
+      ]
+    );
+  };
+
+  const handleIncinerate = () => {
+    if (Platform.OS === 'web') {
+        if (window.confirm('DATA INCINERATOR\n\nThis will permanently delete authentication data and log you out. Are you sure?')) {
+            (async () => {
+                try {
+                    setSaving(true); 
+                    await storage.deleteItem('token');
+                    await logout();
+                    window.alert('💥 Data incinerated. Returning to orbit...');
+                    router.replace('/login');
+                } catch (error) {
+                    console.error('Incineration failed:', error);
+                    window.alert('Error: Failed to incinerate data.');
+                } finally {
+                    setSaving(false);
+                }
+            })();
+        }
+        return;
+    }
+
+    Alert.alert(
+      'DATA INCINERATOR',
+      'This will permanently delete authentication data and log you out. Are you sure?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'NUKE IT 💥',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setSaving(true);
+              // Clear primary auth token
+              await storage.deleteItem('token');
+              // Ensure context is cleared
+              await logout();
+              
+              Alert.alert('💥', 'Data incinerated. Returning to orbit...');
+              router.replace('/login');
+            } catch (error) {
+              console.error('Incineration failed:', error);
+              Alert.alert('Error', 'Failed to incinerate data.');
+            } finally {
+              setSaving(false);
+            }
           },
         },
       ]
@@ -173,6 +233,27 @@ export default function ProfileScreen() {
 
       {/* Divider */}
       <View style={styles.divider} />
+
+      {/* Data Incinerator */}
+      <View style={styles.sectionHeader}>
+        <Text style={[styles.sectionTitle, { color: Colors.ERROR }]}>DANGER ZONE</Text>
+      </View>
+      
+      <Pressable
+        style={({ pressed }) => [
+            styles.incineratorButton,
+            pressed && styles.incineratorButtonPressed
+        ]}
+        onPress={handleIncinerate}
+      >
+        <Ionicons name="flame" size={24} color={Colors.TEXT_NORMAL} />
+        <Text style={styles.incineratorText}>DATA INCINERATOR</Text>
+      </Pressable>
+      <Text style={styles.incineratorHint}>
+        This will wipe your session data and log you out immediately.
+      </Text>
+
+      <View style={{ height: Spacing.L }} />
 
       {/* Account Section */}
       <Text style={styles.sectionTitle}>Account</Text>
@@ -364,5 +445,40 @@ const styles = StyleSheet.create({
   versionText: {
     ...Typography.MICRO,
     color: Colors.TEXT_MUTED,
+  },
+  incineratorButton: {
+    backgroundColor: Colors.ERROR,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Spacing.M,
+    borderRadius: Radius.M,
+    marginTop: Spacing.S,
+    ...Glows.SELECTED, // Add a glow to make it dangerous looking
+    shadowColor: Colors.ERROR,
+  },
+  incineratorButtonPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.98 }],
+  },
+  incineratorText: {
+    ...Typography.H3,
+    color: Colors.TEXT_NORMAL,
+    marginLeft: Spacing.S,
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  incineratorHint: {
+    ...Typography.MICRO,
+    color: Colors.TEXT_MUTED,
+    marginTop: Spacing.S,
+    textAlign: 'center',
+    marginBottom: Spacing.M,
+  },
+  sectionHeader: {
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    marginBottom: Spacing.S, 
+    marginTop: Spacing.M
   },
 });

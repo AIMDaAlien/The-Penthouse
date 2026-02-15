@@ -3,14 +3,22 @@ import { storage } from './storage';
 import Constants from 'expo-constants';
 import type { Message } from '../types';
 
+import { Platform } from 'react-native';
+
 // Detect machine IP for development (localhost doesn't work on Android)
-// Detect machine IP for development (localhost doesn't work on Android)
+
 // In standalone builds (APK), hostUri will be undefined, so we default to the production domain.
 const origin = Constants.expoConfig?.hostUri?.split(':')[0];
-const BASE_URL = origin ? `http://${origin}:3000` : 'https://penthouse.blog';
+const BASE_URL = origin 
+  ? `http://${origin}:3000` 
+  : (Platform.OS === 'web' && __DEV__) 
+    ? 'http://localhost:3000' 
+    : 'https://penthouse.blog';
 const API_URL = `${BASE_URL}/api`;
 
-console.log('API URL:', API_URL);
+if (__DEV__) {
+    console.log('API URL:', API_URL);
+}
 
 // Helper to convert relative upload paths to absolute URLs
 export const getMediaUrl = (path: string | undefined | null): string => {
@@ -246,8 +254,14 @@ export const getServers = () => api.get('/servers');
 export const createServer = (name: string, iconUrl?: string) =>
     api.post('/servers', { name, iconUrl });
 export const getServerDetails = (serverId: number) => api.get(`/servers/${serverId}`);
-export const createChannel = (serverId: number, name: string) =>
-    api.post(`/servers/${serverId}/channels`, { name });
+export const createChannel = (serverId: number, name: string, type: 'text' | 'voice' = 'text', vibe: string = 'default') =>
+    api.post(`/servers/${serverId}/channels`, { name, type, vibe });
+
+export const updateChannel = (channelId: number, data: { name?: string; topic?: string; vibe?: string }) =>
+    api.put(`/channels/${channelId}`, data);
+
+export const deleteChannel = (channelId: number) =>
+    api.delete(`/channels/${channelId}`);
 
 export const uploadServerIcon = async (file: RNFile): Promise<{ data: { iconUrl: string } }> => {
     const formData = new FormData();
@@ -313,6 +327,44 @@ export const unblockUser = (userId: number) =>
 
 export const getBlockedUsers = () =>
     api.get('/friends/blocked');
+
+// Roles & Permissions (Mock)
+export const getRoles = (serverId: number) => {
+    // Mock response
+    return new Promise<{ data: import('../types').Role[] }>((resolve) => {
+        setTimeout(() => {
+            resolve({
+                data: [
+                    { 
+                        id: 'role_owner', 
+                        name: 'Owner', 
+                        color: '#FFD700', // Gold
+                        permissions: ['MANAGE_CHANNELS', 'MANAGE_ROLES', 'KICK_MEMBERS', 'BAN_MEMBERS', 'SEND_MESSAGES', 'View_LOCKED_CHANNELS'] 
+                    },
+                    { 
+                        id: 'role_vip', 
+                        name: 'VIP', 
+                        color: '#D946EF', // Fuchsia
+                        permissions: ['SEND_MESSAGES', 'View_LOCKED_CHANNELS'] 
+                    },
+                    { 
+                        id: 'role_guest', 
+                        name: 'Guest', 
+                        color: '#9CA3AF', // Gray
+                        permissions: ['SEND_MESSAGES'] 
+                    }
+                ]
+            });
+        }, 500);
+    });
+};
+
+export const updateChannelPermissions = (channelId: number, roleId: string, allowed: boolean) => {
+    // Mock API call
+    return new Promise<{ success: boolean }>((resolve) => {
+        setTimeout(() => resolve({ success: true }), 500);
+    });
+};
 
 export default api;
 

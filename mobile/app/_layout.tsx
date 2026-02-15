@@ -10,6 +10,8 @@ import { JetBrainsMono_400Regular, JetBrainsMono_500Medium } from '@expo-google-
 import '../global.css';
 import { BackgroundLayer } from '../src/components/BackgroundLayer';
 import { ToastProvider } from '../src/components/Toast';
+import { NotificationListener } from '../src/components/NotificationListener';
+import { registerForPushNotifications, setupNotificationListeners } from '../src/services/pushNotifications';
 
 // Configure Reanimated logger to suppress false positive warnings from third-party libs
 // See: https://docs.swmansion.com/react-native-reanimated/docs/debugging/logger-configuration/
@@ -39,6 +41,30 @@ function RootNavigation() {
       router.replace('/');
     }
   }, [user, isLoading, segments]);
+
+  // Push Notifications Setup
+  useEffect(() => {
+    if (user) {
+      registerForPushNotifications();
+      
+      const cleanup = setupNotificationListeners(
+        (notification) => {
+          // Handle foreground notification if needed (ToastListener handles it mostly)
+          console.log('Foreground push:', notification);
+        },
+        (response) => {
+          // Handle tap
+          const data = response.notification.request.content.data;
+          if (data?.chatId) {
+             router.push(`/chat/${data.chatId}`);
+          }
+        }
+      );
+      
+      return cleanup;
+    }
+  }, [user]);
+
 
   if (isLoading) {
     return (
@@ -103,10 +129,14 @@ export default function RootLayout() {
             {/* Persistent Background Layer at the very root */}
             <BackgroundLayer />
             
-            {/* Navigation Overlay */}
-            <View style={StyleSheet.absoluteFill}>
-               <RootNavigation />
+            {/* Navigation Overlay - Centered with Max Width for Desktop */}
+            <View style={[StyleSheet.absoluteFill, { alignItems: 'center' }]}>
+               <View style={{ width: '100%', maxWidth: 1200, height: '100%', overflow: 'hidden' }}>
+                  <RootNavigation />
+               </View>
             </View>
+            
+            <NotificationListener />
           </ToastProvider>
         </ServerProvider>
       </AuthProvider>

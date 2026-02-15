@@ -13,6 +13,7 @@ import { Typography } from '../designsystem/Typography';
 import { Spacing, Radius } from '../designsystem/Spacing';
 import { Shadows } from '../designsystem/Shadows';
 import { GlassInput } from './glass/GlassInput';
+import MediaPreviewModal from './media/MediaPreviewModal';
 
 interface MessageInputProps {
     chatId?: number;
@@ -109,25 +110,52 @@ export default function MessageInput({
         }
     };
 
+    const [previewFile, setPreviewFile] = useState<{ uri: string; type: string; name?: string } | null>(null);
+
     const handlePickImage = async () => {
         try {
             const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: 'images',
+                mediaTypes: ImagePicker.MediaTypeOptions.All,
                 quality: 0.8,
             });
 
             if (!result.canceled && result.assets && result.assets.length > 0) {
-                if (onFileSelect) {
-                    const asset = result.assets[0];
-                    await onFileSelect({
-                        uri: asset.uri,
-                        name: asset.fileName || 'image.jpg',
-                        type: asset.mimeType || 'image/jpeg',
-                    });
-                }
+                const asset = result.assets[0];
+                setPreviewFile({
+                    uri: asset.uri,
+                    name: asset.fileName || `media.${asset.type === 'video' ? 'mp4' : 'jpg'}`,
+                    type: asset.mimeType || (asset.type === 'video' ? 'video/mp4' : 'image/jpeg'),
+                });
             }
         } catch (err) {
             console.error('Pick image failed', err);
+        }
+    };
+
+    const handleSendMedia = async (caption?: string) => {
+        if (!previewFile || !onFileSelect) return;
+
+        try {
+            // If caption exists, we might need to handle it. 
+            // For now, the backend might not support caption with file directly in one go 
+            // depending on the API, but we can send the file.
+            // Feature Request: Add caption support to onFileSelect or separate message
+            
+            await onFileSelect({
+                uri: previewFile.uri,
+                name: previewFile.name,
+                type: previewFile.type,
+            });
+            
+            // If caption provided, send as text message immediately after? 
+            // Or ideally attach to metadata. For now, let's just send the file.
+            if (caption?.trim()) {
+                 await onSend(caption, 'text');
+            }
+        } catch (error) {
+            Alert.alert('Error', 'Failed to send media');
+        } finally {
+            setPreviewFile(null);
         }
     };
 
@@ -287,6 +315,14 @@ export default function MessageInput({
                 visible={pickerMode === 'gif'}
                 onClose={() => setPickerMode('none')}
                 onSelect={handleGifSelect}
+            />
+
+            {/* Media Preview "Double Take" Modal */}
+            <MediaPreviewModal 
+                visible={!!previewFile}
+                file={previewFile}
+                onSend={handleSendMedia}
+                onClose={() => setPreviewFile(null)}
             />
         </View>
     );

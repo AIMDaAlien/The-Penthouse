@@ -58,13 +58,13 @@ export default function Register() {
   return (
     <SafeAreaView className="flex-1 bg-[#09090b]">
       <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}
         className="flex-1"
       >
         <DismissKeyboardView>
           <ScrollView 
             contentContainerStyle={{flexGrow: 1, paddingBottom: 40}} 
-            className="px-10"
+            className="px-10 w-full max-w-md self-center"
             showsVerticalScrollIndicator={false}
           >
             
@@ -150,7 +150,8 @@ export default function Register() {
                 <View className="h-[1px] flex-1 bg-zinc-800" />
                 <Link href="/login" asChild>
                   <Pressable>
-                    <Text className="text-[#cba6f7] font-black text-xs uppercase tracking-[2px]">Sign In</Text>
+                    <Text className="text-[#cba6f7] font-black text-xs uppercase tracking-[2px]">SIGN IN</Text>
+
                   </Pressable>
                 </Link>
                 <View className="h-[1px] flex-1 bg-zinc-800" />

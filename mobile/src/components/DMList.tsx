@@ -8,7 +8,8 @@
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable, FlatList, RefreshControl, Image } from 'react-native';
+import { View, Text, StyleSheet, Pressable, RefreshControl, Image } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, Radius, SpringConfig } from '../designsystem';
 import { getChats, getMediaUrl } from '../services/api';
@@ -45,7 +46,7 @@ interface DMRowProps {
   unreadCount?: number;
 }
 
-function DMRow({ dm, onPress, unreadCount }: DMRowProps) {
+const DMRow = React.memo(function DMRow({ dm, onPress, unreadCount }: DMRowProps) {
   const scale = useSharedValue(1);
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -111,7 +112,7 @@ function DMRow({ dm, onPress, unreadCount }: DMRowProps) {
       </Animated.View>
     </Pressable>
   );
-}
+});
 
 // ─────────────────────────────────────────────────────────────
 // Main Component
@@ -193,9 +194,10 @@ export function DMList({ onSelectDM, onNewDM }: DMListProps) {
           </Pressable>
         </View>
       ) : (
-        <FlatList
+        <FlashList
           data={dms}
           keyExtractor={(item) => item.id.toString()}
+          estimatedItemSize={72}
           renderItem={({ item }) => (
             <DMRow
               dm={item}

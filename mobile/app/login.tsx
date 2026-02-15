@@ -1,4 +1,4 @@
-import { View, Text, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard, Image, Pressable } from 'react-native';
+import { View, Text, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard, ScrollView, Pressable } from 'react-native';
 import { useState } from 'react';
 import { Link, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -17,6 +17,7 @@ const DismissKeyboardView = ({ children }: { children: React.ReactNode }) => {
     </TouchableWithoutFeedback>
   );
 };
+
 
 export default function Login() {
   const [username, setUsername] = useState('');
@@ -48,13 +49,17 @@ export default function Login() {
   return (
     <SafeAreaView className="flex-1 bg-[#09090b]">
       <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}
         className="flex-1"
       >
         <DismissKeyboardView>
-          <View className="flex-1 justify-center px-10 pb-10">
+          <ScrollView 
+            contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', paddingBottom: 40 }}
+            className="px-10 w-full max-w-md self-center"
+            showsVerticalScrollIndicator={false}
+          >
             
-            <View className="items-center mb-16">
+            <View className="items-center mb-16 mt-10">
               <View 
                 className="w-24 h-24 bg-[#cba6f7]/10 border border-[#cba6f7]/30 items-center justify-center shadow-2xl shadow-[#cba6f7]/20"
                 style={{
@@ -121,14 +126,15 @@ export default function Login() {
                 <View className="h-[1px] flex-1 bg-zinc-800" />
                 <Link href="/register" asChild>
                   <Pressable>
-                    <Text className="text-[#cba6f7] font-black text-xs uppercase tracking-[2px]">Create Account</Text>
+                    <Text className="text-[#cba6f7] font-black text-xs uppercase tracking-[2px]">CREATE ACCOUNT</Text>
+
                   </Pressable>
                 </Link>
                 <View className="h-[1px] flex-1 bg-zinc-800" />
               </View>
             </View>
 
-          </View>
+          </ScrollView>
         </DismissKeyboardView>
       </KeyboardAvoidingView>
     </SafeAreaView>

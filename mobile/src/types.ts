@@ -21,7 +21,25 @@ export interface Channel {
     serverId?: number;
     lastMessage?: string;
     unreadCount?: number;
+    vibe?: 'chill' | 'hype' | 'serious' | 'default';
+    activeUsers?: User[];
+    allowedRoles?: string[]; // Array of Role IDs allowed to access
 }
+
+export interface Role {
+    id: string;
+    name: string; // e.g., 'Owner', 'VIP', 'Guest'
+    color: string; // Hex color for name display
+    permissions: Permission[];
+}
+
+export type Permission = 
+    | 'MANAGE_CHANNELS'
+    | 'MANAGE_ROLES'
+    | 'KICK_MEMBERS'
+    | 'BAN_MEMBERS'
+    | 'SEND_MESSAGES'
+    | 'View_LOCKED_CHANNELS';
 
 export interface Chat {
     id: number;

@@ -53,6 +53,7 @@ export function useMessages(
 ): UseMessagesReturn {
     // Messages state
     const [messages, setMessages] = useState<Message[]>([]);
+    const messagesRef = useRef<Message[]>([]);
 
     // Edit state
     const [editingMessage, setEditingMessage] = useState<Message | null>(null);
@@ -70,6 +71,9 @@ export function useMessages(
     const typingTimeouts = useRef<Map<number, number>>(new Map());
 
     // Load messages for a chat
+    // Keep messagesRef in sync
+    useEffect(() => { messagesRef.current = messages; }, [messages]);
+
     const loadMessages = useCallback(async (chatId: number) => {
         try {
             const { data } = await getMessages(chatId);
@@ -383,8 +387,8 @@ export function useMessages(
     }, [selectedChat]);
 
     const handleReact = useCallback(async (messageId: number, emoji: string) => {
-        // Optimistic update logic similar to web
-        const message = messages.find(m => m.id === messageId);
+        // Read from ref to avoid depending on messages array (which changes every message)
+        const message = messagesRef.current.find(m => m.id === messageId);
         const existingReactions = message?.reactions || [];
         const hasReacted = existingReactions.some(r => r.emoji === emoji && r.userId === user?.id);
 
@@ -415,7 +419,7 @@ export function useMessages(
         } catch (err) {
             console.error('Failed to toggle reaction:', err);
         }
-    }, [messages, user]);
+    }, [user]);
 
     return {
         messages,

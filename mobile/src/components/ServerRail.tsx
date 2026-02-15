@@ -40,7 +40,7 @@ interface ServerButtonProps {
 // Server Button with Morph + Glow
 // ─────────────────────────────────────────────────────────────
 
-function ServerButton({ server, isSelected, hasUnread, onPress }: ServerButtonProps) {
+const ServerButton = React.memo(function ServerButton({ server, isSelected, hasUnread, onPress }: ServerButtonProps) {
   const morph = useSharedValue(isSelected ? 1 : 0);
   const scale = useSharedValue(1);
 
@@ -111,7 +111,7 @@ function ServerButton({ server, isSelected, hasUnread, onPress }: ServerButtonPr
       </Pressable>
     </View>
   );
-}
+});
 
 // ─────────────────────────────────────────────────────────────
 // Home Button
@@ -122,7 +122,7 @@ interface HomeButtonProps {
   onPress: () => void;
 }
 
-function HomeButton({ isSelected, onPress }: HomeButtonProps) {
+const HomeButton = React.memo(function HomeButton({ isSelected, onPress }: HomeButtonProps) {
   const morph = useSharedValue(isSelected ? 1 : 0);
   const scale = useSharedValue(1);
 
@@ -160,7 +160,7 @@ function HomeButton({ isSelected, onPress }: HomeButtonProps) {
       </Pressable>
     </View>
   );
-}
+});
 
 // ─────────────────────────────────────────────────────────────
 // Main Component

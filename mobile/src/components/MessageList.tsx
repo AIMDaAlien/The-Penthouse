@@ -1,9 +1,10 @@
-import { View, Text, FlatList, Image, Pressable, ActionSheetIOS, Platform, Alert, Dimensions, StyleSheet } from 'react-native';
+import React, { useState, useCallback, useRef, useMemo } from 'react';
+import { View, Text, Image, Pressable, ActionSheetIOS, Platform, Alert, Dimensions, StyleSheet } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { Message, Reaction } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { format } from 'date-fns';
 import { Ionicons } from '@expo/vector-icons';
-import { useState, useCallback, useRef } from 'react';
 import * as Clipboard from 'expo-clipboard';
 import ImageViewer from './ImageViewer';
 import VoicePlayer from './VoicePlayer';
@@ -19,6 +20,12 @@ const MAX_MEDIA_HEIGHT = 360;
 
 // Quick reaction emojis
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
+
+// Module-level viewability config (stable reference, no re-creation)
+const VIEWABILITY_CONFIG = { itemVisiblePercentThreshold: 50 };
+
+// Module-level content container style (stable reference)
+const LIST_CONTENT_STYLE = { paddingVertical: 16 };
 
 // Calculate display dimensions maintaining aspect ratio
 function getMediaDimensions(metadata?: Record<string, unknown>): { width: number; height: number } {
@@ -44,6 +51,7 @@ function getMediaDimensions(metadata?: Record<string, unknown>): { width: number
 
 interface MessageListProps {
     messages: Message[];
+    vibe?: string;
     onReply?: (message: Message) => void;
     onEdit?: (message: Message) => void;
     onDelete?: (messageId: number) => void;
@@ -51,34 +59,40 @@ interface MessageListProps {
     onMarkRead?: (messageId: number) => void;
 }
 
-// Group reactions by emoji and count
-function groupReactions(reactions: Reaction[]): { emoji: string; count: number; users: string[] }[] {
-    const groups: Record<string, { count: number; users: string[] }> = {};
-    reactions.forEach(r => {
-        if (!groups[r.emoji]) {
-            groups[r.emoji] = { count: 0, users: [] };
-        }
-        groups[r.emoji].count++;
-        groups[r.emoji].users.push(r.displayName || r.username);
-    });
-    return Object.entries(groups).map(([emoji, data]) => ({ emoji, ...data }));
-}
+// ... groupReactions ...
 
 interface MessageItemProps {
     message: Message;
     isMe: boolean;
     userId: number;
+    vibe?: string;
     onImagePress: (uri: string) => void;
     onLongPress: () => void;
     onReact?: (emoji: string) => void;
 }
 
-function MessageItem({ message, isMe, userId, onImagePress, onLongPress, onReact }: MessageItemProps) {
+// Helper to get bubble colors based on vibe
+const getBubbleColors = (vibe: string | undefined, isMe: boolean) => {
+    if (!isMe) return { bg: Colors.GLASS.ROW_BG, text: Colors.TEXT };
+    
+    switch(vibe) {
+        case 'chill': return { bg: '#0ea5e9', text: '#fff' }; // Sky 500
+        case 'hype': return { bg: '#d946ef', text: '#fff' }; // Fuchsia 500
+        case 'serious': return { bg: '#52525b', text: '#e4e4e7' }; // Zinc 600
+        default: return { bg: Colors.LAVENDER, text: Colors.CRUST };
+    }
+};
+
+// ─────────────────────────────────────────────────────────────
+// MessageItem — wrapped in React.memo to prevent re-renders
+// when sibling messages change
+// ─────────────────────────────────────────────────────────────
+const MessageItem = React.memo(function MessageItem({ message, isMe, userId, vibe, onImagePress, onLongPress, onReact }: MessageItemProps) {
     const [showReactions, setShowReactions] = useState(false);
     const [imageError, setImageError] = useState(false);
     const [imageLoading, setImageLoading] = useState(true);
 
-    // Check if message is deleted
+    // ... deleted check ... 
     if (message.deletedAt || message.deleted_at) {
         return (
             <View style={[styles.messageRow, isMe ? styles.rowRight : styles.rowLeft]}>
@@ -97,19 +111,29 @@ function MessageItem({ message, isMe, userId, onImagePress, onLongPress, onReact
     const isImage = message.type === 'image' || message.type === 'gif';
     const isVoice = message.type === 'voice';
     const isVideo = message.type === 'video';
+    const isMediaOnly = isImage || isVideo;
     const reactions = message.reactions || [];
     const groupedReactions = groupReactions(reactions);
     const hasReacted = (emoji: string) => reactions.some(r => r.emoji === emoji && r.userId === userId);
 
-    const handleLongPress = () => {
+    const handleLongPress = useCallback(() => {
         setShowReactions(true);
         onLongPress();
-    };
+    }, [onLongPress]);
 
-    const handleReactionSelect = (emoji: string) => {
+    const handleReactionSelect = useCallback((emoji: string) => {
         setShowReactions(false);
         onReact?.(emoji);
-    };
+    }, [onReact]);
+
+    // Determine bubble styles
+    const bubbleColors = getBubbleColors(vibe, isMe);
+    const bubbleStyles = isMediaOnly
+        ? [styles.mediaBubble]
+        : [
+            styles.bubbleBase, 
+            isMe ? { backgroundColor: bubbleColors.bg, borderTopRightRadius: 2 } : styles.bubbleOther
+          ];
 
     return (
         <View style={[styles.messageContainer, isMe ? styles.alignRight : styles.alignLeft]}>
@@ -137,19 +161,11 @@ function MessageItem({ message, isMe, userId, onImagePress, onLongPress, onReact
                     </View>
                 )}
 
-                {/* Determine if this is a media-only message (no text content) */}
-                {(() => {
-                    const isMediaOnly = isImage || isVideo;
-                    const bubbleStyles = isMediaOnly 
-                        ? [styles.mediaBubble, { maxWidth: '80%' as const }]
-                        : [styles.bubbleBase, isMe ? styles.bubbleMe : styles.bubbleOther, { maxWidth: '80%' as const }];
-                    
-                    return (
-                        <Pressable
-                            onLongPress={handleLongPress}
-                            delayLongPress={300}
-                            style={bubbleStyles}
-                        >
+                <Pressable
+                    onLongPress={handleLongPress}
+                    delayLongPress={300}
+                    style={bubbleStyles}
+                >
                     {!isMe && (
                         <Text style={[Typography.MICRO, styles.senderName]}>
                             {message.sender.displayName || message.sender.username}
@@ -198,32 +214,31 @@ function MessageItem({ message, isMe, userId, onImagePress, onLongPress, onReact
                             isMe={isMe}
                         />
                     ) : (
-                        <Text style={[Typography.BODY, { color: isMe ? Colors.CRUST : Colors.TEXT }]}>
+                        <Text style={[Typography.BODY, { color: isMe ? bubbleColors.text : Colors.TEXT }]}>
                             {message.content}
                         </Text>
                     )}
 
-                            {/* Timestamp and status */}
-                            <View style={[styles.metaRow, isMediaOnly && styles.mediaMetaRow]}>
-                                {(message.editedAt || message.edited_at) && (
-                                    <Text style={[styles.editedText, isMediaOnly && styles.mediaText]}>edited</Text>
-                                )}
-                                <Text style={[styles.timestamp, isMediaOnly && styles.mediaText]}>
-                                    {format(new Date(message.createdAt), 'h:mm a')}
-                                </Text>
-                                {isMe && (
-                                    <Text style={[
-                                        styles.readStatus, 
-                                        { color: message.readAt ? Colors.PERIWINKLE : Colors.OVERLAY1 },
-                                        isMediaOnly && styles.mediaText
-                                    ]}>
-                                        {message.readAt ? '✓✓' : '✓'}
-                                    </Text>
-                                )}
-                            </View>
-                        </Pressable>
-                    );
-                })()}
+                    {/* Timestamp and status */}
+// ... keeping meta row logic same ...
+                    <View style={[styles.metaRow, isMediaOnly && styles.mediaMetaRow]}>
+                        {(message.editedAt || message.edited_at) && (
+                            <Text style={[styles.editedText, isMediaOnly && styles.mediaText]}>edited</Text>
+                        )}
+                        <Text style={[styles.timestamp, isMediaOnly && styles.mediaText]}>
+                            {format(new Date(message.createdAt), 'h:mm a')}
+                        </Text>
+                        {isMe && (
+                            <Text style={[
+                                styles.readStatus,
+                                { color: message.readAt ? Colors.PERIWINKLE : Colors.OVERLAY1 },
+                                isMediaOnly && styles.mediaText
+                            ]}>
+                                {message.readAt ? '✓✓' : '✓'}
+                            </Text>
+                        )}
+                    </View>
+                </Pressable>
             </View>
 
             {/* Reactions display */}
@@ -264,10 +279,11 @@ function MessageItem({ message, isMe, userId, onImagePress, onLongPress, onReact
             )}
         </View>
     );
-}
+});
 
 export default function MessageList({
     messages,
+    vibe,
     onReply,
     onEdit,
     onDelete,
@@ -276,9 +292,13 @@ export default function MessageList({
 }: MessageListProps) {
     const { user } = useAuth();
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
-    const flatListRef = useRef<FlatList>(null);
+    const flatListRef = useRef<any>(null);
+
+    // Memoize reversed messages to avoid re-creating array on every render
+    const reversedMessages = useMemo(() => [...messages].reverse(), [messages]);
 
     const handleLongPress = useCallback((message: Message, isMe: boolean) => {
+        // ... action sheet logic same ...
         const options: string[] = ['Reply', 'Copy Text'];
         const destructiveIndex: number[] = [];
 
@@ -352,34 +372,38 @@ export default function MessageList({
         });
     }, [user?.id, onMarkRead]);
 
-    const viewabilityConfig = { itemVisiblePercentThreshold: 50 };
+    // Stable renderItem callback
+    const renderItem = useCallback(({ item }: { item: Message }) => {
+        const isMe = item.sender.id === user?.id;
+        return (
+            <MessageItem
+                message={item}
+                isMe={isMe ?? false}
+                userId={user?.id ?? 0}
+                vibe={vibe}
+                onImagePress={setSelectedImage}
+                onLongPress={() => handleLongPress(item, isMe ?? false)}
+                onReact={(emoji) => onReact?.(item.id, emoji)}
+            />
+        );
+    }, [user?.id, handleLongPress, onReact, vibe]);
+
+    const keyExtractor = useCallback((item: Message) => item.id.toString(), []);
 
     if (!user) return null;
 
     return (
         <>
-            <FlatList
+            <FlashList
                 ref={flatListRef}
-                data={[...messages].reverse()}
-                renderItem={({ item }) => {
-                    const isMe = item.sender.id === user.id;
-                    return (
-                        <MessageItem
-                            message={item}
-                            isMe={isMe}
-                            userId={user.id}
-                            onImagePress={setSelectedImage}
-                            onLongPress={() => handleLongPress(item, isMe)}
-                            onReact={(emoji) => onReact?.(item.id, emoji)}
-                        />
-                    );
-                }}
-                keyExtractor={item => item.id.toString()}
+                data={reversedMessages}
+                renderItem={renderItem}
+                keyExtractor={keyExtractor}
+                estimatedItemSize={80}
                 inverted
-                style={styles.list}
-                contentContainerStyle={{ paddingVertical: 16 }}
+                contentContainerStyle={LIST_CONTENT_STYLE}
                 onViewableItemsChanged={onViewableItemsChanged}
-                viewabilityConfig={viewabilityConfig}
+                viewabilityConfig={VIEWABILITY_CONFIG}
             />
 
             {/* Image Viewer Modal */}
@@ -441,6 +465,7 @@ const styles = StyleSheet.create({
     bubbleBase: {
         borderRadius: Radius.CARD,
         padding: Spacing.M,
+        maxWidth: '80%',
     },
     bubbleMe: {
         backgroundColor: Colors.LAVENDER,
@@ -520,8 +545,10 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     mediaBubble: {
-        // Transparent bubble for media-only messages
-        padding: Spacing.XS,
+        // Transparent — no colored border around media
+        padding: 0,
+        backgroundColor: 'transparent',
+        maxWidth: '80%',
     },
     mediaMetaRow: {
         position: 'absolute',

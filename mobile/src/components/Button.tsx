@@ -51,32 +51,30 @@ export default function Button({ title, variant = 'primary', isLoading, classNam
   };
 
   return (
-    <AnimatedPressable
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-      className={`w-full py-4.5 px-6 flex items-center justify-center flex-row gap-3 ${getVariantStyles()} ${
-        props.disabled || isLoading ? 'opacity-50' : ''
-      } ${className}`}
-      disabled={isLoading || props.disabled}
-      style={[
-        animatedStyle,
-        {
+    <Animated.View style={[animatedStyle, style as any]}>
+      <Pressable
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        className={`w-full py-4 px-6 flex items-center justify-center flex-row gap-3 ${getVariantStyles()} ${
+          props.disabled || isLoading ? 'opacity-50' : ''
+        } ${className}`}
+        disabled={isLoading || props.disabled}
+        style={{
           borderTopLeftRadius: 28,
           borderBottomRightRadius: 28,
           borderTopRightRadius: 6,
           borderBottomLeftRadius: 6,
-        },
-        style as any
-      ]}
-      {...props}
-    >
-      {isLoading ? (
-        <ActivityIndicator color={variant === 'outline' ? '#a1a1aa' : 'white'} />
-      ) : (
-        <Text className={`text-center font-bold text-lg tracking-wide ${getTextStyles()}`}>
-          {title}
-        </Text>
-      )}
-    </AnimatedPressable>
+        }}
+        {...props}
+      >
+        {isLoading ? (
+          <ActivityIndicator color={variant === 'outline' ? '#a1a1aa' : 'white'} />
+        ) : (
+          <Text className={`text-center font-bold text-lg tracking-wide ${getTextStyles()}`}>
+            {title}
+          </Text>
+        )}
+      </Pressable>
+    </Animated.View>
   );
 }
