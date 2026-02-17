@@ -21,7 +21,8 @@ jobs:
           cd "$APP_PATH"
           git fetch --all --prune
           git checkout main
-          git pull --ff-only origin main
+          git reset --hard origin/main
+          git clean -fd
           docker compose up -d --build
           docker compose ps
           docker run --rm --network app_default curlimages/curl:8.10.1 -fsS http://penthouse-app:3000/api/health >/dev/null
