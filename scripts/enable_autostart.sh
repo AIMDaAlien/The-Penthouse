@@ -8,6 +8,7 @@ set -euo pipefail
 APP_ROOT="${PENTHOUSE_APP_ROOT:-/mnt/Storage_Pool/penthouse/app}"
 LOG_FILE="/var/log/penthouse-autostart.log"
 START_CMD="cd ${APP_ROOT} && ./scripts/prepare_data_dirs.sh && /usr/bin/docker compose up -d"
+LEGACY_START_CMD="cd ${APP_ROOT} && /usr/bin/docker compose up -d"
 CRON_ENTRY="@reboot ${START_CMD} >> ${LOG_FILE} 2>&1"
 
 WATCHDOG_LOG="/var/log/penthouse-watchdog.log"
@@ -29,6 +30,9 @@ fi
 
 existing_crontab="$(crontab -l 2>/dev/null || true)"
 updated="$existing_crontab"
+
+# Remove legacy reboot entry if present.
+updated="$(printf '%s\n' "$updated" | grep -Fv "$LEGACY_START_CMD" || true)"
 
 if ! echo "$updated" | grep -Fq "$START_CMD"; then
   updated="$(printf '%s\n%s\n' "$updated" "$CRON_ENTRY")"
