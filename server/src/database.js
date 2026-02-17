@@ -15,6 +15,7 @@ if (!fs.existsSync(uploadsDir)) {
 }
 
 let db = null;
+let signalsRegistered = false;
 
 async function initializeDatabase() {
   const SQL = await initSqlJs();
@@ -36,7 +37,7 @@ async function initializeDatabase() {
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT UNIQUE NOT NULL,
-      email TEXT UNIQUE,
+      email TEXT,
       password TEXT NOT NULL,
       display_name TEXT,
       avatar_url TEXT,
@@ -47,7 +48,7 @@ async function initializeDatabase() {
 
   // Migration: Add email column if it doesn't exist
   try {
-    db.run('ALTER TABLE users ADD COLUMN email TEXT UNIQUE');
+    db.run('ALTER TABLE users ADD COLUMN email TEXT');
   } catch (e) {
     if (!e.message.includes('duplicate column')) console.error('Migration error (email):', e.message);
   }
@@ -208,6 +209,7 @@ async function initializeDatabase() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
       token TEXT NOT NULL,
+      token_hash TEXT,
       expires_at DATETIME NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
@@ -242,9 +244,71 @@ async function initializeDatabase() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       blocker_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
       blocked_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(blocker_id, blocked_id)
     )
   `);
+
+  // Refresh Tokens (Security Hardening)
+  db.run(`
+    CREATE TABLE IF NOT EXISTS refresh_tokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      token TEXT UNIQUE NOT NULL,
+      token_hash TEXT,
+      expires_at DATETIME NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Migration: add created_at to blocked_users if missing
+  try {
+    db.run('ALTER TABLE blocked_users ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP');
+  } catch (e) {
+    if (e.message.includes('non-constant default')) {
+      try {
+        db.run('ALTER TABLE blocked_users ADD COLUMN created_at DATETIME');
+        db.run('UPDATE blocked_users SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL');
+      } catch (innerErr) {
+        if (!innerErr.message.includes('duplicate column')) {
+          console.error('Migration error (blocked_users.created_at fallback):', innerErr.message);
+        }
+      }
+    } else if (!e.message.includes('duplicate column')) {
+      console.error('Migration error (blocked_users.created_at):', e.message);
+    }
+  }
+
+  // Migration: add token_hash to refresh_tokens if missing
+  try {
+    db.run('ALTER TABLE refresh_tokens ADD COLUMN token_hash TEXT');
+  } catch (e) {
+    if (!e.message.includes('duplicate column')) console.error('Migration error (refresh_tokens.token_hash):', e.message);
+  }
+
+  // Migration: add token_hash to password_resets if missing
+  try {
+    db.run('ALTER TABLE password_resets ADD COLUMN token_hash TEXT');
+  } catch (e) {
+    if (!e.message.includes('duplicate column')) console.error('Migration error (password_resets.token_hash):', e.message);
+  }
+
+  // Performance Indexes (Critical for Scale)
+  db.run('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_unique ON users(email) WHERE email IS NOT NULL');
+  db.run('CREATE INDEX IF NOT EXISTS idx_messages_chat_created ON messages(chat_id, created_at DESC)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_messages_chat_id_desc ON messages(chat_id, id DESC)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_server_members_user ON server_members(user_id)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_chat_members_user ON chat_members(user_id)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_reactions_message ON reactions(message_id)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_read_receipts_message ON read_receipts(message_id)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_chats_server_type_created ON chats(server_id, type, created_at)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_friend_requests_receiver_status ON friend_requests(receiver_id, status, created_at DESC)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_friend_requests_sender_status ON friend_requests(sender_id, status, created_at DESC)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_refresh_tokens_expiry ON refresh_tokens(expires_at)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_password_resets_expiry ON password_resets(expires_at)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_refresh_tokens_hash ON refresh_tokens(token_hash)');
+  db.run('CREATE INDEX IF NOT EXISTS idx_password_resets_hash ON password_resets(token_hash)');
+
 
   // Save to disk (initial save)
   saveDatabase(true);
@@ -257,8 +321,11 @@ async function initializeDatabase() {
     saveDatabase(true);
     process.exit(0);
   };
-  process.on('SIGINT', handleExit);
-  process.on('SIGTERM', handleExit);
+  if (!signalsRegistered) {
+    process.on('SIGINT', handleExit);
+    process.on('SIGTERM', handleExit);
+    signalsRegistered = true;
+  }
 }
 
 let saveTimeout = null;

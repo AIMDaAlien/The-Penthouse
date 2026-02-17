@@ -19,15 +19,15 @@ describe('Friends Endpoints', () => {
     // Create 3 users
     const res1 = await request(app).post('/api/auth/register').send({ username: 'user1', password: 'password123' });
     user1 = res1.body.user;
-    token1 = res1.body.token;
+    token1 = res1.body.accessToken;
 
     const res2 = await request(app).post('/api/auth/register').send({ username: 'user2', password: 'password123' });
     user2 = res2.body.user;
-    token2 = res2.body.token;
+    token2 = res2.body.accessToken;
 
     const res3 = await request(app).post('/api/auth/register').send({ username: 'user3', password: 'password123' });
     user3 = res3.body.user;
-    token3 = res3.body.token;
+    token3 = res3.body.accessToken;
   });
 
   describe('POST /api/friends/request', () => {
@@ -121,6 +121,23 @@ describe('Friends Endpoints', () => {
       expect(Array.isArray(res.body)).toBe(true);
       expect(res.body.length).toBe(1);
       expect(res.body[0].username).toBe('user2');
+    });
+  });
+
+  describe('GET /api/friends/blocked', () => {
+    it('should list blocked users without schema errors', async () => {
+      await request(app)
+        .post(`/api/friends/block/${user2.id}`)
+        .set('Authorization', `Bearer ${token1}`);
+
+      const res = await request(app)
+        .get('/api/friends/blocked')
+        .set('Authorization', `Bearer ${token1}`);
+
+      expect(res.statusCode).toBe(200);
+      expect(Array.isArray(res.body)).toBe(true);
+      expect(res.body.length).toBe(1);
+      expect(res.body[0].user_id).toBe(user2.id);
     });
   });
 });

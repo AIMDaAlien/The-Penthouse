@@ -29,6 +29,10 @@ const errorHandler = (err, req, res, next) => {
     status = 400;
     message = err.message;
     error = 'Validation Error';
+  } else if (err.message === 'Origin not allowed by CORS') {
+    status = 403;
+    message = err.message;
+    error = 'Forbidden';
   }
 
   // Send response

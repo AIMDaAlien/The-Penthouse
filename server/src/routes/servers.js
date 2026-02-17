@@ -31,7 +31,7 @@ router.get('/', authenticateToken, (req, res) => {
 });
 
 // Create a new server
-router.post('/', authenticateToken, (req, res) => {
+router.post('/', authenticateToken, validateCreateServer, (req, res) => {
     try {
         const { name, iconUrl } = req.body;
 
@@ -132,7 +132,7 @@ router.get('/:serverId', authenticateToken, (req, res) => {
 });
 
 // Create channel in server
-router.post('/:serverId/channels', authenticateToken, (req, res) => {
+router.post('/:serverId/channels', authenticateToken, validateCreateChannel, (req, res) => {
     try {
         const { serverId } = req.params;
         const { name } = req.body;

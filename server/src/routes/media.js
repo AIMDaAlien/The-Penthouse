@@ -4,18 +4,36 @@ const path = require('path');
 const fs = require('fs');
 const { db } = require('../database');
 const { authenticateToken } = require('../middleware/auth');
+const { uploadLimiter } = require('../middleware/rateLimit');
 const asyncHandler = require('../utils/asyncHandler');
 
 const router = express.Router();
+const uploadsRoot = path.join(__dirname, '..', '..', 'data', 'uploads');
+const isProduction = process.env.NODE_ENV === 'production';
+const debugLog = (...args) => {
+    if (!isProduction) console.log(...args);
+};
+const safeDeleteUpload = (inputPath) => {
+    try {
+        const fileName = path.basename(inputPath || '');
+        if (!fileName) return;
+        const targetPath = path.join(uploadsRoot, fileName);
+        if (!targetPath.startsWith(uploadsRoot + path.sep) && targetPath !== uploadsRoot) return;
+        if (fs.existsSync(targetPath)) {
+            fs.unlinkSync(targetPath);
+        }
+    } catch (err) {
+        console.error('Failed to delete upload file safely:', err.message);
+    }
+};
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        const uploadDir = path.join(__dirname, '..', '..', 'data', 'uploads');
-        if (!fs.existsSync(uploadDir)) {
-            fs.mkdirSync(uploadDir, { recursive: true });
+        if (!fs.existsSync(uploadsRoot)) {
+            fs.mkdirSync(uploadsRoot, { recursive: true });
         }
-        cb(null, uploadDir);
+        cb(null, uploadsRoot);
     },
     filename: (req, file, cb) => {
         const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1E9)}${path.extname(file.originalname)}`;
@@ -33,9 +51,9 @@ const upload = multer({
         // Accept image/*, audio/*, and video/* mime types
         const mimetype = /^(image|audio|video)\/.+/.test(file.mimetype);
 
-        console.log(`File filter check: name=${file.originalname}, ext=${path.extname(file.originalname)}, mime=${file.mimetype}, extOk=${extname}, mimeOk=${mimetype}`);
+        debugLog(`File filter check: name=${file.originalname}, ext=${path.extname(file.originalname)}, mime=${file.mimetype}, extOk=${extname}, mimeOk=${mimetype}`);
 
-        if (extname || mimetype) {
+        if (extname && mimetype) {
             return cb(null, true);
         }
         const error = new Error(`File type not allowed. Got: ${file.mimetype}, ext: ${path.extname(file.originalname)}`);
@@ -45,7 +63,7 @@ const upload = multer({
 });
 
 // Generic file upload
-router.post('/upload', authenticateToken, upload.single('file'), asyncHandler(async (req, res) => {
+router.post('/upload', authenticateToken, uploadLimiter, upload.single('file'), asyncHandler(async (req, res) => {
     if (!req.file) {
         console.error('Upload error: No file received. Body:', req.body);
         return res.status(400).json({ error: 'No file uploaded' });
@@ -56,7 +74,7 @@ router.post('/upload', authenticateToken, upload.single('file'), asyncHandler(as
     const type = mimeType.startsWith('image/') ? 'image' :
                  mimeType.startsWith('video/') ? 'video' : 'file';
 
-    console.log(`File uploaded: ${req.file.filename}, MIME: ${mimeType}, Type: ${type}`);
+    debugLog(`File uploaded: ${req.file.filename}, MIME: ${mimeType}, Type: ${type}`);
 
     res.json({
         url: fileUrl,
@@ -67,7 +85,7 @@ router.post('/upload', authenticateToken, upload.single('file'), asyncHandler(as
 }));
 
 // Upload voice message
-router.post('/voice', authenticateToken, upload.single('voice'), asyncHandler(async (req, res) => {
+router.post('/voice', authenticateToken, uploadLimiter, upload.single('voice'), asyncHandler(async (req, res) => {
     if (!req.file) {
         return res.status(400).json({ error: 'No voice file uploaded' });
     }
@@ -86,7 +104,7 @@ router.post('/voice', authenticateToken, upload.single('voice'), asyncHandler(as
 }));
 
 // Upload profile picture
-router.post('/avatar', authenticateToken, upload.single('avatar'), asyncHandler(async (req, res) => {
+router.post('/avatar', authenticateToken, uploadLimiter, upload.single('avatar'), asyncHandler(async (req, res) => {
     if (!req.file) {
         return res.status(400).json({ error: 'No file uploaded' });
     }
@@ -96,10 +114,7 @@ router.post('/avatar', authenticateToken, upload.single('avatar'), asyncHandler(
     // Delete old avatar if exists
     const user = db.prepare('SELECT avatar_url FROM users WHERE id = ?').get(req.user.userId);
     if (user && user.avatar_url) {
-        const oldPath = path.join(__dirname, '..', '..', 'data', user.avatar_url);
-        if (fs.existsSync(oldPath)) {
-            fs.unlinkSync(oldPath);
-        }
+        safeDeleteUpload(user.avatar_url);
     }
 
     // Update user
@@ -110,7 +125,7 @@ router.post('/avatar', authenticateToken, upload.single('avatar'), asyncHandler(
 }));
 
 // Upload server icon
-router.post('/server-icon', authenticateToken, upload.single('icon'), asyncHandler(async (req, res) => {
+router.post('/server-icon', authenticateToken, uploadLimiter, upload.single('icon'), asyncHandler(async (req, res) => {
     if (!req.file) {
         return res.status(400).json({ error: 'No file uploaded' });
     }
@@ -123,20 +138,17 @@ router.post('/server-icon', authenticateToken, upload.single('icon'), asyncHandl
         // Verify user is the server owner
         const server = db.prepare('SELECT owner_id, icon_url FROM servers WHERE id = ?').get(serverId);
         if (!server) {
-            fs.unlinkSync(req.file.path);
+            safeDeleteUpload(req.file.path);
             return res.status(404).json({ error: 'Server not found' });
         }
         if (server.owner_id !== req.user.userId) {
-            fs.unlinkSync(req.file.path);
+            safeDeleteUpload(req.file.path);
             return res.status(403).json({ error: 'Only the server owner can update the icon' });
         }
 
         // Delete old icon if exists
         if (server.icon_url) {
-            const oldPath = path.join(__dirname, '..', '..', 'data', server.icon_url);
-            if (fs.existsSync(oldPath)) {
-                fs.unlinkSync(oldPath);
-            }
+            safeDeleteUpload(server.icon_url);
         }
 
         db.prepare('UPDATE servers SET icon_url = ? WHERE id = ?')
@@ -147,20 +159,20 @@ router.post('/server-icon', authenticateToken, upload.single('icon'), asyncHandl
 }));
 
 // Upload custom emote
-router.post('/emotes', authenticateToken, upload.single('emote'), asyncHandler(async (req, res) => {
+router.post('/emotes', authenticateToken, uploadLimiter, upload.single('emote'), asyncHandler(async (req, res) => {
     if (!req.file) {
         return res.status(400).json({ error: 'No file uploaded' });
     }
 
     const { name } = req.body;
     if (!name) {
-        fs.unlinkSync(req.file.path);
+        safeDeleteUpload(req.file.path);
         return res.status(400).json({ error: 'Emote name is required' });
     }
 
     // Validate emote name (alphanumeric and underscores only)
     if (!/^[a-zA-Z0-9_]+$/.test(name)) {
-        fs.unlinkSync(req.file.path);
+        safeDeleteUpload(req.file.path);
         return res.status(400).json({ error: 'Emote name can only contain letters, numbers, and underscores' });
     }
 
@@ -169,7 +181,7 @@ router.post('/emotes', authenticateToken, upload.single('emote'), asyncHandler(a
     // Check if emote name exists
     const existing = db.prepare('SELECT id FROM emotes WHERE name = ?').get(name);
     if (existing) {
-        fs.unlinkSync(req.file.path);
+        safeDeleteUpload(req.file.path);
         return res.status(409).json({ error: 'Emote name already exists' });
     }
 
@@ -219,10 +231,7 @@ router.delete('/emotes/:id', authenticateToken, asyncHandler(async (req, res) =>
     }
 
     // Delete file
-    const filePath = path.join(__dirname, '..', '..', 'data', emote.image_url);
-    if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
-    }
+    safeDeleteUpload(emote.image_url);
 
     db.prepare('DELETE FROM emotes WHERE id = ?').run(id);
 

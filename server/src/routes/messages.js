@@ -7,11 +7,25 @@ const asyncHandler = require('../utils/asyncHandler');
 const ChatService = require('../services/chatService');
 
 const router = express.Router();
+const ensureChatAccess = (chatId, userId) => {
+    const { isMember, chat } = ChatService.verifyMembership(chatId, userId);
+    if (!chat) {
+        return { ok: false, status: 404, error: 'Chat not found' };
+    }
+    if (!isMember) {
+        return { ok: false, status: 403, error: 'Not a member of this chat' };
+    }
+    return { ok: true, chat };
+};
 
 // Get messages for a chat
 router.get('/:chatId', authenticateToken, asyncHandler(async (req, res) => {
     const { chatId } = req.params;
     const { limit = 50, before } = req.query;
+    const parsedLimit = Number.parseInt(limit, 10);
+    const safeLimit = Number.isInteger(parsedLimit)
+        ? Math.min(Math.max(parsedLimit, 1), 100)
+        : 50;
 
     const { isMember, chat } = ChatService.verifyMembership(chatId, req.user.userId);
     if (!chat) {
@@ -37,7 +51,7 @@ router.get('/:chatId', authenticateToken, asyncHandler(async (req, res) => {
     }
 
     query += ' ORDER BY m.created_at DESC, m.id DESC LIMIT ?';
-    params.push(parseInt(limit));
+    params.push(safeLimit);
 
     const messages = db.prepare(query).all(...params);
 
@@ -255,6 +269,10 @@ router.put('/:messageId', authenticateToken, asyncHandler(async (req, res) => {
     if (!message) {
         return res.status(404).json({ error: 'Message not found' });
     }
+    const access = ensureChatAccess(message.chat_id, req.user.userId);
+    if (!access.ok) {
+        return res.status(access.status).json({ error: access.error });
+    }
 
     if (message.user_id !== req.user.userId) {
         return res.status(403).json({ error: 'Can only edit your own messages' });
@@ -288,6 +306,10 @@ router.delete('/:messageId', authenticateToken, asyncHandler(async (req, res) =>
     if (!message) {
         return res.status(404).json({ error: 'Message not found' });
     }
+    const access = ensureChatAccess(message.chat_id, req.user.userId);
+    if (!access.ok) {
+        return res.status(access.status).json({ error: access.error });
+    }
 
     if (message.user_id !== req.user.userId) {
         return res.status(403).json({ error: 'Can only delete your own messages' });
@@ -319,6 +341,10 @@ router.post('/:messageId/react', authenticateToken, asyncHandler(async (req, res
     const message = db.prepare('SELECT chat_id FROM messages WHERE id = ?').get(messageId);
     if (!message) {
         return res.status(404).json({ error: 'Message not found' });
+    }
+    const access = ensureChatAccess(message.chat_id, req.user.userId);
+    if (!access.ok) {
+        return res.status(access.status).json({ error: access.error });
     }
 
     // Insert or ignore if already exists
@@ -353,6 +379,10 @@ router.delete('/:messageId/react/:emoji', authenticateToken, asyncHandler(async 
     if (!message) {
         return res.status(404).json({ error: 'Message not found' });
     }
+    const access = ensureChatAccess(message.chat_id, req.user.userId);
+    if (!access.ok) {
+        return res.status(access.status).json({ error: access.error });
+    }
 
     db.prepare(
         'DELETE FROM reactions WHERE message_id = ? AND user_id = ? AND emoji = ?'
@@ -385,6 +415,10 @@ router.post('/:messageId/read', authenticateToken, asyncHandler(async (req, res)
     if (!message) {
         return res.status(404).json({ error: 'Message not found' });
     }
+    const access = ensureChatAccess(message.chat_id, req.user.userId);
+    if (!access.ok) {
+        return res.status(access.status).json({ error: access.error });
+    }
 
     // Insert or ignore if already read
     db.prepare(
@@ -406,6 +440,10 @@ router.post('/:messageId/read', authenticateToken, asyncHandler(async (req, res)
 // Get pinned messages for a chat
 router.get('/pins/:chatId', authenticateToken, asyncHandler(async (req, res) => {
     const { chatId } = req.params;
+    const access = ensureChatAccess(chatId, req.user.userId);
+    if (!access.ok) {
+        return res.status(access.status).json({ error: access.error });
+    }
 
     const pins = db.prepare(`
         SELECT pm.id as pin_id, pm.pinned_at, pm.pinned_by,
@@ -447,6 +485,10 @@ router.post('/:messageId/pin', authenticateToken, asyncHandler(async (req, res) 
 
     const message = db.prepare('SELECT chat_id FROM messages WHERE id = ?').get(messageId);
     if (!message) return res.status(404).json({ error: 'Message not found' });
+    const access = ensureChatAccess(message.chat_id, req.user.userId);
+    if (!access.ok) {
+        return res.status(access.status).json({ error: access.error });
+    }
 
     // Insert pin (ignore if exists)
     try {
@@ -496,6 +538,10 @@ router.delete('/:messageId/pin', authenticateToken, asyncHandler(async (req, res
 
     const message = db.prepare('SELECT chat_id FROM messages WHERE id = ?').get(messageId);
     if (!message) return res.status(404).json({ error: 'Message not found' });
+    const access = ensureChatAccess(message.chat_id, req.user.userId);
+    if (!access.ok) {
+        return res.status(access.status).json({ error: access.error });
+    }
 
     db.prepare('DELETE FROM pinned_messages WHERE message_id = ?').run(messageId);
 

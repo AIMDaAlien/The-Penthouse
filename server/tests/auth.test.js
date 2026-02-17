@@ -12,6 +12,7 @@ describe('Auth Endpoints', () => {
   beforeEach(() => {
     dbModule.db.prepare('DELETE FROM users').run();
     dbModule.db.prepare('DELETE FROM password_resets').run();
+    dbModule.db.prepare('DELETE FROM refresh_tokens').run();
   });
 
   describe('POST /api/auth/register', () => {
@@ -25,7 +26,8 @@ describe('Auth Endpoints', () => {
         });
       
       expect(res.statusCode).toBe(201);
-      expect(res.body).toHaveProperty('token');
+      expect(res.body).toHaveProperty('accessToken');
+      expect(res.body).toHaveProperty('refreshToken');
       expect(res.body.user).toHaveProperty('id');
       expect(res.body.user.username).toBe('testuser');
     });
@@ -48,7 +50,7 @@ describe('Auth Endpoints', () => {
         });
 
       expect(res.statusCode).toBe(409);
-      expect(res.body).toHaveProperty('error', 'Username already taken');
+      expect(res.body).toHaveProperty('error', 'Username or email already taken');
     });
   });
 
@@ -72,7 +74,8 @@ describe('Auth Endpoints', () => {
         });
 
       expect(res.statusCode).toBe(200);
-      expect(res.body).toHaveProperty('token');
+      expect(res.body).toHaveProperty('accessToken');
+      expect(res.body).toHaveProperty('refreshToken');
       expect(res.body.user.username).toBe('loginuser');
     });
 
@@ -95,7 +98,8 @@ describe('Auth Endpoints', () => {
       const res = await request(app)
         .post('/api/auth/register')
         .send({
-          username: 'recovery@example.com', // Use valid email format
+          username: 'recoveryuser',
+          email: 'recovery@example.com',
           password: 'oldpassword',
           displayName: 'Recovery User'
         });
@@ -137,7 +141,7 @@ describe('Auth Endpoints', () => {
       const loginRes = await request(app)
         .post('/api/auth/login')
         .send({
-          username: 'recovery@example.com',
+          username: 'recoveryuser',
           password: 'newsecurepassword'
         });
       

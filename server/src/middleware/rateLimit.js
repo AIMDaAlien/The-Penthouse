@@ -82,6 +82,46 @@ const friendRequestLimiter = createLimiter({
   message: 'Too many friend requests sent. Please wait before sending more.'
 });
 
+/**
+ * Refresh Token Rate Limit
+ * 30 refresh requests per hour per IP
+ */
+const refreshLimiter = createLimiter({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 30,
+  message: 'Too many token refresh attempts. Please wait and try again.'
+});
+
+/**
+ * Logout Rate Limit
+ * 120 logout requests per hour per IP
+ */
+const logoutLimiter = createLimiter({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 120,
+  message: 'Too many logout requests. Please slow down.'
+});
+
+/**
+ * Forgot Password Rate Limit
+ * 5 requests per hour per IP
+ */
+const forgotPasswordLimiter = createLimiter({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 5,
+  message: 'Too many password reset requests. Please wait before trying again.'
+});
+
+/**
+ * Strict Debug Endpoint Limit
+ * 10 requests per hour per IP
+ */
+const debugLimiter = createLimiter({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 10,
+  message: 'Too many debug requests.'
+});
+
 module.exports = {
   authLimiter,
   registerLimiter,
@@ -89,4 +129,8 @@ module.exports = {
   uploadLimiter,
   apiLimiter,
   friendRequestLimiter,
+  refreshLimiter,
+  logoutLimiter,
+  forgotPasswordLimiter,
+  debugLimiter,
 };

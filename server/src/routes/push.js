@@ -1,13 +1,21 @@
 const express = require('express');
 const { db } = require('../database');
 const { authenticateToken } = require('../middleware/auth');
+const { debugLimiter } = require('../middleware/rateLimit');
 const { sendPushNotification } = require('../services/push');
 const asyncHandler = require('../utils/asyncHandler');
 
 const router = express.Router();
+const requireDebugEndpointsEnabled = (req, res, next) => {
+    const debugEnabled = process.env.ENABLE_DEBUG_ENDPOINTS === 'true';
+    if (process.env.NODE_ENV === 'production' && !debugEnabled) {
+        return res.status(404).json({ error: 'Not found' });
+    }
+    next();
+};
 
 // Send test notification (for debugging)
-router.post('/test', authenticateToken, asyncHandler(async (req, res) => {
+router.post('/test', authenticateToken, debugLimiter, requireDebugEndpointsEnabled, asyncHandler(async (req, res) => {
     const { title = 'Test', body = 'This is a test notification' } = req.body;
     
     const result = await sendPushNotification(
@@ -60,7 +68,7 @@ router.delete('/unregister', authenticateToken, asyncHandler(async (req, res) =>
 }));
 
 // Get user's push tokens (for debugging)
-router.get('/tokens', authenticateToken, asyncHandler(async (req, res) => {
+router.get('/tokens', authenticateToken, debugLimiter, requireDebugEndpointsEnabled, asyncHandler(async (req, res) => {
     const tokens = db.prepare(`
         SELECT token, device_type, created_at 
         FROM push_tokens 

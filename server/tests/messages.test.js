@@ -4,8 +4,8 @@ const dbModule = require('../src/database');
 const jwt = require('jsonwebtoken');
 
 describe('Messages Endpoints', () => {
-  let token1, token2;
-  let user1, user2;
+  let token1, token2, token3;
+  let user1, user2, user3;
   let chatId;
 
   beforeAll(async () => {
@@ -33,6 +33,13 @@ describe('Messages Endpoints', () => {
     const user2Id = dbModule.db.prepare('SELECT id FROM users WHERE username = ?').get('user2').id;
     user2 = { id: user2Id, username: 'user2' };
     token2 = jwt.sign({ userId: user2.id, username: user2.username }, process.env.JWT_SECRET);
+
+    dbModule.db.prepare(`
+        INSERT INTO users (username, password, display_name) VALUES (?, ?, ?)
+      `).run('user3', 'hashedpassword', 'User Three');
+    const user3Id = dbModule.db.prepare('SELECT id FROM users WHERE username = ?').get('user3').id;
+    user3 = { id: user3Id, username: 'user3' };
+    token3 = jwt.sign({ userId: user3.id, username: user3.username }, process.env.JWT_SECRET);
 
     // 4. Create Friendship (might be needed for DM)
     dbModule.db.prepare(`
@@ -92,6 +99,68 @@ describe('Messages Endpoints', () => {
 
       expect(res.body[0].content).toBe('Msg 1'); 
       expect(res.body[1].content).toBe('Msg 2');
+    });
+
+    it('should clamp oversized limits safely', async () => {
+      for (let i = 0; i < 120; i++) {
+        dbModule.db.prepare(`
+          INSERT INTO messages (chat_id, user_id, content, message_type) VALUES (?, ?, ?, ?)
+        `).run(chatId, user1.id, `Msg ${i}`, 'text');
+      }
+
+      const res = await request(app)
+        .get(`/api/messages/${chatId}?limit=500`)
+        .set('Authorization', `Bearer ${token1}`);
+
+      expect(res.statusCode).toBe(200);
+      expect(Array.isArray(res.body)).toBe(true);
+      expect(res.body.length).toBe(100);
+    });
+  });
+
+  describe('Authorization checks on message actions', () => {
+    it('should reject non-member reaction/read/pin/unpin/pins/edit/delete access', async () => {
+      const result = dbModule.db.prepare(`
+        INSERT INTO messages (chat_id, user_id, content, message_type) VALUES (?, ?, ?, ?)
+      `).run(chatId, user1.id, 'Protected Msg', 'text');
+      const messageId = result.lastInsertRowid;
+
+      const reactRes = await request(app)
+        .post(`/api/messages/${messageId}/react`)
+        .set('Authorization', `Bearer ${token3}`)
+        .send({ emoji: '🔥' });
+      expect(reactRes.statusCode).toBe(403);
+
+      const readRes = await request(app)
+        .post(`/api/messages/${messageId}/read`)
+        .set('Authorization', `Bearer ${token3}`);
+      expect(readRes.statusCode).toBe(403);
+
+      const pinRes = await request(app)
+        .post(`/api/messages/${messageId}/pin`)
+        .set('Authorization', `Bearer ${token3}`);
+      expect(pinRes.statusCode).toBe(403);
+
+      const unpinRes = await request(app)
+        .delete(`/api/messages/${messageId}/pin`)
+        .set('Authorization', `Bearer ${token3}`);
+      expect(unpinRes.statusCode).toBe(403);
+
+      const pinsRes = await request(app)
+        .get(`/api/messages/pins/${chatId}`)
+        .set('Authorization', `Bearer ${token3}`);
+      expect(pinsRes.statusCode).toBe(403);
+
+      const editRes = await request(app)
+        .put(`/api/messages/${messageId}`)
+        .set('Authorization', `Bearer ${token3}`)
+        .send({ content: 'Nope' });
+      expect(editRes.statusCode).toBe(403);
+
+      const deleteRes = await request(app)
+        .delete(`/api/messages/${messageId}`)
+        .set('Authorization', `Bearer ${token3}`);
+      expect(deleteRes.statusCode).toBe(403);
     });
   });
 });

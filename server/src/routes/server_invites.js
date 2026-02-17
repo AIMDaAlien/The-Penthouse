@@ -38,7 +38,10 @@ router.get('/:code', asyncHandler(async (req, res) => {
 router.post('/server/:serverId', authenticateToken, asyncHandler(async (req, res) => {
     const { serverId } = req.params;
     const userId = req.user.userId;
-    const { maxUses } = req.body;
+    const parsedMaxUses = Number(req.body.maxUses);
+    const maxUses = Number.isFinite(parsedMaxUses) && parsedMaxUses > 0
+        ? Math.floor(parsedMaxUses)
+        : null;
 
     // Verify user is a member of the server
     const member = db.prepare('SELECT * FROM server_members WHERE server_id = ? AND user_id = ?')
@@ -53,7 +56,7 @@ router.post('/server/:serverId', authenticateToken, asyncHandler(async (req, res
     db.prepare(`
             INSERT INTO server_invites (server_id, code, created_by, max_uses)
             VALUES (?, ?, ?, ?)
-        `).run(serverId, code, userId, maxUses || null);
+        `).run(serverId, code, userId, maxUses);
 
     res.json({ success: true, code });
 }));
@@ -62,27 +65,48 @@ router.post('/server/:serverId', authenticateToken, asyncHandler(async (req, res
 router.post('/:code/join', authenticateToken, asyncHandler(async (req, res) => {
     const { code } = req.params;
     const userId = req.user.userId;
+    let invite;
+    let alreadyMember = false;
 
-    const invite = db.prepare('SELECT * FROM server_invites WHERE code = ?').get(code);
-    if (!invite) {
-        return res.status(404).json({ error: 'Invite not found' });
+    try {
+        db.exec('BEGIN IMMEDIATE');
+
+        invite = db.prepare('SELECT * FROM server_invites WHERE code = ?').get(code);
+        if (!invite) {
+            db.exec('ROLLBACK');
+            return res.status(404).json({ error: 'Invite not found' });
+        }
+
+        if (invite.max_uses !== null && invite.uses >= invite.max_uses) {
+            db.exec('ROLLBACK');
+            return res.status(410).json({ error: 'Invite has reached max uses' });
+        }
+
+        // Check if user is already a member
+        const existingMember = db.prepare('SELECT * FROM server_members WHERE server_id = ? AND user_id = ?')
+            .get(invite.server_id, userId);
+
+        if (existingMember) {
+            alreadyMember = true;
+        } else {
+            // Add user to server
+            db.prepare('INSERT INTO server_members (server_id, user_id) VALUES (?, ?)')
+                .run(invite.server_id, userId);
+
+            // Update invite uses
+            db.prepare('UPDATE server_invites SET uses = uses + 1 WHERE id = ?')
+                .run(invite.id);
+        }
+
+        db.exec('COMMIT');
+    } catch (error) {
+        try { db.exec('ROLLBACK'); } catch (_) {}
+        throw error;
     }
 
-    // Check if user is already a member
-    const existingMember = db.prepare('SELECT * FROM server_members WHERE server_id = ? AND user_id = ?')
-        .get(invite.server_id, userId);
-
-    if (existingMember) {
+    if (alreadyMember) {
         return res.json({ success: true, alreadyMember: true, serverId: invite.server_id });
     }
-
-    // Add user to server
-    db.prepare('INSERT INTO server_members (server_id, user_id) VALUES (?, ?)')
-        .run(invite.server_id, userId);
-
-    // Update invite uses
-    db.prepare('UPDATE server_invites SET uses = uses + 1 WHERE id = ?')
-        .run(invite.id);
 
     // Get the General channel to return for redirection
     const generalChannel = db.prepare(`

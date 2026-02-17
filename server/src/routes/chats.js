@@ -22,9 +22,11 @@ router.get('/', authenticateToken, asyncHandler(async (req, res) => {
          WHERE m2.chat_id = c.id 
          AND m2.user_id != ? 
          AND rr.id IS NULL) as unread_count,
-        -- For DMs, fetch the other user's name
+        -- For DMs, fetch the other user's name and ID
         (SELECT u.display_name FROM chat_members cm2 JOIN users u ON cm2.user_id = u.id WHERE cm2.chat_id = c.id AND cm2.user_id != ? LIMIT 1) as other_display_name,
-        (SELECT u.username FROM chat_members cm2 JOIN users u ON cm2.user_id = u.id WHERE cm2.chat_id = c.id AND cm2.user_id != ? LIMIT 1) as other_username
+        (SELECT u.username FROM chat_members cm2 JOIN users u ON cm2.user_id = u.id WHERE cm2.chat_id = c.id AND cm2.user_id != ? LIMIT 1) as other_username,
+        (SELECT u.id FROM chat_members cm2 JOIN users u ON cm2.user_id = u.id WHERE cm2.chat_id = c.id AND cm2.user_id != ? LIMIT 1) as other_user_id
+        
       FROM chats c
       INNER JOIN chat_members cm ON c.id = cm.chat_id
       WHERE cm.user_id = ? AND c.server_id IS NULL
@@ -54,6 +56,7 @@ router.get('/', authenticateToken, asyncHandler(async (req, res) => {
             lastMessage: c.last_message,
             lastMessageAt: c.last_message_at,
             unreadCount: c.unread_count || 0,
+            otherUserId: c.other_user_id, // Add this field
             createdAt: c.created_at
         };
     }));

@@ -4,19 +4,26 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { db } = require('../database');
 const { authenticateToken } = require('../middleware/auth');
-const { authLimiter, registerLimiter } = require('../middleware/rateLimit');
+const { authLimiter, registerLimiter, refreshLimiter, logoutLimiter, forgotPasswordLimiter } = require('../middleware/rateLimit');
 const { validateLogin, validateRegister, validateForgotPassword, validateResetPassword } = require('../middleware/validation');
 const { sendPasswordResetEmail } = require('../services/email');
 const asyncHandler = require('../utils/asyncHandler');
 
 const router = express.Router();
+const hashToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
+const debugLog = (...args) => {
+    if (process.env.NODE_ENV !== 'production') console.log(...args);
+};
 
 // Register new user
 router.post('/register', registerLimiter, validateRegister, asyncHandler(async (req, res) => {
-    const { username, email, password, displayName } = req.body;
+    const { username, password, displayName } = req.body;
+    const email = req.body.email?.trim() ? req.body.email.trim().toLowerCase() : null;
 
     // Check if username or email exists
-    const existing = db.prepare('SELECT id FROM users WHERE username = ? OR email = ?').get(username, email);
+    const existing = email
+        ? db.prepare('SELECT id FROM users WHERE username = ? OR email = ?').get(username, email)
+        : db.prepare('SELECT id FROM users WHERE username = ?').get(username);
     if (existing) {
         return res.status(409).json({ error: 'Username or email already taken' });
     }
@@ -29,12 +36,22 @@ router.post('/register', registerLimiter, validateRegister, asyncHandler(async (
         'INSERT INTO users (username, email, password, display_name) VALUES (?, ?, ?, ?)'
     ).run(username, email, hashedPassword, displayName || username);
 
-    // Generate token
-    const token = jwt.sign(
+    // Generate Access Token (15m)
+    const accessToken = jwt.sign(
         { userId: result.lastInsertRowid, username },
         process.env.JWT_SECRET,
-        { expiresIn: '30d' }
+        { expiresIn: '15m' }
     );
+
+    // Generate Refresh Token (7d)
+    const refreshToken = crypto.randomBytes(40).toString('hex');
+    const refreshTokenHash = hashToken(refreshToken);
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+
+    // Store Refresh Token
+    db.prepare('INSERT INTO refresh_tokens (user_id, token, token_hash, expires_at) VALUES (?, ?, ?, ?)')
+      .run(result.lastInsertRowid, refreshTokenHash, refreshTokenHash, expiresAt.toISOString());
 
     res.status(201).json({
         message: 'Account created successfully',
@@ -43,7 +60,8 @@ router.post('/register', registerLimiter, validateRegister, asyncHandler(async (
             username,
             displayName: displayName || username
         },
-        token
+        accessToken,
+        refreshToken
     });
 }));
 
@@ -51,7 +69,7 @@ router.post('/register', registerLimiter, validateRegister, asyncHandler(async (
 router.post('/login', authLimiter, validateLogin, asyncHandler(async (req, res) => {
     const { username, password } = req.body;
 
-    console.log('Login attempt for:', username);
+    debugLog('Login attempt for:', username);
 
     // Find user
     const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
@@ -66,12 +84,22 @@ router.post('/login', authLimiter, validateLogin, asyncHandler(async (req, res) 
         return res.status(401).json({ error: 'Invalid username or password' });
     }
 
-    // Generate token
-    const token = jwt.sign(
+    // Generate Access Token (15m)
+    const accessToken = jwt.sign(
         { userId: user.id, username: user.username },
         process.env.JWT_SECRET,
-        { expiresIn: '30d' }
+        { expiresIn: '15m' }
     );
+
+    // Generate Refresh Token (7d)
+    const refreshToken = crypto.randomBytes(40).toString('hex');
+    const refreshTokenHash = hashToken(refreshToken);
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+
+    // Store Refresh Token
+    db.prepare('INSERT INTO refresh_tokens (user_id, token, token_hash, expires_at) VALUES (?, ?, ?, ?)')
+      .run(user.id, refreshTokenHash, refreshTokenHash, expiresAt.toISOString());
 
     res.json({
         message: 'Login successful',
@@ -81,8 +109,67 @@ router.post('/login', authLimiter, validateLogin, asyncHandler(async (req, res) 
             displayName: user.display_name,
             avatarUrl: user.avatar_url
         },
-        token
+        accessToken,
+        refreshToken
     });
+}));
+
+// Refresh Token
+router.post('/refresh', refreshLimiter, asyncHandler(async (req, res) => {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+        return res.status(400).json({ error: 'Refresh token required' });
+    }
+
+    const refreshTokenHash = hashToken(refreshToken);
+
+    // Find valid token
+    const storedToken = db.prepare(`
+        SELECT * FROM refresh_tokens 
+        WHERE (token_hash = ? OR token = ?)
+        AND expires_at > CURRENT_TIMESTAMP
+        LIMIT 1
+    `).get(refreshTokenHash, refreshToken);
+
+    if (!storedToken) {
+        return res.status(401).json({ error: 'Invalid or expired refresh token' });
+    }
+
+    // Revoke used token (Rotation)
+    db.prepare('DELETE FROM refresh_tokens WHERE id = ?').run(storedToken.id);
+
+    // Generate New Access Token (15m)
+    const user = db.prepare('SELECT username FROM users WHERE id = ?').get(storedToken.user_id);
+    const newAccessToken = jwt.sign(
+        { userId: storedToken.user_id, username: user.username },
+        process.env.JWT_SECRET,
+        { expiresIn: '15m' }
+    );
+
+    // Generate New Refresh Token (7d)
+    const newRefreshToken = crypto.randomBytes(40).toString('hex');
+    const newRefreshTokenHash = hashToken(newRefreshToken);
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+
+    db.prepare('INSERT INTO refresh_tokens (user_id, token, token_hash, expires_at) VALUES (?, ?, ?, ?)')
+      .run(storedToken.user_id, newRefreshTokenHash, newRefreshTokenHash, expiresAt.toISOString());
+
+    res.json({
+        accessToken: newAccessToken,
+        refreshToken: newRefreshToken
+    });
+}));
+
+// Logout (Revoke Refresh Token)
+router.post('/logout', logoutLimiter, asyncHandler(async (req, res) => {
+    const { refreshToken } = req.body;
+    if (refreshToken) {
+        const refreshTokenHash = hashToken(refreshToken);
+        db.prepare('DELETE FROM refresh_tokens WHERE token_hash = ? OR token = ?').run(refreshTokenHash, refreshToken);
+    }
+    res.json({ message: 'Logged out successfully' });
 }));
 
 // Get current user profile
@@ -138,7 +225,7 @@ router.put('/profile', authenticateToken, asyncHandler(async (req, res) => {
 // ─────────────────────────────────────────────────────────────
 
 // Request Password Reset
-router.post('/forgot-password', validateForgotPassword, asyncHandler(async (req, res) => {
+router.post('/forgot-password', forgotPasswordLimiter, validateForgotPassword, asyncHandler(async (req, res) => {
     const { email } = req.body;
     
     // Find user by email
@@ -151,13 +238,14 @@ router.post('/forgot-password', validateForgotPassword, asyncHandler(async (req,
 
     // Generate token
     const token = crypto.randomBytes(32).toString('hex');
+    const tokenHash = hashToken(token);
     const expiresAt = new Date(Date.now() + 3600000); // 1 hour
 
     // Save to DB
     db.prepare(`
-        INSERT INTO password_resets (user_id, token, expires_at)
-        VALUES (?, ?, ?)
-    `).run(user.id, token, expiresAt.toISOString());
+        INSERT INTO password_resets (user_id, token, token_hash, expires_at)
+        VALUES (?, ?, ?, ?)
+    `).run(user.id, tokenHash, tokenHash, expiresAt.toISOString());
 
     // Send Email
     await sendPasswordResetEmail(email, token, user.username);
@@ -168,12 +256,15 @@ router.post('/forgot-password', validateForgotPassword, asyncHandler(async (req,
 // Reset Password
 router.post('/reset-password', validateResetPassword, asyncHandler(async (req, res) => {
     const { token, newPassword } = req.body;
+    const tokenHash = hashToken(token);
 
     // Find valid token
     const resetRecord = db.prepare(`
         SELECT * FROM password_resets 
-        WHERE token = ? AND expires_at > CURRENT_TIMESTAMP
-    `).get(token);
+        WHERE (token_hash = ? OR token = ?)
+        AND expires_at > CURRENT_TIMESTAMP
+        LIMIT 1
+    `).get(tokenHash, token);
 
     if (!resetRecord) {
         return res.status(400).json({ error: 'Invalid or expired token' });
