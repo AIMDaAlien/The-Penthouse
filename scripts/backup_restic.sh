@@ -10,6 +10,12 @@ if [ ! -f "$BACKUP_ENV_FILE" ]; then
   exit 1
 fi
 
+example_file="$(dirname "$BACKUP_ENV_FILE")/.backup.env.example"
+if [ -f "$example_file" ] && cmp -s "$BACKUP_ENV_FILE" "$example_file"; then
+  echo "Backup is not configured yet (.backup.env matches .backup.env.example); skipping."
+  exit 0
+fi
+
 if [ ! -d "$APP_ROOT/data" ]; then
   echo "Missing app data directory: $APP_ROOT/data"
   exit 1

@@ -11,6 +11,13 @@ if [ ! -f "$BACKUP_ENV_FILE" ]; then
   exit 1
 fi
 
+example_file="$(dirname "$BACKUP_ENV_FILE")/.backup.env.example"
+if [ -f "$example_file" ] && cmp -s "$BACKUP_ENV_FILE" "$example_file"; then
+  echo "Backup is not configured yet (.backup.env matches .backup.env.example)."
+  echo "Edit $BACKUP_ENV_FILE, then re-run init."
+  exit 1
+fi
+
 repo_value="$(grep -E '^RESTIC_REPOSITORY=' "$BACKUP_ENV_FILE" | tail -n1 | cut -d= -f2- || true)"
 extra_mount=()
 if [[ "$repo_value" == /* ]]; then
