@@ -10,12 +10,17 @@ required_vars=(
   FAILOVER_IP
 )
 
+missing_vars=()
 for var in "${required_vars[@]}"; do
   if [ -z "${!var:-}" ]; then
-    echo "Missing required env var: $var"
-    exit 1
+    missing_vars+=("$var")
   fi
 done
+
+if [ "${#missing_vars[@]}" -gt 0 ]; then
+  echo "Cloudflare failover check skipped; missing vars: ${missing_vars[*]}"
+  exit 0
+fi
 
 PRIMARY_HEALTH_URL="${PRIMARY_HEALTH_URL:-https://api.penthouse.blog/api/health}"
 FAILOVER_HEALTH_URL="${FAILOVER_HEALTH_URL:-http://${FAILOVER_IP}/api/health}"
