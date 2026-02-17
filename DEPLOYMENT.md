@@ -1,200 +1,198 @@
-# Deploying The Penthouse on TrueNAS (Self-Hosted)
+# Deploying The Penthouse on TrueNAS (Production)
 
-> Run your own private social server on a TrueNAS Scale system using Docker Compose.
-
----
-
-## Prerequisites
-
-- **TrueNAS Scale** (or any Docker-capable server)
-- SSH access to your server
-- A local network IP (e.g. `192.168.1.100`)
-- *(Optional)* A domain name for HTTPS via reverse proxy
+This guide is the hardened baseline for your on-prem setup:
+- Public entry on `https://penthouse.blog`
+- API/WebSocket on `https://api.penthouse.blog`
+- Git-push auto deploy to TrueNAS with self-hosted runner
+- Encrypted offsite backups with `restic`
+- DNS failover automation via Cloudflare workflow
 
 ---
 
-## 1. Clone the Repository
+## 1. Prerequisites
+
+- TrueNAS SCALE host with Docker Compose
+- Repo: `https://github.com/AIMDaAlien/The-Penthouse`
+- DNS control for `penthouse.blog` and `api.penthouse.blog`
+- Router/NAT control for inbound forwarding
+- GitHub repo admin access (for Actions secrets)
+
+---
+
+## 2. Clone + Environment
 
 ```bash
 ssh root@your-truenas-ip
-cd /mnt/your-pool/apps  # or wherever you store apps
-git clone https://github.com/AIMDaAlien/The-Penthouse.git
-cd The-Penthouse
-```
-
----
-
-## 2. Configure Environment
-
-```bash
+cd /mnt/Storage_Pool/penthouse
+git clone https://github.com/AIMDaAlien/The-Penthouse.git app
+cd app
 cp server/.env.example .env
 ```
 
-Edit `.env` with your values:
+Set required production values in `.env`:
 
 ```env
-# REQUIRED — generate a secure secret
-JWT_SECRET=$(openssl rand -base64 32)
-
-# Production mode
 NODE_ENV=production
-
-# Your server's local IP or domain
-DOMAIN=192.168.1.100
-
-# CORS — allow all for mobile app, or restrict to your domain
-CORS_ORIGIN=*
-
-# Optional: GIF APIs
-GIPHY_API_KEY=your-key
-KLIPY_API_KEY=your-key
-
-# Optional: Email for password recovery
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=your-email@gmail.com
-SMTP_PASS=your-app-password
-SMTP_FROM=The Penthouse <your-email@gmail.com>
+PORT=3000
+JWT_SECRET=<openssl rand -base64 32>
+CORS_ORIGIN=https://penthouse.blog,https://api.penthouse.blog
+DOMAIN=penthouse.blog
+ENABLE_DEBUG_ENDPOINTS=false
 ```
 
-> ⚠️ **Never use the default JWT_SECRET in production.**
+Notes:
+- `JWT_SECRET` must be set.
+- `CORS_ORIGIN` must be set.
+- Wildcard defaults are blocked by compose hardening.
 
 ---
 
-## 3. Build & Start
+## 3. DNS + Port Forwarding
+
+Create DNS records:
+- `A penthouse.blog -> <your public IP>`
+- `A api.penthouse.blog -> <your public IP>`
+
+Router forwards:
+- WAN `80 -> TrueNAS:9080`
+- WAN `443 -> TrueNAS:9443`
+
+---
+
+## 4. Start and Validate
 
 ```bash
-docker compose up -d --build
+./scripts/start_stack.sh
 ```
 
-Verify it's running:
+Validate health:
 
 ```bash
-curl http://localhost:3000/api/health
-# Expected: {"status":"ok","app":"The Penthouse","version":"1.0.0"}
+docker compose exec -T penthouse-app wget -q --spider http://localhost:3000/api/health && echo ok
 ```
 
-View logs:
+View running services:
 
 ```bash
-docker compose logs -f penthouse-app
+docker compose ps
 ```
 
 ---
 
-## 4. Connect Mobile App
+## 5. Auto-Start + Self-Heal
 
-On your phone, update the API URL in the mobile app to point to your TrueNAS server:
-
-```
-http://192.168.1.100:3000
-```
-
-Replace `192.168.1.100` with your TrueNAS IP address.
-
-> **Finding your TrueNAS IP**: Go to TrueNAS Web UI → Network → Interfaces, or run `hostname -I` via SSH.
-
----
-
-## 5. Data Persistence
-
-Your database and uploaded files are stored in `./data/` on the host, mapped to `/app/data` inside the container.
-
-| Host Path              | Container Path    | Contents              |
-|------------------------|-------------------|-----------------------|
-| `./data/penthouse.db`  | `/app/data/penthouse.db` | SQLite database |
-| `./data/uploads/`      | `/app/data/uploads/`     | Media files     |
-
-To back up:
+Install cron jobs for reboot start, watchdog, and backup schedule:
 
 ```bash
-cp -r ./data ./data-backup-$(date +%Y%m%d)
+./scripts/enable_autostart.sh
+crontab -l
 ```
 
----
-
-## 6. (Optional) HTTPS with Reverse Proxy
-
-For secure access outside your local network, set up a reverse proxy with SSL.
-
-### Using Nginx Proxy Manager (recommended for TrueNAS)
-
-> **Note**: If Nginx Proxy Manager freezes or fails to install (common on some TrueNAS setups), **skip this step**. You can use the app directly via `http://192.168.0.120:3000`.
-
-1. Install Nginx Proxy Manager from TrueNAS Apps catalog
-2. Add a new Proxy Host:
-   - **Domain**: `chat.yourdomain.com`
-   - **Forward Hostname/IP**: `penthouse-app` (or your TrueNAS IP)
-   - **Forward Port**: `3000`
-   - **Websocket Support**: ✅ Enabled (critical for real-time chat)
-3. Request an SSL certificate via Let's Encrypt
-4. Update your `.env`:
-   ```
-   DOMAIN=chat.yourdomain.com
-   CORS_ORIGIN=https://chat.yourdomain.com
-   ```
-
-### Option 3: Custom Domain (Built-in Caddy) — Recommended for 'penthouse.blog'
-
-Since you have a domain (`penthouse.blog`), we can use the built-in Caddy server to handle HTTPS automatically.
-
-1. **Configure DNS**:
-   - Go to your domain registrar (Namecheap, GoDaddy, etc.).
-   - Create an **A Record** for `penthouse.blog` pointing to your **Home Public IP**.
-   - (Optional) Create a CNAME for `www` pointing to `penthouse.blog`.
-
-2. **Configure Router Port Forwarding**:
-   - Access your router settings (usually `192.168.0.1` or `192.168.1.1`).
-   - Forward external port **80** to your TrueNAS IP **9080**.
-   - Forward external port **443** to your TrueNAS IP **9443**.
-
-   > **Why 9080/9443?** TrueNAS uses ports 80/443 for its own UI, so we map them to alternate ports on the NAS, but the outside world sees standard 80/443.
-
-3. **Verify**:
-   - Visit `https://penthouse.blog` in your browser. It should show the landing page secure with SSL!
+Installed jobs:
+- `@reboot` stack start
+- `*/5` watchdog health check + recovery
+- `03:17 daily` encrypted backup (when `.backup.env` exists)
+- `03:47 Sunday` backup prune (when `.backup.env` exists)
 
 ---
 
-## 7. Updating
+## 6. Encrypted Offsite Backups (Restic)
+
+Create backup credential file:
 
 ```bash
-cd /mnt/your-pool/apps/The-Penthouse
-git pull
-docker compose up -d --build
+cp .backup.env.example .backup.env
+chmod 600 .backup.env
+```
+
+Fill `.backup.env` with your B2/S3 credentials and repository URL.
+
+Initialize repository once:
+
+```bash
+./scripts/backup_init_restic.sh
+```
+
+Run immediate backup test:
+
+```bash
+./scripts/backup_restic.sh
+```
+
+Run retention prune manually:
+
+```bash
+./scripts/backup_prune_restic.sh
+```
+
+Restore test to a temp location:
+
+```bash
+./scripts/backup_restore_restic.sh latest /tmp/penthouse-restore-test
 ```
 
 ---
 
-## 8. Troubleshooting
+## 7. Git Push Auto-Deploy
 
-| Issue | Solution |
-|-------|----------|
-| `ECONNREFUSED` | Check if container is running: `docker ps` |
-| WebSocket not connecting | Ensure port 3000 is open and WSS is supported by proxy |
-| Push notifications not working | Must use a physical device with Expo Go; check `docker compose logs` for errors |
-| Database locked | Only one instance should access the SQLite file at a time |
-| Media not loading | Check `./data/uploads/` permissions: `chmod -R 755 ./data/uploads` |
+Workflow:
+- `.github/workflows/deploy-truenas.yml`
+
+Behavior:
+- Runs on self-hosted runner labels: `truenas`, `penthouse`
+- Pulls `main`, rebuilds, restarts compose
+- Verifies health inside container
+
+Runner should be configured on TrueNAS and kept online at boot.
 
 ---
 
-## Architecture
+## 8. Cloudflare DNS Failover
 
-```
-┌────────────────────┐
-│   Mobile App       │  (Expo / React Native)
-│   (your phone)     │
-└────────┬───────────┘
-         │  HTTP + WebSocket
-         ▼
-┌────────────────────┐
-│  TrueNAS Server    │
-│  ┌──────────────┐  │
-│  │  Docker       │  │
-│  │  ┌──────────┐ │  │
-│  │  │ Penthouse│ │  │
-│  │  │  :3000   │ │  │
-│  │  └──────────┘ │  │
-│  └──────────────┘  │
-│  📁 ./data/         │  (SQLite + uploads)
-└────────────────────┘
-```
+Workflow:
+- `.github/workflows/cloudflare-failover.yml`
+
+Policy:
+- Every 5 minutes, check primary health and failover health
+- If primary fails and failover is healthy, switch `A` records
+- If primary recovers, switch records back to primary
+
+Required GitHub repository secrets:
+- `CF_API_TOKEN`
+- `CF_ZONE_ID`
+- `CF_RECORD_PENTHOUSE_ID`
+- `CF_RECORD_API_ID`
+- `PRIMARY_IP`
+- `FAILOVER_IP`
+- `PRIMARY_HEALTH_URL` (recommended: `https://api.penthouse.blog/api/health`)
+- `FAILOVER_HEALTH_URL` (health URL for backup site)
+
+Cloudflare API token minimum scope:
+- Zone:DNS Edit
+- Zone:Zone Read
+
+---
+
+## 9. Collaboration Setup (Remote Contributors)
+
+Recommended model for outside collaborators/testers:
+- Give GitHub repo access (not server root access)
+- Protect `main` branch (require PR + status checks)
+- Deploy only on merged PRs to `main`
+- Keep TrueNAS access key-only and restricted to one admin user
+
+For live testing from Reykjavik (or any region):
+- Share `https://penthouse.blog` and `https://api.penthouse.blog`
+- Create dedicated tester accounts/invite links
+- Use a staging branch + optional staging stack for risky tests
+
+---
+
+## 10. Troubleshooting
+
+- `docker compose config` fails: missing required env vars in `.env`
+- Backups not running: check `.backup.env` path and cron logs:
+  - `/var/log/penthouse-backup.log`
+  - `/var/log/penthouse-backup-prune.log`
+- Failover workflow errors: verify Cloudflare secret IDs and token scope
+- Cert issues: confirm public DNS and WAN forwarding 80/443
