@@ -35,5 +35,6 @@ fi
 
 if [ "$needs_restart" -eq 1 ]; then
   echo "Recovering stack..."
+  ./scripts/prepare_data_dirs.sh
   docker compose up -d
 fi

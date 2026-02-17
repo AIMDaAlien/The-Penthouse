@@ -7,7 +7,7 @@ set -euo pipefail
 
 APP_ROOT="${PENTHOUSE_APP_ROOT:-/mnt/Storage_Pool/penthouse/app}"
 LOG_FILE="/var/log/penthouse-autostart.log"
-START_CMD="cd ${APP_ROOT} && /usr/bin/docker compose up -d"
+START_CMD="cd ${APP_ROOT} && ./scripts/prepare_data_dirs.sh && /usr/bin/docker compose up -d"
 CRON_ENTRY="@reboot ${START_CMD} >> ${LOG_FILE} 2>&1"
 
 WATCHDOG_LOG="/var/log/penthouse-watchdog.log"
