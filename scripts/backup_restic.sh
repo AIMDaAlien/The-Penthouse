@@ -15,11 +15,19 @@ if [ ! -d "$APP_ROOT/data" ]; then
   exit 1
 fi
 
+repo_value="$(grep -E '^RESTIC_REPOSITORY=' "$BACKUP_ENV_FILE" | tail -n1 | cut -d= -f2- || true)"
+extra_mount=()
+if [[ "$repo_value" == /* ]]; then
+  mkdir -p "$repo_value"
+  extra_mount=(-v "${repo_value}:${repo_value}")
+fi
+
 HOST_TAG="$(hostname)"
 STAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 echo "Starting encrypted backup at $STAMP"
 docker run --rm \
+  "${extra_mount[@]}" \
   --env-file "$BACKUP_ENV_FILE" \
   -v "$APP_ROOT:/backup/src:ro" \
   "$RESTIC_IMAGE" \

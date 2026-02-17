@@ -11,13 +11,20 @@ if [ ! -f "$BACKUP_ENV_FILE" ]; then
   exit 1
 fi
 
+repo_value="$(grep -E '^RESTIC_REPOSITORY=' "$BACKUP_ENV_FILE" | tail -n1 | cut -d= -f2- || true)"
+extra_mount=()
+if [[ "$repo_value" == /* ]]; then
+  mkdir -p "$repo_value"
+  extra_mount=(-v "${repo_value}:${repo_value}")
+fi
+
 echo "Checking restic repository..."
-if docker run --rm --env-file "$BACKUP_ENV_FILE" "$RESTIC_IMAGE" snapshots >/dev/null 2>&1; then
+if docker run --rm "${extra_mount[@]}" --env-file "$BACKUP_ENV_FILE" "$RESTIC_IMAGE" snapshots >/dev/null 2>&1; then
   echo "Restic repository is already initialized."
   exit 0
 fi
 
 echo "Initializing restic repository..."
-docker run --rm --env-file "$BACKUP_ENV_FILE" "$RESTIC_IMAGE" init
+docker run --rm "${extra_mount[@]}" --env-file "$BACKUP_ENV_FILE" "$RESTIC_IMAGE" init
 
 echo "Restic repository initialized."

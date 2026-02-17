@@ -12,10 +12,18 @@ if [ ! -f "$BACKUP_ENV_FILE" ]; then
   exit 1
 fi
 
+repo_value="$(grep -E '^RESTIC_REPOSITORY=' "$BACKUP_ENV_FILE" | tail -n1 | cut -d= -f2- || true)"
+extra_mount=()
+if [[ "$repo_value" == /* ]]; then
+  mkdir -p "$repo_value"
+  extra_mount=(-v "${repo_value}:${repo_value}")
+fi
+
 mkdir -p "$TARGET_DIR"
 
 echo "Restoring snapshot '$SNAPSHOT' into '$TARGET_DIR'"
 docker run --rm \
+  "${extra_mount[@]}" \
   --env-file "$BACKUP_ENV_FILE" \
   -v "$TARGET_DIR:/restore" \
   "$RESTIC_IMAGE" \

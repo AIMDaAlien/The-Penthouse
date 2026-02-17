@@ -14,8 +14,16 @@ if [ ! -f "$BACKUP_ENV_FILE" ]; then
   exit 1
 fi
 
+repo_value="$(grep -E '^RESTIC_REPOSITORY=' "$BACKUP_ENV_FILE" | tail -n1 | cut -d= -f2- || true)"
+extra_mount=()
+if [[ "$repo_value" == /* ]]; then
+  mkdir -p "$repo_value"
+  extra_mount=(-v "${repo_value}:${repo_value}")
+fi
+
 echo "Pruning old snapshots (daily=${KEEP_DAILY}, weekly=${KEEP_WEEKLY}, monthly=${KEEP_MONTHLY})"
 docker run --rm \
+  "${extra_mount[@]}" \
   --env-file "$BACKUP_ENV_FILE" \
   "$RESTIC_IMAGE" \
   forget \
