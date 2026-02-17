@@ -60,6 +60,8 @@ router.post('/register', registerLimiter, validateRegister, asyncHandler(async (
             username,
             displayName: displayName || username
         },
+        // Backwards compatibility for existing mobile clients.
+        token: accessToken,
         accessToken,
         refreshToken
     });
@@ -109,6 +111,8 @@ router.post('/login', authLimiter, validateLogin, asyncHandler(async (req, res) 
             displayName: user.display_name,
             avatarUrl: user.avatar_url
         },
+        // Backwards compatibility for existing mobile clients.
+        token: accessToken,
         accessToken,
         refreshToken
     });
