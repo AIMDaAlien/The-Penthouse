@@ -13,9 +13,9 @@ They are written to be useful to other people doing something similar: self-host
 - [[05-Git-Push-Autodeploy-TrueNAS-Runner]]
 - [[06-Deploy-Downtime-Minimization]]
 - [[07-Security-Gotchas]]
+- [[08-SSH-Hardening-TrueNAS]]
 
 ## Timeline (Concrete Dates)
 
 - **2026-02-17**: DNS IP drift caused ACME timeouts and downtime until Cloudflare `A` records were corrected to the actual public IP. Added DDNS to prevent recurrence.
 - **2026-02-17 to 2026-02-18**: Backend hardening pass (auth, invites, message/WS authorization, rate limits, upload safety, token hashing) + production deployment automation and downtime reduction.
-

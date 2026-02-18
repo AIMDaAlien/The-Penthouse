@@ -85,8 +85,10 @@ const corsOptions = {
   credentials: !allowWildcard
 };
 app.use(cors(corsOptions));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+const jsonLimit = process.env.JSON_BODY_LIMIT || '256kb';
+const urlencodedLimit = process.env.URLENCODED_BODY_LIMIT || '256kb';
+app.use(express.json({ limit: jsonLimit }));
+app.use(express.urlencoded({ extended: true, limit: urlencodedLimit }));
 
 // Global Rate Limiting for API routes
 app.use('/api', apiLimiter);

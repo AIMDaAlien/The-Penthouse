@@ -1,11 +1,18 @@
-const initSqlJs = require('sql.js');
 const path = require('path');
 const fs = require('fs');
+const BetterSqlite3 = require('better-sqlite3');
+
+// Keep sql.js only for one-time conversion from the legacy snapshot DB.
+const initSqlJs = require('sql.js');
 
 // Ensure data directory exists
 const dataDir = path.join(__dirname, '..', 'data');
 const uploadsDir = path.join(dataDir, 'uploads');
-const dbPath = path.join(dataDir, 'penthouse.db');
+
+// Legacy sql.js snapshot DB (in-memory export persisted to a file)
+const legacyDbPath = path.join(dataDir, 'penthouse.db');
+// Durable SQLite DB (file-backed)
+const sqlitePath = path.join(dataDir, 'penthouse.sqlite');
 
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
@@ -17,23 +24,82 @@ if (!fs.existsSync(uploadsDir)) {
 let db = null;
 let signalsRegistered = false;
 
-async function initializeDatabase() {
-  const SQL = await initSqlJs();
+// Export a stable proxy object so modules can `const { db } = require('../database')`
+// without capturing a null value before initializeDatabase() runs.
+const dbProxy = {
+  prepare: (sql) => {
+    if (!db) throw new Error('Database not initialized');
+    return db.prepare(sql);
+  },
+  exec: (sql) => {
+    if (!db) throw new Error('Database not initialized');
+    return db.exec(sql);
+  },
+  pragma: (value) => {
+    if (!db) throw new Error('Database not initialized');
+    return db.pragma(value);
+  },
+  transaction: (fn) => {
+    if (!db) throw new Error('Database not initialized');
+    return db.transaction(fn);
+  }
+};
 
-  // Load existing database or create new one
-  // Load existing database or create new one
-  if (process.env.NODE_ENV !== 'test' && fs.existsSync(dbPath)) {
-    const fileBuffer = fs.readFileSync(dbPath);
-    db = new SQL.Database(fileBuffer);
-  } else {
-    db = new SQL.Database();
+function sqlJsGetAll(sqlJsDb, sql, params = []) {
+  const stmt = sqlJsDb.prepare(sql);
+  if (params.length > 0) stmt.bind(params);
+  const results = [];
+  const columns = stmt.getColumnNames();
+
+  while (stmt.step()) {
+    const values = stmt.get();
+    const obj = {};
+    columns.forEach((col, i) => { obj[col] = values[i]; });
+    results.push(obj);
   }
 
+  stmt.free();
+  return results;
+}
+
+function convertLegacySqlJsToSqlite(sqlJsDb, sqliteDb) {
+  // Copy table rows (schema and indexes are created by the normal migrations below).
+  const legacyTables = sqlJsGetAll(
+    sqlJsDb,
+    "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+  ).map(r => r.name);
+
+  const tx = sqliteDb.transaction(() => {
+    for (const table of legacyTables) {
+      if (!table || table.startsWith('sqlite_')) continue;
+
+      const legacyCols = sqlJsGetAll(sqlJsDb, `PRAGMA table_info(${table})`).map(r => r.name);
+      const newCols = sqliteDb.prepare(`PRAGMA table_info(${table})`).all().map(r => r.name);
+      if (newCols.length === 0) continue;
+
+      const commonCols = legacyCols.filter(c => newCols.includes(c));
+      if (commonCols.length === 0) continue;
+
+      const rows = sqlJsGetAll(sqlJsDb, `SELECT ${commonCols.join(',')} FROM ${table}`);
+      if (rows.length === 0) continue;
+
+      const placeholders = commonCols.map(() => '?').join(',');
+      const insert = sqliteDb.prepare(`INSERT INTO ${table} (${commonCols.join(',')}) VALUES (${placeholders})`);
+      for (const row of rows) {
+        insert.run(...commonCols.map(c => row[c]));
+      }
+    }
+  });
+
+  tx();
+}
+
+function applySchemaMigrations(sqliteDb) {
   // Enable foreign keys
-  db.run('PRAGMA foreign_keys = ON');
+  sqliteDb.pragma('foreign_keys = ON');
 
   // Users table
-  db.run(`
+  sqliteDb.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT UNIQUE NOT NULL,
@@ -48,13 +114,13 @@ async function initializeDatabase() {
 
   // Migration: Add email column if it doesn't exist
   try {
-    db.run('ALTER TABLE users ADD COLUMN email TEXT');
+    sqliteDb.exec('ALTER TABLE users ADD COLUMN email TEXT');
   } catch (e) {
-    if (!e.message.includes('duplicate column')) console.error('Migration error (email):', e.message);
+    if (!String(e.message || '').includes('duplicate column')) console.error('Migration error (email):', e.message);
   }
 
   // Servers (Communities)
-  db.run(`
+  sqliteDb.exec(`
     CREATE TABLE IF NOT EXISTS servers (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -65,7 +131,7 @@ async function initializeDatabase() {
   `);
 
   // Server Members
-  db.run(`
+  sqliteDb.exec(`
     CREATE TABLE IF NOT EXISTS server_members (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       server_id INTEGER REFERENCES servers(id) ON DELETE CASCADE,
@@ -76,10 +142,10 @@ async function initializeDatabase() {
   `);
 
   // Chats (can be DMs, Group DMs, or Server Channels)
-  db.run(`
+  sqliteDb.exec(`
     CREATE TABLE IF NOT EXISTS chats (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT, 
+      name TEXT,
       type TEXT DEFAULT 'dm',
       server_id INTEGER REFERENCES servers(id) ON DELETE CASCADE,
       created_by INTEGER REFERENCES users(id),
@@ -88,7 +154,7 @@ async function initializeDatabase() {
   `);
 
   // Chat Members
-  db.run(`
+  sqliteDb.exec(`
     CREATE TABLE IF NOT EXISTS chat_members (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       chat_id INTEGER REFERENCES chats(id) ON DELETE CASCADE,
@@ -100,7 +166,7 @@ async function initializeDatabase() {
   `);
 
   // Messages
-  db.run(`
+  sqliteDb.exec(`
     CREATE TABLE IF NOT EXISTS messages (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       chat_id INTEGER REFERENCES chats(id) ON DELETE CASCADE,
@@ -117,23 +183,19 @@ async function initializeDatabase() {
 
   // Migration: Add edited_at and deleted_at columns if they don't exist
   try {
-    db.run('ALTER TABLE messages ADD COLUMN edited_at DATETIME DEFAULT NULL');
+    sqliteDb.exec('ALTER TABLE messages ADD COLUMN edited_at DATETIME DEFAULT NULL');
   } catch (e) {
-    if (!e.message.includes('duplicate column')) console.error('Migration error (edited_at):', e.message);
-  }
-  try {
-    db.run('ALTER TABLE messages ADD COLUMN deleted_at DATETIME DEFAULT NULL');
-  } catch (e) {
-    if (!e.message.includes('duplicate column')) console.error('Migration error (deleted_at):', e.message);
-  }
-  try {
-    db.run('ALTER TABLE messages ADD COLUMN reply_to INTEGER REFERENCES messages(id) ON DELETE SET NULL');
-  } catch (e) {
-    if (!e.message.includes('duplicate column')) console.error('Migration error (reply_to):', e.message);
+    if (!String(e.message || '').includes('duplicate column')) console.error('Migration error (edited_at):', e.message);
   }
 
-  // Reactions (Instagram-style)
-  db.run(`
+  try {
+    sqliteDb.exec('ALTER TABLE messages ADD COLUMN deleted_at DATETIME DEFAULT NULL');
+  } catch (e) {
+    if (!String(e.message || '').includes('duplicate column')) console.error('Migration error (deleted_at):', e.message);
+  }
+
+  // Reactions table
+  sqliteDb.exec(`
     CREATE TABLE IF NOT EXISTS reactions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       message_id INTEGER REFERENCES messages(id) ON DELETE CASCADE,
@@ -144,8 +206,8 @@ async function initializeDatabase() {
     )
   `);
 
-  // Read Receipts
-  db.run(`
+  // Read receipts table
+  sqliteDb.exec(`
     CREATE TABLE IF NOT EXISTS read_receipts (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       message_id INTEGER REFERENCES messages(id) ON DELETE CASCADE,
@@ -155,56 +217,66 @@ async function initializeDatabase() {
     )
   `);
 
-  // Pinned Messages
-  db.run(`
-    CREATE TABLE IF NOT EXISTS pinned_messages (
+  // Friend requests table
+  sqliteDb.exec(`
+    CREATE TABLE IF NOT EXISTS friend_requests (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      chat_id INTEGER REFERENCES chats(id) ON DELETE CASCADE,
-      message_id INTEGER REFERENCES messages(id) ON DELETE CASCADE,
-      pinned_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
-      pinned_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE(chat_id, message_id)
-    )
-  `);
-
-  // Server Invites
-  db.run(`
-    CREATE TABLE IF NOT EXISTS server_invites (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      server_id INTEGER REFERENCES servers(id) ON DELETE CASCADE,
-      code TEXT UNIQUE NOT NULL,
-      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      uses INTEGER DEFAULT 0,
-      max_uses INTEGER DEFAULT NULL
-    )
-  `);
-
-  // Custom emotes
-  db.run(`
-    CREATE TABLE IF NOT EXISTS emotes (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT UNIQUE NOT NULL,
-      image_url TEXT NOT NULL,
-      created_by INTEGER REFERENCES users(id),
+      sender_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      receiver_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      status TEXT DEFAULT 'pending',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
 
-  // Push notification tokens
-  db.run(`
+  // Friendships table
+  sqliteDb.exec(`
+    CREATE TABLE IF NOT EXISTS friendships (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      friend_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(user_id, friend_id)
+    )
+  `);
+
+  // Server invites table
+  sqliteDb.exec(`
+    CREATE TABLE IF NOT EXISTS server_invites (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      server_id INTEGER REFERENCES servers(id) ON DELETE CASCADE,
+      code TEXT UNIQUE NOT NULL,
+      created_by INTEGER REFERENCES users(id),
+      max_uses INTEGER DEFAULT NULL,
+      uses INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Pinned messages table
+  sqliteDb.exec(`
+    CREATE TABLE IF NOT EXISTS pinned_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      message_id INTEGER REFERENCES messages(id) ON DELETE CASCADE,
+      pinned_by INTEGER REFERENCES users(id),
+      pinned_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(message_id)
+    )
+  `);
+
+  // Push tokens table
+  sqliteDb.exec(`
     CREATE TABLE IF NOT EXISTS push_tokens (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
       token TEXT NOT NULL,
-      device_type TEXT,
+      device_type TEXT DEFAULT 'unknown',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(user_id, token)
     )
   `);
 
-  // Password Resets
-  db.run(`
+  // Password reset tokens table
+  sqliteDb.exec(`
     CREATE TABLE IF NOT EXISTS password_resets (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -215,31 +287,19 @@ async function initializeDatabase() {
     )
   `);
 
-  // Friend requests (pending)
-  db.run(`
-    CREATE TABLE IF NOT EXISTS friend_requests (
+  // Emotes table
+  sqliteDb.exec(`
+    CREATE TABLE IF NOT EXISTS emotes (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      sender_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-      receiver_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-      status TEXT DEFAULT 'pending',
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE(sender_id, receiver_id)
+      name TEXT UNIQUE NOT NULL,
+      image_url TEXT NOT NULL,
+      uploaded_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
 
-  // Friendships (accepted friend requests)
-  db.run(`
-    CREATE TABLE IF NOT EXISTS friendships (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-      friend_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE(user_id, friend_id)
-    )
-  `);
-
-  // Blocked users
-  db.run(`
+  // Blocked Users table
+  sqliteDb.exec(`
     CREATE TABLE IF NOT EXISTS blocked_users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       blocker_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -249,8 +309,8 @@ async function initializeDatabase() {
     )
   `);
 
-  // Refresh Tokens (Security Hardening)
-  db.run(`
+  // Refresh Tokens
+  sqliteDb.exec(`
     CREATE TABLE IF NOT EXISTS refresh_tokens (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -263,62 +323,107 @@ async function initializeDatabase() {
 
   // Migration: add created_at to blocked_users if missing
   try {
-    db.run('ALTER TABLE blocked_users ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP');
+    sqliteDb.exec('ALTER TABLE blocked_users ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP');
   } catch (e) {
-    if (e.message.includes('non-constant default')) {
+    if (String(e.message || '').includes('non-constant default')) {
       try {
-        db.run('ALTER TABLE blocked_users ADD COLUMN created_at DATETIME');
-        db.run('UPDATE blocked_users SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL');
+        sqliteDb.exec('ALTER TABLE blocked_users ADD COLUMN created_at DATETIME');
+        sqliteDb.exec('UPDATE blocked_users SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL');
       } catch (innerErr) {
-        if (!innerErr.message.includes('duplicate column')) {
+        if (!String(innerErr.message || '').includes('duplicate column')) {
           console.error('Migration error (blocked_users.created_at fallback):', innerErr.message);
         }
       }
-    } else if (!e.message.includes('duplicate column')) {
+    } else if (!String(e.message || '').includes('duplicate column')) {
       console.error('Migration error (blocked_users.created_at):', e.message);
     }
   }
 
   // Migration: add token_hash to refresh_tokens if missing
   try {
-    db.run('ALTER TABLE refresh_tokens ADD COLUMN token_hash TEXT');
+    sqliteDb.exec('ALTER TABLE refresh_tokens ADD COLUMN token_hash TEXT');
   } catch (e) {
-    if (!e.message.includes('duplicate column')) console.error('Migration error (refresh_tokens.token_hash):', e.message);
+    if (!String(e.message || '').includes('duplicate column')) console.error('Migration error (refresh_tokens.token_hash):', e.message);
   }
 
   // Migration: add token_hash to password_resets if missing
   try {
-    db.run('ALTER TABLE password_resets ADD COLUMN token_hash TEXT');
+    sqliteDb.exec('ALTER TABLE password_resets ADD COLUMN token_hash TEXT');
   } catch (e) {
-    if (!e.message.includes('duplicate column')) console.error('Migration error (password_resets.token_hash):', e.message);
+    if (!String(e.message || '').includes('duplicate column')) console.error('Migration error (password_resets.token_hash):', e.message);
   }
 
-  // Performance Indexes (Critical for Scale)
-  db.run('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_unique ON users(email) WHERE email IS NOT NULL');
-  db.run('CREATE INDEX IF NOT EXISTS idx_messages_chat_created ON messages(chat_id, created_at DESC)');
-  db.run('CREATE INDEX IF NOT EXISTS idx_messages_chat_id_desc ON messages(chat_id, id DESC)');
-  db.run('CREATE INDEX IF NOT EXISTS idx_server_members_user ON server_members(user_id)');
-  db.run('CREATE INDEX IF NOT EXISTS idx_chat_members_user ON chat_members(user_id)');
-  db.run('CREATE INDEX IF NOT EXISTS idx_reactions_message ON reactions(message_id)');
-  db.run('CREATE INDEX IF NOT EXISTS idx_read_receipts_message ON read_receipts(message_id)');
-  db.run('CREATE INDEX IF NOT EXISTS idx_chats_server_type_created ON chats(server_id, type, created_at)');
-  db.run('CREATE INDEX IF NOT EXISTS idx_friend_requests_receiver_status ON friend_requests(receiver_id, status, created_at DESC)');
-  db.run('CREATE INDEX IF NOT EXISTS idx_friend_requests_sender_status ON friend_requests(sender_id, status, created_at DESC)');
-  db.run('CREATE INDEX IF NOT EXISTS idx_refresh_tokens_expiry ON refresh_tokens(expires_at)');
-  db.run('CREATE INDEX IF NOT EXISTS idx_password_resets_expiry ON password_resets(expires_at)');
-  db.run('CREATE INDEX IF NOT EXISTS idx_refresh_tokens_hash ON refresh_tokens(token_hash)');
-  db.run('CREATE INDEX IF NOT EXISTS idx_password_resets_hash ON password_resets(token_hash)');
+  // Performance indexes
+  sqliteDb.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_unique ON users(email) WHERE email IS NOT NULL');
+  sqliteDb.exec('CREATE INDEX IF NOT EXISTS idx_messages_chat_created ON messages(chat_id, created_at DESC)');
+  sqliteDb.exec('CREATE INDEX IF NOT EXISTS idx_messages_chat_id_desc ON messages(chat_id, id DESC)');
+  sqliteDb.exec('CREATE INDEX IF NOT EXISTS idx_server_members_user ON server_members(user_id)');
+  sqliteDb.exec('CREATE INDEX IF NOT EXISTS idx_chat_members_user ON chat_members(user_id)');
+  sqliteDb.exec('CREATE INDEX IF NOT EXISTS idx_reactions_message ON reactions(message_id)');
+  sqliteDb.exec('CREATE INDEX IF NOT EXISTS idx_read_receipts_message ON read_receipts(message_id)');
+  sqliteDb.exec('CREATE INDEX IF NOT EXISTS idx_chats_server_type_created ON chats(server_id, type, created_at)');
+  sqliteDb.exec('CREATE INDEX IF NOT EXISTS idx_friend_requests_receiver_status ON friend_requests(receiver_id, status, created_at DESC)');
+  sqliteDb.exec('CREATE INDEX IF NOT EXISTS idx_friend_requests_sender_status ON friend_requests(sender_id, status, created_at DESC)');
+  sqliteDb.exec('CREATE INDEX IF NOT EXISTS idx_refresh_tokens_expiry ON refresh_tokens(expires_at)');
+  sqliteDb.exec('CREATE INDEX IF NOT EXISTS idx_password_resets_expiry ON password_resets(expires_at)');
+  sqliteDb.exec('CREATE INDEX IF NOT EXISTS idx_refresh_tokens_hash ON refresh_tokens(token_hash)');
+  sqliteDb.exec('CREATE INDEX IF NOT EXISTS idx_password_resets_hash ON password_resets(token_hash)');
+}
 
+async function initializeDatabase() {
+  const isTest = process.env.NODE_ENV === 'test';
+  const needsLegacyConversion = !isTest && fs.existsSync(legacyDbPath) && !fs.existsSync(sqlitePath);
 
-  // Save to disk (initial save)
-  saveDatabase(true);
+  // Open durable SQLite DB (file-backed in prod; in-memory in tests).
+  const sqliteDb = new BetterSqlite3(isTest ? ':memory:' : sqlitePath);
 
+  // Durability and concurrency tuning.
+  sqliteDb.pragma('foreign_keys = ON');
+  sqliteDb.pragma('busy_timeout = 5000');
+  if (!isTest) {
+    sqliteDb.pragma('journal_mode = WAL');
+    sqliteDb.pragma('synchronous = FULL');
+  }
+
+  applySchemaMigrations(sqliteDb);
+
+  // One-time conversion from legacy sql.js DB if present.
+  if (needsLegacyConversion) {
+    console.log('Legacy sql.js database detected; converting to durable SQLite...');
+    try {
+      const SQL = await initSqlJs();
+      const legacyBuffer = fs.readFileSync(legacyDbPath);
+      const legacyDb = new SQL.Database(legacyBuffer);
+      legacyDb.run('PRAGMA foreign_keys = ON');
+
+      // Convert within a single transaction so we either get everything or nothing.
+      sqliteDb.exec('BEGIN IMMEDIATE');
+      try {
+        convertLegacySqlJsToSqlite(legacyDb, sqliteDb);
+        sqliteDb.exec('COMMIT');
+      } catch (err) {
+        try { sqliteDb.exec('ROLLBACK'); } catch (_) {}
+        throw err;
+      } finally {
+        try { legacyDb.close(); } catch (_) {}
+      }
+
+      console.log('Legacy database conversion complete.');
+    } catch (err) {
+      // Leave legacy DB untouched; remove partial sqlite file if created.
+      try { sqliteDb.close(); } catch (_) {}
+      try { fs.unlinkSync(sqlitePath); } catch (_) {}
+      throw err;
+    }
+  }
+
+  db = sqliteDb;
   console.log('📦 Database initialized');
 
   // Handle graceful shutdown
   const handleExit = () => {
-    console.log('Hyperspace closing... saving database...');
-    saveDatabase(true);
+    console.log('Hyperspace closing... closing database...');
+    try { sqliteDb.close(); } catch (_) {}
     process.exit(0);
   };
   if (!signalsRegistered) {
@@ -328,134 +433,11 @@ async function initializeDatabase() {
   }
 }
 
-let saveTimeout = null;
-const SAVE_DELAY_MS = 5000;
-
-function saveDatabase(immediate = false) {
-  if (process.env.NODE_ENV === 'test') return;
-  
-  if (immediate) {
-    if (saveTimeout) clearTimeout(saveTimeout);
-    if (db) {
-      try {
-        const data = db.export();
-        const buffer = Buffer.from(data);
-        fs.writeFileSync(dbPath, buffer);
-        // console.log('💾 Database synced to disk');
-      } catch (err) {
-        console.error('Failed to save database:', err);
-      }
-    }
-    return;
-  }
-
-  // Debounced save
-  if (!saveTimeout) {
-    saveTimeout = setTimeout(() => {
-      saveDatabase(true);
-      saveTimeout = null;
-    }, SAVE_DELAY_MS);
-  }
-}
-
-// Run a parameterized statement and return lastInsertRowid and changes
-function runStatement(sql, params = []) {
-  try {
-    const stmt = db.prepare(sql);
-    if (params.length > 0) {
-      stmt.bind(params);
-    }
-    stmt.step();
-    stmt.free();
-
-    // For INSERTs, get the lastInsertRowid via sql.js
-    if (sql.trim().toUpperCase().startsWith('INSERT')) {
-      const result = db.exec('SELECT last_insert_rowid() as id');
-      if (result.length > 0 && result[0].values.length > 0) {
-        const id = result[0].values[0][0];
-        saveDatabase();
-        return { lastInsertRowid: id, changes: 1 };
-      }
-    }
-
-    // For UPDATE/DELETE, get actual rows modified
-    const changes = db.getRowsModified();
-    saveDatabase();
-    return { lastInsertRowid: 0, changes };
-  } catch (err) {
-    console.error('DB run error:', sql, params, err.message);
-    throw err;
-  }
-}
-
-// Get a single row
-function getRow(sql, params = []) {
-  try {
-    const stmt = db.prepare(sql);
-    if (params.length > 0) {
-      stmt.bind(params);
-    }
-
-    if (!stmt.step()) {
-      stmt.free();
-      return undefined;
-    }
-
-    const columns = stmt.getColumnNames();
-    const values = stmt.get();
-    stmt.free();
-
-    const obj = {};
-    columns.forEach((col, i) => obj[col] = values[i]);
-    return obj;
-  } catch (err) {
-    console.error('DB get error:', sql, params, err.message);
-    throw err;
-  }
-}
-
-// Get all rows
-function getAllRows(sql, params = []) {
-  try {
-    const stmt = db.prepare(sql);
-    if (params.length > 0) {
-      stmt.bind(params);
-    }
-
-    const results = [];
-    const columns = stmt.getColumnNames();
-
-    while (stmt.step()) {
-      const values = stmt.get();
-      const obj = {};
-      columns.forEach((col, i) => obj[col] = values[i]);
-      results.push(obj);
-    }
-
-    stmt.free();
-    return results;
-  } catch (err) {
-    console.error('DB all error:', sql, params, err.message);
-    throw err;
-  }
-}
-
-// Helper functions to match better-sqlite3 API
 function getDb() {
-  return {
-    prepare: (sql) => ({
-      run: (...params) => runStatement(sql, params),
-      get: (...params) => getRow(sql, params),
-      all: (...params) => getAllRows(sql, params)
-    }),
-    exec: (sql) => {
-      db.run(sql);
-      saveDatabase();
-    }
-  };
+  return dbProxy;
 }
 
 module.exports = {
-  get db() { return getDb(); },
+  db: getDb(),
   initializeDatabase
 };

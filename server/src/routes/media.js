@@ -10,6 +10,11 @@ const asyncHandler = require('../utils/asyncHandler');
 const router = express.Router();
 const uploadsRoot = path.join(__dirname, '..', '..', 'data', 'uploads');
 const isProduction = process.env.NODE_ENV === 'production';
+const toPositiveInt = (value, fallback) => {
+    const parsed = Number.parseInt(value, 10);
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+};
+const uploadMaxBytes = toPositiveInt(process.env.UPLOAD_MAX_BYTES, 25 * 1024 * 1024);
 const debugLog = (...args) => {
     if (!isProduction) console.log(...args);
 };
@@ -43,7 +48,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
     storage,
-    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+    limits: { fileSize: uploadMaxBytes, files: 1 },
     fileFilter: (req, file, cb) => {
         // Allow common image and audio formats
         const allowedExtensions = /jpeg|jpg|png|gif|webp|webm|mp3|wav|ogg|m4a|aac|mp4|caf|3gp/;
