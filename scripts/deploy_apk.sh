@@ -1,10 +1,32 @@
 #!/bin/bash
 
-# Configuration
-SERVER_IP="192.168.0.120"
-SERVER_USER="root"
-SERVER_PASS="ballooni121"
-DEST_PATH="/mnt/Storage_Pool/penthouse/app/data/downloads/the-penthouse.apk"
+set -euo pipefail
+
+# Deploy an APK to your TrueNAS host over SSH/SCP.
+#
+# Security note:
+# - Do NOT hardcode passwords/tokens in this repo.
+# - Prefer SSH keys.
+#
+# Usage:
+#   SERVER_HOST=192.168.0.120 ./scripts/deploy_apk.sh path/to/the-penthouse.apk
+#
+# Optional env vars:
+#   SERVER_USER=root
+#   SERVER_PORT=22
+#   DEST_PATH=/mnt/Storage_Pool/penthouse/app/data/downloads/the-penthouse.apk
+#   SSHPASS=...   (discouraged; only used if sshpass is installed)
+
+SERVER_HOST="${SERVER_HOST:-}"
+SERVER_USER="${SERVER_USER:-root}"
+SERVER_PORT="${SERVER_PORT:-22}"
+DEST_PATH="${DEST_PATH:-/mnt/Storage_Pool/penthouse/app/data/downloads/the-penthouse.apk}"
+
+if [ -z "${SERVER_HOST}" ]; then
+    echo "Error: SERVER_HOST is required."
+    echo "Example: SERVER_HOST=192.168.0.120 $0 path/to/the-penthouse.apk"
+    exit 1
+fi
 
 # Find the latest .apk file in the current directory or arguments
 APK_FILE="$1"
@@ -18,25 +40,20 @@ if [ -z "$APK_FILE" ]; then
     exit 1
 fi
 
-echo "Deploying $APK_FILE to $SERVER_IP..."
+echo "Deploying $APK_FILE to ${SERVER_USER}@${SERVER_HOST}:${DEST_PATH} ..."
 
 REMOTE_DIR=$(dirname "$DEST_PATH")
 
-if ! command -v sshpass &> /dev/null; then
-    echo "⚠️  sshpass not found. Falling back to interactive login."
-    echo "1. Creating remote directory (enter password if prompted)..."
-    ssh "$SERVER_USER@$SERVER_IP" "mkdir -p $REMOTE_DIR"
-    echo "2. Uploading APK (enter password if prompted)..."
-    scp "$APK_FILE" "$SERVER_USER@$SERVER_IP:$DEST_PATH"
+SSH_OPTS=(-p "${SERVER_PORT}" -o StrictHostKeyChecking=accept-new)
+
+if [ -n "${SSHPASS:-}" ] && command -v sshpass &> /dev/null; then
+    sshpass -p "${SSHPASS}" ssh "${SSH_OPTS[@]}" "${SERVER_USER}@${SERVER_HOST}" "mkdir -p '${REMOTE_DIR}'"
+    sshpass -p "${SSHPASS}" scp "${SSH_OPTS[@]}" "$APK_FILE" "${SERVER_USER}@${SERVER_HOST}:${DEST_PATH}"
 else
-    sshpass -p "$SERVER_PASS" ssh -o StrictHostKeyChecking=no "$SERVER_USER@$SERVER_IP" "mkdir -p $REMOTE_DIR"
-    sshpass -p "$SERVER_PASS" scp -o StrictHostKeyChecking=no "$APK_FILE" "$SERVER_USER@$SERVER_IP:$DEST_PATH"
+    echo "Using SSH keys or interactive auth if needed."
+    ssh "${SSH_OPTS[@]}" "${SERVER_USER}@${SERVER_HOST}" "mkdir -p '${REMOTE_DIR}'"
+    scp "${SSH_OPTS[@]}" "$APK_FILE" "${SERVER_USER}@${SERVER_HOST}:${DEST_PATH}"
 fi
 
-if [ $? -eq 0 ]; then
-    echo "✅ deployment successful!"
-    echo "Download link: http://$SERVER_IP:3000/downloads/the-penthouse.apk"
-else
-    echo "❌ Deployment failed."
-    exit 1
-fi
+echo "✅ deployment successful!"
+echo "Download link (prod default): https://penthouse.blog/downloads/the-penthouse.apk"

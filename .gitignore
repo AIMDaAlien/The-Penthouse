@@ -34,3 +34,6 @@ coverage/
 
 # Offsite backup credentials
 .backup.env
+
+# Cloudflare DDNS credentials
+.cloudflare-ddns.env

@@ -10,7 +10,7 @@ const SOCKET_URL = origin
   ? `http://${origin}:3000` 
   : (Platform.OS === 'web' && __DEV__) 
     ? 'http://localhost:3000' 
-    : 'https://penthouse.blog';
+    : 'https://api.penthouse.blog';
 
 console.log('Socket URL:', SOCKET_URL);
 

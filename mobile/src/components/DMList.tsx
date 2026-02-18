@@ -8,13 +8,14 @@
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable, RefreshControl, Image } from 'react-native';
+import { View, Text, StyleSheet, Pressable, RefreshControl } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, Spacing, Radius, SpringConfig } from '../designsystem';
 import { getChats, getMediaUrl } from '../services/api';
 import { formatDistanceToNow } from 'date-fns';
 import Animated, { FadeIn, useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
+import { AppImage } from './AppImage';
 
 // ─────────────────────────────────────────────────────────────
 // Types
@@ -75,7 +76,12 @@ const DMRow = React.memo(function DMRow({ dm, onPress, unreadCount }: DMRowProps
         {/* Avatar */}
         <View style={styles.avatarContainer}>
           {dm.avatarUrl ? (
-            <Image source={{ uri: getMediaUrl(dm.avatarUrl) }} style={styles.avatar} />
+            <AppImage
+              variant="avatar"
+              source={{ uri: getMediaUrl(dm.avatarUrl) }}
+              style={styles.avatar}
+              contentFit="cover"
+            />
           ) : (
             <View style={[styles.avatar, styles.avatarPlaceholder]}>
               <Ionicons 

@@ -13,7 +13,7 @@ const BASE_URL = origin
   ? `http://${origin}:3000` 
   : (Platform.OS === 'web' && __DEV__) 
     ? 'http://localhost:3000' 
-    : 'https://penthouse.blog';
+    : 'https://api.penthouse.blog';
 const API_URL = `${BASE_URL}/api`;
 
 if (__DEV__) {

@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useMemo } from 'react';
-import { View, Text, Image, Pressable, ActionSheetIOS, Platform, Alert, Dimensions, StyleSheet } from 'react-native';
+import { View, Text, Pressable, ActionSheetIOS, Platform, Alert, Dimensions, StyleSheet } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Message, Reaction } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -13,6 +13,7 @@ import { getMediaUrl } from '../services/api';
 import { Colors } from '../designsystem/Colors';
 import { Typography } from '../designsystem/Typography';
 import { Spacing, Radius } from '../designsystem/Spacing';
+import { AppImage } from './AppImage';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const MAX_MEDIA_WIDTH = Math.min(SCREEN_WIDTH * 0.65, 260);
@@ -59,7 +60,15 @@ interface MessageListProps {
     onMarkRead?: (messageId: number) => void;
 }
 
-// ... groupReactions ...
+const groupReactions = (reactions: Reaction[]) => {
+    const map = new Map<string, number>();
+    for (const r of reactions) {
+        map.set(r.emoji, (map.get(r.emoji) || 0) + 1);
+    }
+    return Array.from(map.entries())
+        .map(([emoji, count]) => ({ emoji, count }))
+        .sort((a, b) => b.count - a.count);
+};
 
 interface MessageItemProps {
     message: Message;
@@ -152,7 +161,12 @@ const MessageItem = React.memo(function MessageItem({ message, isMe, userId, vib
                 {!isMe && (
                     <View style={styles.avatarContainer}>
                         {message.sender.avatarUrl ? (
-                            <Image source={{ uri: getMediaUrl(message.sender.avatarUrl) }} style={styles.avatar} />
+                            <AppImage
+                                variant="avatar"
+                                source={{ uri: getMediaUrl(message.sender.avatarUrl) }}
+                                style={styles.avatar}
+                                contentFit="cover"
+                            />
                         ) : (
                             <Text style={[Typography.MICRO, { color: Colors.OVERLAY1, fontWeight: 'bold' }]}>
                                 {message.sender.username.substring(0, 2).toUpperCase()}
@@ -188,10 +202,11 @@ const MessageItem = React.memo(function MessageItem({ message, isMe, userId, vib
                                             <Text style={[Typography.MICRO, { marginTop: 4 }]}>Failed to load</Text>
                                         </View>
                                     ) : (
-                                        <Image
+                                        <AppImage
                                             source={{ uri: getMediaUrl(message.content) }}
                                             style={{ width: dims.width, height: dims.height }}
-                                            resizeMode="contain"
+                                            contentFit="contain"
+                                            variant="media"
                                             onLoad={() => setImageLoading(false)}
                                             onError={() => {
                                                 setImageLoading(false);

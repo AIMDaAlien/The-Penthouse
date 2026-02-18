@@ -62,7 +62,46 @@ const errorHandler = require('./middleware/errorHandler');
 // Ensure client IP is preserved behind Caddy/reverse-proxy
 app.set('trust proxy', 1);
 
+// Add response timing headers for API requests (helps diagnose latency).
+// Use res.end wrapping so headers are set before the response is finalized.
+app.use((req, res, next) => {
+  if (!req.originalUrl.startsWith('/api')) return next();
+
+  const start = process.hrtime.bigint();
+  const originalEnd = res.end;
+
+  // eslint-disable-next-line no-param-reassign
+  res.end = function wrappedEnd(...args) {
+    try {
+      const end = process.hrtime.bigint();
+      const ms = Number(end - start) / 1e6;
+      const msStr = ms.toFixed(1);
+
+      if (!res.headersSent) {
+        res.setHeader('X-Response-Time', `${msStr}ms`);
+        const existing = res.getHeader('Server-Timing');
+        const entry = `app;dur=${msStr}`;
+        if (existing) {
+          res.setHeader('Server-Timing', `${existing}, ${entry}`);
+        } else {
+          res.setHeader('Server-Timing', entry);
+        }
+      }
+    } catch (_) {
+      // ignore
+    }
+
+    return originalEnd.apply(this, args);
+  };
+
+  next();
+});
+
 app.use(helmet({
+  // These are enforced at the edge (Caddy). Disable here to avoid conflicting
+  // duplicates like multiple HSTS/Referrer-Policy values.
+  hsts: false,
+  referrerPolicy: false,
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
