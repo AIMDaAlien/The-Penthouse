@@ -29,7 +29,7 @@ if [ -z "${SERVER_HOST}" ]; then
 fi
 
 # Find the latest .apk file in the current directory or arguments
-APK_FILE="$1"
+APK_FILE="${1:-}"
 if [ -z "$APK_FILE" ]; then
     APK_FILE=$(ls -t *.apk 2>/dev/null | head -n 1)
 fi
@@ -45,14 +45,15 @@ echo "Deploying $APK_FILE to ${SERVER_USER}@${SERVER_HOST}:${DEST_PATH} ..."
 REMOTE_DIR=$(dirname "$DEST_PATH")
 
 SSH_OPTS=(-p "${SERVER_PORT}" -o StrictHostKeyChecking=accept-new)
+SCP_OPTS=(-P "${SERVER_PORT}" -o StrictHostKeyChecking=accept-new)
 
 if [ -n "${SSHPASS:-}" ] && command -v sshpass &> /dev/null; then
     sshpass -p "${SSHPASS}" ssh "${SSH_OPTS[@]}" "${SERVER_USER}@${SERVER_HOST}" "mkdir -p '${REMOTE_DIR}'"
-    sshpass -p "${SSHPASS}" scp "${SSH_OPTS[@]}" "$APK_FILE" "${SERVER_USER}@${SERVER_HOST}:${DEST_PATH}"
+    sshpass -p "${SSHPASS}" scp "${SCP_OPTS[@]}" "$APK_FILE" "${SERVER_USER}@${SERVER_HOST}:${DEST_PATH}"
 else
     echo "Using SSH keys or interactive auth if needed."
     ssh "${SSH_OPTS[@]}" "${SERVER_USER}@${SERVER_HOST}" "mkdir -p '${REMOTE_DIR}'"
-    scp "${SSH_OPTS[@]}" "$APK_FILE" "${SERVER_USER}@${SERVER_HOST}:${DEST_PATH}"
+    scp "${SCP_OPTS[@]}" "$APK_FILE" "${SERVER_USER}@${SERVER_HOST}:${DEST_PATH}"
 fi
 
 echo "✅ deployment successful!"
