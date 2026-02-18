@@ -15,6 +15,7 @@ const mediaRoutes = require('./routes/media');
 const pushRoutes = require('./routes/push');
 const friendsRoutes = require('./routes/friends');
 const appUpdateRoutes = require('./routes/app_update');
+const channelsRoutes = require('./routes/channels');
 
 const app = express();
 const server = http.createServer(app);
@@ -104,6 +105,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/messages', messagesRoutes);
 app.use('/api/chats', chatsRoutes);
 app.use('/api/servers', serversRoutes);
+app.use('/api/channels', channelsRoutes);
 app.use('/api/invites', require('./routes/server_invites'));
 app.use('/api/media', mediaRoutes);
 app.use('/api/push', pushRoutes);

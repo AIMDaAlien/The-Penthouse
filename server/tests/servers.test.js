@@ -77,6 +77,27 @@ describe('Servers / Channels / Member Management', () => {
     expect(deleted.body.success).toBe(true);
   });
 
+  it('legacy /api/channels routes work for update/delete', async () => {
+    const created = await request(app)
+      .post(`/api/servers/${serverId}/channels`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ name: 'legacychan' });
+    const channelId = created.body.id;
+
+    const upd = await request(app)
+      .put(`/api/channels/${channelId}`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ name: 'legacychan2' });
+    expect(upd.statusCode).toBe(200);
+    expect(upd.body.success).toBe(true);
+
+    const del = await request(app)
+      .delete(`/api/channels/${channelId}`)
+      .set('Authorization', `Bearer ${ownerToken}`);
+    expect(del.statusCode).toBe(200);
+    expect(del.body.success).toBe(true);
+  });
+
   it('cannot delete general channel', async () => {
     const deleted = await request(app)
       .delete(`/api/servers/${serverId}/channels/${generalChannelId}`)
@@ -127,4 +148,3 @@ describe('Servers / Channels / Member Management', () => {
     expect(transferred.body.ownerId).toBe(memberId);
   });
 });
-

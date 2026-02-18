@@ -295,10 +295,22 @@ export const createChannel = (serverId: number, name: string, type: 'text' | 'vo
     api.post(`/servers/${serverId}/channels`, { name, type, vibe });
 
 export const updateChannel = (channelId: number, data: { name?: string; topic?: string; vibe?: string }) =>
-    api.put(`/channels/${channelId}`, data);
+    api.put(`/channels/${channelId}`, { name: data.name });
 
 export const deleteChannel = (channelId: number) =>
     api.delete(`/channels/${channelId}`);
+
+export const leaveServer = (serverId: number) =>
+    api.post(`/servers/${serverId}/leave`);
+
+export const removeServerMember = (serverId: number, userId: number) =>
+    api.delete(`/servers/${serverId}/members/${userId}`);
+
+export const transferServerOwnership = (serverId: number, userId: number) =>
+    api.post(`/servers/${serverId}/transfer/${userId}`);
+
+export const deleteServer = (serverId: number) =>
+    api.delete(`/servers/${serverId}`);
 
 export const uploadServerIcon = async (file: RNFile): Promise<{ data: { iconUrl: string } }> => {
     const formData = new FormData();
