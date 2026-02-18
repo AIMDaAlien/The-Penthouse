@@ -94,6 +94,8 @@ Installed jobs:
 - `*/5` Cloudflare DDNS updater (when `.cloudflare-ddns.env` exists)
 - `03:17 daily` encrypted backup (when `.backup.env` exists)
 - `03:47 Sunday` backup prune (when `.backup.env` exists)
+- `04:11 Sunday` rotate host cron logs (`/var/log/penthouse-*.log`)
+- `04:23 Sunday` prune docker build cache + unused images (safe defaults)
 
 ### Cloudflare DDNS (Recommended)
 
@@ -114,6 +116,28 @@ Run once to verify:
 ```bash
 ./scripts/cloudflare_ddns.sh
 tail -n 50 /var/log/penthouse-ddns.log
+```
+
+---
+
+## 6.1 Disk Exhaustion Prevention (Logs + Docker Cache)
+
+Two common disk-growth culprits in small self-hosted setups:
+
+1. Docker container logs
+2. Host cron logs (redirected to `/var/log`)
+
+This repo addresses both:
+
+- `docker-compose.yml` sets Docker log rotation for `penthouse-app` and `caddy` (`max-size=10m`, `max-file=3`).
+- `scripts/rotate_penthouse_logs.sh` rotates `/var/log/penthouse-*.log`.
+- `scripts/docker_prune_safe.sh` prunes old build cache and unused images.
+
+After updating, run on TrueNAS:
+
+```bash
+cd /mnt/Storage_Pool/penthouse/app
+./scripts/enable_autostart.sh
 ```
 
 ---

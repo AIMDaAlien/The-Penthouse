@@ -18,6 +18,11 @@ services:
     read_only: true
     tmpfs:
       - /tmp
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       - NODE_ENV=production
       - PORT=3000
@@ -51,6 +56,11 @@ services:
     depends_on:
       penthouse-app:
         condition: service_healthy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - default
 

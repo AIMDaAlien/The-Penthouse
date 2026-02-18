@@ -14,6 +14,7 @@ They are written to be useful to other people doing something similar: self-host
 - [[06-Deploy-Downtime-Minimization]]
 - [[07-Security-Gotchas]]
 - [[08-SSH-Hardening-TrueNAS]]
+- [[09-Disk-Exhaustion-Prevention]]
 
 ## Timeline (Concrete Dates)
 
