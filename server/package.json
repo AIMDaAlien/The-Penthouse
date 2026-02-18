@@ -1,6 +1,6 @@
 {
   "name": "the-penthouse-server",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Backend server for The Penthouse - a private social media app",
   "main": "src/index.js",
   "scripts": {

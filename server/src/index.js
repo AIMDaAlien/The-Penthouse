@@ -112,7 +112,16 @@ app.use(errorHandler);
 
 // Health check
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', app: 'The Penthouse', version: '1.0.0' });
+  let version = 'unknown';
+  try {
+    // In Dockerfile.production, server/package.json is copied to /app/package.json.
+    // In dev, this resolves to server/package.json.
+    // eslint-disable-next-line import/no-dynamic-require, global-require
+    version = require('../package.json').version || version;
+  } catch (_) {
+    // ignore
+  }
+  res.json({ status: 'ok', app: 'The Penthouse', version });
 });
 
 // Serve landing page and APK downloads
