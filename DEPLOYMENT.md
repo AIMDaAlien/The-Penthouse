@@ -96,6 +96,7 @@ Installed jobs:
 - `03:47 Sunday` backup prune (when `.backup.env` exists)
 - `04:11 Sunday` rotate host cron logs (`/var/log/penthouse-*.log`)
 - `04:23 Sunday` prune docker build cache + unused images (safe defaults)
+- `04:33 Sunday` SQLite maintenance (checkpoint + optimize)
 
 ### Cloudflare DDNS (Recommended)
 

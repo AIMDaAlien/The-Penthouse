@@ -42,12 +42,28 @@ It prunes:
 
 It does not remove volumes.
 
+### 4. SQLite WAL Maintenance
+
+SQLite in WAL mode uses a `-wal` file that can grow if it never checkpoints.
+
+We added:
+
+- `scripts/sqlite_maintenance.sh`
+
+It runs:
+
+- `wal_checkpoint(TRUNCATE)`
+- `optimize`
+
+via `docker compose exec` inside the app container.
+
 ## Cron Installation
 
 `./scripts/enable_autostart.sh` installs:
 
 - weekly host log rotation
 - weekly docker prune
+- weekly sqlite maintenance
 
 ## Verification
 
@@ -57,4 +73,3 @@ On the TrueNAS host:
 crontab -l | egrep -n "rotate_penthouse_logs|docker_prune_safe" || true
 ls -lh /var/log/penthouse-*.log 2>/dev/null || true
 ```
-

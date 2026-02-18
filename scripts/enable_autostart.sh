@@ -35,6 +35,10 @@ DOCKER_PRUNE_LOG="/var/log/penthouse-docker-prune.log"
 DOCKER_PRUNE_CMD="cd ${APP_ROOT} && ./scripts/docker_prune_safe.sh"
 DOCKER_PRUNE_CRON="23 4 * * 0 ${DOCKER_PRUNE_CMD} >> ${DOCKER_PRUNE_LOG} 2>&1"
 
+SQLITE_MAINT_LOG="/var/log/penthouse-sqlite-maint.log"
+SQLITE_MAINT_CMD="cd ${APP_ROOT} && ./scripts/sqlite_maintenance.sh"
+SQLITE_MAINT_CRON="33 4 * * 0 ${SQLITE_MAINT_CMD} >> ${SQLITE_MAINT_LOG} 2>&1"
+
 if [ "${EUID}" -ne 0 ]; then
   echo "Run as root"
   exit 1
@@ -74,6 +78,10 @@ if ! echo "$updated" | grep -Fq "$DOCKER_PRUNE_CMD"; then
   updated="$(printf '%s\n%s\n' "$updated" "$DOCKER_PRUNE_CRON")"
 fi
 
+if ! echo "$updated" | grep -Fq "$SQLITE_MAINT_CMD"; then
+  updated="$(printf '%s\n%s\n' "$updated" "$SQLITE_MAINT_CRON")"
+fi
+
 printf '%s\n' "$updated" | sed '/^\s*$/d' | crontab -
 
 echo "Autostart + watchdog + backup jobs enabled."
@@ -84,3 +92,4 @@ echo "Entry: $PRUNE_CRON"
 echo "Entry: $DDNS_CRON"
 echo "Entry: $ROTATE_CRON"
 echo "Entry: $DOCKER_PRUNE_CRON"
+echo "Entry: $SQLITE_MAINT_CRON"
