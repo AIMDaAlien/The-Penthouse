@@ -23,6 +23,10 @@ PRUNE_LOG="/var/log/penthouse-backup-prune.log"
 PRUNE_CMD="[ -f ${APP_ROOT}/.backup.env ] && cd ${APP_ROOT} && ./scripts/backup_prune_restic.sh"
 PRUNE_CRON="47 3 * * 0 ${PRUNE_CMD} >> ${PRUNE_LOG} 2>&1"
 
+DDNS_LOG="/var/log/penthouse-ddns.log"
+DDNS_CMD="[ -f ${APP_ROOT}/.cloudflare-ddns.env ] && cd ${APP_ROOT} && ./scripts/cloudflare_ddns.sh"
+DDNS_CRON="*/5 * * * * ${DDNS_CMD} >> ${DDNS_LOG} 2>&1"
+
 if [ "${EUID}" -ne 0 ]; then
   echo "Run as root"
   exit 1
@@ -50,6 +54,10 @@ if ! echo "$updated" | grep -Fq "$PRUNE_CMD"; then
   updated="$(printf '%s\n%s\n' "$updated" "$PRUNE_CRON")"
 fi
 
+if ! echo "$updated" | grep -Fq "$DDNS_CMD"; then
+  updated="$(printf '%s\n%s\n' "$updated" "$DDNS_CRON")"
+fi
+
 printf '%s\n' "$updated" | sed '/^\s*$/d' | crontab -
 
 echo "Autostart + watchdog + backup jobs enabled."
@@ -57,3 +65,4 @@ echo "Entry: $CRON_ENTRY"
 echo "Entry: $WATCHDOG_CRON"
 echo "Entry: $BACKUP_CRON"
 echo "Entry: $PRUNE_CRON"
+echo "Entry: $DDNS_CRON"

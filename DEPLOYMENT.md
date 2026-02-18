@@ -91,8 +91,30 @@ crontab -l
 Installed jobs:
 - `@reboot` stack start
 - `*/5` watchdog health check + recovery
+- `*/5` Cloudflare DDNS updater (when `.cloudflare-ddns.env` exists)
 - `03:17 daily` encrypted backup (when `.backup.env` exists)
 - `03:47 Sunday` backup prune (when `.backup.env` exists)
+
+### Cloudflare DDNS (Recommended)
+
+This prevents outages when your home ISP changes your public IP.
+
+On TrueNAS, create the env file:
+
+```bash
+cd /mnt/Storage_Pool/penthouse/app
+cp .cloudflare-ddns.env.example .cloudflare-ddns.env
+chmod 600 .cloudflare-ddns.env
+```
+
+Edit `.cloudflare-ddns.env` and set `CF_API_TOKEN` (and optionally IDs).
+
+Run once to verify:
+
+```bash
+./scripts/cloudflare_ddns.sh
+tail -n 50 /var/log/penthouse-ddns.log
+```
 
 ---
 
