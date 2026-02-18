@@ -256,12 +256,58 @@ function applySchemaMigrations(sqliteDb) {
   sqliteDb.exec(`
     CREATE TABLE IF NOT EXISTS pinned_messages (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      chat_id INTEGER REFERENCES chats(id) ON DELETE CASCADE,
       message_id INTEGER REFERENCES messages(id) ON DELETE CASCADE,
       pinned_by INTEGER REFERENCES users(id),
       pinned_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(message_id)
     )
   `);
+
+  // Migration: add chat_id to pinned_messages if missing
+  try {
+    sqliteDb.exec('ALTER TABLE pinned_messages ADD COLUMN chat_id INTEGER');
+    // Backfill chat_id from messages table for existing pins
+    sqliteDb.exec(`
+      UPDATE pinned_messages
+      SET chat_id = (SELECT chat_id FROM messages WHERE messages.id = pinned_messages.message_id)
+      WHERE chat_id IS NULL
+    `);
+  } catch (e) {
+    if (!String(e.message || '').includes('duplicate column')) {
+      console.error('Migration error (pinned_messages.chat_id):', e.message);
+    }
+  }
+
+  // Migration: add pinned_by to pinned_messages if missing
+  try {
+    sqliteDb.exec('ALTER TABLE pinned_messages ADD COLUMN pinned_by INTEGER');
+  } catch (e) {
+    if (!String(e.message || '').includes('duplicate column')) {
+      console.error('Migration error (pinned_messages.pinned_by):', e.message);
+    }
+  }
+
+  // Migration: add pinned_at to pinned_messages if missing
+  try {
+    sqliteDb.exec('ALTER TABLE pinned_messages ADD COLUMN pinned_at DATETIME DEFAULT CURRENT_TIMESTAMP');
+  } catch (e) {
+    if (String(e.message || '').includes('non-constant default')) {
+      try {
+        sqliteDb.exec('ALTER TABLE pinned_messages ADD COLUMN pinned_at DATETIME');
+        sqliteDb.exec('UPDATE pinned_messages SET pinned_at = CURRENT_TIMESTAMP WHERE pinned_at IS NULL');
+      } catch (innerErr) {
+        if (!String(innerErr.message || '').includes('duplicate column')) {
+          console.error('Migration error (pinned_messages.pinned_at fallback):', innerErr.message);
+        }
+      }
+    } else if (!String(e.message || '').includes('duplicate column')) {
+      console.error('Migration error (pinned_messages.pinned_at):', e.message);
+    }
+  }
+
+  // Indexes for pins (hot path: list pins for a chat)
+  sqliteDb.exec('CREATE INDEX IF NOT EXISTS idx_pinned_messages_chat_pinned_at ON pinned_messages(chat_id, pinned_at DESC)');
 
   // Push tokens table
   sqliteDb.exec(`

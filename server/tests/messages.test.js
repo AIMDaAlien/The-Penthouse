@@ -163,4 +163,27 @@ describe('Messages Endpoints', () => {
       expect(deleteRes.statusCode).toBe(403);
     });
   });
+
+  describe('Pins', () => {
+    it('should allow members to pin and list pins', async () => {
+      const result = dbModule.db.prepare(`
+        INSERT INTO messages (chat_id, user_id, content, message_type) VALUES (?, ?, ?, ?)
+      `).run(chatId, user1.id, 'Pin me', 'text');
+      const messageId = result.lastInsertRowid;
+
+      const pinRes = await request(app)
+        .post(`/api/messages/${messageId}/pin`)
+        .set('Authorization', `Bearer ${token1}`);
+      expect(pinRes.statusCode).toBe(200);
+      expect(pinRes.body.success).toBe(true);
+
+      const pinsRes = await request(app)
+        .get(`/api/messages/pins/${chatId}`)
+        .set('Authorization', `Bearer ${token1}`);
+      expect(pinsRes.statusCode).toBe(200);
+      expect(Array.isArray(pinsRes.body)).toBe(true);
+      expect(pinsRes.body.length).toBeGreaterThanOrEqual(1);
+      expect(pinsRes.body[0].id).toBe(messageId);
+    });
+  });
 });

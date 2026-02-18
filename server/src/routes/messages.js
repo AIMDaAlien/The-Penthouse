@@ -446,7 +446,7 @@ router.get('/pins/:chatId', authenticateToken, asyncHandler(async (req, res) => 
     }
 
     const pins = db.prepare(`
-        SELECT pm.id as pin_id, pm.pinned_at, pm.pinned_by,
+        SELECT pm.rowid as pin_id, pm.pinned_at, pm.pinned_by,
                m.*, u.username, u.display_name, u.avatar_url,
                p_u.username as panner_username
         FROM pinned_messages pm
