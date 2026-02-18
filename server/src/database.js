@@ -136,10 +136,20 @@ function applySchemaMigrations(sqliteDb) {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       server_id INTEGER REFERENCES servers(id) ON DELETE CASCADE,
       user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      nickname TEXT,
       joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(server_id, user_id)
     )
   `);
+
+  // Migration: add nickname to server_members if missing
+  try {
+    sqliteDb.exec('ALTER TABLE server_members ADD COLUMN nickname TEXT');
+  } catch (e) {
+    if (!String(e.message || '').includes('duplicate column')) {
+      console.error('Migration error (server_members.nickname):', e.message);
+    }
+  }
 
   // Chats (can be DMs, Group DMs, or Server Channels)
   sqliteDb.exec(`

@@ -4,6 +4,21 @@ const { authenticateToken } = require('../middleware/auth');
 const { validateCreateServer, validateCreateChannel } = require('../middleware/validation');
 
 const router = express.Router();
+const toInt = (v) => {
+    const n = Number.parseInt(v, 10);
+    return Number.isInteger(n) && n > 0 ? n : null;
+};
+const requireServerMembership = (serverId, userId) => {
+    const membership = db.prepare('SELECT 1 FROM server_members WHERE server_id = ? AND user_id = ?')
+        .get(serverId, userId);
+    return !!membership;
+};
+const requireServerOwner = (serverId, userId) => {
+    const server = db.prepare('SELECT owner_id FROM servers WHERE id = ?').get(serverId);
+    if (!server) return { ok: false, status: 404, error: 'Server not found' };
+    if (server.owner_id !== userId) return { ok: false, status: 403, error: 'Only the server owner can do that' };
+    return { ok: true, server };
+};
 
 // Get all servers user is member of
 router.get('/', authenticateToken, (req, res) => {
@@ -163,6 +178,158 @@ router.post('/:serverId/channels', authenticateToken, validateCreateChannel, (re
     } catch (err) {
         console.error('Create channel error:', err);
         res.status(500).json({ error: 'Failed to create channel' });
+    }
+});
+
+// Update channel name in server (owner only)
+router.put('/:serverId/channels/:channelId', authenticateToken, validateCreateChannel, (req, res) => {
+    try {
+        const serverId = toInt(req.params.serverId);
+        const channelId = toInt(req.params.channelId);
+        const { name } = req.body;
+        if (!serverId || !channelId) return res.status(400).json({ error: 'Invalid server/channel id' });
+
+        const ownerCheck = requireServerOwner(serverId, req.user.userId);
+        if (!ownerCheck.ok) return res.status(ownerCheck.status).json({ error: ownerCheck.error });
+
+        const channel = db.prepare('SELECT id, name, type, server_id FROM chats WHERE id = ?').get(channelId);
+        if (!channel || channel.type !== 'channel' || channel.server_id !== serverId) {
+            return res.status(404).json({ error: 'Channel not found' });
+        }
+
+        db.prepare('UPDATE chats SET name = ? WHERE id = ?').run(name, channelId);
+        res.json({ success: true, id: channelId, name });
+    } catch (err) {
+        console.error('Update channel error:', err);
+        res.status(500).json({ error: 'Failed to update channel' });
+    }
+});
+
+// Delete channel in server (owner only)
+router.delete('/:serverId/channels/:channelId', authenticateToken, (req, res) => {
+    try {
+        const serverId = toInt(req.params.serverId);
+        const channelId = toInt(req.params.channelId);
+        if (!serverId || !channelId) return res.status(400).json({ error: 'Invalid server/channel id' });
+
+        const ownerCheck = requireServerOwner(serverId, req.user.userId);
+        if (!ownerCheck.ok) return res.status(ownerCheck.status).json({ error: ownerCheck.error });
+
+        const channel = db.prepare('SELECT id, name, type, server_id FROM chats WHERE id = ?').get(channelId);
+        if (!channel || channel.type !== 'channel' || channel.server_id !== serverId) {
+            return res.status(404).json({ error: 'Channel not found' });
+        }
+        if (channel.name === 'general') {
+            return res.status(400).json({ error: 'Cannot delete the general channel' });
+        }
+
+        // Ensure at least one channel remains
+        const channelCount = db.prepare('SELECT COUNT(*) as c FROM chats WHERE server_id = ? AND type = ?').get(serverId, 'channel');
+        if (channelCount && channelCount.c <= 1) {
+            return res.status(400).json({ error: 'Cannot delete the last channel' });
+        }
+
+        db.prepare('DELETE FROM chats WHERE id = ?').run(channelId);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Delete channel error:', err);
+        res.status(500).json({ error: 'Failed to delete channel' });
+    }
+});
+
+// Leave server (member only; owner must transfer first)
+router.post('/:serverId/leave', authenticateToken, (req, res) => {
+    try {
+        const serverId = toInt(req.params.serverId);
+        if (!serverId) return res.status(400).json({ error: 'Invalid server id' });
+
+        const server = db.prepare('SELECT owner_id FROM servers WHERE id = ?').get(serverId);
+        if (!server) return res.status(404).json({ error: 'Server not found' });
+        if (!requireServerMembership(serverId, req.user.userId)) {
+            return res.status(403).json({ error: 'Not a member of this server' });
+        }
+        if (server.owner_id === req.user.userId) {
+            return res.status(400).json({ error: 'Owner cannot leave server. Transfer ownership or delete the server.' });
+        }
+
+        db.prepare('DELETE FROM server_members WHERE server_id = ? AND user_id = ?').run(serverId, req.user.userId);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Leave server error:', err);
+        res.status(500).json({ error: 'Failed to leave server' });
+    }
+});
+
+// Remove member (kick). Owner can remove anyone except self; member can remove self (leave).
+router.delete('/:serverId/members/:userId', authenticateToken, (req, res) => {
+    try {
+        const serverId = toInt(req.params.serverId);
+        const targetUserId = toInt(req.params.userId);
+        if (!serverId || !targetUserId) return res.status(400).json({ error: 'Invalid server/user id' });
+
+        const server = db.prepare('SELECT owner_id FROM servers WHERE id = ?').get(serverId);
+        if (!server) return res.status(404).json({ error: 'Server not found' });
+
+        const requesterId = req.user.userId;
+        const isOwner = server.owner_id === requesterId;
+        const isSelf = requesterId === targetUserId;
+
+        if (!isOwner && !isSelf) {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
+        if (isSelf && isOwner) {
+            return res.status(400).json({ error: 'Owner cannot remove self. Transfer ownership or delete the server.' });
+        }
+        if (targetUserId === server.owner_id) {
+            return res.status(400).json({ error: 'Cannot remove the server owner' });
+        }
+
+        const result = db.prepare('DELETE FROM server_members WHERE server_id = ? AND user_id = ?').run(serverId, targetUserId);
+        if (!result || result.changes === 0) return res.status(404).json({ error: 'User is not a member of this server' });
+
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Remove member error:', err);
+        res.status(500).json({ error: 'Failed to remove member' });
+    }
+});
+
+// Transfer ownership to another member (owner only)
+router.post('/:serverId/transfer/:userId', authenticateToken, (req, res) => {
+    try {
+        const serverId = toInt(req.params.serverId);
+        const newOwnerId = toInt(req.params.userId);
+        if (!serverId || !newOwnerId) return res.status(400).json({ error: 'Invalid server/user id' });
+
+        const ownerCheck = requireServerOwner(serverId, req.user.userId);
+        if (!ownerCheck.ok) return res.status(ownerCheck.status).json({ error: ownerCheck.error });
+
+        if (!requireServerMembership(serverId, newOwnerId)) {
+            return res.status(400).json({ error: 'New owner must be a member of the server' });
+        }
+
+        db.prepare('UPDATE servers SET owner_id = ? WHERE id = ?').run(newOwnerId, serverId);
+        res.json({ success: true, ownerId: newOwnerId });
+    } catch (err) {
+        console.error('Transfer ownership error:', err);
+        res.status(500).json({ error: 'Failed to transfer ownership' });
+    }
+});
+
+// Delete server (owner only)
+router.delete('/:serverId', authenticateToken, (req, res) => {
+    try {
+        const serverId = toInt(req.params.serverId);
+        if (!serverId) return res.status(400).json({ error: 'Invalid server id' });
+
+        const ownerCheck = requireServerOwner(serverId, req.user.userId);
+        if (!ownerCheck.ok) return res.status(ownerCheck.status).json({ error: ownerCheck.error });
+
+        db.prepare('DELETE FROM servers WHERE id = ?').run(serverId);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Delete server error:', err);
+        res.status(500).json({ error: 'Failed to delete server' });
     }
 });
 

@@ -19,6 +19,10 @@ const errorHandler = (err, req, res, next) => {
     status = 400;
     message = 'Invalid JSON payload';
     error = 'Bad Request';
+  } else if (err && err.code === 'LIMIT_FILE_SIZE') {
+    status = 413;
+    message = 'Uploaded file is too large';
+    error = 'Payload Too Large';
   } else if (err.code === 'SQLITE_CONSTRAINT') {
     // Database constraint violation
     status = 409;
@@ -33,6 +37,10 @@ const errorHandler = (err, req, res, next) => {
     status = 403;
     message = err.message;
     error = 'Forbidden';
+  } else if (err.message === 'Insufficient storage') {
+    status = 507;
+    message = 'Insufficient storage';
+    error = 'Insufficient Storage';
   }
 
   // Send response

@@ -15,6 +15,7 @@ const toPositiveInt = (value, fallback) => {
     return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 };
 const uploadMaxBytes = toPositiveInt(process.env.UPLOAD_MAX_BYTES, 25 * 1024 * 1024);
+const minFreeDiskBytes = toPositiveInt(process.env.MIN_FREE_DISK_BYTES, 512 * 1024 * 1024);
 const debugLog = (...args) => {
     if (!isProduction) console.log(...args);
 };
@@ -37,6 +38,20 @@ const storage = multer.diskStorage({
     destination: (req, file, cb) => {
         if (!fs.existsSync(uploadsRoot)) {
             fs.mkdirSync(uploadsRoot, { recursive: true });
+        }
+        // Best-effort disk free space guard to avoid filling the pool.
+        try {
+            if (typeof fs.statfsSync === 'function') {
+                const st = fs.statfsSync(uploadsRoot);
+                const freeBytes = Number(st.bavail) * Number(st.bsize);
+                if (Number.isFinite(freeBytes) && freeBytes > 0 && freeBytes < minFreeDiskBytes) {
+                    const err = new Error('Insufficient storage');
+                    return cb(err);
+                }
+            }
+        } catch (e) {
+            // If statfs isn't supported or fails, don't block uploads; log in non-prod only.
+            debugLog('statfs failed:', e && e.message ? e.message : String(e));
         }
         cb(null, uploadsRoot);
     },
