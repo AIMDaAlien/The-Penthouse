@@ -47,18 +47,37 @@ cf_api() {
   local url="$2"
   local data="${3:-}"
 
+  local resp http_code body
   if [ -n "${data}" ]; then
-    curl -fsSL -X "${method}" \
-      -H "Authorization: Bearer ${CF_API_TOKEN}" \
-      -H "Content-Type: application/json" \
-      --data "${data}" \
-      "${url}"
+    resp="$(
+      curl -sS --max-time 12 -X "${method}" \
+        -H "Authorization: Bearer ${CF_API_TOKEN}" \
+        -H "Content-Type: application/json" \
+        --data "${data}" \
+        -w '\n__HTTP_STATUS__:%{http_code}' \
+        "${url}"
+    )"
   else
-    curl -fsSL -X "${method}" \
-      -H "Authorization: Bearer ${CF_API_TOKEN}" \
-      -H "Content-Type: application/json" \
-      "${url}"
+    resp="$(
+      curl -sS --max-time 12 -X "${method}" \
+        -H "Authorization: Bearer ${CF_API_TOKEN}" \
+        -H "Content-Type: application/json" \
+        -w '\n__HTTP_STATUS__:%{http_code}' \
+        "${url}"
+    )"
   fi
+
+  http_code="$(printf '%s' "${resp}" | awk -F: '/^__HTTP_STATUS__:/ {print $2}' | tail -n 1)"
+  body="$(printf '%s' "${resp}" | sed '/^__HTTP_STATUS__:/d')"
+
+  # curl succeeded but Cloudflare returned an error status code
+  if [ -z "${http_code}" ] || [ "${http_code}" -lt 200 ] || [ "${http_code}" -ge 300 ]; then
+    echo "Cloudflare API HTTP ${http_code:-unknown} for ${method} ${url}"
+    echo "${body}"
+    return 1
+  fi
+
+  printf '%s' "${body}"
 }
 
 get_public_ip() {
@@ -199,4 +218,3 @@ main() {
 }
 
 main "$@"
-
