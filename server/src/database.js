@@ -374,49 +374,68 @@ async function initializeDatabase() {
   const isTest = process.env.NODE_ENV === 'test';
   const needsLegacyConversion = !isTest && fs.existsSync(legacyDbPath) && !fs.existsSync(sqlitePath);
 
-  // Open durable SQLite DB (file-backed in prod; in-memory in tests).
-  const sqliteDb = new BetterSqlite3(isTest ? ':memory:' : sqlitePath);
-
-  // Durability and concurrency tuning.
-  sqliteDb.pragma('foreign_keys = ON');
-  sqliteDb.pragma('busy_timeout = 5000');
-  if (!isTest) {
-    sqliteDb.pragma('journal_mode = WAL');
-    sqliteDb.pragma('synchronous = FULL');
-  }
-
-  applySchemaMigrations(sqliteDb);
+  const openSqlite = (dbFile) => {
+    const sqliteDb = new BetterSqlite3(dbFile);
+    // Durability and concurrency tuning.
+    sqliteDb.pragma('foreign_keys = ON');
+    sqliteDb.pragma('busy_timeout = 5000');
+    if (!isTest) {
+      sqliteDb.pragma('journal_mode = WAL');
+      sqliteDb.pragma('synchronous = FULL');
+    }
+    applySchemaMigrations(sqliteDb);
+    return sqliteDb;
+  };
 
   // One-time conversion from legacy sql.js DB if present.
   if (needsLegacyConversion) {
+    const tmpPath = `${sqlitePath}.tmp`;
+    try { fs.unlinkSync(tmpPath); } catch (_) {}
+
     console.log('Legacy sql.js database detected; converting to durable SQLite...');
     try {
+      const sqliteTmp = openSqlite(tmpPath);
+      sqliteTmp.pragma('foreign_keys = OFF'); // order-independent import
+
       const SQL = await initSqlJs();
       const legacyBuffer = fs.readFileSync(legacyDbPath);
       const legacyDb = new SQL.Database(legacyBuffer);
       legacyDb.run('PRAGMA foreign_keys = ON');
 
-      // Convert within a single transaction so we either get everything or nothing.
-      sqliteDb.exec('BEGIN IMMEDIATE');
+      sqliteTmp.exec('BEGIN IMMEDIATE');
       try {
-        convertLegacySqlJsToSqlite(legacyDb, sqliteDb);
-        sqliteDb.exec('COMMIT');
+        convertLegacySqlJsToSqlite(legacyDb, sqliteTmp);
+        sqliteTmp.exec('COMMIT');
       } catch (err) {
-        try { sqliteDb.exec('ROLLBACK'); } catch (_) {}
+        try { sqliteTmp.exec('ROLLBACK'); } catch (_) {}
         throw err;
       } finally {
         try { legacyDb.close(); } catch (_) {}
       }
 
+      sqliteTmp.pragma('foreign_keys = ON');
+      try {
+        const fkIssues = sqliteTmp.prepare('PRAGMA foreign_key_check').all();
+        if (fkIssues.length > 0) {
+          console.error('Foreign key issues detected after import:', fkIssues.slice(0, 10));
+        }
+      } catch (_) {
+        // ignore
+      }
+
+      sqliteTmp.close();
+      fs.renameSync(tmpPath, sqlitePath);
       console.log('Legacy database conversion complete.');
     } catch (err) {
-      // Leave legacy DB untouched; remove partial sqlite file if created.
-      try { sqliteDb.close(); } catch (_) {}
+      // Leave legacy DB untouched; remove temp/new sqlite files if created.
+      try { fs.unlinkSync(tmpPath); } catch (_) {}
       try { fs.unlinkSync(sqlitePath); } catch (_) {}
+      console.error('Legacy database conversion failed:', err && err.message ? err.message : err);
       throw err;
     }
   }
 
+  const sqliteDb = openSqlite(isTest ? ':memory:' : sqlitePath);
   db = sqliteDb;
   console.log('📦 Database initialized');
 
