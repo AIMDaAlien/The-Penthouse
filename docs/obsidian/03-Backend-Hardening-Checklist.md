@@ -1,6 +1,13 @@
-# Backend Hardening Checklist (Express + Socket.IO + sql.js)
+# Backend Hardening Checklist (Express + Socket.IO + SQLite)
 
 This is a pragmatic list of backend vulnerabilities and stability issues that were fixed in a minimal-risk way (no major redesign).
+
+## Data Durability (DB)
+
+- Migrated legacy `sql.js` snapshot DB to durable SQLite (`better-sqlite3`):
+  - `WAL` enabled for concurrency.
+  - Durability tuned (`synchronous=FULL`) in production.
+  - One-time conversion path from `data/penthouse.db` to `data/penthouse.sqlite`.
 
 ## Auth
 
@@ -75,6 +82,12 @@ This is a pragmatic list of backend vulnerabilities and stability issues that we
 - Avoid publishing app port directly; only Caddy exposed.
 - `no-new-privileges`, `cap_drop: [ALL]`, `read_only: true`, `tmpfs: /tmp`.
 
+## Performance / Observability (Lightweight)
+
+- Added API response timing headers:
+  - `X-Response-Time: <ms>ms`
+  - `Server-Timing: app;dur=<ms>`
+
 ## Tests
 
 - Added Jest env setup (`JWT_SECRET`, `NODE_ENV=test`).
@@ -85,4 +98,3 @@ This is a pragmatic list of backend vulnerabilities and stability issues that we
   - non-member message action `403`
   - clamp limits
   - app update endpoint
-
