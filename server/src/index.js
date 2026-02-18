@@ -23,6 +23,7 @@ const toPositiveInt = (value, fallback) => {
   const parsed = Number.parseInt(value, 10);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 };
+let shuttingDown = false;
 if (!process.env.JWT_SECRET) {
   throw new Error('JWT_SECRET must be configured');
 }
@@ -121,7 +122,7 @@ app.get('/api/health', (req, res) => {
   } catch (_) {
     // ignore
   }
-  res.json({ status: 'ok', app: 'The Penthouse', version });
+  res.json({ status: shuttingDown ? 'shutting_down' : 'ok', app: 'The Penthouse', version });
 });
 
 // Serve landing page and APK downloads
@@ -150,6 +151,44 @@ async function start() {
   server.keepAliveTimeout = toPositiveInt(process.env.HTTP_KEEP_ALIVE_TIMEOUT_MS, 65000);
   server.headersTimeout = toPositiveInt(process.env.HTTP_HEADERS_TIMEOUT_MS, 66000);
   server.requestTimeout = toPositiveInt(process.env.HTTP_REQUEST_TIMEOUT_MS, 30000);
+
+  // Track sockets so we can force-close on shutdown.
+  const sockets = new Set();
+  server.on('connection', (socket) => {
+    sockets.add(socket);
+    socket.on('close', () => sockets.delete(socket));
+  });
+
+  const gracefulShutdown = (signal) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`Received ${signal}; draining connections...`);
+
+    // Stop accepting new HTTP connections.
+    server.close(() => {
+      console.log('HTTP server closed.');
+      process.exit(0);
+    });
+
+    // Stop socket.io accepting new connections and close existing.
+    try {
+      io.close();
+    } catch (_) {
+      // ignore
+    }
+
+    // Force close remaining sockets after grace period.
+    const forceAfterMs = toPositiveInt(process.env.SHUTDOWN_FORCE_AFTER_MS, 20000);
+    setTimeout(() => {
+      for (const socket of sockets) {
+        try { socket.destroy(); } catch (_) {}
+      }
+      process.exit(0);
+    }, forceAfterMs).unref();
+  };
+
+  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+  process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
   server.listen(PORT, () => {
     console.log(`🏠 The Penthouse server running on port ${PORT}`);

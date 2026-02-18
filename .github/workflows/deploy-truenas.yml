@@ -23,7 +23,19 @@ jobs:
           git checkout main
           git reset --hard origin/main
           ./scripts/prepare_data_dirs.sh
-          docker compose up -d --build
+          # Build while the old container is still running, then recreate only the app.
+          docker compose build penthouse-app
+          docker compose up -d --no-deps --force-recreate penthouse-app
+          # Apply Caddyfile changes without restarting Caddy.
+          docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile || true
           docker compose ps
+          # Wait for health (handles brief restart window).
+          for i in $(seq 1 30); do
+            if docker compose exec -T penthouse-app wget -q --spider http://localhost:3000/api/health; then
+              echo health_ok
+              break
+            fi
+            sleep 2
+          done
           docker compose exec -T penthouse-app wget -q --spider http://localhost:3000/api/health
           echo deploy_ok

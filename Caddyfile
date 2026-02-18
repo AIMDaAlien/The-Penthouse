@@ -14,11 +14,18 @@
 penthouse.blog {
     import common_headers
     encode zstd gzip
-    reverse_proxy penthouse-app:3000
+    reverse_proxy penthouse-app:3000 {
+        # Smooth over short deploy restarts (tradeoff: slower failure for real outages).
+        lb_try_duration 5s
+        lb_try_interval 250ms
+    }
 }
 
 api.penthouse.blog {
     import common_headers
     encode zstd gzip
-    reverse_proxy penthouse-app:3000
+    reverse_proxy penthouse-app:3000 {
+        lb_try_duration 5s
+        lb_try_interval 250ms
+    }
 }

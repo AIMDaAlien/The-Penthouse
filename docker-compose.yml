@@ -5,6 +5,8 @@ services:
       dockerfile: Dockerfile.production
     container_name: penthouse-app
     restart: unless-stopped
+    init: true
+    stop_grace_period: 25s
     expose:
       - "3000"
     volumes:
