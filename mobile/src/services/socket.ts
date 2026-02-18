@@ -2,6 +2,7 @@ import { io, Socket } from 'socket.io-client';
 import Constants from 'expo-constants';
 
 import { Platform } from 'react-native';
+import { setServerOffline, setServerOnline } from './serverStatus';
 
 // Detect machine IP for development
 const origin = Constants.expoConfig?.hostUri?.split(':')[0];
@@ -28,14 +29,17 @@ export const connectSocket = (token: string): Socket => {
 
     socket.on('connect', () => {
         console.log('🔌 Connected to WebSocket');
+        setServerOnline();
     });
 
     socket.on('disconnect', () => {
         console.log('🔌 Disconnected from WebSocket');
+        setServerOffline('WebSocket disconnected');
     });
 
     socket.on('connect_error', (error) => {
         console.error('WebSocket connection error:', error.message);
+        setServerOffline(error.message || 'WebSocket error');
     });
 
     return socket;

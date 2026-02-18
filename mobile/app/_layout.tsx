@@ -11,6 +11,7 @@ import '../global.css';
 import { BackgroundLayer } from '../src/components/BackgroundLayer';
 import { ToastProvider } from '../src/components/Toast';
 import { NotificationListener } from '../src/components/NotificationListener';
+import { ServerStatusBanner } from '../src/components/ServerStatusBanner';
 import { registerForPushNotifications, setupNotificationListeners } from '../src/services/pushNotifications';
 
 // Configure Reanimated logger to suppress false positive warnings from third-party libs
@@ -135,6 +136,9 @@ export default function RootLayout() {
                   <RootNavigation />
                </View>
             </View>
+
+            {/* Always-on connectivity banner (best-effort) */}
+            <ServerStatusBanner />
             
             <NotificationListener />
           </ToastProvider>

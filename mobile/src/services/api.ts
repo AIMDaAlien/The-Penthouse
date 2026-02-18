@@ -49,15 +49,28 @@ api.interceptors.request.use(async (config) => {
 });
 
 import { DeviceEventEmitter } from 'react-native';
+import { setServerOffline, setServerOnline } from './serverStatus';
 
 // Handle 401
 api.interceptors.response.use(
-    (response) => response,
+    (response) => {
+        // Any successful response implies reachability.
+        setServerOnline();
+        return response;
+    },
     async (error) => {
         if (error.response?.status === 401) {
             await storage.deleteItem('token');
             DeviceEventEmitter.emit('auth:unauthorized');
             console.log('401 detected, token deleted');
+            // Auth error is not a reachability signal.
+            return Promise.reject(error);
+        }
+        // Network errors/timeouts usually have no response.
+        if (!error.response) {
+            setServerOffline(error.message || 'Network error');
+        } else if (error.response.status >= 500) {
+            setServerOffline(`Server error (${error.response.status})`);
         }
         return Promise.reject(error);
     }
@@ -88,21 +101,29 @@ export const uploadFile = async (file: RNFile): Promise<{ data: { url: string; t
 
     // Use native fetch for file uploads (more reliable in React Native)
     const token = await storage.getItem('token');
-    const response = await fetch(`${API_URL}/media/upload`, {
+    let response: Response;
+    try {
+        response = await fetch(`${API_URL}/media/upload`, {
         method: 'POST',
         headers: {
             'Authorization': `Bearer ${token}`,
             // Let fetch auto-set Content-Type with boundary for FormData
         },
         body: formData,
-    });
+        });
+    } catch (e: any) {
+        setServerOffline(e?.message || 'Upload network error');
+        throw e;
+    }
 
     if (!response.ok) {
         const errorText = await response.text();
         console.error('Upload failed:', response.status, errorText);
+        if (response.status >= 500) setServerOffline(`Upload server error (${response.status})`);
         throw new Error(`Upload failed: ${response.status}`);
     }
 
+    setServerOnline();
     const data = await response.json();
     return { data };
 };
@@ -117,18 +138,26 @@ export const uploadVoice = async (audioUri: string, duration: number, mimeType =
     formData.append('duration', duration.toString());
 
     const token = await storage.getItem('token');
-    const response = await fetch(`${API_URL}/media/voice`, {
+    let response: Response;
+    try {
+        response = await fetch(`${API_URL}/media/voice`, {
         method: 'POST',
         headers: {
             'Authorization': `Bearer ${token}`,
         },
         body: formData,
-    });
+        });
+    } catch (e: any) {
+        setServerOffline(e?.message || 'Upload network error');
+        throw e;
+    }
 
     if (!response.ok) {
+        if (response.status >= 500) setServerOffline(`Upload server error (${response.status})`);
         throw new Error(`Upload failed: ${response.status}`);
     }
 
+    setServerOnline();
     const data = await response.json();
     return { data };
 };
@@ -186,20 +215,28 @@ export const uploadAvatar = async (file: RNFile): Promise<{ data: { avatarUrl: s
     } as any);
 
     const token = await storage.getItem('token');
-    const response = await fetch(`${API_URL}/media/avatar`, {
+    let response: Response;
+    try {
+        response = await fetch(`${API_URL}/media/avatar`, {
         method: 'POST',
         headers: {
             'Authorization': `Bearer ${token}`,
         },
         body: formData,
-    });
+        });
+    } catch (e: any) {
+        setServerOffline(e?.message || 'Upload network error');
+        throw e;
+    }
 
     if (!response.ok) {
         const errorText = await response.text();
         console.error('Avatar upload failed:', response.status, errorText);
+        if (response.status >= 500) setServerOffline(`Upload server error (${response.status})`);
         throw new Error(`Avatar upload failed: ${response.status}`);
     }
 
+    setServerOnline();
     const data = await response.json();
     return { data };
 };
@@ -367,4 +404,3 @@ export const updateChannelPermissions = (channelId: number, roleId: string, allo
 };
 
 export default api;
-
