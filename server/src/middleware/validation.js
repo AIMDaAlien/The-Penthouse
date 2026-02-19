@@ -85,8 +85,8 @@ const validateForgotPassword = [
 const validateResetPassword = [
   body('token').notEmpty().withMessage('Token is required'),
   body('newPassword')
-    .isLength({ min: 6 })
-    .withMessage('Password must be at least 6 characters long'),
+    .isLength({ min: 8 })
+    .withMessage('Password must be at least 8 characters'),
   handleValidation
 ];
 
