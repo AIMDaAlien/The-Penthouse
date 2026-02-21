@@ -46,9 +46,10 @@ const sanitizeMessageContent = (content) => {
 const validateRegister = [
   body('username')
     .trim()
+    .toLowerCase()
     .isLength({ min: 3, max: 20 })
     .withMessage('Username must be 3-20 characters')
-    .matches(/^[a-zA-Z0-9_@.-]+$/)
+    .matches(/^[a-z0-9_@.-]+$/)
     .withMessage('Username can only contain letters, numbers, underscores, @, ., and -'),
   
   body('password')
@@ -67,6 +68,7 @@ const validateRegister = [
 const validateLogin = [
   body('username')
     .trim()
+    .toLowerCase()
     .notEmpty()
     .withMessage('Username is required'),
   

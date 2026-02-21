@@ -56,7 +56,7 @@ export default function Register() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-[#09090b]">
+    <SafeAreaView className="flex-1 bg-transparent">
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}
         className="flex-1"
@@ -128,7 +128,11 @@ export default function Register() {
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry
+                className="mb-2"
               />
+              <Text className="text-zinc-500 text-[10px] font-semibold uppercase tracking-wider mb-4 ml-2">
+                Must be at least 8 characters
+              </Text>
 
                <Input
                 label="Verify"
@@ -136,8 +140,11 @@ export default function Register() {
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
                 secureTextEntry
-                className="mb-8"
+                className="mb-2"
               />
+              <Text className="text-zinc-500 text-[10px] font-semibold uppercase tracking-wider mb-8 ml-2">
+                Must clearly match the password above
+              </Text>
 
               <Button
                 title="CREATE ACCOUNT"

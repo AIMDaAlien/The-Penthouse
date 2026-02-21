@@ -51,6 +51,20 @@ api.interceptors.request.use(async (config) => {
 import { DeviceEventEmitter } from 'react-native';
 import { setServerOffline, setServerOnline } from './serverStatus';
 
+let isRefreshing = false;
+let failedQueue: Array<{ resolve: (token: string) => void; reject: (error: any) => void }> = [];
+
+const processQueue = (error: any, token: string | null = null) => {
+    failedQueue.forEach(prom => {
+        if (error) {
+            prom.reject(error);
+        } else if (token) {
+            prom.resolve(token);
+        }
+    });
+    failedQueue = [];
+};
+
 // Handle 401
 api.interceptors.response.use(
     (response) => {
@@ -59,17 +73,74 @@ api.interceptors.response.use(
         return response;
     },
     async (error) => {
-        if (error.response?.status === 401) {
-            await storage.deleteItem('token');
-            DeviceEventEmitter.emit('auth:unauthorized');
-            console.log('401 detected, token deleted');
-            // Auth error is not a reachability signal.
-            return Promise.reject(error);
+        const originalRequest = error.config;
+
+        if (error.response?.status === 401 && !originalRequest._retry && originalRequest.url !== '/auth/refresh') {
+            if (isRefreshing) {
+                return new Promise(function (resolve, reject) {
+                    failedQueue.push({ resolve, reject });
+                })
+                    .then(token => {
+                        originalRequest.headers['Authorization'] = 'Bearer ' + token;
+                        return axios(originalRequest);
+                    })
+                    .catch(err => {
+                        return Promise.reject(err);
+                    });
+            }
+
+            originalRequest._retry = true;
+            isRefreshing = true;
+
+            try {
+                const refreshToken = await storage.getItem('refreshToken');
+                if (!refreshToken) {
+                    throw new Error('No refresh token available');
+                }
+
+                // Call refresh endpoint directly with fetch to avoid interceptor loops
+                const response = await fetch(`${API_URL}/auth/refresh`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ refreshToken })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Refresh failed');
+                }
+
+                const data = await response.json();
+                const newAccessToken = data.accessToken;
+                const newRefreshToken = data.refreshToken;
+
+                await storage.setItem('token', newAccessToken);
+                await storage.setItem('refreshToken', newRefreshToken);
+
+                DeviceEventEmitter.emit('auth:token_refreshed', newAccessToken);
+
+                processQueue(null, newAccessToken);
+                originalRequest.headers['Authorization'] = 'Bearer ' + newAccessToken;
+                
+                // Also update the api defaults if possible (though interceptor reading from storage is usually enough)
+                api.defaults.headers.common['Authorization'] = 'Bearer ' + newAccessToken;
+
+                return axios(originalRequest);
+            } catch (err) {
+                processQueue(err, null);
+                await storage.deleteItem('token');
+                await storage.deleteItem('refreshToken');
+                DeviceEventEmitter.emit('auth:unauthorized');
+                console.log('401 detected, refresh failed, token deleted');
+                return Promise.reject(error);
+            } finally {
+                isRefreshing = false;
+            }
         }
+
         // Network errors/timeouts usually have no response.
-        if (!error.response) {
+        if (!error.response && error.code !== 'ERR_CANCELED') {
             setServerOffline(error.message || 'Network error');
-        } else if (error.response.status >= 500) {
+        } else if (error.response?.status >= 500) {
             setServerOffline(`Server error (${error.response.status})`);
         }
         return Promise.reject(error);

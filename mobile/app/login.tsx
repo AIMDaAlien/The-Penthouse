@@ -47,7 +47,7 @@ export default function Login() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-[#09090b]">
+    <SafeAreaView className="flex-1 bg-transparent">
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}
         className="flex-1"
@@ -104,8 +104,11 @@ export default function Login() {
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry
-                className="mb-8"
+                className="mb-2"
               />
+              <Text className="text-zinc-500 text-[10px] font-semibold uppercase tracking-wider mb-8 ml-2">
+                Must be at least 8 characters
+              </Text>
 
               <Button
                 title="LOG IN"
