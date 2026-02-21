@@ -39,6 +39,9 @@ if [ "${MANDATORY}" != "true" ] && [ "${MANDATORY}" != "false" ]; then
 fi
 
 NOTES="${MOBILE_UPDATE_NOTES:-}"
+if [ -z "${NOTES}" ] && [ -n "${MOBILE_UPDATE_NOTES_FILE:-}" ] && [ -f "${MOBILE_UPDATE_NOTES_FILE}" ]; then
+    NOTES="$(cat "${MOBILE_UPDATE_NOTES_FILE}")"
+fi
 if [ -z "${NOTES}" ] && [ -n "${GITHUB_SHA:-}" ]; then
     NOTES="Automated build from commit ${GITHUB_SHA}"
 fi

@@ -190,6 +190,7 @@ Behavior:
 - Publishes APK to `data/downloads/the-penthouse.apk` on TrueNAS
 - Regenerates `data/downloads/app-update.json` with checksum + metadata
 - Pulls `main`, rebuilds, restarts compose, then verifies health + APK URL
+- Generates release notes from commit range and publishes them as update changelog
 
 Runner should be configured on TrueNAS and kept online at boot.
 
@@ -198,7 +199,34 @@ Required GitHub repository secret:
 
 ---
 
-## 8. Cloudflare DNS Failover
+## 8. Expo OTA Updates
+
+Workflow:
+- `.github/workflows/eas-ota-update.yml`
+
+Behavior:
+- Runs on pushes to `main` that touch `mobile/**`
+- Publishes JS/asset updates to EAS branch `preview`
+- Reuses generated release notes as OTA update message
+
+Important:
+- OTA only applies when the installed app runtime matches.
+- This repo uses `runtimeVersion.policy = appVersion`, so OTA works only within the same app version.
+
+---
+
+## 9. Mobile Versioning Protocol
+
+- `PATCH` (`1.2.3 -> 1.2.4`): bug fixes, no schema/native breaking changes
+- `MINOR` (`1.2.3 -> 1.3.0`): user-facing feature additions
+- `MAJOR` (`1.2.3 -> 2.0.0`): breaking API/behavior changes
+- Use OTA (`eas update`) for JS/asset-only changes within the same app version
+- Require APK upgrade when native dependencies/config change or when `expo.version` is bumped
+- Use `mandatory`/`minSupportedVersion` in update manifest to force upgrades when needed
+
+---
+
+## 10. Cloudflare DNS Failover
 
 Workflow:
 - `.github/workflows/cloudflare-failover.yml`
@@ -224,7 +252,7 @@ Cloudflare API token minimum scope:
 
 ---
 
-## 9. Collaboration Setup (Remote Contributors)
+## 11. Collaboration Setup (Remote Contributors)
 
 Recommended model for outside collaborators/testers:
 - Give GitHub repo access (not server root access)
@@ -239,7 +267,7 @@ For live testing from Reykjavik (or any region):
 
 ---
 
-## 10. Troubleshooting
+## 12. Troubleshooting
 
 - `docker compose config` fails: missing required env vars in `.env`
 - Backups not running: check `.backup.env` path and cron logs:

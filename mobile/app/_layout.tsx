@@ -12,6 +12,7 @@ import { BackgroundLayer } from '../src/components/BackgroundLayer';
 import { ToastProvider } from '../src/components/Toast';
 import { NotificationListener } from '../src/components/NotificationListener';
 import { ServerStatusBanner } from '../src/components/ServerStatusBanner';
+import { AppUpdateGate } from '../src/components/AppUpdateGate';
 import { registerForPushNotifications, setupNotificationListeners } from '../src/services/pushNotifications';
 
 // Configure Reanimated logger to suppress false positive warnings from third-party libs
@@ -139,6 +140,9 @@ export default function RootLayout() {
 
             {/* Always-on connectivity banner (best-effort) */}
             <ServerStatusBanner />
+
+            {/* In-app binary/OTA update prompts */}
+            <AppUpdateGate />
             
             <NotificationListener />
           </ToastProvider>

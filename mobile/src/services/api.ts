@@ -161,6 +161,19 @@ export interface RNFile {
     type?: string;
 }
 
+export interface AppUpdateInfo {
+    app: string;
+    latestVersion: string;
+    mandatory: boolean;
+    notes: string;
+    minSupportedVersion: string | null;
+    publishedAt: string | null;
+    checksumSha256: string | null;
+    fileName: string;
+    downloadPath: string;
+    apkUrl: string;
+}
+
 export const uploadFile = async (file: RNFile): Promise<{ data: { url: string; type: 'image' | 'video' | 'file'; mimeType: string; filename: string } }> => {
     const formData = new FormData();
     // React Native expects: { uri, type, name }
@@ -485,5 +498,7 @@ export const updateChannelPermissions = (channelId: number, roleId: string, allo
         setTimeout(() => resolve({ success: true }), 500);
     });
 };
+
+export const getAppUpdateInfo = () => api.get<AppUpdateInfo>('/app/update');
 
 export default api;
