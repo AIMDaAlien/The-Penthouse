@@ -14,7 +14,7 @@
     "@expo/vector-icons": "^15.0.3",
     "@react-navigation/drawer": "^7.5.0",
     "@shopify/flash-list": "^2.2.2",
-    "axios": "^1.7.9",
+    "axios": "^1.13.5",
     "date-fns": "^4.1.0",
     "expo": "~54.0.33",
     "expo-av": "~16.0.8",
@@ -57,5 +57,8 @@
     "tailwindcss": "^3.4.19",
     "typescript": "~5.9.2"
   },
-  "private": true
+  "private": true,
+  "overrides": {
+    "tar": "^7.5.8"
+  }
 }

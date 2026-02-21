@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { View, Text, Pressable, ActionSheetIOS, Platform, Alert, Dimensions, StyleSheet } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { Message, Reaction } from '../types';
@@ -309,9 +309,6 @@ export default function MessageList({
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
     const flatListRef = useRef<any>(null);
 
-    // Memoize reversed messages to avoid re-creating array on every render
-    const reversedMessages = useMemo(() => [...messages].reverse(), [messages]);
-
     const handleLongPress = useCallback((message: Message, isMe: boolean) => {
         // ... action sheet logic same ...
         const options: string[] = ['Reply', 'Copy Text'];
@@ -411,14 +408,16 @@ export default function MessageList({
         <>
             <FlashList
                 ref={flatListRef}
-                data={reversedMessages}
+                data={messages}
                 renderItem={renderItem}
                 keyExtractor={keyExtractor}
-                estimatedItemSize={80}
-                inverted
                 contentContainerStyle={LIST_CONTENT_STYLE}
                 onViewableItemsChanged={onViewableItemsChanged}
                 viewabilityConfig={VIEWABILITY_CONFIG}
+                maintainVisibleContentPosition={{
+                    autoscrollToBottomThreshold: 0.2,
+                    startRenderingFromBottom: true,
+                }}
             />
 
             {/* Image Viewer Modal */}

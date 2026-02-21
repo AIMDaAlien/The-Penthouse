@@ -9,6 +9,7 @@ export interface User {
     username: string;
     displayName: string;
     avatarUrl?: string;
+    email?: string;
 }
 
 interface AuthContextType {
@@ -59,11 +60,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             logout();
         };
 
+        const handleTokenRefreshed = async (newToken: string) => {
+            console.log('AuthContext: Received token refreshed event');
+            setToken(newToken);
+            connectSocket(newToken);
+        };
+
+        const subscriptionRefreshed = DeviceEventEmitter.addListener('auth:token_refreshed', handleTokenRefreshed);
         const subscription = DeviceEventEmitter.addListener('auth:unauthorized', handleUnauthorized);
         initAuth();
 
         return () => {
              subscription.remove();
+             subscriptionRefreshed.remove();
         };
     }, []);
 
@@ -71,10 +80,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
             const { data } = await apiLogin(username, password);
             console.log('[AuthContext] Login successful');
-            await storage.setItem('token', data.token);
-            setToken(data.token);
+            await storage.setItem('token', data.accessToken || data.token);
+            if (data.refreshToken) {
+                await storage.setItem('refreshToken', data.refreshToken);
+            }
+            setToken(data.accessToken || data.token);
             setUser(data.user);
-            connectSocket(data.token);
+            connectSocket(data.accessToken || data.token);
         } catch (error) {
             console.error('[AuthContext] Login failed:', error);
             throw error;
@@ -85,10 +97,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
             const { data } = await apiRegister(username, email, password, displayName);
             console.log('[AuthContext] Registration successful');
-            await storage.setItem('token', data.token);
-            setToken(data.token);
+            await storage.setItem('token', data.accessToken || data.token);
+            if (data.refreshToken) {
+                await storage.setItem('refreshToken', data.refreshToken);
+            }
+            setToken(data.accessToken || data.token);
             setUser(data.user);
-            connectSocket(data.token);
+            connectSocket(data.accessToken || data.token);
         } catch (error) {
             console.error('[AuthContext] Registration failed:', error);
             throw error;
@@ -97,6 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const logout = async () => {
         await storage.deleteItem('token');
+        await storage.deleteItem('refreshToken');
         setToken(null);
         setUser(null);
         disconnectSocket();

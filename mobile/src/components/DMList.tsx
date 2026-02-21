@@ -37,6 +37,9 @@ interface DMListProps {
   onNewDM: () => void;
 }
 
+// Module-level stable reference (avoids re-creation per render)
+const DM_KEY_EXTRACTOR = (item: DM) => item.id.toString();
+
 // ─────────────────────────────────────────────────────────────
 // DM Row Component
 // ─────────────────────────────────────────────────────────────
@@ -169,6 +172,14 @@ export function DMList({ onSelectDM, onNewDM }: DMListProps) {
     setRefreshing(false);
   }, [loadDMs]);
 
+  const renderDMItem = useCallback(({ item }: { item: DM }) => (
+    <DMRow
+      dm={item}
+      onPress={() => onSelectDM(item.id)}
+      unreadCount={unreadCounts.get(item.id)}
+    />
+  ), [onSelectDM, unreadCounts]);
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -202,15 +213,8 @@ export function DMList({ onSelectDM, onNewDM }: DMListProps) {
       ) : (
         <FlashList
           data={dms}
-          keyExtractor={(item) => item.id.toString()}
-          estimatedItemSize={72}
-          renderItem={({ item }) => (
-            <DMRow
-              dm={item}
-              onPress={() => onSelectDM(item.id)}
-              unreadCount={unreadCounts.get(item.id)}
-            />
-          )}
+          keyExtractor={DM_KEY_EXTRACTOR}
+          renderItem={renderDMItem}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}

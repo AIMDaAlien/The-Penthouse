@@ -7,6 +7,13 @@ const asyncHandler = require('../utils/asyncHandler');
 const ChatService = require('../services/chatService');
 
 const router = express.Router();
+
+// Module-level helpers (avoid re-creation per request)
+const ensureUTC = (dateStr) => {
+    if (!dateStr) return null;
+    return dateStr.endsWith('Z') ? dateStr : dateStr + 'Z';
+};
+
 const ensureChatAccess = (chatId, userId) => {
     const { isMember, chat } = ChatService.verifyMembership(chatId, userId);
     if (!chat) {
@@ -102,12 +109,6 @@ router.get('/:chatId', authenticateToken, asyncHandler(async (req, res) => {
             };
         });
     }
-
-    // Helper to ensure UTC
-    const ensureUTC = (dateStr) => {
-        if (!dateStr) return null;
-        return dateStr.endsWith('Z') ? dateStr : dateStr + 'Z';
-    };
 
     // Return in chronological order
     res.json(messages.reverse().map(m => ({

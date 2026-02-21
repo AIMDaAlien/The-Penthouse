@@ -174,12 +174,13 @@ router.post('/accept/:id', asyncHandler(async (req, res) => {
       return res.status(404).json({ error: 'Friend request not found' });
     }
 
-    // Delete the request
-    db.prepare('DELETE FROM friend_requests WHERE id = ?').run(requestId);
-
-    // Create bidirectional friendship
-    db.prepare('INSERT INTO friendships (user_id, friend_id) VALUES (?, ?)').run(userId, request.sender_id);
-    db.prepare('INSERT INTO friendships (user_id, friend_id) VALUES (?, ?)').run(request.sender_id, userId);
+    // Atomic: delete request + create bidirectional friendship
+    const acceptTransaction = db.transaction(() => {
+      db.prepare('DELETE FROM friend_requests WHERE id = ?').run(requestId);
+      db.prepare('INSERT INTO friendships (user_id, friend_id) VALUES (?, ?)').run(userId, request.sender_id);
+      db.prepare('INSERT INTO friendships (user_id, friend_id) VALUES (?, ?)').run(request.sender_id, userId);
+    });
+    acceptTransaction();
 
     res.json({ message: 'Friend request accepted' });
 }));
@@ -333,22 +334,17 @@ router.post('/block/:userId', asyncHandler(async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Remove any friendships
-    db.prepare('DELETE FROM friendships WHERE user_id = ? AND friend_id = ?').run(blockerId, blockedId);
-    db.prepare('DELETE FROM friendships WHERE user_id = ? AND friend_id = ?').run(blockedId, blockerId);
-
-    // Remove any pending friend requests
-    db.prepare(`
-      DELETE FROM friend_requests 
-      WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)
-    `).run(blockerId, blockedId, blockedId, blockerId);
-
-    // Add to blocked users
-    try {
-      db.prepare('INSERT INTO blocked_users (blocker_id, blocked_id) VALUES (?, ?)').run(blockerId, blockedId);
-    } catch (e) {
-      // Already blocked
-    }
+    // Atomic: remove friendships + requests + insert block
+    const blockTransaction = db.transaction(() => {
+      db.prepare('DELETE FROM friendships WHERE user_id = ? AND friend_id = ?').run(blockerId, blockedId);
+      db.prepare('DELETE FROM friendships WHERE user_id = ? AND friend_id = ?').run(blockedId, blockerId);
+      db.prepare(`
+        DELETE FROM friend_requests 
+        WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)
+      `).run(blockerId, blockedId, blockedId, blockerId);
+      db.prepare('INSERT OR IGNORE INTO blocked_users (blocker_id, blocked_id) VALUES (?, ?)').run(blockerId, blockedId);
+    });
+    blockTransaction();
 
     res.json({ message: 'User blocked' });
 }));

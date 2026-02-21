@@ -272,30 +272,30 @@ export default function MessageInput({
                         />
                     </Pressable>
 
-                    {/* GIF button (when no text) */}
-                    {!displayText.trim() && !isEditing && (
+                    {/* GIF button */}
+                    {!isEditing && (
                         <Pressable onPress={() => togglePicker('gif')} style={styles.iconBtn}>
                             <Text style={[Typography.MICRO, { color: pickerMode === 'gif' ? Colors.LAVENDER : Colors.OVERLAY1, fontSize: 10 }]}>GIF</Text>
                         </Pressable>
                     )}
 
-                    {/* Voice button (when no text) */}
-                    {!displayText.trim() && !isEditing && (
+                    {/* Voice button */}
+                    {!isEditing && (
                         <Pressable onPress={() => togglePicker('voice')} style={styles.iconBtn}>
                             <Ionicons name="mic" size={24} color={Colors.OVERLAY1} />
                         </Pressable>
                     )}
 
-                    {/* Send button (when has text or editing) */}
-                    {(displayText.trim() || isEditing) && (
-                        <Pressable
-                            onPress={handleSend}
-                            disabled={sending || (!displayText.trim() && !isEditing)}
-                            style={({ pressed }) => [
-                                styles.sendBtn,
-                                pressed && { transform: [{ scale: 0.95 }], opacity: 0.8 }
-                            ]}
-                        >
+                    {/* Send button (Always visible, disabled when no text) */}
+                    <Pressable
+                        onPress={handleSend}
+                        disabled={sending || (!displayText.trim() && !isEditing)}
+                        style={({ pressed }) => [
+                            styles.sendBtn,
+                            pressed && { transform: [{ scale: 0.95 }], opacity: 0.8 },
+                            (!displayText.trim() && !isEditing) && { opacity: 0.5, backgroundColor: Colors.SURFACE1 }
+                        ]}
+                    >
                             {sending ? (
                                 <ActivityIndicator size="small" color={Colors.CRUST} />
                             ) : (
@@ -306,7 +306,6 @@ export default function MessageInput({
                                 />
                             )}
                         </Pressable>
-                    )}
                 </View>
             </BlurView>
 
