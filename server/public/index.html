@@ -168,6 +168,12 @@
             flex-shrink: 0;
         }
 
+        .download-btn.is-disabled {
+            opacity: 0.5;
+            pointer-events: none;
+            box-shadow: none;
+        }
+
         .no-apk {
             margin-top: 1rem;
             font-size: 0.8rem;
@@ -231,7 +237,7 @@
                 <div class="feature"><span>🔒</span>Self-hosted privacy</div>
             </div>
 
-            <a href="/downloads/the-penthouse.apk" class="download-btn" id="downloadBtn">
+            <a href="#" class="download-btn is-disabled" id="downloadBtn" aria-disabled="true">
                 <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z"/></svg>
                 Download for Android
             </a>
@@ -243,23 +249,32 @@
             </div>
         </div>
 
-        <p class="version">v1.0.0 · Self-Hosted</p>
+        <p class="version" id="versionLabel">v1.0.0 · Self-Hosted</p>
     </div>
 
     <script>
-        // Check if APK exists
-        fetch('/downloads/the-penthouse.apk', { method: 'HEAD' })
+        const downloadBtn = document.getElementById('downloadBtn');
+        const noApk = document.getElementById('noApk');
+        const versionLabel = document.getElementById('versionLabel');
+
+        fetch('/api/app/update')
             .then(res => {
-                if (!res.ok) {
-                    document.getElementById('downloadBtn').style.opacity = '0.5';
-                    document.getElementById('downloadBtn').style.pointerEvents = 'none';
-                } else {
-                    document.getElementById('noApk').style.display = 'none';
+                if (!res.ok) throw new Error('No APK metadata');
+                return res.json();
+            })
+            .then(update => {
+                if (!update || !update.downloadPath) throw new Error('Missing download path');
+                downloadBtn.href = update.downloadPath;
+                downloadBtn.classList.remove('is-disabled');
+                downloadBtn.removeAttribute('aria-disabled');
+                noApk.style.display = 'none';
+                if (update.latestVersion) {
+                    versionLabel.textContent = `v${update.latestVersion} · Self-Hosted`;
                 }
             })
             .catch(() => {
-                document.getElementById('downloadBtn').style.opacity = '0.5';
-                document.getElementById('downloadBtn').style.pointerEvents = 'none';
+                downloadBtn.classList.add('is-disabled');
+                downloadBtn.setAttribute('aria-disabled', 'true');
             });
     </script>
 </body>

@@ -186,11 +186,15 @@ Workflow:
 - `.github/workflows/deploy-truenas.yml`
 
 Behavior:
-- Runs on self-hosted runner labels: `truenas`, `penthouse`
-- Pulls `main`, rebuilds, restarts compose
-- Verifies health inside container
+- Builds Android APK on EAS (GitHub-hosted runner) for each `main` push
+- Publishes APK to `data/downloads/the-penthouse.apk` on TrueNAS
+- Regenerates `data/downloads/app-update.json` with checksum + metadata
+- Pulls `main`, rebuilds, restarts compose, then verifies health + APK URL
 
 Runner should be configured on TrueNAS and kept online at boot.
+
+Required GitHub repository secret:
+- `EXPO_TOKEN` (Expo access token for `eas build`)
 
 ---
 
@@ -242,4 +246,5 @@ For live testing from Reykjavik (or any region):
   - `/var/log/penthouse-backup.log`
   - `/var/log/penthouse-backup-prune.log`
 - Failover workflow errors: verify Cloudflare secret IDs and token scope
+- APK workflow fails at build step: confirm `EXPO_TOKEN` is set and valid
 - Cert issues: confirm public DNS and WAN forwarding 80/443
