@@ -2,7 +2,7 @@
 
 All notable changes to The Penthouse are documented in this file.
 
-## [1.0.1] - 2026-02-22
+## [1.2.0] - 2026-02-22
 
 ### Added
 - GitHub Release publishing in CI (`deploy-truenas` workflow) with APK asset + release notes.
@@ -10,7 +10,7 @@ All notable changes to The Penthouse are documented in this file.
 - Stronger release docs in `README.md` (pipeline, versioning, OTA vs APK, downgrade flow).
 
 ### Changed
-- Mobile release version bumped to `1.0.1` (`mobile/app.json`, `mobile/package.json`).
+- Mobile release version bumped to `1.2.0` (`mobile/app.json`, `mobile/package.json`).
 - APK pipeline now tags/releases by app version (`v<expo.version>`).
 - Homepage/download flow remains driven by `/api/app/update` + `/downloads/the-penthouse.apk`.
 

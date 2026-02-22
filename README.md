@@ -65,6 +65,15 @@ Use SemVer and bump `mobile/app.json -> expo.version` for each significant relea
 - MINOR (`1.0.0 -> 1.1.0`): new backward-compatible features
 - MAJOR (`1.0.0 -> 2.0.0`): breaking changes
 
+Use the helper script so `mobile/package.json`, `mobile/package-lock.json`, and `mobile/app.json` stay aligned:
+
+```bash
+./scripts/bump_mobile_version.sh patch
+./scripts/bump_mobile_version.sh minor
+./scripts/bump_mobile_version.sh major
+./scripts/bump_mobile_version.sh 1.2   # shorthand -> 1.2.0
+```
+
 For significant updates, publish a new APK and GitHub Release.
 
 ## GitHub Releases + downgrade path

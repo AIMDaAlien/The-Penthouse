@@ -48,6 +48,24 @@ jobs:
           echo "OTA release notes:"
           cat artifacts/release-notes.txt
 
+      - name: Validate mobile version semantics
+        run: |
+          set -euo pipefail
+          APP_VERSION="$(jq -r '.expo.version // empty' mobile/app.json)"
+          PKG_VERSION="$(jq -r '.version // empty' mobile/package.json)"
+          if [ -z "${APP_VERSION}" ] || [ -z "${PKG_VERSION}" ]; then
+            echo "mobile/app.json expo.version and mobile/package.json version are required."
+            exit 1
+          fi
+          if [ "${APP_VERSION}" != "${PKG_VERSION}" ]; then
+            echo "Version mismatch: app.json=${APP_VERSION}, package.json=${PKG_VERSION}"
+            exit 1
+          fi
+          if ! [[ "${APP_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Version must be SemVer (x.y.z). Got: ${APP_VERSION}"
+            exit 1
+          fi
+
       - name: Publish OTA update to preview branch
         run: |
           set -euo pipefail
