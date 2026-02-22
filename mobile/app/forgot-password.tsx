@@ -1,21 +1,21 @@
-import { View, Text, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard, Pressable } from 'react-native';
+import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator, Platform } from 'react-native';
 import { useState } from 'react';
-import { Link, useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import Input from '../src/components/Input';
-import Button from '../src/components/Button';
+import { Link } from 'expo-router';
+import { AuthScreenWrapper } from '../src/components/AuthScreenWrapper';
+import { BlurView } from 'expo-blur';
 import { forgotPassword } from '../src/services/api';
 
-// Wrapper that dismisses keyboard on native, but not on web
-const DismissKeyboardView = ({ children }: { children: React.ReactNode }) => {
-  if (Platform.OS === 'web') {
-    return <View className="flex-1">{children}</View>;
-  }
-  return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      {children}
-    </TouchableWithoutFeedback>
-  );
+const COLORS = {
+  textMain: '#ffffff',
+  textMuted: 'rgba(255, 255, 255, 0.65)',
+  lineBorder: 'rgba(255, 255, 255, 0.3)',
+  placeholderText: 'rgba(255, 255, 255, 0.4)',
+  errorBg: 'rgba(243, 139, 168, 0.15)',
+  errorBorder: 'rgba(243, 139, 168, 0.4)',
+  errorText: '#f38ba8',
+  successBg: 'rgba(166, 227, 161, 0.15)',
+  successBorder: 'rgba(166, 227, 161, 0.4)',
+  successText: '#a6e3a1',
 };
 
 export default function ForgotPassword() {
@@ -23,130 +23,91 @@ export default function ForgotPassword() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  
-  const router = useRouter();
 
   const handleSubmit = async () => {
-    if (!email) {
-      setError('Please enter your email/username');
-      return;
-    }
-
+    if (!email) { setError('Please enter your email or username'); return; }
     try {
-      setError('');
-      setIsLoading(true);
+      setError(''); setIsLoading(true);
       await forgotPassword(email);
       setSuccess(true);
     } catch (err: any) {
-      // API returns success even if user doesn't exist (security)
+      // Always show success for security (don't reveal if account exists)
       setSuccess(true);
-    } finally {
-      setIsLoading(false);
-    }
+    } finally { setIsLoading(false); }
   };
 
   if (success) {
     return (
-      <SafeAreaView className="flex-1 bg-[#09090b]">
-        <View className="flex-1 justify-center px-10 pb-10">
-          <View className="items-center mb-12">
-            <View 
-              className="w-20 h-20 bg-green-500/10 border border-green-500/30 items-center justify-center"
-              style={{
-                borderTopLeftRadius: 32,
-                borderBottomRightRadius: 32,
-                borderTopRightRadius: 8,
-                borderBottomLeftRadius: 8,
-              }}
-            >
-              <Text className="text-4xl">✓</Text>
-            </View>
-            <Text className="text-2xl font-black text-white text-center mt-6" style={{ letterSpacing: -1 }}>
-              CHECK YOUR EMAIL
-            </Text>
-            <Text className="text-zinc-400 text-center mt-4 px-4">
-              If an account exists with that email, we sent password reset instructions.
-            </Text>
-          </View>
+      <AuthScreenWrapper centered>
+        <View style={{ alignItems: 'center', gap: 16, paddingHorizontal: 10 }}>
+          <Text style={{ fontSize: 48 }}>✓</Text>
+          <Text style={s.penthouseText}>CHECK{'\n'}YOUR EMAIL</Text>
+          <Text style={[s.subtitle, { textAlign: 'center', marginTop: 8 }]}>
+            If an account exists with that email, we've sent password reset instructions.
+          </Text>
 
           <Link href="/login" asChild>
-            <Pressable className="bg-[#cba6f7] py-4 rounded-2xl items-center">
-              <Text className="text-black font-black text-sm uppercase tracking-widest">
-                Back to Login
-              </Text>
+            <Pressable style={[s.frostedButton, { marginTop: 30, width: '100%' }]}>
+              {Platform.OS === 'ios' && <BlurView intensity={12} tint="light" style={[StyleSheet.absoluteFill, { borderRadius: 50, overflow: 'hidden' }]} />}
+              <Text style={s.buttonText}>Back to Login</Text>
             </Pressable>
           </Link>
         </View>
-      </SafeAreaView>
+      </AuthScreenWrapper>
     );
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-[#09090b]">
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        className="flex-1"
-      >
-        <DismissKeyboardView>
-          <View className="flex-1 justify-center px-10 pb-10">
-            
-            <View className="items-center mb-12">
-              <View 
-                className="w-20 h-20 bg-[#cba6f7]/10 border border-[#cba6f7]/30 items-center justify-center"
-                style={{
-                  borderTopLeftRadius: 32,
-                  borderBottomRightRadius: 32,
-                  borderTopRightRadius: 8,
-                  borderBottomLeftRadius: 8,
-                }}
-              >
-                <Text className="text-4xl">🔐</Text>
-              </View>
-              <Text className="text-2xl font-black text-white text-center mt-6" style={{ letterSpacing: -1 }}>
-                FORGOT PASSWORD
-              </Text>
-              <Text className="text-zinc-400 text-center mt-4 px-4">
-                Enter your email and we'll send you a link to reset your password.
-              </Text>
-            </View>
+    <AuthScreenWrapper centered>
+      <View style={{ gap: 25 }}>
+        {/* Header */}
+        <View>
+          <Text style={s.theText}>THE</Text>
+          <Text style={s.penthouseText}>{'PENT\nHOUSE'}</Text>
+          <Text style={s.subtitle}>Reset your access credentials</Text>
+        </View>
 
-            <View className="w-full">
-              {error ? (
-                <View className="bg-red-500/10 border border-red-500/50 p-4 rounded-xl mb-6">
-                  <Text className="text-red-400 text-center text-xs font-bold uppercase tracking-widest">{error}</Text>
-                </View>
-              ) : null}
-
-              <Input
-                label="Email"
-                placeholder="you@example.com"
-                value={email}
-                onChangeText={setEmail}
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="email-address"
-                className="mb-6"
-              />
-
-              <Button
-                title="SEND RESET LINK"
-                onPress={handleSubmit}
-                isLoading={isLoading}
-                className="mb-6 shadow-xl shadow-[#cba6f7]/20"
-              />
-
-              <Link href="/login" asChild>
-                <Pressable>
-                  <Text className="text-zinc-500 text-center text-xs font-semibold">
-                    Back to Login
-                  </Text>
-                </Pressable>
-              </Link>
-            </View>
-
+        {/* Form */}
+        {error ? (
+          <View style={s.errorBox}>
+            <Text style={s.errorText}>{error}</Text>
           </View>
-        </DismissKeyboardView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+        ) : null}
+
+        <View style={s.inputGroup}>
+          <Text style={s.label}>Email / Username</Text>
+          <TextInput style={s.input} placeholder="you@example.com" placeholderTextColor={COLORS.placeholderText}
+            value={email} onChangeText={setEmail} autoCapitalize="none" autoCorrect={false} keyboardType="email-address" />
+        </View>
+
+        <Pressable onPress={handleSubmit} disabled={isLoading}
+          style={({ pressed }) => [s.frostedButton, pressed && s.frostedButtonPressed, isLoading && { opacity: 0.6 }]}>
+          {Platform.OS === 'ios' && <BlurView intensity={12} tint="light" style={[StyleSheet.absoluteFill, { borderRadius: 50, overflow: 'hidden' }]} />}
+          {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={s.buttonText}>Send Reset Link</Text>}
+        </Pressable>
+
+        <View style={s.footerLinks}>
+          <Link href="/login" asChild>
+            <Pressable><Text style={s.footerLink}>Back to Login</Text></Pressable>
+          </Link>
+        </View>
+      </View>
+    </AuthScreenWrapper>
   );
 }
+
+const s = StyleSheet.create({
+  theText: { fontFamily: 'Ubuntu_300Light', fontSize: 20, letterSpacing: 6, color: '#fff', marginBottom: 5, marginLeft: 3 },
+  penthouseText: { fontFamily: 'Erode-SemiBold', fontSize: 55, lineHeight: 52, color: '#fff', letterSpacing: 1 },
+  subtitle: { fontFamily: 'Ubuntu_300Light', fontSize: 15, color: '#fff', opacity: 0.8, marginTop: 15, letterSpacing: 0.5 },
+  inputGroup: { gap: 6 },
+  label: { fontFamily: 'Ubuntu_500Medium', fontSize: 11, textTransform: 'uppercase', letterSpacing: 2, color: COLORS.textMuted },
+  input: { backgroundColor: 'transparent', borderWidth: 0, borderBottomWidth: 1, borderBottomColor: COLORS.lineBorder, borderRadius: 0, paddingVertical: 8, paddingHorizontal: 0, fontFamily: 'Ubuntu_400Regular', fontSize: 16, color: '#fff' },
+  frostedButton: { backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', borderRadius: 50, paddingVertical: 18, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', marginTop: 10 },
+  frostedButtonPressed: { backgroundColor: 'rgba(255,255,255,0.25)' },
+  buttonText: { fontFamily: 'Ubuntu_500Medium', fontSize: 16, color: '#fff', textTransform: 'uppercase', letterSpacing: 2 },
+  errorBox: { backgroundColor: COLORS.errorBg, borderWidth: 1, borderColor: COLORS.errorBorder, borderRadius: 8, padding: 12 },
+  errorText: { fontFamily: 'Ubuntu_500Medium', fontSize: 10, color: COLORS.errorText, textTransform: 'uppercase', letterSpacing: 2, textAlign: 'center' },
+  footerLinks: { flexDirection: 'row', justifyContent: 'center' },
+  footerLink: { fontFamily: 'Ubuntu_400Regular', fontSize: 13, color: COLORS.textMuted },
+});

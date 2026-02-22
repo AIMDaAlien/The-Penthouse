@@ -1,21 +1,18 @@
-import { View, Text, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard, ScrollView, Pressable } from 'react-native';
+import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator, Platform } from 'react-native';
 import { useState } from 'react';
-import { Link, useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import Input from '../src/components/Input';
-import Button from '../src/components/Button';
+import { Link } from 'expo-router';
 import { useAuth } from '../src/context/AuthContext';
+import { AuthScreenWrapper } from '../src/components/AuthScreenWrapper';
+import { BlurView } from 'expo-blur';
 
-// Wrapper that dismisses keyboard on native, but not on web (where it steals focus)
-const DismissKeyboardView = ({ children }: { children: React.ReactNode }) => {
-  if (Platform.OS === 'web') {
-    return <>{children}</>;
-  }
-  return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      {children}
-    </TouchableWithoutFeedback>
-  );
+const COLORS = {
+  textMain: '#ffffff',
+  textMuted: 'rgba(255, 255, 255, 0.65)',
+  lineBorder: 'rgba(255, 255, 255, 0.3)',
+  placeholderText: 'rgba(255, 255, 255, 0.4)',
+  errorBg: 'rgba(243, 139, 168, 0.15)',
+  errorBorder: 'rgba(243, 139, 168, 0.4)',
+  errorText: '#f38ba8',
 };
 
 export default function Register() {
@@ -26,148 +23,98 @@ export default function Register() {
   const [displayName, setDisplayName] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  
   const { register } = useAuth();
-  const router = useRouter();
 
   const handleRegister = async () => {
     if (!username || !email || !password || !confirmPassword) {
-        setError('Please fill in all required fields');
-        return;
+      setError('Please fill in all required fields'); return;
     }
-
     if (password !== confirmPassword) {
-        setError('Passwords do not match');
-        return;
+      setError('Passwords do not match'); return;
     }
-
     try {
-      setError('');
-      setIsLoading(true);
-      console.log('Attempting registration for:', username);
+      setError(''); setIsLoading(true);
       await register(username, email, password, displayName);
-      console.log('Registration successful');
     } catch (err: any) {
-      console.error('Registration error detail:', err.response?.data || err.message || err);
       setError(err.response?.data?.message || 'Registration failed. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
+    } finally { setIsLoading(false); }
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-transparent">
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}
-        className="flex-1"
-      >
-        <DismissKeyboardView>
-          <ScrollView 
-            contentContainerStyle={{flexGrow: 1, paddingBottom: 40}} 
-            className="px-10 w-full max-w-md self-center"
-            showsVerticalScrollIndicator={false}
-          >
-            
-            <View className="items-center mb-12 mt-10">
-              <View 
-                className="w-20 h-20 bg-[#cba6f7]/10 border border-[#cba6f7]/30 items-center justify-center shadow-2xl shadow-[#cba6f7]/20"
-                style={{
-                  borderTopLeftRadius: 30,
-                  borderBottomRightRadius: 30,
-                  borderTopRightRadius: 6,
-                  borderBottomLeftRadius: 6,
-                }}
-              >
-                 <Text className="text-4xl font-black text-[#cba6f7]" style={{ letterSpacing: -2 }}>+</Text>
-              </View>
-              <View className="mt-8 items-center">
-                <Text className="text-3xl font-black text-white text-center leading-none" style={{ letterSpacing: -1.5 }}>
-                  CREATE{"\n"}ACCOUNT
-                </Text>
-                <View className="h-1 w-12 bg-[#cba6f7] mt-4 rounded-full" />
-                <Text className="text-zinc-500 text-sm font-bold uppercase tracking-[3px] mt-6 text-center">
-                  Join The Penthouse
-                </Text>
-              </View>
-            </View>
+    <AuthScreenWrapper>
+      {/* Header */}
+      <View>
+        <Text style={s.theText}>THE</Text>
+        <Text style={s.penthouseText}>{'PENT\nHOUSE'}</Text>
+        <Text style={s.subtitle}>Request Residency</Text>
+      </View>
 
-            <View className="w-full">
-              {error ? (
-                <View className="bg-red-500/10 border border-red-500/50 p-4 rounded-xl mb-8">
-                  <Text className="text-red-400 text-center text-xs font-bold uppercase tracking-widest">{error}</Text>
-                </View>
-              ) : null}
+      {/* Form */}
+      <View style={{ gap: 20, marginBottom: 25 }}>
+        {error ? (
+          <View style={s.errorBox}>
+            <Text style={s.errorText}>{error}</Text>
+          </View>
+        ) : null}
 
-              <Input
-                label="Identity"
-                placeholder="Username"
-                value={username}
-                onChangeText={setUsername}
-                autoCapitalize="none"
-              />
+        <View style={s.inputGroup}>
+          <Text style={s.label}>Username</Text>
+          <TextInput style={s.input} placeholder="Choose a username" placeholderTextColor={COLORS.placeholderText}
+            value={username} onChangeText={setUsername} autoCapitalize="none" />
+        </View>
 
-              <Input
-                label="Contact"
-                placeholder="Email Address"
-                value={email}
-                onChangeText={setEmail}
-                autoCapitalize="none"
-                keyboardType="email-address"
-              />
+        <View style={s.inputGroup}>
+          <Text style={s.label}>Email</Text>
+          <TextInput style={s.input} placeholder="your@email.com" placeholderTextColor={COLORS.placeholderText}
+            value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
+        </View>
 
-              <Input
-                label="Alias"
-                placeholder="Display Name"
-                value={displayName}
-                onChangeText={setDisplayName}
-              />
+        <View style={s.inputGroup}>
+          <Text style={s.label}>Display Name</Text>
+          <TextInput style={s.input} placeholder="How you appear to others" placeholderTextColor={COLORS.placeholderText}
+            value={displayName} onChangeText={setDisplayName} />
+        </View>
 
-              <Input
-                label="Security"
-                placeholder="Password"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-                className="mb-2"
-              />
-              <Text className="text-zinc-500 text-[10px] font-semibold uppercase tracking-wider mb-4 ml-2">
-                Must be at least 8 characters
-              </Text>
+        <View style={s.inputGroup}>
+          <Text style={s.label}>Password</Text>
+          <TextInput style={s.input} placeholder="At least 8 characters" placeholderTextColor={COLORS.placeholderText}
+            value={password} onChangeText={setPassword} secureTextEntry />
+        </View>
 
-               <Input
-                label="Verify"
-                placeholder="Repeat password"
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                secureTextEntry
-                className="mb-2"
-              />
-              <Text className="text-zinc-500 text-[10px] font-semibold uppercase tracking-wider mb-8 ml-2">
-                Must clearly match the password above
-              </Text>
+        <View style={s.inputGroup}>
+          <Text style={s.label}>Confirm Password</Text>
+          <TextInput style={s.input} placeholder="Repeat your password" placeholderTextColor={COLORS.placeholderText}
+            value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry />
+        </View>
 
-              <Button
-                title="CREATE ACCOUNT"
-                onPress={handleRegister}
-                isLoading={isLoading}
-                className="mb-8 shadow-xl shadow-[#cba6f7]/20"
-              />
+        <Pressable onPress={handleRegister} disabled={isLoading}
+          style={({ pressed }) => [s.frostedButton, pressed && s.frostedButtonPressed, isLoading && { opacity: 0.6 }]}>
+          {Platform.OS === 'ios' && <BlurView intensity={12} tint="light" style={[StyleSheet.absoluteFill, { borderRadius: 50, overflow: 'hidden' }]} />}
+          {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={s.buttonText}>Create Account</Text>}
+        </Pressable>
 
-              <View className="flex-row justify-center items-center gap-3">
-                <View className="h-[1px] flex-1 bg-zinc-800" />
-                <Link href="/login" asChild>
-                  <Pressable>
-                    <Text className="text-[#cba6f7] font-black text-xs uppercase tracking-[2px]">SIGN IN</Text>
-
-                  </Pressable>
-                </Link>
-                <View className="h-[1px] flex-1 bg-zinc-800" />
-              </View>
-            </View>
-
-          </ScrollView>
-        </DismissKeyboardView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+        <View style={s.footerLinks}>
+          <Link href="/login" asChild>
+            <Pressable><Text style={s.footerLink}>Already a resident? Sign In</Text></Pressable>
+          </Link>
+        </View>
+      </View>
+    </AuthScreenWrapper>
   );
 }
+
+const s = StyleSheet.create({
+  theText: { fontFamily: 'Ubuntu_300Light', fontSize: 20, letterSpacing: 6, color: '#fff', marginBottom: 5, marginLeft: 3 },
+  penthouseText: { fontFamily: 'Erode-SemiBold', fontSize: 55, lineHeight: 52, color: '#fff', letterSpacing: 1 },
+  subtitle: { fontFamily: 'Ubuntu_300Light', fontSize: 15, color: '#fff', opacity: 0.8, marginTop: 15, letterSpacing: 0.5 },
+  inputGroup: { gap: 6 },
+  label: { fontFamily: 'Ubuntu_500Medium', fontSize: 11, textTransform: 'uppercase', letterSpacing: 2, color: COLORS.textMuted },
+  input: { backgroundColor: 'transparent', borderWidth: 0, borderBottomWidth: 1, borderBottomColor: COLORS.lineBorder, borderRadius: 0, paddingVertical: 8, paddingHorizontal: 0, fontFamily: 'Ubuntu_400Regular', fontSize: 16, color: '#fff' },
+  frostedButton: { backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', borderRadius: 50, paddingVertical: 18, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', marginTop: 10 },
+  frostedButtonPressed: { backgroundColor: 'rgba(255,255,255,0.25)' },
+  buttonText: { fontFamily: 'Ubuntu_500Medium', fontSize: 16, color: '#fff', textTransform: 'uppercase', letterSpacing: 2 },
+  errorBox: { backgroundColor: COLORS.errorBg, borderWidth: 1, borderColor: COLORS.errorBorder, borderRadius: 8, padding: 12 },
+  errorText: { fontFamily: 'Ubuntu_500Medium', fontSize: 10, color: COLORS.errorText, textTransform: 'uppercase', letterSpacing: 2, textAlign: 'center' },
+  footerLinks: { flexDirection: 'row', justifyContent: 'center' },
+  footerLink: { fontFamily: 'Ubuntu_400Regular', fontSize: 13, color: COLORS.textMuted },
+});
