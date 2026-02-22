@@ -4,6 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile.production
     container_name: penthouse-app
+    user: "0:0"
     restart: unless-stopped
     init: true
     stop_grace_period: 25s
