@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>POC Motion C — Cinematic Reveal</title>
+<link href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #8382C9;
+    --text: #ffffff;
+    --line: rgba(255,255,255,0.3);
+    --muted: rgba(255,255,255,0.65);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0e0e14;
+    display: flex; justify-content: center; align-items: center;
+    min-height: 100vh; font-family: 'Ubuntu', sans-serif;
+    overflow: hidden;
+  }
+  .label {
+    position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+    color: #fff; font-size: 14px; letter-spacing: 3px; text-transform: uppercase;
+    opacity: 0.5; z-index: 100; font-weight: 300;
+  }
+  .phone {
+    width: 390px; height: 844px; background: rgba(131,130,201,0.75);
+    border-radius: 40px; overflow: hidden; position: relative;
+    box-shadow: 0 0 200px 80px rgba(131,130,201,0.3);
+  }
+  .orb { position: absolute; background: #fff; border-radius: 50%; filter: blur(70px); }
+  .orb-1 { width: 200px; height: 200px; top: 10%; left: -50px; opacity: 0; }
+  .orb-2 { width: 250px; height: 250px; bottom: 20%; right: -80px; opacity: 0; }
+  .orb-3 { width: 150px; height: 150px; top: 45%; left: 30%; opacity: 0; }
+  .overlay { position: absolute; inset: 0; background: #1a1a1a; opacity: 0.25; pointer-events: none; }
+  .content {
+    position: relative; z-index: 2; padding: 60px 35px 40px;
+    display: flex; flex-direction: column; justify-content: space-between;
+    height: 100%;
+  }
+
+  /* ========================
+     CINEMATIC ANIMATION SYSTEM
+     ========================
+     Phase 1: PENTHOUSE scales from massive + blurred to final size
+     Phase 2: Other elements cascade in with spring overshoot
+     Phase 3: Orbs fade in and begin drifting
+  */
+
+  /* Phase 1: Hero text — cinematic scale-down reveal */
+  .hero-the {
+    opacity: 0;
+    transform: translateY(-30px);
+    animation: theReveal 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s forwards;
+  }
+  @keyframes theReveal {
+    0% { opacity: 0; transform: translateY(-30px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+
+  .hero-penthouse {
+    opacity: 0;
+    transform: scale(2.5);
+    filter: blur(15px);
+    animation: penthouseReveal 1.2s cubic-bezier(0.22, 1.0, 0.36, 1) 0s forwards;
+  }
+  @keyframes penthouseReveal {
+    0% { opacity: 0; transform: scale(2.5); filter: blur(15px); }
+    40% { opacity: 1; filter: blur(3px); }
+    70% { transform: scale(0.97); filter: blur(0px); }
+    100% { opacity: 1; transform: scale(1); filter: blur(0px); }
+  }
+
+  .hero-subtitle {
+    opacity: 0;
+    transform: translateY(15px);
+    animation: subtitleReveal 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) 0.7s forwards;
+  }
+  @keyframes subtitleReveal {
+    0% { opacity: 0; transform: translateY(15px); }
+    100% { opacity: 0.8; transform: translateY(0); }
+  }
+
+  /* Phase 2: Form elements — staggered spring cascade from bottom */
+  .form-item {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+  .form-item.f1 { animation: formSpring 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) 0.9s forwards; }
+  .form-item.f2 { animation: formSpring 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) 1.05s forwards; }
+  .form-item.f3 { animation: formSpring 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) 1.2s forwards; }
+  .form-item.f4 { animation: formSpring 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) 1.4s forwards; }
+  @keyframes formSpring {
+    0% { opacity: 0; transform: translateY(40px); }
+    60% { transform: translateY(-4px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Phase 3: Orbs — delayed fade in + drift */
+  .orb-1 { animation: orbAppear1 2s ease-out 1.5s forwards, drift1 12s ease-in-out 3.5s infinite alternate; }
+  .orb-2 { animation: orbAppear2 2s ease-out 1.8s forwards, drift2 14s ease-in-out 3.8s infinite alternate; }
+  .orb-3 { animation: orbAppear3 2s ease-out 2.1s forwards, drift3 16s ease-in-out 4.1s infinite alternate; }
+  @keyframes orbAppear1 { to { opacity: 0.35; } }
+  @keyframes orbAppear2 { to { opacity: 0.25; } }
+  @keyframes orbAppear3 { to { opacity: 0.2; } }
+  @keyframes drift1 { 0% { transform: translate(0,0); } 100% { transform: translate(40px,70px); } }
+  @keyframes drift2 { 0% { transform: translate(0,0); } 100% { transform: translate(-50px,-60px); } }
+  @keyframes drift3 { 0% { transform: translate(0,0); } 100% { transform: translate(35px,-40px); } }
+
+  /* Divider line that draws itself */
+  .divider {
+    height: 2px; background: rgba(255,255,255,0.3); margin: 20px 0;
+    transform: scaleX(0); transform-origin: left;
+    animation: drawLine 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) 0.5s forwards;
+  }
+  @keyframes drawLine {
+    0% { transform: scaleX(0); }
+    100% { transform: scaleX(1); }
+  }
+
+  .the-text { font-weight: 300; font-size: 30px; letter-spacing: 6px; color: var(--text); margin-bottom: 5px; margin-left: 3px; }
+  .penthouse-text { font-family: 'Erode', serif; font-weight: 600; font-size: 96px; line-height: 0.92; color: var(--text); letter-spacing: 1px; }
+  .subtitle { font-weight: 300; font-size: 15px; color: var(--text); margin-top: 15px; letter-spacing: 0.5px; }
+  .form { display: flex; flex-direction: column; gap: 25px; }
+  .input-group { display: flex; flex-direction: column; gap: 6px; }
+  .input-label { font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: var(--muted); }
+  input {
+    background: transparent; border: none; border-bottom: 1px solid var(--line);
+    padding: 8px 0; font-family: 'Ubuntu', sans-serif; font-size: 16px; color: #fff; outline: none;
+    transition: border-color 0.3s;
+  }
+  input::placeholder { color: rgba(255,255,255,0.4); }
+  input:focus { border-bottom-color: #fff; }
+  .btn {
+    background: rgba(255,255,255,0.15); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.3); border-radius: 50px; padding: 18px; text-align: center;
+    font-family: 'Ubuntu', sans-serif; font-weight: 500; font-size: 16px; color: #fff;
+    text-transform: uppercase; letter-spacing: 2px; cursor: pointer; margin-top: 15px;
+    transition: background 0.2s, transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .btn:hover { background: rgba(255,255,255,0.25); }
+  .btn:active { transform: scale(0.96); }
+  .footer { display: flex; justify-content: space-between; }
+  .footer a { font-size: 13px; color: var(--muted); text-decoration: none; }
+  .footer a:hover { color: #fff; }
+  .restart {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 30px; padding: 10px 24px; color: #fff; font-family: 'Ubuntu', sans-serif;
+    font-size: 12px; letter-spacing: 2px; text-transform: uppercase; cursor: pointer; z-index: 100;
+  }
+  .restart:hover { background: rgba(255,255,255,0.2); }
+</style>
+</head>
+<body>
+
+<div class="label">POC C — Cinematic Reveal (dramatic scale + phased entrance)</div>
+
+<div class="phone" id="phone">
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+  <div class="overlay"></div>
+  <div class="content">
+    <div>
+      <div class="hero-the"><span class="the-text">THE</span></div>
+      <div class="hero-penthouse"><span class="penthouse-text">PENT<br>HOUSE</span></div>
+      <div class="divider"></div>
+      <div class="hero-subtitle"><span class="subtitle">No point being wealthy without freedom</span></div>
+    </div>
+    <div class="form">
+      <div class="form-item f1">
+        <div class="input-group">
+          <span class="input-label">Username / Email</span>
+          <input type="text" placeholder="Enter your credentials">
+        </div>
+      </div>
+      <div class="form-item f2">
+        <div class="input-group">
+          <span class="input-label">Password</span>
+          <input type="password" placeholder="Enter your password">
+        </div>
+      </div>
+      <div class="form-item f3">
+        <div class="btn">Log In</div>
+      </div>
+      <div class="form-item f4">
+        <div class="footer">
+          <a href="#">Forgot Password?</a>
+          <a href="#">Sign Up</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<button class="restart" onclick="location.reload()">↻ Replay Animation</button>
+
+</body>
+</html>
