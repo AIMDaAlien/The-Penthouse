@@ -134,9 +134,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'transparent',
     alignItems: 'center',
-    justifyContent: 'center',
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 10,
   },
   phoneContainer: {
     flex: 1,
@@ -144,9 +141,9 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: Platform.OS === 'web' ? 420 : undefined,
     overflow: 'hidden',
-    // Soft periwinkle glow that bleeds into the dark background on web
+    // Soft periwinkle glow — wide and shallow to blend into the background
     ...(Platform.OS === 'web'
-      ? { boxShadow: `0 0 120px 60px ${PERIWINKLE}` }
+      ? { boxShadow: '0 0 200px 80px rgba(131, 130, 201, 0.5)' }
       : {}),
   } as any,
   darkOverlay: {

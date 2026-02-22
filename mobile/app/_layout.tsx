@@ -30,7 +30,7 @@ function RootNavigation() {
 
   useEffect(() => {
     if (isLoading) return;
-    const inAuthGroup = segments[0] === '(auth)' || segments[0] === 'login' || segments[0] === 'register';
+    const inAuthGroup = segments[0] === '(auth)' || segments[0] === 'login' || segments[0] === 'register' || segments[0] === 'forgot-password';
 
     if (!user && !inAuthGroup) {
       router.replace('/login');
@@ -70,6 +70,7 @@ function RootNavigation() {
       <Stack.Screen name="(main)" options={{ headerShown: false }} />
       <Stack.Screen name="login" options={{ animation: 'fade' }} />
       <Stack.Screen name="register" options={{ animation: 'fade' }} />
+      <Stack.Screen name="forgot-password" options={{ animation: 'fade' }} />
       <Stack.Screen name="settings" options={{ headerShown: false, presentation: 'transparentModal', animation: 'fade' }} />
       <Stack.Screen name="chat/[id]" options={{ headerShown: true }} />
     </Stack>
@@ -110,8 +111,8 @@ export default function RootLayout() {
             
             <BackgroundLayer />
             
-            <View style={[StyleSheet.absoluteFill, { alignItems: 'center' }]}>
-               <View style={{ width: '100%', maxWidth: 1200, height: '100%', overflow: 'hidden' }}>
+            <View style={[StyleSheet.absoluteFill, { alignItems: 'center', backgroundColor: 'transparent' }]}>
+               <View style={{ width: '100%', maxWidth: 1200, height: '100%', overflow: 'hidden', backgroundColor: 'transparent' }}>
                   <RootNavigation />
                </View>
             </View>

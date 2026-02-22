@@ -17,4 +17,11 @@
     flex-direction: column;
     overflow-x: hidden;
   }
+
+  /* Force React Navigation scene containers transparent so BackgroundLayer shows through.
+     RN Web renders Views as divs with class starting with "css-view-".
+     The scene container gets an inline background-color: rgb(242,242,242) from React Navigation. */
+  div[class*="css-view-"] {
+    background-color: transparent !important;
+  }
 }
