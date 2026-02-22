@@ -1,145 +1,438 @@
-import { View, Text, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard, ScrollView, Pressable } from 'react-native';
-import { useState } from 'react';
-import { Link, useRouter } from 'expo-router';
+import { View, Text, TextInput, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard, ScrollView, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { useState, useEffect } from 'react';
+import { Link } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Input from '../src/components/Input';
-import Button from '../src/components/Button';
 import { useAuth } from '../src/context/AuthContext';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withRepeat,
+  withTiming,
+  Easing,
+  withSequence,
+} from 'react-native-reanimated';
+import { BlurView } from 'expo-blur';
 
-// Wrapper that dismisses keyboard on native, but not on web (where it steals focus)
-const DismissKeyboardView = ({ children }: { children: React.ReactNode }) => {
-  if (Platform.OS === 'web') {
-    return <View className="flex-1">{children}</View>;
-  }
-  return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      {children}
-    </TouchableWithoutFeedback>
-  );
+// POC 3 color palette
+const COLORS = {
+  bg: '#8382C9',         // Dominant periwinkle
+  textMain: '#ffffff',
+  textMuted: 'rgba(255, 255, 255, 0.65)',
+  lineBorder: 'rgba(255, 255, 255, 0.3)',
+  placeholderText: 'rgba(255, 255, 255, 0.4)',
+  errorBg: 'rgba(243, 139, 168, 0.15)',
+  errorBorder: 'rgba(243, 139, 168, 0.4)',
+  errorText: '#f38ba8',
 };
 
+// Expressive spring config (per M3 spec)
+const EXPRESSIVE_SPRING = { damping: 15, stiffness: 120, mass: 1 };
+
+const DismissKeyboardView = ({ children }: { children: React.ReactNode }) => {
+  if (Platform.OS === 'web') return <View style={{ flex: 1 }}>{children}</View>;
+  return <TouchableWithoutFeedback onPress={Keyboard.dismiss}>{children}</TouchableWithoutFeedback>;
+};
 
 export default function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  
   const { login } = useAuth();
-  const router = useRouter();
+
+  // Entrance animation
+  const contentOpacity = useSharedValue(0);
+  const contentTranslateY = useSharedValue(40);
+
+  // Orb drift animations
+  const orb1X = useSharedValue(0);
+  const orb1Y = useSharedValue(0);
+  const orb2X = useSharedValue(0);
+  const orb2Y = useSharedValue(0);
+  const orb3X = useSharedValue(0);
+  const orb3Y = useSharedValue(0);
+
+  useEffect(() => {
+    // Content entrance
+    contentOpacity.value = withTiming(1, { duration: 600 });
+    contentTranslateY.value = withSpring(0, EXPRESSIVE_SPRING);
+
+    // Orb 1 drift (matches POC3 @keyframes drift1)
+    orb1X.value = withRepeat(
+      withSequence(
+        withTiming(40, { duration: 9000, easing: Easing.inOut(Easing.quad) }),
+        withTiming(-20, { duration: 9000, easing: Easing.inOut(Easing.quad) }),
+      ), -1, true
+    );
+    orb1Y.value = withRepeat(
+      withSequence(
+        withTiming(60, { duration: 9000, easing: Easing.inOut(Easing.quad) }),
+        withTiming(100, { duration: 9000, easing: Easing.inOut(Easing.quad) }),
+      ), -1, true
+    );
+
+    // Orb 2 drift (matches POC3 @keyframes drift2)
+    orb2X.value = withRepeat(
+      withSequence(
+        withTiming(-60, { duration: 11000, easing: Easing.inOut(Easing.quad) }),
+        withTiming(-10, { duration: 11000, easing: Easing.inOut(Easing.quad) }),
+      ), -1, true
+    );
+    orb2Y.value = withRepeat(
+      withSequence(
+        withTiming(-40, { duration: 11000, easing: Easing.inOut(Easing.quad) }),
+        withTiming(-90, { duration: 11000, easing: Easing.inOut(Easing.quad) }),
+      ), -1, true
+    );
+
+    // Orb 3 drift (matches POC3 @keyframes drift3)
+    orb3X.value = withRepeat(
+      withTiming(50, { duration: 15000, easing: Easing.inOut(Easing.quad) }),
+      -1, true
+    );
+    orb3Y.value = withRepeat(
+      withTiming(-50, { duration: 15000, easing: Easing.inOut(Easing.quad) }),
+      -1, true
+    );
+  }, []);
+
+  const orb1Style = useAnimatedStyle(() => ({
+    transform: [{ translateX: orb1X.value }, { translateY: orb1Y.value }],
+  }));
+  const orb2Style = useAnimatedStyle(() => ({
+    transform: [{ translateX: orb2X.value }, { translateY: orb2Y.value }],
+  }));
+  const orb3Style = useAnimatedStyle(() => ({
+    transform: [{ translateX: orb3X.value }, { translateY: orb3Y.value }],
+  }));
+  const contentStyle = useAnimatedStyle(() => ({
+    opacity: contentOpacity.value,
+    transform: [{ translateY: contentTranslateY.value }],
+  }));
 
   const handleLogin = async () => {
     if (!username || !password) {
       setError('Please fill in all fields');
       return;
     }
-
     try {
       setError('');
       setIsLoading(true);
       await login(username, password);
-      // Redirect handled by _layout
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Login failed. Please check your credentials.');
+      setError(err.response?.data?.message || 'Login failed. Please check credentials.');
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-transparent">
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}
-        className="flex-1"
-      >
-        <DismissKeyboardView>
-          <ScrollView 
-            contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', paddingBottom: 40 }}
-            className="px-10 w-full max-w-md self-center"
-            showsVerticalScrollIndicator={false}
-          >
-            
-            <View className="items-center mb-16 mt-10">
-              <View 
-                className="w-24 h-24 bg-[#cba6f7]/10 border border-[#cba6f7]/30 items-center justify-center shadow-2xl shadow-[#cba6f7]/20"
-                style={{
-                  borderTopLeftRadius: 36,
-                  borderBottomRightRadius: 36,
-                  borderTopRightRadius: 8,
-                  borderBottomLeftRadius: 8,
-                }}
-              >
-                 <Text className="text-5xl font-black text-[#cba6f7]" style={{ letterSpacing: -2 }}>P</Text>
-              </View>
-              <View className="mt-8 items-center">
-                <Text className="text-4xl font-black text-white text-center leading-none" style={{ letterSpacing: -1.5 }}>
-                  WELCOME{"\n"}BACK
-                </Text>
-                <View className="h-1 w-12 bg-[#cba6f7] mt-4 rounded-full" />
-                <Text className="text-zinc-500 text-sm font-bold uppercase tracking-[3px] mt-6 text-center">
-                  Sign in to continue
-                </Text>
-              </View>
-            </View>
+    // Full-screen periwinkle background — overrides the app's BackgroundLayer
+    <View style={styles.fullScreen}>
+      {/* Drifting white glow orbs */}
+      <View style={[StyleSheet.absoluteFill, { overflow: 'hidden' }]} pointerEvents="none">
+        <Animated.View style={[styles.orb, styles.orb1, orb1Style]} />
+        <Animated.View style={[styles.orb, styles.orb2, orb2Style]} />
+        <Animated.View style={[styles.orb, styles.orb3, orb3Style]} />
+      </View>
 
-            <View className="w-full">
-              {error ? (
-                <View className="bg-red-500/10 border border-red-500/50 p-4 rounded-xl mb-8">
-                  <Text className="text-red-400 text-center text-xs font-bold uppercase tracking-widest">{error}</Text>
+      {/* Dark overlay for dark mode toning — the user requested this */}
+      <View style={styles.darkOverlay} pointerEvents="none" />
+
+      <SafeAreaView style={{ flex: 1 }}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1 }}
+        >
+          <DismissKeyboardView>
+            <ScrollView
+              contentContainerStyle={styles.scrollContent}
+              style={styles.scrollView}
+              showsVerticalScrollIndicator={false}
+            >
+              <Animated.View style={[contentStyle, styles.contentWrapper]}>
+
+                {/* Header — top-anchored, "THE" in Ubuntu, "PENTHOUSE" in Erode */}
+                <View style={styles.header}>
+                  <Text style={styles.theText}>THE</Text>
+                  <Text style={styles.penthouseText}>{'PENT\nHOUSE'}</Text>
+                  <Text style={styles.subtitle}>Secure Resident Access</Text>
                 </View>
-              ) : null}
 
-              <Input
-                label="Identity"
-                placeholder="Username"
-                value={username}
-                onChangeText={setUsername}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
+                {/* Form — bottom-anchored with middle space breathing room */}
+                <View style={styles.formSection}>
+                  {error ? (
+                    <View style={styles.errorBox}>
+                      <Text style={styles.errorText}>{error}</Text>
+                    </View>
+                  ) : null}
 
-              <Input
-                label="Security"
-                placeholder="••••••••"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-                className="mb-2"
-              />
-              <Text className="text-zinc-500 text-[10px] font-semibold uppercase tracking-wider mb-8 ml-2">
-                Must be at least 8 characters
-              </Text>
+                  {/* Username input — transparent, bottom border only */}
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.label}>Username / Email</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Enter your credentials"
+                      placeholderTextColor={COLORS.placeholderText}
+                      value={username}
+                      onChangeText={setUsername}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+                  </View>
 
-              <Button
-                title="LOG IN"
-                onPress={handleLogin}
-                isLoading={isLoading}
-                className="mb-4 shadow-xl shadow-[#cba6f7]/20"
-              />
+                  {/* Password input — transparent, bottom border only */}
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.label}>Password</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Enter your password"
+                      placeholderTextColor={COLORS.placeholderText}
+                      value={password}
+                      onChangeText={setPassword}
+                      secureTextEntry
+                    />
+                  </View>
 
-              <Link href="/forgot-password" asChild>
-                <Pressable className="mb-8">
-                  <Text className="text-zinc-500 text-center text-xs font-semibold">
-                    Forgot your password?
-                  </Text>
-                </Pressable>
-              </Link>
-
-              <View className="flex-row justify-center items-center gap-3">
-                <View className="h-[1px] flex-1 bg-zinc-800" />
-                <Link href="/register" asChild>
-                  <Pressable>
-                    <Text className="text-[#cba6f7] font-black text-xs uppercase tracking-[2px]">CREATE ACCOUNT</Text>
-
+                  {/* POC 3: Frosted Glass Pill Button */}
+                  <Pressable
+                    onPress={handleLogin}
+                    disabled={isLoading}
+                    style={({ pressed }) => [
+                      styles.frostedButton,
+                      pressed && styles.frostedButtonPressed,
+                      isLoading && { opacity: 0.6 },
+                    ]}
+                  >
+                    {Platform.OS === 'ios' && (
+                      <BlurView
+                        intensity={12}
+                        tint="light"
+                        style={[StyleSheet.absoluteFill, { borderRadius: 50, overflow: 'hidden' }]}
+                      />
+                    )}
+                    {isLoading ? (
+                      <ActivityIndicator color={COLORS.textMain} />
+                    ) : (
+                      <Text style={styles.buttonText}>Log In</Text>
+                    )}
                   </Pressable>
-                </Link>
-                <View className="h-[1px] flex-1 bg-zinc-800" />
-              </View>
-            </View>
 
-          </ScrollView>
-        </DismissKeyboardView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+                  {/* Footer links */}
+                  <View style={styles.footerLinks}>
+                    <Link href="/forgot-password" asChild>
+                      <Pressable>
+                        <Text style={styles.footerLink}>Forgot Password?</Text>
+                      </Pressable>
+                    </Link>
+                    <Link href="/register" asChild>
+                      <Pressable>
+                        <Text style={styles.footerLink}>Contact Concierge</Text>
+                      </Pressable>
+                    </Link>
+                  </View>
+                </View>
+
+              </Animated.View>
+            </ScrollView>
+          </DismissKeyboardView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  fullScreen: {
+    flex: 1,
+    backgroundColor: COLORS.bg,
+    // This makes the auth screen completely opaque, covering the app's dark BackgroundLayer
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 10,
+  },
+
+  // Dark overlay — subtle grey at low opacity to deepen dark mode without killing periwinkle
+  darkOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#1a1a1a',
+    opacity: 0.25,
+  },
+
+  scrollView: {
+    flex: 1,
+    paddingHorizontal: 35,
+    maxWidth: 420,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingTop: 50,
+    paddingBottom: 40,
+  },
+  contentWrapper: {
+    flex: 1,
+    justifyContent: 'space-between',
+  },
+
+  // --- Header ---
+  header: {
+    marginBottom: 'auto' as any,
+  },
+  theText: {
+    fontFamily: 'Ubuntu_300Light',
+    fontSize: 20,
+    letterSpacing: 6,
+    color: COLORS.textMain,
+    marginBottom: 5,
+    marginLeft: 3,
+  },
+  penthouseText: {
+    fontFamily: 'Erode-SemiBold',
+    fontSize: 55,
+    lineHeight: 52,
+    color: COLORS.textMain,
+    letterSpacing: 1,
+  },
+  subtitle: {
+    fontFamily: 'Ubuntu_300Light',
+    fontSize: 15,
+    color: COLORS.textMain,
+    opacity: 0.8,
+    marginTop: 15,
+    letterSpacing: 0.5,
+  },
+
+  // --- Form ---
+  formSection: {
+    gap: 25,
+    marginBottom: 25,
+  },
+  inputGroup: {
+    gap: 6,
+  },
+  label: {
+    fontFamily: 'Ubuntu_500Medium',
+    fontSize: 11,
+    textTransform: 'uppercase',
+    letterSpacing: 2,
+    color: COLORS.textMuted,
+  },
+  input: {
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.lineBorder,
+    borderRadius: 0,
+    paddingVertical: 8,
+    paddingHorizontal: 0,
+    fontFamily: 'Ubuntu_400Regular',
+    fontSize: 16,
+    color: COLORS.textMain,
+  },
+
+  // --- POC 3 Frosted Glass Button ---
+  frostedButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 50,
+    paddingVertical: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    marginTop: 15,
+  },
+  frostedButtonPressed: {
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+  },
+  buttonText: {
+    fontFamily: 'Ubuntu_500Medium',
+    fontSize: 16,
+    color: COLORS.textMain,
+    textTransform: 'uppercase',
+    letterSpacing: 2,
+  },
+
+  // --- Error ---
+  errorBox: {
+    backgroundColor: COLORS.errorBg,
+    borderWidth: 1,
+    borderColor: COLORS.errorBorder,
+    borderRadius: 8,
+    padding: 12,
+  },
+  errorText: {
+    fontFamily: 'Ubuntu_500Medium',
+    fontSize: 10,
+    color: COLORS.errorText,
+    textTransform: 'uppercase',
+    letterSpacing: 2,
+    textAlign: 'center',
+  },
+
+  // --- Footer ---
+  footerLinks: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  footerLink: {
+    fontFamily: 'Ubuntu_400Regular',
+    fontSize: 13,
+    color: COLORS.textMuted,
+  },
+
+  // --- Orbs ---
+  orb: {
+    position: 'absolute',
+    backgroundColor: '#ffffff',
+    borderRadius: 999,
+  },
+  orb1: {
+    width: 200,
+    height: 200,
+    top: '10%',
+    left: -50,
+    opacity: 0.35,
+    // CSS filter not available in RN — use shadow as glow approximation
+    ...(Platform.OS === 'web'
+      ? { filter: 'blur(70px)' }
+      : {
+          shadowColor: '#ffffff',
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: 0.35,
+          shadowRadius: 70,
+        }),
+  } as any,
+  orb2: {
+    width: 250,
+    height: 250,
+    bottom: '20%',
+    right: -80,
+    opacity: 0.25,
+    ...(Platform.OS === 'web'
+      ? { filter: 'blur(70px)' }
+      : {
+          shadowColor: '#ffffff',
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: 0.25,
+          shadowRadius: 70,
+        }),
+  } as any,
+  orb3: {
+    width: 150,
+    height: 150,
+    top: '45%',
+    left: '30%',
+    opacity: 0.2,
+    ...(Platform.OS === 'web'
+      ? { filter: 'blur(70px)' }
+      : {
+          shadowColor: '#ffffff',
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: 0.2,
+          shadowRadius: 50,
+        }),
+  } as any,
+});

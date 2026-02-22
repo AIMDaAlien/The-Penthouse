@@ -1,0 +1,500 @@
+commit 7765608115bbbed497bda99d338e9cbeff0de97d
+Author: AIMDaAlien <aimdaalien@gmail.com>
+Date:   Wed Feb 18 10:18:41 2026 -0500
+
+    ops: add sqlite maintenance cron (wal checkpoint + optimize)
+
+diff --git a/scripts/sqlite_maintenance.sh b/scripts/sqlite_maintenance.sh
+new file mode 100755
+index 0000000..dc6ce2b
+--- /dev/null
++++ b/scripts/sqlite_maintenance.sh
+@@ -0,0 +1,47 @@
++#!/usr/bin/env bash
++set -euo pipefail
++
++# SQLite maintenance for the Penthouse app.
++# Runs inside the app container so it doesn't depend on host sqlite3 binaries.
++#
++# What it does:
++# - WAL checkpoint (TRUNCATE) to prevent WAL files growing forever
++# - PRAGMA optimize (lightweight)
++#
++# Usage (TrueNAS host):
++#   cd /mnt/Storage_Pool/penthouse/app
++#   ./scripts/sqlite_maintenance.sh
++
++APP_ROOT="${PENTHOUSE_APP_ROOT:-/mnt/Storage_Pool/penthouse/app}"
++cd "$APP_ROOT"
++
++if ! command -v docker >/dev/null 2>&1; then
++  echo "docker not found"
++  exit 1
++fi
++
++echo "$(date -Is) sqlite maintenance start"
++
++docker compose exec -T penthouse-app node - <<'NODE'
++const Database = require('better-sqlite3');
++
++const dbPath = '/app/data/penthouse.sqlite';
++const db = new Database(dbPath);
++try {
++  db.pragma('busy_timeout = 5000');
++  db.pragma('journal_mode = WAL');
++  db.pragma('foreign_keys = ON');
++
++  // WAL checkpoint to keep disk usage stable.
++  db.pragma('wal_checkpoint(TRUNCATE)');
++
++  // Let SQLite update stats for query planner.
++  db.pragma('optimize');
++  console.log('ok');
++} finally {
++  db.close();
++}
++NODE
++
++echo "$(date -Is) sqlite maintenance done"
++
+
+commit d2b25d8f512501770ac341212cc401114732b3fc
+Author: AIMDaAlien <aimdaalien@gmail.com>
+Date:   Tue Feb 17 22:37:44 2026 -0500
+
+    ops: add Cloudflare DDNS updater cron
+
+diff --git a/.cloudflare-ddns.env.example b/.cloudflare-ddns.env.example
+new file mode 100644
+index 0000000..c134244
+--- /dev/null
++++ b/.cloudflare-ddns.env.example
+@@ -0,0 +1,22 @@
++# Copy this to .cloudflare-ddns.env on the TrueNAS host and chmod 600 it.
++#
++# Cloudflare API token minimum scopes:
++# - Zone:Zone Read
++# - Zone:DNS Edit
++#
++# Required:
++# CF_API_TOKEN=...
++#
++# Optional:
++# If you set these IDs, the script won't need to look them up.
++# CF_ZONE_ID=...
++# CF_RECORD_PENTHOUSE_ID=...
++# CF_RECORD_API_ID=...
++#
++# Optional names (defaults are fine for penthouse.blog):
++# CF_ZONE_NAME=penthouse.blog
++# CF_RECORD_PENTHOUSE_NAME=penthouse.blog
++# CF_RECORD_API_NAME=api.penthouse.blog
++
++CF_API_TOKEN=
++
+diff --git a/scripts/cloudflare_ddns.sh b/scripts/cloudflare_ddns.sh
+new file mode 100755
+index 0000000..add9011
+--- /dev/null
++++ b/scripts/cloudflare_ddns.sh
+@@ -0,0 +1,202 @@
++#!/usr/bin/env bash
++set -euo pipefail
++
++# Cloudflare DDNS updater for home-hosted Penthouse.
++# Updates A records for:
++# - penthouse.blog
++# - api.penthouse.blog
++#
++# Runs safely under cron. Only changes DNS when IP drift is detected.
++#
++# Config (recommended via env file at repo root):
++#   .cloudflare-ddns.env with:
++#     CF_API_TOKEN=...
++#     CF_ZONE_NAME=penthouse.blog
++#     CF_RECORD_PENTHOUSE_NAME=penthouse.blog
++#     CF_RECORD_API_NAME=api.penthouse.blog
++#
++# Optional (if you want to avoid lookups):
++#   CF_ZONE_ID=...
++#   CF_RECORD_PENTHOUSE_ID=...
++#   CF_RECORD_API_ID=...
++#
++# Minimum token scopes:
++# - Zone:Zone Read
++# - Zone:DNS Edit
++
++ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
++ENV_FILE="${CLOUDFLARE_DDNS_ENV_FILE:-${ROOT_DIR}/.cloudflare-ddns.env}"
++
++if [ -f "${ENV_FILE}" ]; then
++  # shellcheck disable=SC1090
++  source "${ENV_FILE}"
++fi
++
++CF_API_TOKEN="${CF_API_TOKEN:-}"
++CF_ZONE_NAME="${CF_ZONE_NAME:-penthouse.blog}"
++CF_RECORD_PENTHOUSE_NAME="${CF_RECORD_PENTHOUSE_NAME:-penthouse.blog}"
++CF_RECORD_API_NAME="${CF_RECORD_API_NAME:-api.${CF_ZONE_NAME}}"
++
++if [ -z "${CF_API_TOKEN}" ]; then
++  echo "Cloudflare DDNS skipped; missing CF_API_TOKEN (set in ${ENV_FILE})."
++  exit 0
++fi
++
++cf_api() {
++  local method="$1"
++  local url="$2"
++  local data="${3:-}"
++
++  if [ -n "${data}" ]; then
++    curl -fsSL -X "${method}" \
++      -H "Authorization: Bearer ${CF_API_TOKEN}" \
++      -H "Content-Type: application/json" \
++      --data "${data}" \
++      "${url}"
++  else
++    curl -fsSL -X "${method}" \
++      -H "Authorization: Bearer ${CF_API_TOKEN}" \
++      -H "Content-Type: application/json" \
++      "${url}"
++  fi
++}
++
++get_public_ip() {
++  local ip=""
++  ip="$(curl -fsSL --max-time 6 https://api.ipify.org 2>/dev/null || true)"
++  if [[ ! "${ip}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
++    ip="$(curl -fsSL --max-time 6 https://ifconfig.me/ip 2>/dev/null || true)"
++  fi
++  if [[ ! "${ip}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
++    ip="$(curl -fsSL --max-time 6 https://1.1.1.1/cdn-cgi/trace 2>/dev/null | awk -F= '$1=="ip"{print $2}' || true)"
++  fi
++  if [[ ! "${ip}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
++    echo "Failed to determine public IPv4 address"
++    return 1
++  fi
++  echo "${ip}"
++}
++
++# Extract a string field from Cloudflare JSON in the common success shape.
++# Prefers jq if present; falls back to a conservative regex extraction.
++json_extract() {
++  local json="$1"
++  local jq_expr="$2"
++  local fallback_regex="$3"
++
++  if command -v jq >/dev/null 2>&1; then
++    jq -r "${jq_expr}" <<<"${json}"
++    return 0
++  fi
++
++  # fallback: pull the first match of fallback_regex
++  # shellcheck disable=SC2001
++  sed -nE "s/${fallback_regex}/\\1/p" <<<"${json}" | head -n 1
++}
++
++require_success() {
++  local json="$1"
++  if command -v jq >/dev/null 2>&1; then
++    local ok
++    ok="$(jq -r '.success' <<<"${json}" 2>/dev/null || echo "false")"
++    [ "${ok}" = "true" ] && return 0
++  else
++    echo "${json}" | grep -q '"success":true' && return 0
++  fi
++  echo "Cloudflare API error: ${json}"
++  return 1
++}
++
++get_zone_id() {
++  if [ -n "${CF_ZONE_ID:-}" ]; then
++    echo "${CF_ZONE_ID}"
++    return 0
++  fi
++  local json
++  json="$(cf_api GET "https://api.cloudflare.com/client/v4/zones?name=${CF_ZONE_NAME}&status=active&page=1&per_page=1")"
++  require_success "${json}"
++  local id
++  id="$(json_extract "${json}" '.result[0].id // empty' '.*\"result\"\\s*:\\s*\\[\\s*\\{[^}]*\"id\"\\s*:\\s*\"([^\"]+)\".*')"
++  if [ -z "${id}" ] || [ "${id}" = "null" ]; then
++    echo "Could not resolve zone id for ${CF_ZONE_NAME}"
++    return 1
++  fi
++  echo "${id}"
++}
++
++get_record_by_name() {
++  local zone_id="$1"
++  local fqdn="$2"
++  local json
++  json="$(cf_api GET "https://api.cloudflare.com/client/v4/zones/${zone_id}/dns_records?type=A&name=${fqdn}&page=1&per_page=1")"
++  require_success "${json}"
++  echo "${json}"
++}
++
++update_record_if_needed() {
++  local zone_id="$1"
++  local record_id="$2"
++  local fqdn="$3"
++  local desired_ip="$4"
++
++  local get_json
++  get_json="$(cf_api GET "https://api.cloudflare.com/client/v4/zones/${zone_id}/dns_records/${record_id}")"
++  require_success "${get_json}"
++
++  local current_ip ttl proxied
++  current_ip="$(json_extract "${get_json}" '.result.content // empty' '.*\"content\"\\s*:\\s*\"([0-9\\.]+)\".*')"
++  ttl="$(json_extract "${get_json}" '.result.ttl // 1' '.*\"ttl\"\\s*:\\s*([0-9]+).*')"
++  proxied="$(json_extract "${get_json}" '.result.proxied // false' '.*\"proxied\"\\s*:\\s*(true|false).*')"
++  if [ -z "${ttl}" ] || [ "${ttl}" = "null" ]; then ttl="1"; fi
++  if [ -z "${proxied}" ] || [ "${proxied}" = "null" ]; then proxied="false"; fi
++
++  if [ "${current_ip}" = "${desired_ip}" ]; then
++    echo "$(date -Is) ${fqdn} already ${desired_ip}"
++    return 0
++  fi
++
++  echo "$(date -Is) updating ${fqdn}: ${current_ip:-<unknown>} -> ${desired_ip}"
++  local payload
++  payload="$(printf '{"type":"A","name":"%s","content":"%s","ttl":%s,"proxied":%s}' "${fqdn}" "${desired_ip}" "${ttl}" "${proxied}")"
++  local put_json
++  put_json="$(cf_api PUT "https://api.cloudflare.com/client/v4/zones/${zone_id}/dns_records/${record_id}" "${payload}")"
++  require_success "${put_json}"
++}
++
++main() {
++  local ip zone_id
++  ip="$(get_public_ip)"
++  zone_id="$(get_zone_id)"
++
++  local penthouse_id api_id
++  if [ -n "${CF_RECORD_PENTHOUSE_ID:-}" ]; then
++    penthouse_id="${CF_RECORD_PENTHOUSE_ID}"
++  else
++    local json
++    json="$(get_record_by_name "${zone_id}" "${CF_RECORD_PENTHOUSE_NAME}")"
++    penthouse_id="$(json_extract "${json}" '.result[0].id // empty' '.*\"result\"\\s*:\\s*\\[\\s*\\{[^}]*\"id\"\\s*:\\s*\"([^\"]+)\".*')"
++  fi
++
++  if [ -n "${CF_RECORD_API_ID:-}" ]; then
++    api_id="${CF_RECORD_API_ID}"
++  else
++    local json
++    json="$(get_record_by_name "${zone_id}" "${CF_RECORD_API_NAME}")"
++    api_id="$(json_extract "${json}" '.result[0].id // empty' '.*\"result\"\\s*:\\s*\\[\\s*\\{[^}]*\"id\"\\s*:\\s*\"([^\"]+)\".*')"
++  fi
++
++  if [ -z "${penthouse_id:-}" ] || [ "${penthouse_id}" = "null" ]; then
++    echo "Could not resolve record id for ${CF_RECORD_PENTHOUSE_NAME}"
++    exit 1
++  fi
++  if [ -z "${api_id:-}" ] || [ "${api_id}" = "null" ]; then
++    echo "Could not resolve record id for ${CF_RECORD_API_NAME}"
++    exit 1
++  fi
++
++  update_record_if_needed "${zone_id}" "${penthouse_id}" "${CF_RECORD_PENTHOUSE_NAME}" "${ip}"
++  update_record_if_needed "${zone_id}" "${api_id}" "${CF_RECORD_API_NAME}" "${ip}"
++}
++
++main "$@"
++
+
+commit be026640c66d63934f822a0e4479ebd274efb63b
+Author: AIMDaAlien <aimdaalien@gmail.com>
+Date:   Tue Feb 17 17:38:41 2026 -0500
+
+    untracked files on main: 37546e7 feat: UI Polish & Data Incinerator
+
+diff --git a/scripts/enable_autostart.sh b/scripts/enable_autostart.sh
+new file mode 100755
+index 0000000..fd2957f
+--- /dev/null
++++ b/scripts/enable_autostart.sh
+@@ -0,0 +1,36 @@
++#!/usr/bin/env bash
++set -euo pipefail
++
++# Run this on the TrueNAS host as root to auto-start the stack after reboot.
++# Optional env override:
++#   PENTHOUSE_APP_ROOT=/mnt/Storage_Pool/penthouse/app
++
++APP_ROOT="${PENTHOUSE_APP_ROOT:-/mnt/Storage_Pool/penthouse/app}"
++LOG_FILE="/var/log/penthouse-autostart.log"
++START_CMD="cd ${APP_ROOT} && /usr/bin/docker compose up -d"
++CRON_ENTRY="@reboot ${START_CMD} >> ${LOG_FILE} 2>&1"
++WATCHDOG_LOG="/var/log/penthouse-watchdog.log"
++WATCHDOG_CMD="cd ${APP_ROOT} && ./scripts/watchdog_stack.sh"
++WATCHDOG_CRON="*/5 * * * * ${WATCHDOG_CMD} >> ${WATCHDOG_LOG} 2>&1"
++
++if [ "${EUID}" -ne 0 ]; then
++  echo "Run as root"
++  exit 1
++fi
++
++existing_crontab="$(crontab -l 2>/dev/null || true)"
++updated="$existing_crontab"
++
++if ! echo "$updated" | grep -Fq "$START_CMD"; then
++  updated="$(printf '%s\n%s\n' "$updated" "$CRON_ENTRY")"
++fi
++
++if ! echo "$updated" | grep -Fq "$WATCHDOG_CMD"; then
++  updated="$(printf '%s\n%s\n' "$updated" "$WATCHDOG_CRON")"
++fi
++
++printf '%s\n' "$updated" | sed '/^\s*$/d' | crontab -
++
++echo "Autostart + watchdog enabled."
++echo "Entry: $CRON_ENTRY"
++echo "Entry: $WATCHDOG_CRON"
+diff --git a/scripts/watchdog_stack.sh b/scripts/watchdog_stack.sh
+new file mode 100755
+index 0000000..ea72628
+--- /dev/null
++++ b/scripts/watchdog_stack.sh
+@@ -0,0 +1,39 @@
++#!/usr/bin/env bash
++set -euo pipefail
++
++# Lightweight self-healing watchdog for TrueNAS cron.
++# - Ensures required compose services are running
++# - Verifies app health endpoint from inside app container
++# - Brings stack back up when needed
++
++APP_ROOT="${PENTHOUSE_APP_ROOT:-/mnt/Storage_Pool/penthouse/app}"
++REQUIRED_SERVICES=("penthouse-app" "caddy")
++
++if ! command -v docker >/dev/null 2>&1; then
++  echo "docker not found"
++  exit 1
++fi
++
++cd "$APP_ROOT"
++
++running_services="$(docker compose ps --services --filter status=running || true)"
++needs_restart=0
++
++for svc in "${REQUIRED_SERVICES[@]}"; do
++  if ! printf '%s\n' "$running_services" | grep -Fx -- "$svc" >/dev/null; then
++    echo "Service not running: $svc"
++    needs_restart=1
++  fi
++done
++
++if [ "$needs_restart" -eq 0 ]; then
++  if ! docker compose exec -T penthouse-app wget -q --spider http://localhost:3000/api/health >/dev/null 2>&1; then
++    echo "Health check failed"
++    needs_restart=1
++  fi
++fi
++
++if [ "$needs_restart" -eq 1 ]; then
++  echo "Recovering stack..."
++  docker compose up -d
++fi
+
+commit 4fd7aaa5139c2e23b0d638d120e3a6790cd7f916
+Author: AIMDaAlien <AIMDaAlien@users.noreply.github.com>
+Date:   Tue Feb 17 15:46:46 2026 -0500
+
+    ops: normalize data perms before deploy/start for hardened container
+
+diff --git a/scripts/prepare_data_dirs.sh b/scripts/prepare_data_dirs.sh
+new file mode 100755
+index 0000000..e6b712a
+--- /dev/null
++++ b/scripts/prepare_data_dirs.sh
+@@ -0,0 +1,15 @@
++#!/usr/bin/env bash
++set -euo pipefail
++
++APP_ROOT="${PENTHOUSE_APP_ROOT:-/mnt/Storage_Pool/penthouse/app}"
++
++cd "$APP_ROOT"
++mkdir -p data/uploads data/downloads
++
++if [ "$(id -u)" -eq 0 ]; then
++  # Ensure app container can write to SQLite/uploads after capability hardening.
++  chown -R 0:0 data
++  chmod -R u+rwX,g+rX,o-rwx data
++fi
++
++echo "Data directories prepared."
+
+commit b6ed8b1438224d915f177fa5b0f82a1560b69620
+Author: AIMDaAlien <AIMDaAlien@users.noreply.github.com>
+Date:   Tue Feb 17 15:43:26 2026 -0500
+
+    ops: harden compose and add backup + cloudflare failover automation
+
+diff --git a/.github/workflows/cloudflare-failover.yml b/.github/workflows/cloudflare-failover.yml
+new file mode 100644
+index 0000000..568c920
+--- /dev/null
++++ b/.github/workflows/cloudflare-failover.yml
+@@ -0,0 +1,29 @@
++name: Cloudflare DNS Failover
++
++on:
++  schedule:
++    - cron: "*/5 * * * *"
++  workflow_dispatch:
++
++concurrency:
++  group: cloudflare-failover
++  cancel-in-progress: true
++
++jobs:
++  failover:
++    runs-on: ubuntu-latest
++    steps:
++      - name: Checkout
++        uses: actions/checkout@v4
++
++      - name: Apply DNS failover policy
++        env:
++          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
++          CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
++          CF_RECORD_PENTHOUSE_ID: ${{ secrets.CF_RECORD_PENTHOUSE_ID }}
++          CF_RECORD_API_ID: ${{ secrets.CF_RECORD_API_ID }}
++          PRIMARY_IP: ${{ secrets.PRIMARY_IP }}
++          FAILOVER_IP: ${{ secrets.FAILOVER_IP }}
++          PRIMARY_HEALTH_URL: ${{ secrets.PRIMARY_HEALTH_URL }}
++          FAILOVER_HEALTH_URL: ${{ secrets.FAILOVER_HEALTH_URL }}
++        run: ./scripts/cloudflare_failover.sh
+diff --git a/DEPLOYMENT.md b/DEPLOYMENT.md
+index ae2147d..553dd6a 100644
+--- a/DEPLOYMENT.md
++++ b/DEPLOYMENT.md
+@@ -1,200 +1,198 @@
+-# Deploying The Penthouse on TrueNAS (Self-Hosted)
++# Deploying The Penthouse on TrueNAS (Production)
+ 
+-> Run your own private social server on a TrueNAS Scale system using Docker Compose.
++This guide is the hardened baseline for your on-prem setup:
++- Public entry on `https://penthouse.blog`
++- API/WebSocket on `https://api.penthouse.blog`
++- Git-push auto deploy to TrueNAS with self-hosted runner
++- Encrypted offsite backups with `restic`
++- DNS failover automation via Cloudflare workflow
+ 
+ ---
+ 
+-## Prerequisites
++## 1. Prerequisites
+ 
+-- **TrueNAS Scale** (or any Docker-capable server)
+-- SSH access to your server
+-- A local network IP (e.g. `192.168.1.100`)
+-- *(Optional)* A domain name for HTTPS via reverse proxy
++- TrueNAS SCALE host with Docker Compose
++- Repo: `https://github.com/AIMDaAlien/The-Penthouse`
++- DNS control for `penthouse.blog` and `api.penthouse.blog`
++- Router/NAT control for inbound forwarding
++- GitHub repo admin access (for Actions secrets)
+ 
+ ---
+ 
+-## 1. Clone the Repository

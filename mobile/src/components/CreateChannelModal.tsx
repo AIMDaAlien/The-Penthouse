@@ -14,7 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import Animated, { SlideInDown } from 'react-native-reanimated';
-import { Colors, Typography, Spacing, Radius, splitAppTheme, Glows } from '../designsystem';
+import { Colors, Typography, Spacing, Radius, Glows } from '../designsystem';
 import { createChannel } from '../services/api';
 
 interface CreateChannelModalProps {
@@ -109,7 +109,7 @@ export default function CreateChannelModal({ visible, serverId, onClose, onCreat
                 <Text style={styles.label}>CHANNEL NAME</Text>
                 <View style={styles.inputContainer}>
                   <Ionicons 
-                    name={type === 'text' ? 'hashtag' : 'volume-medium'} 
+                    name={type === 'text' ? 'at' : 'volume-medium'} 
                     size={20} 
                     color={Colors.TEXT_MUTED} 
                     style={styles.inputIcon}

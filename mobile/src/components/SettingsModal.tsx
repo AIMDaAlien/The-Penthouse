@@ -31,7 +31,7 @@ interface SettingsModalProps {
 }
 
 export default function SettingsModal({ visible, onClose }: SettingsModalProps) {
-    const { signOut, user } = useAuth();
+    const { logout, user } = useAuth();
     const [incinerating, setIncinerating] = useState(false);
     
     // Animation values
@@ -152,7 +152,7 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
                         <View style={styles.divider} />
 
                         {/* Sign Out */}
-                        <Pressable style={styles.signOutBtn} onPress={signOut}>
+                        <Pressable style={styles.signOutBtn} onPress={logout}>
                             <Text style={styles.signOutText}>Log Out</Text>
                         </Pressable>
                     </View>

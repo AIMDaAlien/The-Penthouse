@@ -279,7 +279,6 @@ export default function UnifiedGifPicker({ visible, onClose, onSelect }: Unified
                             renderItem={renderGif}
                             keyExtractor={keyExtractor}
                             numColumns={2}
-                            estimatedItemSize={GIF_SIZE}
                             contentContainerStyle={styles.listContent}
                             showsVerticalScrollIndicator={false}
                             ListEmptyComponent={ListEmptyComponent}

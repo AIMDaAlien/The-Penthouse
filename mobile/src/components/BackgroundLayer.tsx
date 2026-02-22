@@ -92,8 +92,8 @@ const styles = StyleSheet.create({
   },
   darkOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: Colors.TERTIARY,
-    opacity: 0.5,
+    backgroundColor: '#121212', // Added for deeper dark mode
+    opacity: 0.65,
   },
   tint: {
     ...StyleSheet.absoluteFillObject,
