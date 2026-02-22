@@ -6,10 +6,13 @@
     <title>The Penthouse</title>
     <meta name="description" content="A private social space for close friends. Real-time messaging, servers, voice messages, and more.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://api.fontshare.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Ubuntu:ital,wght@0,300;0,400;0,500;0,700;1,300&display=swap" rel="stylesheet">
+    <link href="https://api.fontshare.com/v2/css?f[]=erode@600&display=swap" rel="stylesheet">
     <style>
+        /* Fallback self-hosted Erode if CDN is blocked */
         @font-face {
-            font-family: 'Erode';
+            font-family: 'Erode-Local';
             src: url('/fonts/Erode-SemiBold.ttf') format('truetype');
             font-weight: 600;
             font-style: normal;
@@ -96,7 +99,7 @@
         }
 
         .nav-brand {
-            font-family: 'Erode', 'Georgia', serif;
+            font-family: 'Erode', 'Erode-Local', 'Georgia', serif;
             font-weight: 600;
             font-size: 16px;
             color: #fff;
@@ -319,7 +322,7 @@
         }
 
         .penthouse-text {
-            font-family: 'Erode', 'Georgia', serif;
+            font-family: 'Erode', 'Erode-Local', 'Georgia', serif;
             font-weight: 600;
             font-size: 64px;
             line-height: 0.92;
