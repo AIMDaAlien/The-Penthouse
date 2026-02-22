@@ -137,7 +137,7 @@ const styles = StyleSheet.create({
   },
   phoneContainer: {
     flex: 1,
-    backgroundColor: PERIWINKLE,
+    backgroundColor: 'rgba(131, 130, 201, 0.75)',
     width: '100%',
     maxWidth: Platform.OS === 'web' ? 420 : undefined,
     overflow: 'hidden',
