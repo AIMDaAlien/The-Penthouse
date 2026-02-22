@@ -19,16 +19,28 @@ else
   fi
 fi
 
-NOTES="$(
+RAW_NOTES="$(
   git log --no-merges --pretty=format:'%s' "${RANGE}" \
     | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' \
     | sed '/^$/d' \
     | head -n "${MAX_ITEMS}"
 )"
 
-if [ -z "${NOTES}" ]; then
-  NOTES="$(git show -s --format='%s' "${TO_SHA}")"
+if [ -z "${RAW_NOTES}" ]; then
+  RAW_NOTES="$(git show -s --format='%s' "${TO_SHA}")"
 fi
 
-echo "What changed:"
-echo "${NOTES}" | sed 's/^/- /'
+NOTES="$(
+  printf '%s\n' "${RAW_NOTES}" \
+    | awk '
+      {
+        line=$0;
+        sub(/^[[:space:]]+/, "", line);
+        sub(/^(feat|fix|docs|ci|chore|perf|refactor|test|build|ops)[[:space:]]*:[[:space:]]*/, "", line);
+        if (length(line) > 0) print "- " line;
+      }
+    '
+)"
+
+echo "what changed in this build:"
+echo "${NOTES}"
