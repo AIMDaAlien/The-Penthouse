@@ -38,7 +38,7 @@ export default function Login() {
       <View>
         <Text style={s.theText}>THE</Text>
         <Text style={s.penthouseText}>{'PENT\nHOUSE'}</Text>
-        <Text style={s.subtitle}>Secure Resident Access</Text>
+        <Text style={s.subtitle}>No point being wealthy without freedom</Text>
       </View>
 
       {/* Form — bottom-anchored */}
@@ -81,8 +81,8 @@ export default function Login() {
 }
 
 const s = StyleSheet.create({
-  theText: { fontFamily: 'Ubuntu_300Light', fontSize: 20, letterSpacing: 6, color: '#fff', marginBottom: 5, marginLeft: 3 },
-  penthouseText: { fontFamily: 'Erode-SemiBold', fontSize: 55, lineHeight: 52, color: '#fff', letterSpacing: 1 },
+  theText: { fontFamily: 'Ubuntu_300Light', fontSize: 30, letterSpacing: 6, color: '#fff', marginBottom: 5, marginLeft: 3 },
+  penthouseText: { fontFamily: 'Erode-SemiBold', fontSize: 96, lineHeight: 88, color: '#fff', letterSpacing: 1 },
   subtitle: { fontFamily: 'Ubuntu_300Light', fontSize: 15, color: '#fff', opacity: 0.8, marginTop: 15, letterSpacing: 0.5 },
   inputGroup: { gap: 6 },
   label: { fontFamily: 'Ubuntu_500Medium', fontSize: 11, textTransform: 'uppercase', letterSpacing: 2, color: COLORS.textMuted },

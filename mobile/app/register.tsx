@@ -104,8 +104,8 @@ export default function Register() {
 }
 
 const s = StyleSheet.create({
-  theText: { fontFamily: 'Ubuntu_300Light', fontSize: 20, letterSpacing: 6, color: '#fff', marginBottom: 5, marginLeft: 3 },
-  penthouseText: { fontFamily: 'Erode-SemiBold', fontSize: 55, lineHeight: 52, color: '#fff', letterSpacing: 1 },
+  theText: { fontFamily: 'Ubuntu_300Light', fontSize: 30, letterSpacing: 6, color: '#fff', marginBottom: 5, marginLeft: 3 },
+  penthouseText: { fontFamily: 'Erode-SemiBold', fontSize: 96, lineHeight: 88, color: '#fff', letterSpacing: 1 },
   subtitle: { fontFamily: 'Ubuntu_300Light', fontSize: 15, color: '#fff', opacity: 0.8, marginTop: 15, letterSpacing: 0.5 },
   inputGroup: { gap: 6 },
   label: { fontFamily: 'Ubuntu_500Medium', fontSize: 11, textTransform: 'uppercase', letterSpacing: 2, color: COLORS.textMuted },
