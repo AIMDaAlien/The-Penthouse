@@ -132,7 +132,7 @@ export function AuthScreenWrapper({ children, centered = false }: AuthScreenWrap
 const styles = StyleSheet.create({
   outerContainer: {
     flex: 1,
-    backgroundColor: '#11111b',
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
     ...StyleSheet.absoluteFillObject,
