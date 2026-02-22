@@ -62,6 +62,14 @@ export const Typography = {
     color: Colors.TEXT_NORMAL,
   } as TextStyle,
 
+  H4: {
+    fontFamily: Fonts.SANS.MEDIUM,
+    fontWeight: '600',
+    fontSize: 14,
+    lineHeight: 20,
+    color: Colors.TEXT_NORMAL,
+  } as TextStyle,
+
   // ─────────────────────────────────────────────────────────────
   // BODY TEXT
   // ─────────────────────────────────────────────────────────────

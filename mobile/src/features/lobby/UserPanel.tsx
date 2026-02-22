@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, Pressable, Image, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Colors, Typography, Spacing, Radius } from '../../designsystem';
 import { useAuth } from '../../context/AuthContext';
 import { BlurView } from 'expo-blur';

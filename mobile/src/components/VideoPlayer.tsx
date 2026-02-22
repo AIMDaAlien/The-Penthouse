@@ -1,7 +1,7 @@
 import { View, Pressable, Text, StyleSheet, Dimensions } from 'react-native';
 import { useState, useRef, useCallback } from 'react';
 import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const VIDEO_WIDTH = Math.min(SCREEN_WIDTH * 0.7, 280);

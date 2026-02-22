@@ -7,7 +7,7 @@ import MessageInput from '../../src/components/MessageInput';
 import AddMembersModal from '../../src/components/AddMembersModal';
 import { useEffect, useMemo, useCallback, useState } from 'react';
 import { markMessageRead, getChatDetails, startDm } from '../../src/services/api';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '../../src/designsystem';
 import type { Chat, Message } from '../../src/types';

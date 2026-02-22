@@ -6,8 +6,16 @@
     <title>The Penthouse</title>
     <meta name="description" content="A private social space for close friends. Real-time messaging, servers, voice messages, and more.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Ubuntu:ital,wght@0,300;0,400;0,500;0,700;1,300&display=swap" rel="stylesheet">
     <style>
+        @font-face {
+            font-family: 'Erode';
+            src: url('/fonts/Erode-SemiBold.ttf') format('truetype');
+            font-weight: 600;
+            font-style: normal;
+            font-display: swap;
+        }
+
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
         :root {
@@ -20,14 +28,14 @@
             --subtext0: #a6adc8;
             --text: #cdd6f4;
             --lavender: #b4befe;
-            --periwinkle: #8b9bf6;
+            --periwinkle: #8382C9;
             --mauve: #cba6f7;
             --green: #a6e3a1;
             --red: #f38ba8;
         }
 
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-family: 'Ubuntu', -apple-system, BlinkMacSystemFont, sans-serif;
             background: var(--crust);
             color: var(--text);
             min-height: 100vh;
@@ -46,8 +54,8 @@
             left: -50%;
             width: 200%;
             height: 200%;
-            background: radial-gradient(ellipse at 30% 20%, rgba(180, 190, 254, 0.08) 0%, transparent 50%),
-                        radial-gradient(ellipse at 70% 80%, rgba(139, 155, 246, 0.06) 0%, transparent 50%),
+            background: radial-gradient(ellipse at 30% 20%, rgba(131, 130, 201, 0.1) 0%, transparent 50%),
+                        radial-gradient(ellipse at 70% 80%, rgba(131, 130, 201, 0.06) 0%, transparent 50%),
                         radial-gradient(ellipse at 50% 50%, rgba(203, 166, 247, 0.04) 0%, transparent 60%);
             animation: drift 20s ease-in-out infinite;
             z-index: 0;
@@ -79,31 +87,45 @@
             box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
         }
 
-        /* Emoji icon */
-        .icon {
-            font-size: 3.5rem;
-            margin-bottom: 1rem;
-            filter: drop-shadow(0 4px 12px rgba(0,0,0,0.3));
+        /* ─── Auth-style header ─── */
+        .header {
+            text-align: left;
+            margin-bottom: 1.5rem;
         }
 
-        h1 {
-            font-size: 2rem;
-            font-weight: 700;
-            letter-spacing: -0.03em;
-            line-height: 1.1;
-            background: linear-gradient(135deg, var(--lavender), var(--periwinkle));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            margin-bottom: 0.5rem;
+        .the-text {
+            font-family: 'Ubuntu', sans-serif;
+            font-weight: 300;
+            font-size: 18px;
+            letter-spacing: 6px;
+            color: #fff;
+            margin-bottom: 4px;
+            margin-left: 2px;
+        }
+
+        .penthouse-text {
+            font-family: 'Erode', 'Georgia', serif;
+            font-weight: 600;
+            font-size: 64px;
+            line-height: 0.92;
+            color: #fff;
+            letter-spacing: 1px;
+        }
+
+        .header-divider {
+            height: 2px;
+            background: rgba(255, 255, 255, 0.25);
+            margin: 12px 0 8px;
         }
 
         .tagline {
-            color: var(--subtext0);
-            font-size: 0.95rem;
-            font-weight: 400;
+            font-family: 'Ubuntu', sans-serif;
+            font-weight: 300;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.9rem;
             line-height: 1.5;
-            margin-bottom: 2rem;
+            margin-bottom: 1.5rem;
+            text-align: left;
         }
 
         /* Features */
@@ -119,15 +141,24 @@
             background: rgba(49, 50, 68, 0.4);
             border: 1px solid rgba(255, 255, 255, 0.04);
             border-radius: 14px;
-            padding: 0.75rem;
+            padding: 0.85rem;
             font-size: 0.8rem;
             color: var(--subtext0);
+            font-weight: 400;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
         }
 
-        .feature span {
-            display: block;
-            font-size: 1.1rem;
-            margin-bottom: 0.25rem;
+        .feature svg {
+            width: 28px;
+            height: 28px;
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+
+        .feature-text {
+            line-height: 1.4;
         }
 
         /* Download button */
@@ -135,27 +166,28 @@
             display: inline-flex;
             align-items: center;
             gap: 0.75rem;
-            background: linear-gradient(135deg, var(--lavender), var(--periwinkle));
-            color: var(--crust);
-            font-family: inherit;
-            font-size: 1.05rem;
-            font-weight: 600;
+            background: linear-gradient(135deg, var(--periwinkle), #6b6aad);
+            color: #fff;
+            font-family: 'Ubuntu', sans-serif;
+            font-size: 1rem;
+            font-weight: 500;
             padding: 1rem 2rem;
             border: none;
             border-radius: 18px;
             cursor: pointer;
             text-decoration: none;
             transition: transform 0.2s ease, box-shadow 0.2s ease;
-            box-shadow: 0 4px 20px rgba(180, 190, 254, 0.25),
-                        0 0 40px rgba(139, 155, 246, 0.1);
+            box-shadow: 0 4px 20px rgba(131, 130, 201, 0.3),
+                        0 0 40px rgba(131, 130, 201, 0.1);
             width: 100%;
             justify-content: center;
+            letter-spacing: 1px;
         }
 
         .download-btn:hover {
             transform: translateY(-2px);
-            box-shadow: 0 6px 28px rgba(180, 190, 254, 0.35),
-                        0 0 60px rgba(139, 155, 246, 0.15);
+            box-shadow: 0 6px 28px rgba(131, 130, 201, 0.4),
+                        0 0 60px rgba(131, 130, 201, 0.15);
         }
 
         .download-btn:active {
@@ -178,6 +210,7 @@
             margin-top: 1rem;
             font-size: 0.8rem;
             color: var(--overlay0);
+            font-weight: 300;
         }
 
         .no-apk a {
@@ -197,6 +230,7 @@
             border-radius: 999px;
             font-size: 0.75rem;
             color: var(--subtext0);
+            font-weight: 400;
         }
 
         .status-dot {
@@ -220,21 +254,77 @@
             color: var(--overlay0);
             letter-spacing: 0.08em;
             text-transform: uppercase;
+            font-weight: 300;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="card">
-            <div class="icon">🏠</div>
-            <h1>The Penthouse</h1>
-            <p class="tagline">A private social space for close friends.<br>Real-time chat, servers, voice messages & more.</p>
+            <!-- Auth-style header -->
+            <div class="header">
+                <div class="the-text">THE</div>
+                <div class="penthouse-text">PENT<br>HOUSE</div>
+                <div class="header-divider"></div>
+            </div>
+
+            <p class="tagline">No point being wealthy without freedom.<br>A private social space — real-time chat, servers, voice messages & more.</p>
 
             <div class="features">
-                <div class="feature"><span>💬</span>Real-time messaging</div>
-                <div class="feature"><span>🎙️</span>Voice messages</div>
-                <div class="feature"><span>🏢</span>Servers & channels</div>
-                <div class="feature"><span>🔒</span>Self-hosted privacy</div>
+                <!-- 💬 Messaging → Glassmorphic -->
+                <div class="feature">
+                    <svg viewBox="0 0 48 48" fill="none">
+                        <rect x="10" y="6" width="30" height="22" rx="5" fill="#b4befe" opacity="0.1" stroke="#b4befe" stroke-width="1"/>
+                        <rect x="6" y="12" width="30" height="22" rx="5" fill="#b4befe" opacity="0.08" stroke="#b4befe" stroke-width="1.5"/>
+                        <polyline points="6,34 14,42 14,34" stroke="#b4befe" stroke-width="1.5" fill="#b4befe" fill-opacity="0.08"/>
+                        <line x1="12" y1="20" x2="28" y2="20" stroke="#b4befe" stroke-width="1.5" stroke-linecap="round"/>
+                        <line x1="12" y1="26" x2="22" y2="26" stroke="#b4befe" stroke-width="1.5" stroke-linecap="round"/>
+                    </svg>
+                    <span class="feature-text">Real-time messaging</span>
+                </div>
+
+                <!-- 🎙️ Voice → Art Deco -->
+                <div class="feature">
+                    <svg viewBox="0 0 48 48" fill="none" stroke="#b4befe" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="18" y="6" width="12" height="20" rx="6"/>
+                        <path d="M14 18 C14 30 18 36 24 36 C30 36 34 30 34 18" stroke-dasharray="3 2"/>
+                        <path d="M10 20 C10 33 16 40 24 40 C32 40 38 33 38 20" stroke-dasharray="3 2" opacity="0.4"/>
+                        <line x1="24" y1="40" x2="24" y2="44"/>
+                        <path d="M16 44 L20 42 L24 44 L28 42 L32 44" stroke-width="2"/>
+                    </svg>
+                    <span class="feature-text">Voice messages</span>
+                </div>
+
+                <!-- 🏢 Servers → Serif Accent -->
+                <div class="feature">
+                    <svg viewBox="0 0 48 48" fill="none" stroke="#b4befe" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 44 L14 12 Q14 10 16 10 L32 10 Q34 10 34 12 L34 44"/>
+                        <path d="M10 10 Q10 8 12 8 L36 8 Q38 8 38 10" stroke-width="2"/>
+                        <line x1="10" y1="10" x2="38" y2="10" stroke-width="2"/>
+                        <path d="M10 44 L38 44" stroke-width="2"/>
+                        <line x1="18" y1="17" x2="30" y2="17"/>
+                        <line x1="18" y1="23" x2="30" y2="23"/>
+                        <line x1="18" y1="29" x2="30" y2="29"/>
+                        <line x1="18" y1="35" x2="30" y2="35"/>
+                        <circle cx="16" cy="17" r="1" fill="#b4befe"/>
+                        <circle cx="16" cy="23" r="1" fill="#b4befe"/>
+                        <circle cx="16" cy="29" r="1" fill="#b4befe"/>
+                        <circle cx="16" cy="35" r="1" fill="#b4befe"/>
+                    </svg>
+                    <span class="feature-text">Servers & channels</span>
+                </div>
+
+                <!-- 🔒 Privacy → Art Deco -->
+                <div class="feature">
+                    <svg viewBox="0 0 48 48" fill="none" stroke="#b4befe" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M24 4 L40 12 L40 26 C40 36 32 42 24 44 C16 42 8 36 8 26 L8 12Z"/>
+                        <circle cx="24" cy="22" r="4" fill="#b4befe" opacity="0.15"/>
+                        <path d="M22 26 L21 34 L24 36 L27 34 L26 26" fill="#b4befe" opacity="0.15"/>
+                        <line x1="14" y1="14" x2="34" y2="14" stroke-dasharray="2 3" opacity="0.3"/>
+                        <line x1="12" y1="20" x2="36" y2="20" stroke-dasharray="2 3" opacity="0.3"/>
+                    </svg>
+                    <span class="feature-text">Self-hosted privacy</span>
+                </div>
             </div>
 
             <a href="#" class="download-btn is-disabled" id="downloadBtn" aria-disabled="true">

@@ -10,7 +10,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, RefreshControl } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Colors, Typography, Spacing, Radius, SpringConfig } from '../designsystem';
 import { getChats, getMediaUrl } from '../services/api';
 import { formatDistanceToNow } from 'date-fns';

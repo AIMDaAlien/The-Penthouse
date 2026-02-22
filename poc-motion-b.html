@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>POC Motion B — Living Depth</title>
+<link href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #8382C9;
+    --text: #ffffff;
+    --line: rgba(255,255,255,0.3);
+    --muted: rgba(255,255,255,0.65);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0e0e14;
+    display: flex; justify-content: center; align-items: center;
+    min-height: 100vh; font-family: 'Ubuntu', sans-serif;
+    overflow: hidden; perspective: 1200px;
+  }
+  .label {
+    position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+    color: #fff; font-size: 14px; letter-spacing: 3px; text-transform: uppercase;
+    opacity: 0.5; z-index: 100; font-weight: 300;
+  }
+  .phone {
+    width: 390px; height: 844px; background: rgba(131,130,201,0.75);
+    border-radius: 40px; overflow: hidden; position: relative;
+    box-shadow: 0 0 200px 80px rgba(131,130,201,0.3);
+    transform-style: preserve-3d;
+    /* Spring-like transition for the tilt */
+    transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  /* Breathing orbs with spring-like scale */
+  .orb {
+    position: absolute; background: #fff; border-radius: 50%; filter: blur(70px);
+    animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .orb-1 {
+    width: 200px; height: 200px; top: 10%; left: -50px; opacity: 0.35;
+    animation: breathe1 6s infinite alternate;
+  }
+  .orb-2 {
+    width: 250px; height: 250px; bottom: 20%; right: -80px; opacity: 0.25;
+    animation: breathe2 8s infinite alternate;
+  }
+  .orb-3 {
+    width: 150px; height: 150px; top: 45%; left: 30%; opacity: 0.2;
+    animation: breathe3 7s infinite alternate;
+  }
+  @keyframes breathe1 {
+    0% { transform: translate(0, 0) scale(1); opacity: 0.35; }
+    50% { transform: translate(30px, 40px) scale(1.15); opacity: 0.45; }
+    100% { transform: translate(-15px, 70px) scale(0.9); opacity: 0.3; }
+  }
+  @keyframes breathe2 {
+    0% { transform: translate(0, 0) scale(1); opacity: 0.25; }
+    50% { transform: translate(-40px, -30px) scale(1.2); opacity: 0.35; }
+    100% { transform: translate(-20px, -60px) scale(0.85); opacity: 0.2; }
+  }
+  @keyframes breathe3 {
+    0% { transform: translate(0, 0) scale(1); opacity: 0.2; }
+    50% { transform: translate(25px, -20px) scale(1.3); opacity: 0.3; }
+    100% { transform: translate(40px, 15px) scale(0.95); opacity: 0.15; }
+  }
+  .overlay { position: absolute; inset: 0; background: #1a1a1a; opacity: 0.25; pointer-events: none; }
+  .content {
+    position: relative; z-index: 2; padding: 60px 35px 40px;
+    display: flex; flex-direction: column; justify-content: space-between;
+    height: 100%;
+    /* Parallax: content moves opposite to tilt */
+    transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .the-text { font-weight: 300; font-size: 30px; letter-spacing: 6px; color: var(--text); margin-bottom: 5px; margin-left: 3px; }
+  .penthouse-text { font-family: 'Erode', serif; font-weight: 600; font-size: 96px; line-height: 0.92; color: var(--text); letter-spacing: 1px; }
+  .subtitle { font-weight: 300; font-size: 15px; color: var(--text); opacity: 0.8; margin-top: 15px; letter-spacing: 0.5px; }
+  .form { display: flex; flex-direction: column; gap: 25px; }
+  .input-group { display: flex; flex-direction: column; gap: 6px; }
+  .input-label { font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: var(--muted); }
+  input {
+    background: transparent; border: none; border-bottom: 1px solid var(--line);
+    padding: 8px 0; font-family: 'Ubuntu', sans-serif; font-size: 16px; color: #fff; outline: none;
+    transition: border-color 0.3s;
+  }
+  input::placeholder { color: rgba(255,255,255,0.4); }
+  input:focus { border-bottom-color: #fff; }
+  .btn {
+    background: rgba(255,255,255,0.15); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.3); border-radius: 50px; padding: 18px; text-align: center;
+    font-family: 'Ubuntu', sans-serif; font-weight: 500; font-size: 16px; color: #fff;
+    text-transform: uppercase; letter-spacing: 2px; cursor: pointer; margin-top: 15px;
+    transition: background 0.2s, transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s;
+  }
+  .btn:hover { background: rgba(255,255,255,0.25); box-shadow: 0 0 30px rgba(131,130,201,0.4); }
+  .btn:active { transform: scale(0.96); }
+  .footer { display: flex; justify-content: space-between; }
+  .footer a { font-size: 13px; color: var(--muted); text-decoration: none; transition: color 0.2s; }
+  .footer a:hover { color: #fff; }
+  .hint {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    color: rgba(255,255,255,0.4); font-size: 12px; letter-spacing: 2px; text-transform: uppercase;
+    font-family: 'Ubuntu', sans-serif;
+  }
+  /* Spring entrance */
+  .entrance { animation: springIn 1s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+  @keyframes springIn {
+    0% { opacity: 0; transform: scale(0.85) translateY(30px) rotateX(8deg); }
+    100% { opacity: 1; transform: scale(1) translateY(0) rotateX(0deg); }
+  }
+</style>
+</head>
+<body>
+
+<div class="label">POC B — Living Depth (parallax tilt + breathing orbs)</div>
+
+<div class="phone entrance" id="phone">
+  <div class="orb orb-1" id="orb1"></div>
+  <div class="orb orb-2" id="orb2"></div>
+  <div class="orb orb-3" id="orb3"></div>
+  <div class="overlay"></div>
+  <div class="content" id="content">
+    <div>
+      <div class="the-text">THE</div>
+      <div class="penthouse-text">PENT<br>HOUSE</div>
+      <div class="subtitle">No point being wealthy without freedom</div>
+    </div>
+    <div class="form">
+      <div class="input-group">
+        <span class="input-label">Username / Email</span>
+        <input type="text" placeholder="Enter your credentials">
+      </div>
+      <div class="input-group">
+        <span class="input-label">Password</span>
+        <input type="password" placeholder="Enter your password">
+      </div>
+      <div class="btn">Log In</div>
+      <div class="footer">
+        <a href="#">Forgot Password?</a>
+        <a href="#">Sign Up</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="hint">↕ Move mouse to interact</div>
+
+<script>
+  const phone = document.getElementById('phone');
+  const content = document.getElementById('content');
+  const orb1 = document.getElementById('orb1');
+  const orb2 = document.getElementById('orb2');
+  const orb3 = document.getElementById('orb3');
+
+  document.addEventListener('mousemove', (e) => {
+    const cx = window.innerWidth / 2;
+    const cy = window.innerHeight / 2;
+    const dx = (e.clientX - cx) / cx; // -1 to 1
+    const dy = (e.clientY - cy) / cy; // -1 to 1
+    
+    // Subtle tilt on the phone container (max ±4deg)
+    const tiltX = -dy * 4;
+    const tiltY = dx * 4;
+    phone.style.transform = `rotateX(${tiltX}deg) rotateY(${tiltY}deg)`;
+    
+    // Parallax: content moves slightly opposite (max ±8px)
+    content.style.transform = `translate(${-dx * 8}px, ${-dy * 8}px)`;
+    
+    // Orbs move with parallax at different speeds (depth layers)
+    orb1.style.marginLeft = `${dx * 15}px`;
+    orb1.style.marginTop = `${dy * 15}px`;
+    orb2.style.marginRight = `${-dx * 25}px`;
+    orb2.style.marginBottom = `${-dy * 20}px`;
+    orb3.style.marginLeft = `${dx * 10}px`;
+    orb3.style.marginTop = `${-dy * 10}px`;
+  });
+
+  // Reset on mouse leave
+  document.addEventListener('mouseleave', () => {
+    phone.style.transform = '';
+    content.style.transform = '';
+  });
+</script>
+</body>
+</html>

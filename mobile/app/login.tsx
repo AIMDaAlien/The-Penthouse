@@ -1,145 +1,195 @@
-import { View, Text, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard, ScrollView, Pressable } from 'react-native';
-import { useState } from 'react';
-import { Link, useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import Input from '../src/components/Input';
-import Button from '../src/components/Button';
+import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator, Platform } from 'react-native';
+import { useState, useEffect } from 'react';
+import { Link } from 'expo-router';
 import { useAuth } from '../src/context/AuthContext';
+import { AuthScreenWrapper } from '../src/components/AuthScreenWrapper';
+import { BlurView } from 'expo-blur';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withDelay,
+} from 'react-native-reanimated';
 
-// Wrapper that dismisses keyboard on native, but not on web (where it steals focus)
-const DismissKeyboardView = ({ children }: { children: React.ReactNode }) => {
-  if (Platform.OS === 'web') {
-    return <View className="flex-1">{children}</View>;
-  }
-  return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      {children}
-    </TouchableWithoutFeedback>
-  );
+const COLORS = {
+  textMain: '#ffffff',
+  textMuted: 'rgba(255, 255, 255, 0.65)',
+  lineBorder: 'rgba(255, 255, 255, 0.3)',
+  placeholderText: 'rgba(255, 255, 255, 0.4)',
+  errorBg: 'rgba(243, 139, 168, 0.15)',
+  errorBorder: 'rgba(243, 139, 168, 0.4)',
+  errorText: '#f38ba8',
 };
 
+// Project-mandated spring (dampingRatio ≈ 0.8, stiffness ≈ 300)
+const ENTRANCE_SPRING = { damping: 15, stiffness: 120, mass: 1 };
 
 export default function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  
   const { login } = useAuth();
-  const router = useRouter();
+
+  // ─── Cinematic entrance: per-element animated values ───
+  // THE
+  const theOpacity = useSharedValue(0);
+  const theTranslateY = useSharedValue(-30);
+  // PENTHOUSE (scale from 2.5 → 1)
+  const pentOpacity = useSharedValue(0);
+  const pentScale = useSharedValue(2.5);
+  // Divider (scaleX from 0 → 1)
+  const dividerScaleX = useSharedValue(0);
+  // Subtitle
+  const subOpacity = useSharedValue(0);
+  const subTranslateY = useSharedValue(15);
+  // Form items (staggered)
+  const form1Opacity = useSharedValue(0);
+  const form1TranslateY = useSharedValue(40);
+  const form2Opacity = useSharedValue(0);
+  const form2TranslateY = useSharedValue(40);
+  const form3Opacity = useSharedValue(0);
+  const form3TranslateY = useSharedValue(40);
+  const form4Opacity = useSharedValue(0);
+  const form4TranslateY = useSharedValue(40);
+
+  useEffect(() => {
+    // Phase 1 — Cinematic entrance cascade
+    // PENTHOUSE: immediate, scale down from 2.5
+    pentOpacity.value = withSpring(1, ENTRANCE_SPRING);
+    pentScale.value = withSpring(1, { damping: 18, stiffness: 80, mass: 1 });
+
+    // THE: slight delay
+    theOpacity.value = withDelay(200, withSpring(1, ENTRANCE_SPRING));
+    theTranslateY.value = withDelay(200, withSpring(0, ENTRANCE_SPRING));
+
+    // Divider line
+    dividerScaleX.value = withDelay(500, withSpring(1, ENTRANCE_SPRING));
+
+    // Subtitle
+    subOpacity.value = withDelay(700, withSpring(0.8, ENTRANCE_SPRING));
+    subTranslateY.value = withDelay(700, withSpring(0, ENTRANCE_SPRING));
+
+    // Form cascade
+    form1Opacity.value = withDelay(900, withSpring(1, ENTRANCE_SPRING));
+    form1TranslateY.value = withDelay(900, withSpring(0, ENTRANCE_SPRING));
+    form2Opacity.value = withDelay(1050, withSpring(1, ENTRANCE_SPRING));
+    form2TranslateY.value = withDelay(1050, withSpring(0, ENTRANCE_SPRING));
+    form3Opacity.value = withDelay(1200, withSpring(1, ENTRANCE_SPRING));
+    form3TranslateY.value = withDelay(1200, withSpring(0, ENTRANCE_SPRING));
+    form4Opacity.value = withDelay(1400, withSpring(1, ENTRANCE_SPRING));
+    form4TranslateY.value = withDelay(1400, withSpring(0, ENTRANCE_SPRING));
+  }, []);
+
+  // ─── Animated styles ───
+  const theStyle = useAnimatedStyle(() => ({
+    opacity: theOpacity.value,
+    transform: [{ translateY: theTranslateY.value }],
+  }));
+  const pentStyle = useAnimatedStyle(() => ({
+    opacity: pentOpacity.value,
+    transform: [{ scale: pentScale.value }],
+    transformOrigin: 'top left',
+  }));
+  const dividerStyle = useAnimatedStyle(() => ({
+    transform: [{ scaleX: dividerScaleX.value }],
+    transformOrigin: 'left',
+  }));
+  const subStyle = useAnimatedStyle(() => ({
+    opacity: subOpacity.value,
+    transform: [{ translateY: subTranslateY.value }],
+  }));
+  const f1Style = useAnimatedStyle(() => ({ opacity: form1Opacity.value, transform: [{ translateY: form1TranslateY.value }] }));
+  const f2Style = useAnimatedStyle(() => ({ opacity: form2Opacity.value, transform: [{ translateY: form2TranslateY.value }] }));
+  const f3Style = useAnimatedStyle(() => ({ opacity: form3Opacity.value, transform: [{ translateY: form3TranslateY.value }] }));
+  const f4Style = useAnimatedStyle(() => ({ opacity: form4Opacity.value, transform: [{ translateY: form4TranslateY.value }] }));
 
   const handleLogin = async () => {
-    if (!username || !password) {
-      setError('Please fill in all fields');
-      return;
-    }
-
+    if (!username || !password) { setError('Please fill in all fields'); return; }
     try {
-      setError('');
-      setIsLoading(true);
+      setError(''); setIsLoading(true);
       await login(username, password);
-      // Redirect handled by _layout
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Login failed. Please check your credentials.');
-    } finally {
-      setIsLoading(false);
-    }
+      setError(err.response?.data?.message || 'Login failed. Please check credentials.');
+    } finally { setIsLoading(false); }
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-transparent">
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}
-        className="flex-1"
-      >
-        <DismissKeyboardView>
-          <ScrollView 
-            contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', paddingBottom: 40 }}
-            className="px-10 w-full max-w-md self-center"
-            showsVerticalScrollIndicator={false}
-          >
-            
-            <View className="items-center mb-16 mt-10">
-              <View 
-                className="w-24 h-24 bg-[#cba6f7]/10 border border-[#cba6f7]/30 items-center justify-center shadow-2xl shadow-[#cba6f7]/20"
-                style={{
-                  borderTopLeftRadius: 36,
-                  borderBottomRightRadius: 36,
-                  borderTopRightRadius: 8,
-                  borderBottomLeftRadius: 8,
-                }}
-              >
-                 <Text className="text-5xl font-black text-[#cba6f7]" style={{ letterSpacing: -2 }}>P</Text>
-              </View>
-              <View className="mt-8 items-center">
-                <Text className="text-4xl font-black text-white text-center leading-none" style={{ letterSpacing: -1.5 }}>
-                  WELCOME{"\n"}BACK
-                </Text>
-                <View className="h-1 w-12 bg-[#cba6f7] mt-4 rounded-full" />
-                <Text className="text-zinc-500 text-sm font-bold uppercase tracking-[3px] mt-6 text-center">
-                  Sign in to continue
-                </Text>
-              </View>
-            </View>
+    <AuthScreenWrapper>
+      {/* Header — top-anchored */}
+      <View>
+        <Animated.View style={theStyle}>
+          <Text style={s.theText}>THE</Text>
+        </Animated.View>
+        <Animated.View style={pentStyle}>
+          <Text style={s.penthouseText}>{'PENT\nHOUSE'}</Text>
+        </Animated.View>
+        <Animated.View style={[s.divider, dividerStyle]} />
+        <Animated.View style={subStyle}>
+          <Text style={s.subtitle}>No point being wealthy without freedom</Text>
+        </Animated.View>
+      </View>
 
-            <View className="w-full">
-              {error ? (
-                <View className="bg-red-500/10 border border-red-500/50 p-4 rounded-xl mb-8">
-                  <Text className="text-red-400 text-center text-xs font-bold uppercase tracking-widest">{error}</Text>
-                </View>
-              ) : null}
+      {/* Form — bottom-anchored */}
+      <View style={{ gap: 25, marginBottom: 25 }}>
+        {error ? (
+          <View style={s.errorBox}>
+            <Text style={s.errorText}>{error}</Text>
+          </View>
+        ) : null}
 
-              <Input
-                label="Identity"
-                placeholder="Username"
-                value={username}
-                onChangeText={setUsername}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
+        <Animated.View style={f1Style}>
+          <View style={s.inputGroup}>
+            <Text style={s.label}>Username / Email</Text>
+            <TextInput style={s.input} placeholder="Enter your credentials" placeholderTextColor={COLORS.placeholderText}
+              value={username} onChangeText={setUsername} autoCapitalize="none" autoCorrect={false} />
+          </View>
+        </Animated.View>
 
-              <Input
-                label="Security"
-                placeholder="••••••••"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-                className="mb-2"
-              />
-              <Text className="text-zinc-500 text-[10px] font-semibold uppercase tracking-wider mb-8 ml-2">
-                Must be at least 8 characters
-              </Text>
+        <Animated.View style={f2Style}>
+          <View style={s.inputGroup}>
+            <Text style={s.label}>Password</Text>
+            <TextInput style={s.input} placeholder="Enter your password" placeholderTextColor={COLORS.placeholderText}
+              value={password} onChangeText={setPassword} secureTextEntry />
+          </View>
+        </Animated.View>
 
-              <Button
-                title="LOG IN"
-                onPress={handleLogin}
-                isLoading={isLoading}
-                className="mb-4 shadow-xl shadow-[#cba6f7]/20"
-              />
+        <Animated.View style={f3Style}>
+          <Pressable onPress={handleLogin} disabled={isLoading}
+            style={({ pressed }) => [s.frostedButton, pressed && s.frostedButtonPressed, isLoading && { opacity: 0.6 }]}>
+            {Platform.OS === 'ios' && <BlurView intensity={12} tint="light" style={[StyleSheet.absoluteFill, { borderRadius: 50, overflow: 'hidden' }]} />}
+            {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={s.buttonText}>Log In</Text>}
+          </Pressable>
+        </Animated.View>
 
-              <Link href="/forgot-password" asChild>
-                <Pressable className="mb-8">
-                  <Text className="text-zinc-500 text-center text-xs font-semibold">
-                    Forgot your password?
-                  </Text>
-                </Pressable>
-              </Link>
-
-              <View className="flex-row justify-center items-center gap-3">
-                <View className="h-[1px] flex-1 bg-zinc-800" />
-                <Link href="/register" asChild>
-                  <Pressable>
-                    <Text className="text-[#cba6f7] font-black text-xs uppercase tracking-[2px]">CREATE ACCOUNT</Text>
-
-                  </Pressable>
-                </Link>
-                <View className="h-[1px] flex-1 bg-zinc-800" />
-              </View>
-            </View>
-
-          </ScrollView>
-        </DismissKeyboardView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+        <Animated.View style={f4Style}>
+          <View style={s.footerLinks}>
+            <Link href="/forgot-password" asChild>
+              <Pressable><Text style={s.footerLink}>Forgot Password?</Text></Pressable>
+            </Link>
+            <Link href="/register" asChild>
+              <Pressable><Text style={s.footerLink}>Sign Up</Text></Pressable>
+            </Link>
+          </View>
+        </Animated.View>
+      </View>
+    </AuthScreenWrapper>
   );
 }
+
+const s = StyleSheet.create({
+  theText: { fontFamily: 'Ubuntu_300Light', fontSize: 30, letterSpacing: 6, color: '#fff', marginBottom: 5, marginLeft: 3 },
+  penthouseText: { fontFamily: 'Erode-SemiBold', fontSize: 96, lineHeight: 88, color: '#fff', letterSpacing: 1 },
+  divider: { height: 2, backgroundColor: 'rgba(255,255,255,0.3)', marginTop: 15, marginBottom: 5 },
+  subtitle: { fontFamily: 'Ubuntu_300Light', fontSize: 15, color: '#fff', opacity: 0.8, marginTop: 10, letterSpacing: 0.5 },
+  inputGroup: { gap: 6 },
+  label: { fontFamily: 'Ubuntu_500Medium', fontSize: 11, textTransform: 'uppercase', letterSpacing: 2, color: COLORS.textMuted },
+  input: { backgroundColor: 'transparent', borderWidth: 0, borderBottomWidth: 1, borderBottomColor: COLORS.lineBorder, borderRadius: 0, paddingVertical: 8, paddingHorizontal: 0, fontFamily: 'Ubuntu_400Regular', fontSize: 16, color: '#fff' },
+  frostedButton: { backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', borderRadius: 50, paddingVertical: 18, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', marginTop: 15 },
+  frostedButtonPressed: { backgroundColor: 'rgba(255,255,255,0.25)' },
+  buttonText: { fontFamily: 'Ubuntu_500Medium', fontSize: 16, color: '#fff', textTransform: 'uppercase', letterSpacing: 2 },
+  errorBox: { backgroundColor: COLORS.errorBg, borderWidth: 1, borderColor: COLORS.errorBorder, borderRadius: 8, padding: 12 },
+  errorText: { fontFamily: 'Ubuntu_500Medium', fontSize: 10, color: COLORS.errorText, textTransform: 'uppercase', letterSpacing: 2, textAlign: 'center' },
+  footerLinks: { flexDirection: 'row', justifyContent: 'space-between' },
+  footerLink: { fontFamily: 'Ubuntu_400Regular', fontSize: 13, color: COLORS.textMuted },
+});

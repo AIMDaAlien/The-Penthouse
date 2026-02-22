@@ -1,6 +1,6 @@
 import { View, Text, Modal, TextInput, Image, Pressable, ActivityIndicator, Dimensions, StyleSheet } from 'react-native';
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
 import Constants from 'expo-constants';
@@ -279,7 +279,6 @@ export default function UnifiedGifPicker({ visible, onClose, onSelect }: Unified
                             renderItem={renderGif}
                             keyExtractor={keyExtractor}
                             numColumns={2}
-                            estimatedItemSize={GIF_SIZE}
                             contentContainerStyle={styles.listContent}
                             showsVerticalScrollIndicator={false}
                             ListEmptyComponent={ListEmptyComponent}

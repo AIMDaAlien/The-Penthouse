@@ -8,7 +8,7 @@ import { AppState } from 'react-native';
 
 export function NotificationListener() {
     const { user } = useAuth();
-    const { info } = useToast();
+    const { show } = useToast();
     const router = useRouter();
     const segments = useSegments();
     const soundRef = useRef<Audio.Sound | null>(null);
@@ -60,12 +60,15 @@ export function NotificationListener() {
                 // ignore
             }
 
-            info(`${message.sender.displayName || message.sender.username}: ${message.content}`, `New Message in ${message.chatName || 'Chat'}`, {
+            show({
+                message: `${message.sender.displayName || message.sender.username}: ${message.content}`,
+                title: `New Message in ${message.chatName || 'Chat'}`,
+                variant: 'info',
                 action: () => {
                     router.push(`/chat/${message.chatId}`);
                 },
                 duration: 4000
-            } as any); // Type cast due to strict interface overlap if TS complains
+            });
         };
 
         socket.on('message:new', handleNewMessage);
@@ -73,7 +76,7 @@ export function NotificationListener() {
         return () => {
             socket.off('message:new', handleNewMessage);
         };
-    }, [user, segments, info, router]);
+    }, [user, segments, show, router]);
 
     return null; // Headless component
 }

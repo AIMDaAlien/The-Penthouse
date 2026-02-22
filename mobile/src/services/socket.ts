@@ -15,6 +15,22 @@ const SOCKET_URL = origin
 console.log('Socket URL:', SOCKET_URL);
 
 let socket: Socket | null = null;
+let offlineTimer: ReturnType<typeof setTimeout> | null = null;
+const OFFLINE_GRACE_MS = 3500;
+
+const clearOfflineTimer = () => {
+    if (!offlineTimer) return;
+    clearTimeout(offlineTimer);
+    offlineTimer = null;
+};
+
+const scheduleOffline = (reason: string) => {
+    clearOfflineTimer();
+    offlineTimer = setTimeout(() => {
+        setServerOffline(reason);
+        offlineTimer = null;
+    }, OFFLINE_GRACE_MS);
+};
 
 export const connectSocket = (token: string): Socket => {
     if (socket?.connected) {
@@ -29,23 +45,28 @@ export const connectSocket = (token: string): Socket => {
 
     socket.on('connect', () => {
         console.log('🔌 Connected to WebSocket');
+        clearOfflineTimer();
         setServerOnline();
     });
 
-    socket.on('disconnect', () => {
-        console.log('🔌 Disconnected from WebSocket');
-        setServerOffline('WebSocket disconnected');
+    socket.on('disconnect', (reason) => {
+        console.log('🔌 Disconnected from WebSocket:', reason);
+        // Expected disconnect (logout/app cleanup) should not trip global offline UI.
+        if (reason === 'io client disconnect') return;
+        // Give auto-reconnect a short grace window before marking the app offline.
+        scheduleOffline(`WebSocket disconnected (${reason})`);
     });
 
     socket.on('connect_error', (error) => {
         console.error('WebSocket connection error:', error.message);
-        setServerOffline(error.message || 'WebSocket error');
+        scheduleOffline(error.message || 'WebSocket error');
     });
 
     return socket;
 };
 
 export const disconnectSocket = () => {
+    clearOfflineTimer();
     if (socket) {
         socket.disconnect();
         socket = null;

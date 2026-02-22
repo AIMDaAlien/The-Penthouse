@@ -1,6 +1,6 @@
 import { View, TextInput, Pressable, ActivityIndicator, Alert, Text, StyleSheet } from 'react-native';
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import * as ImagePicker from 'expo-image-picker';
 import { BlurView } from 'expo-blur';
 import { Message } from '../types';

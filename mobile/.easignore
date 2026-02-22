@@ -1,0 +1,22 @@
+# Keep EAS upload context lean.
+node_modules/
+.expo/
+dist/
+web-build/
+coverage/
+
+# Logs/temp
+*.log
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+.DS_Store
+
+# Local-only secrets/config
+.env*.local
+*.pem
+*.tsbuildinfo
+
+# Experimental files (kept in repo root, but ignored here defensively)
+poc*.html
+poc-motion-*.html

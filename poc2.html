@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>THE PENTHOUSE - Auth POCs</title>
+    
+    <!-- Importing Ubuntu, Playfair Display, and Cinzel from Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600&family=Playfair+Display:wght@600&family=Ubuntu:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <!-- Importing Erode from Fontshare -->
+    <link href="https://api.fontshare.com/v2/css?f[]=erode@600&display=swap" rel="stylesheet">
+
+    <style>
+        /* Base Color Palette */
+        :root {
+            --peri-1: #6667AB;
+            --peri-2: #8382C9; /* Dominant Background */
+            --peri-3: #A09EE7;
+            --peri-4: #BEBBFF;
+            --peri-5: #DCD9FF;
+        }
+
+        /* Presentation Wrapper (Dark bg to make mobile screens pop) */
+        body {
+            margin: 0;
+            padding: 50px 20px;
+            background-color: #121212;
+            font-family: 'Ubuntu', sans-serif;
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            flex-wrap: wrap;
+            min-height: 100vh;
+        }
+
+        .poc-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .poc-label {
+            color: #ffffff;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-weight: 300;
+        }
+
+        /* Mobile Screen Mockup */
+        .mobile-screen {
+            width: 375px;
+            height: 812px;
+            background-color: var(--peri-2); /* Dominant Color */
+            border-radius: 40px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Smooth Blurred Texture Elements */
+        .blur-blob {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(60px);
+            z-index: 1;
+        }
+        .blob-1 {
+            width: 250px; height: 250px;
+            background-color: var(--peri-1);
+            top: -50px; left: -50px;
+        }
+        .blob-2 {
+            width: 300px; height: 300px;
+            background-color: var(--peri-4);
+            bottom: -80px; right: -80px;
+            opacity: 0.7;
+        }
+        .blob-3 {
+            width: 150px; height: 150px;
+            background-color: var(--peri-3);
+            top: 40%; left: -60px;
+            opacity: 0.8;
+        }
+
+        /* Screen Content */
+        .content {
+            position: relative;
+            z-index: 10;
+            padding: 60px 30px 40px;
+            display: flex;
+            flex-direction: column;
+            flex-grow: 1;
+            color: white;
+        }
+
+        .title {
+            font-size: 42px;
+            line-height: 1.05;
+            margin: 0 0 10px 0;
+        }
+        
+        /* Font Variations for the POCs */
+        .poc-1 .title { font-family: 'Erode', serif; font-weight: 600; }
+        .poc-2 .title { font-family: 'Playfair Display', serif; font-weight: 600; letter-spacing: 1px; }
+        .poc-3 .title { font-family: 'Cinzel', serif; font-weight: 600; letter-spacing: 2px; }
+
+        .subtitle {
+            font-weight: 300;
+            font-size: 16px;
+            color: var(--peri-5);
+            margin-bottom: auto; /* Pushes form down */
+        }
+
+        /* Forms */
+        .auth-form {
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+            margin-bottom: 20px;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        label {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            font-weight: 500;
+            color: var(--peri-5);
+        }
+
+        input {
+            font-family: 'Ubuntu', sans-serif;
+            font-size: 16px;
+            color: white;
+            width: 100%;
+            box-sizing: border-box;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+        
+        input::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+            font-weight: 300;
+        }
+
+        /* POC 1: Minimal Underline */
+        .poc-1 input {
+            background: transparent;
+            border: none;
+            border-bottom: 1px solid var(--peri-4);
+            padding: 8px 0;
+        }
+        .poc-1 input:focus { border-bottom-color: white; }
+        .poc-1 .btn {
+            background-color: var(--peri-1);
+            color: white;
+            border-radius: 50px;
+        }
+
+        /* POC 2: Soft Glassmorphism */
+        .poc-2 .input-group { gap: 0; }
+        .poc-2 label { display: none; } /* Hide labels for a cleaner glass look */
+        .poc-2 input {
+            background: rgba(255, 255, 255, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 18px 20px;
+        }
+        .poc-2 input:focus { background: rgba(255, 255, 255, 0.25); }
+        .poc-2 .btn {
+            background-color: var(--peri-5);
+            color: var(--peri-1);
+            border-radius: 16px;
+            font-weight: 700;
+            margin-top: 10px;
+        }
+
+        /* POC 3: Architectural Outlined */
+        .poc-3 input {
+            background: transparent;
+            border: 1px solid var(--peri-4);
+            border-radius: 4px;
+            padding: 16px;
+        }
+        .poc-3 input:focus { border-color: white; background: rgba(255,255,255,0.05); }
+        .poc-3 .btn {
+            background-color: transparent;
+            color: white;
+            border: 1px solid white;
+            border-radius: 4px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-size: 14px;
+        }
+
+        /* General Button Styles */
+        .btn {
+            font-family: 'Ubuntu', sans-serif;
+            font-size: 18px;
+            font-weight: 500;
+            padding: 18px;
+            border: none;
+            cursor: pointer;
+            text-align: center;
+            margin-top: 20px;
+            transition: transform 0.2s;
+        }
+        .btn:active { transform: scale(0.97); }
+
+        /* Footer Links */
+        .footer-links {
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+            font-weight: 400;
+        }
+        .footer-links a {
+            color: var(--peri-5);
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+        .footer-links a:hover { color: white; }
+
+    </style>
+</head>
+<body>
+
+    <!-- POC 1: Erode + Minimal -->
+    <div class="poc-container">
+        <div class="poc-label">POC 1: Erode Font + Minimal Inputs</div>
+        <div class="mobile-screen poc-1">
+            <div class="blur-blob blob-1"></div>
+            <div class="blur-blob blob-2"></div>
+            <div class="blur-blob blob-3"></div>
+            <div class="content">
+                <h1 class="title">THE<br>PENT<br>HOUSE</h1>
+                <div class="subtitle">Secure Resident Access</div>
+                <form class="auth-form">
+                    <div class="input-group">
+                        <label>Username / Email</label>
+                        <input type="text" placeholder="Enter your credentials">
+                    </div>
+                    <div class="input-group">
+                        <label>Password</label>
+                        <input type="password" placeholder="Enter your password">
+                    </div>
+                    <button type="button" class="btn">Log In</button>
+                </form>
+                <div class="footer-links">
+                    <a href="#">Forgot Password?</a>
+                    <a href="#">Contact Concierge</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- POC 2: Playfair + Glass -->
+    <div class="poc-container">
+        <div class="poc-label">POC 2: Playfair Font + Glass Inputs</div>
+        <div class="mobile-screen poc-2">
+            <div class="blur-blob blob-1"></div>
+            <div class="blur-blob blob-2"></div>
+            <div class="blur-blob blob-3"></div>
+            <div class="content">
+                <h1 class="title">THE<br>PENT<br>HOUSE</h1>
+                <div class="subtitle">Secure Resident Access</div>
+                <form class="auth-form">
+                    <div class="input-group">
+                        <label>Username / Email</label>
+                        <input type="text" placeholder="Username or Email">
+                    </div>
+                    <div class="input-group">
+                        <label>Password</label>
+                        <input type="password" placeholder="Password">
+                    </div>
+                    <button type="button" class="btn">Log In</button>
+                </form>
+                <div class="footer-links">
+                    <a href="#">Forgot Password?</a>
+                    <a href="#">Contact Concierge</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- POC 3: Cinzel + Architectural -->
+    <div class="poc-container">
+        <div class="poc-label">POC 3: Cinzel Font + Structured Inputs</div>
+        <div class="mobile-screen poc-3">
+            <div class="blur-blob blob-1"></div>
+            <div class="blur-blob blob-2"></div>
+            <div class="blur-blob blob-3"></div>
+            <div class="content">
+                <h1 class="title">THE<br>PENT<br>HOUSE</h1>
+                <div class="subtitle">Secure Resident Access</div>
+                <form class="auth-form">
+                    <div class="input-group">
+                        <label>Username / Email</label>
+                        <input type="text" placeholder="Enter your credentials">
+                    </div>
+                    <div class="input-group">
+                        <label>Password</label>
+                        <input type="password" placeholder="Enter your password">
+                    </div>
+                    <button type="button" class="btn">Log In</button>
+                </form>
+                <div class="footer-links">
+                    <a href="#">Forgot Password?</a>
+                    <a href="#">Contact Concierge</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>

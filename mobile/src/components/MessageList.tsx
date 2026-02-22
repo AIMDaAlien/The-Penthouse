@@ -4,7 +4,7 @@ import { FlashList } from '@shopify/flash-list';
 import { Message, Reaction } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { format } from 'date-fns';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Clipboard from 'expo-clipboard';
 import ImageViewer from './ImageViewer';
 import VoicePlayer from './VoicePlayer';

@@ -89,6 +89,15 @@ describe('Auth Endpoints', () => {
 
       expect(res.statusCode).toBe(401);
     });
+
+    it('should return 401 for invalid access token on protected endpoint', async () => {
+      const res = await request(app)
+        .get('/api/auth/me')
+        .set('Authorization', 'Bearer invalid.token.value');
+
+      expect(res.statusCode).toBe(401);
+      expect(res.body.error).toBe('Invalid or expired token');
+    });
   });
 
   describe('Password Recovery', () => {

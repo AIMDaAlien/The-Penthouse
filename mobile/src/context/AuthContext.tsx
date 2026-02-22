@@ -45,7 +45,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     } catch (err) {
                         console.log('Profile fetch failed, clearing token');
                         await storage.deleteItem('token');
+                        await storage.deleteItem('refreshToken');
                         setToken(null);
+                        setUser(null);
+                        disconnectSocket();
                     }
                 }
             } catch (err) {

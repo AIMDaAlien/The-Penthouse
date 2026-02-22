@@ -74,8 +74,14 @@ api.interceptors.response.use(
     },
     async (error) => {
         const originalRequest = error.config;
+        const status = error.response?.status;
+        const errorMessage = error.response?.data?.error;
+        const shouldAttemptRefresh = (
+            status === 401 ||
+            (status === 403 && errorMessage === 'Invalid or expired token')
+        );
 
-        if (error.response?.status === 401 && !originalRequest._retry && originalRequest.url !== '/auth/refresh') {
+        if (shouldAttemptRefresh && originalRequest && !originalRequest._retry && originalRequest.url !== '/auth/refresh') {
             if (isRefreshing) {
                 return new Promise(function (resolve, reject) {
                     failedQueue.push({ resolve, reject });
@@ -140,8 +146,8 @@ api.interceptors.response.use(
         // Network errors/timeouts usually have no response.
         if (!error.response && error.code !== 'ERR_CANCELED') {
             setServerOffline(error.message || 'Network error');
-        } else if (error.response?.status >= 500) {
-            setServerOffline(`Server error (${error.response.status})`);
+        } else if (status >= 500) {
+            setServerOffline(`Server error (${status})`);
         }
         return Promise.reject(error);
     }
@@ -159,6 +165,19 @@ export interface RNFile {
     name: string;
     mimeType?: string;
     type?: string;
+}
+
+export interface AppUpdateInfo {
+    app: string;
+    latestVersion: string;
+    mandatory: boolean;
+    notes: string;
+    minSupportedVersion: string | null;
+    publishedAt: string | null;
+    checksumSha256: string | null;
+    fileName: string;
+    downloadPath: string;
+    apkUrl: string;
 }
 
 export const uploadFile = async (file: RNFile): Promise<{ data: { url: string; type: 'image' | 'video' | 'file'; mimeType: string; filename: string } }> => {
@@ -485,5 +504,7 @@ export const updateChannelPermissions = (channelId: number, roleId: string, allo
         setTimeout(() => resolve({ success: true }), 500);
     });
 };
+
+export const getAppUpdateInfo = () => api.get<AppUpdateInfo>('/app/update');
 
 export default api;

@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>THE PENTHOUSE - Refined Auth</title>
+    
+    <!-- Ubuntu (for THE, labels, inputs, buttons) -->
+    <link href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <!-- Erode (exclusively for PENTHOUSE) -->
+    <link href="https://api.fontshare.com/v2/css?f[]=erode@600&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            /* The dominant Very Peri periwinkle requested */
+            --bg-color: #8382c9;
+            --text-main: #ffffff;
+            --text-muted: rgba(255, 255, 255, 0.65);
+            --line-color: rgba(255, 255, 255, 0.3);
+        }
+
+        body {
+            margin: 0;
+            padding: 50px 20px;
+            background-color: #121212;
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            flex-wrap: wrap;
+            min-height: 100vh;
+            font-family: 'Ubuntu', sans-serif;
+        }
+
+        .poc-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .poc-label {
+            color: #fff;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-weight: 300;
+        }
+
+        /* Mobile Screen Setup */
+        .screen {
+            width: 375px;
+            height: 812px;
+            background-color: var(--bg-color);
+            border-radius: 40px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.6);
+            display: flex;
+            flex-direction: column;
+            padding: 50px 35px 40px; /* Top, Sides, Bottom padding */
+            box-sizing: border-box;
+        }
+
+        /* =========================================
+           DYNAMIC WHITE GLOWING ELEMENTS
+           ========================================= */
+        .glow-orb {
+            position: absolute;
+            background: #ffffff;
+            border-radius: 50%;
+            filter: blur(70px);
+            z-index: 1;
+        }
+        
+        .orb-1 {
+            width: 200px; height: 200px;
+            top: 10%; left: -50px;
+            opacity: 0.35;
+            animation: drift1 18s ease-in-out infinite alternate;
+        }
+        
+        .orb-2 {
+            width: 250px; height: 250px;
+            bottom: 20%; right: -80px;
+            opacity: 0.25;
+            animation: drift2 22s ease-in-out infinite alternate;
+        }
+
+        .orb-3 {
+            width: 150px; height: 150px;
+            top: 45%; left: 30%;
+            opacity: 0.2;
+            animation: drift3 15s ease-in-out infinite alternate;
+        }
+
+        @keyframes drift1 {
+            0% { transform: translate(0, 0) scale(1); }
+            50% { transform: translate(40px, 60px) scale(1.1); }
+            100% { transform: translate(-20px, 100px) scale(0.9); }
+        }
+        @keyframes drift2 {
+            0% { transform: translate(0, 0) scale(1); }
+            50% { transform: translate(-60px, -40px) scale(1.2); }
+            100% { transform: translate(-10px, -90px) scale(0.95); }
+        }
+        @keyframes drift3 {
+            0% { transform: translate(0, 0); }
+            100% { transform: translate(50px, -50px); }
+        }
+
+        /* =========================================
+           CONTENT LAYOUT (The "Middle Space")
+           ========================================= */
+        .content {
+            position: relative;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        .header {
+            /* This ensures the header stays top, leaving the middle empty */
+            margin-bottom: auto; 
+        }
+
+        /* "THE" strictly in Ubuntu */
+        .the-text {
+            font-family: 'Ubuntu', sans-serif;
+            font-weight: 300;
+            font-size: 20px;
+            letter-spacing: 6px;
+            color: var(--text-main);
+            margin: 0 0 5px 3px;
+        }
+
+        /* "PENTHOUSE" strictly in Erode, proportionally 1.3x larger */
+        .penthouse-text {
+            font-family: 'Erode', serif;
+            font-weight: 600;
+            /* clamp() ensures it scales beautifully but stays perfectly sized to width */
+            font-size: clamp(45px, 14vw, 55px); 
+            line-height: 0.95;
+            color: var(--text-main);
+            margin: 0;
+            letter-spacing: 1px;
+        }
+
+        .subtitle {
+            font-weight: 300;
+            font-size: 15px;
+            color: var(--text-main);
+            opacity: 0.8;
+            margin-top: 15px;
+            letter-spacing: 0.5px;
+        }
+
+        /* Form anchored to bottom */
+        .auth-form {
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+            margin-bottom: 25px;
+        }
+
+        /* =========================================
+           INPUT FIELDS (Elegant Minimal Outline)
+           ========================================= */
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-weight: 500;
+            color: var(--text-muted);
+        }
+
+        input {
+            background: transparent;
+            border: none;
+            border-bottom: 1px solid var(--line-color);
+            border-radius: 0;
+            padding: 8px 0;
+            font-family: 'Ubuntu', sans-serif;
+            font-size: 16px;
+            color: var(--text-main);
+            outline: none;
+            transition: border-color 0.3s ease;
+        }
+
+        input::placeholder {
+            color: rgba(255, 255, 255, 0.4);
+            font-weight: 300;
+        }
+
+        /* Focus state clearly shows users where they are typing */
+        input:focus {
+            border-bottom: 1px solid var(--text-main);
+        }
+
+        /* =========================================
+           BUTTON VARIATIONS (The 3 New Takes)
+           ========================================= */
+        
+        /* Base Button styling */
+        .btn {
+            font-family: 'Ubuntu', sans-serif;
+            font-size: 16px;
+            font-weight: 500;
+            padding: 18px;
+            cursor: pointer;
+            text-align: center;
+            margin-top: 15px;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        /* Concept 1: Delicate Ghost Pill */
+        .btn-concept-1 {
+            background: transparent;
+            color: var(--text-main);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            border-radius: 50px;
+        }
+        .btn-concept-1:active { background: rgba(255, 255, 255, 0.1); }
+
+        /* Concept 2: The Luminous Solid */
+        .btn-concept-2 {
+            background: var(--text-main);
+            color: var(--bg-color); /* Periwinkle text inside white button */
+            border: none;
+            border-radius: 12px;
+            font-weight: 700;
+            box-shadow: 0 8px 30px rgba(255, 255, 255, 0.25); /* Subtle white glow */
+        }
+        .btn-concept-2:active { transform: scale(0.98); }
+
+        /* Concept 3: Frosted Glass Pill */
+        .btn-concept-3 {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            color: var(--text-main);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50px;
+        }
+        .btn-concept-3:active { background: rgba(255, 255, 255, 0.25); }
+
+        /* =========================================
+           FOOTER LINKS
+           ========================================= */
+        .footer-links {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            font-weight: 400;
+        }
+        
+        .footer-links a {
+            color: var(--text-muted);
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+        
+        .footer-links a:hover {
+            color: var(--text-main);
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- POC 1: Delicate Ghost Pill Button -->
+    <div class="poc-container">
+        <div class="poc-label">POC 1: Outline Pill Button</div>
+        <div class="screen">
+            <div class="glow-orb orb-1"></div>
+            <div class="glow-orb orb-2"></div>
+            <div class="glow-orb orb-3"></div>
+            
+            <div class="content">
+                <div class="header">
+                    <div class="the-text">THE</div>
+                    <h1 class="penthouse-text">PENT<br>HOUSE</h1>
+                    <div class="subtitle">Secure Resident Access</div>
+                </div>
+
+                <!-- Forms anchored to bottom, leaving middle empty -->
+                <form class="auth-form">
+                    <div class="input-group">
+                        <label>Username / Email</label>
+                        <input type="text" placeholder="Enter your credentials">
+                    </div>
+                    <div class="input-group">
+                        <label>Password</label>
+                        <input type="password" placeholder="Enter your password">
+                    </div>
+                    <button type="button" class="btn btn-concept-1">Log In</button>
+                </form>
+                
+                <div class="footer-links">
+                    <a href="#">Forgot Password?</a>
+                    <a href="#">Contact Concierge</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- POC 2: Luminous Solid Button -->
+    <div class="poc-container">
+        <div class="poc-label">POC 2: Luminous Solid Button</div>
+        <div class="screen">
+            <div class="glow-orb orb-1"></div>
+            <div class="glow-orb orb-2"></div>
+            <div class="glow-orb orb-3"></div>
+            
+            <div class="content">
+                <div class="header">
+                    <div class="the-text">THE</div>
+                    <h1 class="penthouse-text">PENT<br>HOUSE</h1>
+                    <div class="subtitle">Secure Resident Access</div>
+                </div>
+
+                <form class="auth-form">
+                    <div class="input-group">
+                        <label>Username / Email</label>
+                        <input type="text" placeholder="Enter your credentials">
+                    </div>
+                    <div class="input-group">
+                        <label>Password</label>
+                        <input type="password" placeholder="Enter your password">
+                    </div>
+                    <button type="button" class="btn btn-concept-2">Log In</button>
+                </form>
+                
+                <div class="footer-links">
+                    <a href="#">Forgot Password?</a>
+                    <a href="#">Contact Concierge</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- POC 3: Frosted Glass Button -->
+    <div class="poc-container">
+        <div class="poc-label">POC 3: Frosted Glass Button</div>
+        <div class="screen">
+            <div class="glow-orb orb-1"></div>
+            <div class="glow-orb orb-2"></div>
+            <div class="glow-orb orb-3"></div>
+            
+            <div class="content">
+                <div class="header">
+                    <div class="the-text">THE</div>
+                    <h1 class="penthouse-text">PENT<br>HOUSE</h1>
+                    <div class="subtitle">Secure Resident Access</div>
+                </div>
+
+                <form class="auth-form">
+                    <div class="input-group">
+                        <label>Username / Email</label>
+                        <input type="text" placeholder="Enter your credentials">
+                    </div>
+                    <div class="input-group">
+                        <label>Password</label>
+                        <input type="password" placeholder="Enter your password">
+                    </div>
+                    <button type="button" class="btn btn-concept-3">Log In</button>
+                </form>
+                
+                <div class="footer-links">
+                    <a href="#">Forgot Password?</a>
+                    <a href="#">Contact Concierge</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>

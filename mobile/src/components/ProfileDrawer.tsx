@@ -6,7 +6,7 @@ import { Typography } from '../designsystem/Typography';
 import { Colors } from '../designsystem/Colors';
 import { Spacing, Radius } from '../designsystem/Spacing';
 import Animated, { SlideInRight, SlideOutRight } from 'react-native-reanimated';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 interface User {
     id: number;
