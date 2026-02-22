@@ -5,8 +5,7 @@ import { AuthProvider, useAuth } from '../src/context/AuthContext';
 import { ServerProvider } from '../src/context/ServerContext';
 import { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { useFonts, Ubuntu_300Light, Ubuntu_400Regular, Ubuntu_500Medium, Ubuntu_700Bold } from '@expo-google-fonts/ubuntu';
-import { JetBrainsMono_400Regular, JetBrainsMono_500Medium } from '@expo-google-fonts/jetbrains-mono';
+import { useFonts, Ubuntu_300Light, Ubuntu_400Regular, Ubuntu_500Medium } from '@expo-google-fonts/ubuntu';
 import { useFonts as useCustomFonts } from 'expo-font';
 import '../global.css';
 import { BackgroundLayer } from '../src/components/BackgroundLayer';
@@ -84,9 +83,6 @@ export default function RootLayout() {
     Ubuntu_300Light,
     Ubuntu_400Regular,
     Ubuntu_500Medium,
-    Ubuntu_700Bold,
-    JetBrainsMono_400Regular,
-    JetBrainsMono_500Medium,
   });
 
   const [customFontsLoaded] = useCustomFonts({

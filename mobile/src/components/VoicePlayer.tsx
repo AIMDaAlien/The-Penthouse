@@ -1,7 +1,7 @@
 import { View, Text, Pressable } from 'react-native';
 import { useState, useEffect, useRef } from 'react';
 import { Audio, AVPlaybackStatus } from 'expo-av';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 
 interface VoicePlayerProps {

@@ -1,6 +1,6 @@
 import { View, Text, Modal, Pressable, TextInput, FlatList, Image, ActivityIndicator, Alert } from 'react-native';
 import { useState, useEffect, useCallback } from 'react';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { searchUsers } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 

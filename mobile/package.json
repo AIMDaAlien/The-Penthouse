@@ -9,7 +9,6 @@
     "web": "expo start --web"
   },
   "dependencies": {
-    "@expo-google-fonts/jetbrains-mono": "^0.4.1",
     "@expo-google-fonts/ubuntu": "^0.4.1",
     "@expo/vector-icons": "^15.0.3",
     "@react-navigation/drawer": "^7.5.0",

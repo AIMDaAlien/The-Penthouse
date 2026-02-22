@@ -2,7 +2,7 @@ import { View, Text, Pressable, Image, Alert, ActivityIndicator, ScrollView, Sty
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../src/context/AuthContext';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import * as ImagePicker from 'expo-image-picker';
 import { uploadAvatar, updateProfile } from '../src/services/api';
 import { GlassPanel } from '../src/components/glass/GlassPanel';

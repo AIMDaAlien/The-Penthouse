@@ -9,7 +9,7 @@
 
 import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, Text, TextInput, Pressable, Image } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
 import { Colors, Typography, Spacing, Radius } from '../../designsystem';

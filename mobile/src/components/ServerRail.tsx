@@ -16,7 +16,7 @@ import Animated, {
   withSpring,
   interpolate 
 } from 'react-native-reanimated';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Colors, Spacing, Sizes, SpringConfig, Glows } from '../designsystem';
 import { useServerContext } from '../context/ServerContext';
 import { getMediaUrl } from '../services/api';

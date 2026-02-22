@@ -1,6 +1,6 @@
 import { View, Text, Modal, Pressable, TextInput, Alert, ActivityIndicator } from 'react-native';
 import { useState } from 'react';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { getInvite, joinServer } from '../services/api';
 
 interface JoinServerModalProps {

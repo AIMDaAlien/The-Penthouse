@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Image, StyleSheet, Modal, Pressable, Dimensions, TextInput, KeyboardAvoidingView, Platform, Text } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { BlurView } from 'expo-blur';
 import { Colors } from '../../designsystem/Colors';
 import { Radius, Spacing } from '../../designsystem/Spacing';
