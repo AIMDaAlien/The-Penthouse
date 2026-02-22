@@ -9,6 +9,9 @@ concurrency:
   group: truenas-deploy-main
   cancel-in-progress: false
 
+permissions:
+  contents: write
+
 jobs:
   build-apk:
     runs-on: ubuntu-latest
@@ -46,6 +49,19 @@ jobs:
           echo "Release notes:"
           cat artifacts/release-notes.txt
 
+      - name: Resolve release version
+        id: version
+        run: |
+          set -euo pipefail
+          APP_VERSION="$(jq -r '.expo.version // empty' mobile/app.json)"
+          if [ -z "${APP_VERSION}" ]; then
+            echo "Could not resolve expo.version from mobile/app.json"
+            exit 1
+          fi
+          echo "app_version=${APP_VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "release_tag=v${APP_VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "release_name=The Penthouse v${APP_VERSION}" >> "${GITHUB_OUTPUT}"
+
       - name: Build Android APK with EAS
         run: |
           set -euo pipefail
@@ -57,6 +73,46 @@ jobs:
           mkdir -p artifacts
           curl -fL "${APK_URL}" -o artifacts/the-penthouse.apk
           ls -lh artifacts/the-penthouse.apk
+
+      - name: Compute APK checksum
+        id: checksum
+        run: |
+          set -euo pipefail
+          APK_SHA256="$(sha256sum artifacts/the-penthouse.apk | awk '{print $1}')"
+          echo "sha256=${APK_SHA256}" >> "${GITHUB_OUTPUT}"
+
+      - name: Build GitHub release body
+        env:
+          APP_VERSION: ${{ steps.version.outputs.app_version }}
+          APK_SHA256: ${{ steps.checksum.outputs.sha256 }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## release"
+            echo "- app version: ${APP_VERSION}"
+            echo "- commit: ${GITHUB_SHA}"
+            echo "- apk sha256: \`${APK_SHA256}\`"
+            echo
+            cat artifacts/release-notes.txt
+            echo
+            echo "## install / downgrade"
+            echo "- Latest APK: https://penthouse.blog/downloads/the-penthouse.apk"
+            echo "- Older APKs: use assets attached in previous GitHub Releases."
+          } > artifacts/github-release-notes.md
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.release_tag }}
+          name: ${{ steps.version.outputs.release_name }}
+          body_path: artifacts/github-release-notes.md
+          files: |
+            artifacts/the-penthouse.apk
+            artifacts/release-notes.txt
+          draft: false
+          prerelease: false
+          overwrite_files: true
+          make_latest: true
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
