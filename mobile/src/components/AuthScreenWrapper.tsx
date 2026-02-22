@@ -6,6 +6,7 @@
 import React, { useEffect } from 'react';
 import { View, StyleSheet, Platform, KeyboardAvoidingView, TouchableWithoutFeedback, Keyboard, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -17,6 +18,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 const PERIWINKLE = '#8382C9';
+
 const DARK_OVERLAY_COLOR = '#1a1a1a';
 const DARK_OVERLAY_OPACITY = 0.25;
 
@@ -100,6 +102,7 @@ export function AuthScreenWrapper({ children, centered = false }: AuthScreenWrap
         {/* Dark overlay */}
         <View style={styles.darkOverlay} pointerEvents="none" />
 
+
         <SafeAreaView style={{ flex: 1 }}>
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -129,7 +132,7 @@ export function AuthScreenWrapper({ children, centered = false }: AuthScreenWrap
 const styles = StyleSheet.create({
   outerContainer: {
     flex: 1,
-    backgroundColor: '#11111b', // Dark crust behind the phone container
+    backgroundColor: '#11111b',
     alignItems: 'center',
     justifyContent: 'center',
     ...StyleSheet.absoluteFillObject,
@@ -141,9 +144,11 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: Platform.OS === 'web' ? 420 : undefined,
     overflow: 'hidden',
-    // Rounded edges on web to look like a phone screen
-    ...(Platform.OS === 'web' ? { borderRadius: 0, maxHeight: '100%' } : {}),
-  },
+    // Soft periwinkle glow that bleeds into the dark background on web
+    ...(Platform.OS === 'web'
+      ? { boxShadow: `0 0 120px 60px ${PERIWINKLE}` }
+      : {}),
+  } as any,
   darkOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: DARK_OVERLAY_COLOR,
