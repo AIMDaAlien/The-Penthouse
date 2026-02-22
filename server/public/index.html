@@ -42,7 +42,6 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
             overflow-x: hidden;
         }
 
@@ -67,6 +66,214 @@
             66% { transform: translate(-1%, 1%) rotate(-0.5deg); }
         }
 
+        /* ═══════════════════════════════════════════
+           NAVBAR — mobile-first, glass, living motion
+           ═══════════════════════════════════════════ */
+        .navbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            padding: 0 1.25rem;
+            height: 56px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(17, 17, 27, 0.6);
+            backdrop-filter: blur(20px) saturate(130%);
+            -webkit-backdrop-filter: blur(20px) saturate(130%);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            /* Entrance animation */
+            opacity: 0;
+            transform: translateY(-100%);
+            animation: navSlideIn 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) 0.3s forwards;
+        }
+
+        @keyframes navSlideIn {
+            0% { opacity: 0; transform: translateY(-100%); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+
+        .nav-brand {
+            font-family: 'Erode', 'Georgia', serif;
+            font-weight: 600;
+            font-size: 16px;
+            color: #fff;
+            letter-spacing: 1px;
+            text-decoration: none;
+            white-space: nowrap;
+            /* Spring hover */
+            transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s;
+        }
+        .nav-brand:hover {
+            transform: scale(1.04);
+        }
+        .nav-brand span {
+            font-family: 'Ubuntu', sans-serif;
+            font-weight: 300;
+            font-size: 10px;
+            letter-spacing: 3px;
+            color: rgba(255,255,255,0.5);
+            display: block;
+            margin-top: -2px;
+        }
+
+        /* Desktop links */
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 0;
+            list-style: none;
+        }
+
+        .nav-links li {
+            /* Staggered entrance */
+            opacity: 0;
+            transform: translateY(-12px);
+            animation: navItemIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+        .nav-links li:nth-child(1) { animation-delay: 0.6s; }
+        .nav-links li:nth-child(2) { animation-delay: 0.72s; }
+        .nav-links li:nth-child(3) { animation-delay: 0.84s; }
+        .nav-links li:nth-child(4) { animation-delay: 0.96s; }
+
+        @keyframes navItemIn {
+            0% { opacity: 0; transform: translateY(-12px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+
+        .nav-links a {
+            font-family: 'Ubuntu', sans-serif;
+            font-weight: 400;
+            font-size: 0.8rem;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: var(--subtext0);
+            text-decoration: none;
+            padding: 8px 14px;
+            border-radius: 8px;
+            position: relative;
+            /* Spring-based hover */
+            transition: color 0.3s, background 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .nav-links a:hover {
+            color: #fff;
+            background: rgba(131, 130, 201, 0.12);
+            transform: translateY(-2px);
+        }
+        .nav-links a:active {
+            transform: translateY(0) scale(0.96);
+        }
+
+        /* Animated underline on hover */
+        .nav-links a::after {
+            content: '';
+            position: absolute;
+            bottom: 4px;
+            left: 50%;
+            width: 0;
+            height: 1.5px;
+            background: var(--periwinkle);
+            border-radius: 1px;
+            transition: width 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), left 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .nav-links a:hover::after {
+            width: 60%;
+            left: 20%;
+        }
+
+        /* Live status dot in navbar */
+        .nav-status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--green);
+            display: inline-block;
+            margin-right: 4px;
+            box-shadow: 0 0 6px rgba(166, 227, 161, 0.5);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        /* ─── Mobile hamburger ─── */
+        .nav-toggle {
+            display: none;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 8px;
+            position: relative;
+            width: 36px;
+            height: 36px;
+        }
+        .nav-toggle span {
+            display: block;
+            width: 20px;
+            height: 1.5px;
+            background: var(--subtext0);
+            border-radius: 2px;
+            position: absolute;
+            left: 8px;
+            transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s;
+        }
+        .nav-toggle span:nth-child(1) { top: 11px; }
+        .nav-toggle span:nth-child(2) { top: 17px; }
+        .nav-toggle span:nth-child(3) { top: 23px; }
+
+        /* Hamburger → X transform */
+        .nav-toggle.active span:nth-child(1) { transform: translateY(6px) rotate(45deg); }
+        .nav-toggle.active span:nth-child(2) { opacity: 0; transform: scaleX(0); }
+        .nav-toggle.active span:nth-child(3) { transform: translateY(-6px) rotate(-45deg); }
+
+        /* ─── Mobile dropdown ─── */
+        @media (max-width: 600px) {
+            .nav-links {
+                position: fixed;
+                top: 56px;
+                left: 0;
+                right: 0;
+                flex-direction: column;
+                background: rgba(17, 17, 27, 0.92);
+                backdrop-filter: blur(24px) saturate(130%);
+                -webkit-backdrop-filter: blur(24px) saturate(130%);
+                border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+                padding: 8px 0;
+                gap: 0;
+                /* Closed state */
+                opacity: 0;
+                transform: translateY(-20px);
+                pointer-events: none;
+                transition: opacity 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+                            transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+            }
+            .nav-links.open {
+                opacity: 1;
+                transform: translateY(0);
+                pointer-events: auto;
+            }
+            .nav-links li {
+                /* Override stagger for mobile — they animate with the dropdown instead */
+                opacity: 1;
+                transform: none;
+                animation: none;
+            }
+            .nav-links a {
+                display: block;
+                padding: 14px 24px;
+                font-size: 0.85rem;
+                border-radius: 0;
+            }
+            .nav-links a:hover {
+                background: rgba(131, 130, 201, 0.08);
+                transform: none;
+            }
+            .nav-links a::after { display: none; }
+            .nav-toggle { display: block; }
+        }
+
+        /* ═══════════════════════════════════════════
+           MAIN CONTENT
+           ═══════════════════════════════════════════ */
         .container {
             position: relative;
             z-index: 1;
@@ -74,6 +281,13 @@
             width: 100%;
             padding: 2rem 1.5rem;
             text-align: center;
+            margin-top: 72px; /* Room for fixed navbar */
+            /* Center vertically in remaining space */
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
         }
 
         /* Glass card */
@@ -85,6 +299,7 @@
             border-radius: 28px;
             padding: 2.5rem 2rem;
             box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+            width: 100%;
         }
 
         /* ─── Auth-style header ─── */
@@ -176,7 +391,7 @@
             border-radius: 18px;
             cursor: pointer;
             text-decoration: none;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s;
             box-shadow: 0 4px 20px rgba(131, 130, 201, 0.3),
                         0 0 40px rgba(131, 130, 201, 0.1);
             width: 100%;
@@ -185,13 +400,13 @@
         }
 
         .download-btn:hover {
-            transform: translateY(-2px);
+            transform: translateY(-3px) scale(1.01);
             box-shadow: 0 6px 28px rgba(131, 130, 201, 0.4),
                         0 0 60px rgba(131, 130, 201, 0.15);
         }
 
         .download-btn:active {
-            transform: translateY(0);
+            transform: translateY(0) scale(0.98);
         }
 
         .download-btn svg {
@@ -250,6 +465,7 @@
         /* Version info */
         .version {
             margin-top: 2rem;
+            margin-bottom: 1rem;
             font-size: 0.7rem;
             color: var(--overlay0);
             letter-spacing: 0.08em;
@@ -259,6 +475,29 @@
     </style>
 </head>
 <body>
+
+    <!-- ═══ Fixed Navbar ═══ -->
+    <nav class="navbar" role="navigation" aria-label="Main navigation">
+        <a href="/" class="nav-brand" aria-label="The Penthouse Home">
+            PENTHOUSE
+            <span>THE</span>
+        </a>
+
+        <button class="nav-toggle" id="navToggle" aria-label="Toggle navigation" aria-expanded="false">
+            <span></span>
+            <span></span>
+            <span></span>
+        </button>
+
+        <ul class="nav-links" id="navLinks">
+            <li><a href="https://github.com/AIMDaAlien/The-Penthouse/releases" target="_blank" rel="noopener">Changelog</a></li>
+            <li><a href="https://github.com/AIMDaAlien/The-Penthouse" target="_blank" rel="noopener">Source</a></li>
+            <li><a href="/api/health"><span class="nav-status-dot" id="navStatusDot"></span>Status</a></li>
+            <li><a href="https://github.com/AIMDaAlien/The-Penthouse/blob/main/DEPLOYMENT.md" target="_blank" rel="noopener">Docs</a></li>
+        </ul>
+    </nav>
+
+    <!-- ═══ Main Content ═══ -->
     <div class="container">
         <div class="card">
             <!-- Auth-style header -->
@@ -343,6 +582,24 @@
     </div>
 
     <script>
+        // ─── Mobile nav toggle ───
+        const navToggle = document.getElementById('navToggle');
+        const navLinks = document.getElementById('navLinks');
+        navToggle.addEventListener('click', () => {
+            const isOpen = navLinks.classList.toggle('open');
+            navToggle.classList.toggle('active');
+            navToggle.setAttribute('aria-expanded', isOpen);
+        });
+        // Close nav on link click (mobile)
+        navLinks.querySelectorAll('a').forEach(a => {
+            a.addEventListener('click', () => {
+                navLinks.classList.remove('open');
+                navToggle.classList.remove('active');
+                navToggle.setAttribute('aria-expanded', 'false');
+            });
+        });
+
+        // ─── APK download check ───
         const downloadBtn = document.getElementById('downloadBtn');
         const noApk = document.getElementById('noApk');
         const versionLabel = document.getElementById('versionLabel');
@@ -365,6 +622,20 @@
             .catch(() => {
                 downloadBtn.classList.add('is-disabled');
                 downloadBtn.setAttribute('aria-disabled', 'true');
+            });
+
+        // ─── Navbar status dot: live health check ───
+        const navStatusDot = document.getElementById('navStatusDot');
+        fetch('/api/health')
+            .then(res => {
+                if (res.ok) {
+                    navStatusDot.style.background = 'var(--green)';
+                    navStatusDot.style.boxShadow = '0 0 6px rgba(166, 227, 161, 0.5)';
+                } else { throw new Error(); }
+            })
+            .catch(() => {
+                navStatusDot.style.background = 'var(--red)';
+                navStatusDot.style.boxShadow = '0 0 6px rgba(243, 139, 168, 0.5)';
             });
     </script>
 </body>
