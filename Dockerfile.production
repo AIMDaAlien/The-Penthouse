@@ -1,27 +1,40 @@
 # Production Dockerfile
-# Server-only build (Mobile app is distributed separately)
+# Server + Web client build (Mobile APK is distributed separately)
 
-FROM node:20-alpine AS builder
+# ─── Stage 1: Server dependencies (production only) ───
+FROM node:20-alpine AS server-deps
 WORKDIR /build
 RUN apk add --no-cache python3 make g++ sqlite-dev
 COPY server/package*.json ./
 RUN npm ci --only=production
 
+# ─── Stage 2: Expo web export ───
+FROM node:20-alpine AS web-builder
+WORKDIR /web
+COPY mobile/package*.json ./
+RUN npm ci
+COPY mobile/ ./
+RUN npx expo export --platform web --output-dir /web/dist
+
+# ─── Stage 3: Final image ───
 FROM node:20-alpine
 WORKDIR /app
 
 # Install wget for healthcheck
 RUN apk add --no-cache wget sqlite-libs
 
-# Copy dependencies
-COPY --from=builder /build/node_modules ./node_modules
+# Copy server dependencies
+COPY --from=server-deps /build/node_modules ./node_modules
 COPY server/package.json ./
 
-# Copy source
+# Copy server source
 COPY server/src ./src
 
 # Copy landing page
 COPY server/public ./public
+
+# Copy web client build into /app/public/app
+COPY --from=web-builder /web/dist ./public/app
 
 # Create data directories
 RUN mkdir -p data/uploads data/downloads

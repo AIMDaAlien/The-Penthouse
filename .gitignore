@@ -37,3 +37,6 @@ coverage/
 
 # Cloudflare DDNS credentials
 .cloudflare-ddns.env
+
+# Expo web export (built by Docker at deploy time)
+server/public/app/
