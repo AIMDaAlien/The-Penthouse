@@ -197,5 +197,15 @@ jobs:
             docker compose logs --tail=200 penthouse-app || true
             exit 1
           }
+          docker compose exec -T penthouse-app wget -q --spider http://localhost:3000/app/ || {
+            echo "Web app route check failed (/app). Recent logs:"
+            docker compose logs --tail=200 penthouse-app || true
+            exit 1
+          }
+          docker compose exec -T penthouse-app wget -q --spider http://localhost:3000/app/metadata.json || {
+            echo "Web app artifact missing (/app/metadata.json). Recent logs:"
+            docker compose logs --tail=200 penthouse-app || true
+            exit 1
+          }
           docker compose exec -T penthouse-app wget -q --spider http://localhost:3000/downloads/the-penthouse.apk
           echo deploy_ok
