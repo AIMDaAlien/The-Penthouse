@@ -179,6 +179,13 @@ app.use(express.static(publicPath));
 // Serve APK downloads
 app.use('/downloads', express.static(downloadsPath));
 
+// Serve Expo web app at /app (SPA — all sub-routes serve app/index.html)
+const webAppPath = path.join(publicPath, 'app');
+app.use('/app', express.static(webAppPath));
+app.get('/app/*', (req, res) => {
+  res.sendFile(path.join(webAppPath, 'index.html'));
+});
+
 // Landing page for root URL
 app.get('/', (req, res) => {
   res.sendFile(path.join(publicPath, 'index.html'));

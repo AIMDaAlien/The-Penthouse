@@ -1,40 +1,27 @@
 /**
  * AuthScreenWrapper — Shared shell for all auth screens (login, register, forgot-password).
- * Provides the POC 3 aesthetic: periwinkle background, animated white glow orbs,
- * dark grey overlay, mobile-width container on web, and overflow clipping.
+ * Provides the periwinkle background with layered radial gradients at varying opacities
+ * that blend smoothly into the background — no moving parts, just organic depth.
  *
- * Animation system (two-phase):
- *   Phase 1 — Cinematic entrance: orbs fade in after 1.5s delay
- *   Phase 2 — Ambient motion: orbs breathe (spring-based scale) + web parallax tilt
+ * Animation: web parallax tilt only (mouse-driven, spring-based). No orbs, no drift.
  *
- * Performance notes (Pixel 4a baseline):
+ * Performance notes:
  *   - Only transform + opacity animated (GPU-composited, no layout recalc)
- *   - filter: blur() is static only, never animated
+ *   - Gradients are static CSS / RN Views — zero per-frame cost
  *   - Parallax tilt is web-only (no gyroscope dep, saves battery on native)
- *   - Entrance springs complete and stop — no ongoing CPU cost
  */
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { View, StyleSheet, Platform, KeyboardAvoidingView, TouchableWithoutFeedback, Keyboard, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
-  withDelay,
-  withRepeat,
-  withSequence,
 } from 'react-native-reanimated';
 
 const PERIWINKLE = '#8382C9';
-const DARK_OVERLAY_COLOR = '#1a1a1a';
-const DARK_OVERLAY_OPACITY = 0.25;
-
-// Project-mandated spring config (dampingRatio ≈ 0.8, stiffness ≈ 300)
-const EXPRESSIVE_SPRING = { damping: 15, stiffness: 120, mass: 1 };
-
-// Slower, gentler spring for breathing orbs
-const BREATHING_SPRING = { damping: 14, stiffness: 8, mass: 1.5 };
 
 const DismissKeyboardView = ({ children }: { children: React.ReactNode }) => {
   if (Platform.OS === 'web') return <View style={{ flex: 1 }}>{children}</View>;
@@ -48,25 +35,7 @@ interface AuthScreenWrapperProps {
 }
 
 export function AuthScreenWrapper({ children, centered = false }: AuthScreenWrapperProps) {
-  // ─── Orb entrance (Phase 1): fade in after cinematic reveal ───
-  const orb1Opacity = useSharedValue(0);
-  const orb2Opacity = useSharedValue(0);
-  const orb3Opacity = useSharedValue(0);
-
-  // ─── Orb breathing (Phase 2): spring-based scale pulse ───
-  const orb1Scale = useSharedValue(1);
-  const orb2Scale = useSharedValue(1);
-  const orb3Scale = useSharedValue(1);
-
-  // ─── Orb drift (Phase 2): slow position oscillation ───
-  const orb1X = useSharedValue(0);
-  const orb1Y = useSharedValue(0);
-  const orb2X = useSharedValue(0);
-  const orb2Y = useSharedValue(0);
-  const orb3X = useSharedValue(0);
-  const orb3Y = useSharedValue(0);
-
-  // ─── Web parallax tilt ───
+  // ─── Web parallax tilt (spring-based) ───
   const tiltX = useSharedValue(0);
   const tiltY = useSharedValue(0);
   const contentShiftX = useSharedValue(0);
@@ -74,87 +43,16 @@ export function AuthScreenWrapper({ children, centered = false }: AuthScreenWrap
   const phoneRef = useRef<View>(null);
 
   useEffect(() => {
-    // Phase 1: Orbs fade in after cinematic entrance completes (~1.5s)
-    const ORB_ENTRANCE_DELAY = 1500;
-    orb1Opacity.value = withDelay(ORB_ENTRANCE_DELAY, withSpring(0.35, EXPRESSIVE_SPRING));
-    orb2Opacity.value = withDelay(ORB_ENTRANCE_DELAY + 300, withSpring(0.25, EXPRESSIVE_SPRING));
-    orb3Opacity.value = withDelay(ORB_ENTRANCE_DELAY + 600, withSpring(0.2, EXPRESSIVE_SPRING));
-
-    // Phase 2: Breathing — spring-based scale oscillation (starts after orbs appear)
-    const BREATHING_DELAY = ORB_ENTRANCE_DELAY + 1000;
-    orb1Scale.value = withDelay(BREATHING_DELAY,
-      withRepeat(withSequence(
-        withSpring(1.15, BREATHING_SPRING),
-        withSpring(1.0, BREATHING_SPRING),
-      ), -1, false)
-    );
-    orb2Scale.value = withDelay(BREATHING_DELAY + 500,
-      withRepeat(withSequence(
-        withSpring(1.2, BREATHING_SPRING),
-        withSpring(0.9, BREATHING_SPRING),
-      ), -1, false)
-    );
-    orb3Scale.value = withDelay(BREATHING_DELAY + 1000,
-      withRepeat(withSequence(
-        withSpring(1.25, BREATHING_SPRING),
-        withSpring(0.95, BREATHING_SPRING),
-      ), -1, false)
-    );
-
-    // Phase 2: Slow drift — spring-based position oscillation
-    orb1X.value = withDelay(BREATHING_DELAY,
-      withRepeat(withSequence(
-        withSpring(30, BREATHING_SPRING),
-        withSpring(-15, BREATHING_SPRING),
-      ), -1, false)
-    );
-    orb1Y.value = withDelay(BREATHING_DELAY,
-      withRepeat(withSequence(
-        withSpring(40, BREATHING_SPRING),
-        withSpring(-20, BREATHING_SPRING),
-      ), -1, false)
-    );
-    orb2X.value = withDelay(BREATHING_DELAY + 500,
-      withRepeat(withSequence(
-        withSpring(-40, BREATHING_SPRING),
-        withSpring(20, BREATHING_SPRING),
-      ), -1, false)
-    );
-    orb2Y.value = withDelay(BREATHING_DELAY + 500,
-      withRepeat(withSequence(
-        withSpring(-30, BREATHING_SPRING),
-        withSpring(15, BREATHING_SPRING),
-      ), -1, false)
-    );
-    orb3X.value = withDelay(BREATHING_DELAY + 1000,
-      withRepeat(withSequence(
-        withSpring(25, BREATHING_SPRING),
-        withSpring(-25, BREATHING_SPRING),
-      ), -1, false)
-    );
-    orb3Y.value = withDelay(BREATHING_DELAY + 1000,
-      withRepeat(withSequence(
-        withSpring(-20, BREATHING_SPRING),
-        withSpring(20, BREATHING_SPRING),
-      ), -1, false)
-    );
-  }, []);
-
-  // ─── Web parallax: mousemove handler ───
-  useEffect(() => {
     if (Platform.OS !== 'web') return;
 
     const handleMouseMove = (e: MouseEvent) => {
       const cx = window.innerWidth / 2;
       const cy = window.innerHeight / 2;
-      const dx = (e.clientX - cx) / cx;  // -1 to 1
-      const dy = (e.clientY - cy) / cy;  // -1 to 1
+      const dx = (e.clientX - cx) / cx;
+      const dy = (e.clientY - cy) / cy;
 
-      // Subtle tilt (max ±4deg) — spring-based for smooth feel
       tiltX.value = withSpring(-dy * 4, { damping: 20, stiffness: 150 });
       tiltY.value = withSpring(dx * 4, { damping: 20, stiffness: 150 });
-
-      // Content counter-shift (max ±8px)
       contentShiftX.value = withSpring(-dx * 8, { damping: 20, stiffness: 150 });
       contentShiftY.value = withSpring(-dy * 8, { damping: 20, stiffness: 150 });
     };
@@ -162,32 +60,6 @@ export function AuthScreenWrapper({ children, centered = false }: AuthScreenWrap
     window.addEventListener('mousemove', handleMouseMove, { passive: true });
     return () => window.removeEventListener('mousemove', handleMouseMove);
   }, []);
-
-  // ─── Animated styles ───
-  const orb1Style = useAnimatedStyle(() => ({
-    opacity: orb1Opacity.value,
-    transform: [
-      { translateX: orb1X.value },
-      { translateY: orb1Y.value },
-      { scale: orb1Scale.value },
-    ],
-  }));
-  const orb2Style = useAnimatedStyle(() => ({
-    opacity: orb2Opacity.value,
-    transform: [
-      { translateX: orb2X.value },
-      { translateY: orb2Y.value },
-      { scale: orb2Scale.value },
-    ],
-  }));
-  const orb3Style = useAnimatedStyle(() => ({
-    opacity: orb3Opacity.value,
-    transform: [
-      { translateX: orb3X.value },
-      { translateY: orb3Y.value },
-      { scale: orb3Scale.value },
-    ],
-  }));
 
   const phoneParallaxStyle = useAnimatedStyle(() => {
     if (Platform.OS !== 'web') return {};
@@ -212,17 +84,35 @@ export function AuthScreenWrapper({ children, centered = false }: AuthScreenWrap
 
   return (
     <View style={styles.outerContainer}>
-      {/* Mobile-width periwinkle container on web, full screen on native */}
       <Animated.View ref={phoneRef} style={[styles.phoneContainer, phoneParallaxStyle]}>
-        {/* Orbs — start invisible, fade in after cinematic entrance */}
+        {/* ═══ Layered gradient backdrop ═══ */}
         <View style={[StyleSheet.absoluteFill, { overflow: 'hidden' }]} pointerEvents="none">
-          <Animated.View style={[styles.orb, styles.orb1, orb1Style]} />
-          <Animated.View style={[styles.orb, styles.orb2, orb2Style]} />
-          <Animated.View style={[styles.orb, styles.orb3, orb3Style]} />
+          {/* Base: subtle light wash from top-left */}
+          <LinearGradient
+            colors={['rgba(255,255,255,0.12)', 'transparent']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0.8, y: 0.6 }}
+            style={StyleSheet.absoluteFill}
+          />
+          {/* Mid: soft warm highlight from bottom-right */}
+          <LinearGradient
+            colors={['transparent', 'rgba(180, 170, 220, 0.10)']}
+            start={{ x: 0.2, y: 0.3 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+          {/* Depth: dark vignette from edges to center — reduces brightness evenly */}
+          <LinearGradient
+            colors={['rgba(26, 26, 26, 0.30)', 'transparent', 'rgba(26, 26, 26, 0.30)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+          {/* Accent: faint diagonal streak for organic feel */}
+          <View style={styles.gradientBlob1} />
+          <View style={styles.gradientBlob2} />
+          <View style={styles.gradientBlob3} />
         </View>
-
-        {/* Dark overlay */}
-        <View style={styles.darkOverlay} pointerEvents="none" />
 
         <SafeAreaView style={{ flex: 1 }}>
           <KeyboardAvoidingView
@@ -262,16 +152,10 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: Platform.OS === 'web' ? 420 : undefined,
     overflow: 'hidden',
-    // Soft periwinkle glow — wide and shallow to blend into the background
     ...(Platform.OS === 'web'
       ? { boxShadow: '0 0 200px 80px rgba(131, 130, 201, 0.5)' }
       : {}),
   } as any,
-  darkOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: DARK_OVERLAY_COLOR,
-    opacity: DARK_OVERLAY_OPACITY,
-  },
   scrollView: {
     flex: 1,
     paddingHorizontal: 35,
@@ -286,32 +170,42 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
 
-  // Orbs — start at opacity 0, animated in
-  orb: {
+  // ─── Static gradient blobs — radial spots at varying opacities ───
+  gradientBlob1: {
     position: 'absolute',
-    backgroundColor: '#ffffff',
-    borderRadius: 999,
-  },
-  orb1: {
-    width: 200, height: 200,
-    top: '10%', left: -50,
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    top: '5%',
+    left: '-15%',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
     ...(Platform.OS === 'web'
-      ? { filter: 'blur(70px)' }
-      : { shadowColor: '#fff', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.35, shadowRadius: 70 }),
+      ? { filter: 'blur(60px)' }
+      : { shadowColor: '#fff', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.06, shadowRadius: 60 }),
   } as any,
-  orb2: {
-    width: 250, height: 250,
-    bottom: '20%', right: -80,
+  gradientBlob2: {
+    position: 'absolute',
+    width: 350,
+    height: 350,
+    borderRadius: 175,
+    bottom: '10%',
+    right: '-20%',
+    backgroundColor: 'rgba(200, 190, 240, 0.05)',
     ...(Platform.OS === 'web'
-      ? { filter: 'blur(70px)' }
-      : { shadowColor: '#fff', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.25, shadowRadius: 70 }),
+      ? { filter: 'blur(80px)' }
+      : { shadowColor: '#c8bef0', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.05, shadowRadius: 80 }),
   } as any,
-  orb3: {
-    width: 150, height: 150,
-    top: '45%', left: '30%',
+  gradientBlob3: {
+    position: 'absolute',
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    top: '40%',
+    left: '25%',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
     ...(Platform.OS === 'web'
-      ? { filter: 'blur(70px)' }
-      : { shadowColor: '#fff', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.2, shadowRadius: 50 }),
+      ? { filter: 'blur(50px)' }
+      : { shadowColor: '#fff', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.04, shadowRadius: 50 }),
   } as any,
 });
 
