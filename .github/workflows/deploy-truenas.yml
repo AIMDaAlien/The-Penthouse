@@ -4,6 +4,12 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      force_apk_build:
+        description: Force a new Android APK build (uses EAS build quota)
+        type: boolean
+        required: false
+        default: false
 
 concurrency:
   group: truenas-deploy-main
@@ -16,6 +22,8 @@ jobs:
   build-apk:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
+    outputs:
+      apk_built: ${{ steps.build_apk.outputs.apk_built || 'false' }}
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
     steps:
@@ -24,7 +32,30 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Decide whether APK build is required
+        id: build_gate
+        run: |
+          set -euo pipefail
+          SHOULD_BUILD="false"
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.force_apk_build }}" = "true" ]; then
+            SHOULD_BUILD="true"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            BEFORE_SHA="${{ github.event.before }}"
+            if [ -z "${BEFORE_SHA}" ] || [ "${BEFORE_SHA}" = "0000000000000000000000000000000000000000" ]; then
+              SHOULD_BUILD="true"
+            elif [ -n "${BEFORE_SHA}" ] && [ "${BEFORE_SHA}" != "0000000000000000000000000000000000000000" ]; then
+              if git diff --name-only "${BEFORE_SHA}" "${{ github.sha }}" | grep -q '^mobile/'; then
+                SHOULD_BUILD="true"
+              fi
+            fi
+          fi
+
+          echo "should_build=${SHOULD_BUILD}" >> "${GITHUB_OUTPUT}"
+          echo "APK build required: ${SHOULD_BUILD}"
+
       - name: Validate Expo token
+        if: steps.build_gate.outputs.should_build == 'true'
         run: |
           if [ -z "${EXPO_TOKEN}" ]; then
             echo "EXPO_TOKEN secret is required to build Android APK via EAS."
@@ -32,6 +63,7 @@ jobs:
           fi
 
       - name: Set up Node.js
+        if: steps.build_gate.outputs.should_build == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -39,9 +71,11 @@ jobs:
           cache-dependency-path: mobile/package-lock.json
 
       - name: Install mobile dependencies
+        if: steps.build_gate.outputs.should_build == 'true'
         run: npm ci --prefix mobile
 
       - name: Generate release notes
+        if: steps.build_gate.outputs.should_build == 'true'
         run: |
           set -euo pipefail
           mkdir -p artifacts
@@ -50,6 +84,7 @@ jobs:
           cat artifacts/release-notes.txt
 
       - name: Validate mobile version semantics
+        if: steps.build_gate.outputs.should_build == 'true'
         run: |
           set -euo pipefail
           APP_VERSION="$(jq -r '.expo.version // empty' mobile/app.json)"
@@ -69,6 +104,7 @@ jobs:
 
       - name: Resolve release version
         id: version
+        if: steps.build_gate.outputs.should_build == 'true'
         run: |
           set -euo pipefail
           APP_VERSION="$(jq -r '.expo.version // empty' mobile/app.json)"
@@ -81,25 +117,50 @@ jobs:
           echo "release_name=The Penthouse v${APP_VERSION}" >> "${GITHUB_OUTPUT}"
 
       - name: Build Android APK with EAS
+        id: build_apk
+        if: steps.build_gate.outputs.should_build == 'true'
         run: |
           set -euo pipefail
           cd mobile
           BUILD_JSON_PATH="${RUNNER_TEMP}/eas-build.json"
-          npx eas-cli@latest build --platform android --profile preview --non-interactive --wait --json > "${BUILD_JSON_PATH}"
+          set +e
+          npx eas-cli@latest build --platform android --profile preview --non-interactive --wait --json > "${BUILD_JSON_PATH}" 2>&1
+          BUILD_EXIT=$?
+          set -e
+
+          if [ "${BUILD_EXIT}" -ne 0 ]; then
+            if grep -qi "has used its Android builds from the Free plan this month" "${BUILD_JSON_PATH}"; then
+              echo "EAS Android build quota exhausted. Skipping APK rebuild for this run."
+              echo "apk_built=false" >> "${GITHUB_OUTPUT}"
+              exit 0
+            fi
+
+            echo "EAS build failed unexpectedly:"
+            cat "${BUILD_JSON_PATH}"
+            exit "${BUILD_EXIT}"
+          fi
+
           APK_URL="$(node -e 'const fs=require("fs");const raw=fs.readFileSync(process.argv[1],"utf8").trim();let parsed;try{parsed=JSON.parse(raw);}catch(_){const line=raw.split("\\n").reverse().find(l=>l.trim().startsWith("{")||l.trim().startsWith("["));if(!line){console.error("Unable to parse EAS build output as JSON.");process.exit(1);}parsed=JSON.parse(line);}const builds=Array.isArray(parsed)?parsed:[parsed];const build=builds.find(item=>item&&item.artifacts&&(item.artifacts.buildUrl||item.artifacts.applicationArchiveUrl));const apkUrl=build&&build.artifacts&&(build.artifacts.buildUrl||build.artifacts.applicationArchiveUrl);if(!apkUrl){console.error("APK URL missing in EAS build output.");process.exit(1);}process.stdout.write(apkUrl);' "${BUILD_JSON_PATH}")"
           cd "${GITHUB_WORKSPACE}"
           mkdir -p artifacts
           curl -fL "${APK_URL}" -o artifacts/the-penthouse.apk
           ls -lh artifacts/the-penthouse.apk
+          echo "apk_built=true" >> "${GITHUB_OUTPUT}"
+
+      - name: Mark APK as not built (no mobile changes)
+        if: steps.build_gate.outputs.should_build != 'true'
+        run: echo "APK build skipped because no mobile changes were detected."
 
       - name: Compute APK checksum
         id: checksum
+        if: steps.build_apk.outputs.apk_built == 'true'
         run: |
           set -euo pipefail
           APK_SHA256="$(sha256sum artifacts/the-penthouse.apk | awk '{print $1}')"
           echo "sha256=${APK_SHA256}" >> "${GITHUB_OUTPUT}"
 
       - name: Build GitHub release body
+        if: steps.build_apk.outputs.apk_built == 'true'
         env:
           APP_VERSION: ${{ steps.version.outputs.app_version }}
           APK_SHA256: ${{ steps.checksum.outputs.sha256 }}
@@ -119,6 +180,7 @@ jobs:
           } > artifacts/github-release-notes.md
 
       - name: Publish GitHub release
+        if: steps.build_apk.outputs.apk_built == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.release_tag }}
@@ -133,6 +195,7 @@ jobs:
           make_latest: true
 
       - name: Upload APK artifact
+        if: steps.build_apk.outputs.apk_built == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: penthouse-android-apk
@@ -148,6 +211,7 @@ jobs:
     if: github.ref == 'refs/heads/main'
     steps:
       - name: Download APK artifact
+        if: needs.build-apk.outputs.apk_built == 'true'
         uses: actions/download-artifact@v4
         with:
           name: penthouse-android-apk
@@ -161,20 +225,20 @@ jobs:
           export PENTHOUSE_DATA_PATH="${DATA_PATH}"
           APK_PATH="${GITHUB_WORKSPACE}/apk-release/the-penthouse.apk"
           NOTES_PATH="${GITHUB_WORKSPACE}/apk-release/release-notes.txt"
-          if [ ! -s "${APK_PATH}" ]; then
-            echo "APK artifact missing: ${APK_PATH}"
-            exit 1
-          fi
           mkdir -p "${DATA_PATH}"
           cd "$APP_PATH"
           git fetch --all --prune
           git checkout main
           git reset --hard origin/main
           ./scripts/prepare_data_dirs.sh
-          if [ -s "${NOTES_PATH}" ]; then
-            MOBILE_UPDATE_NOTES_FILE="${NOTES_PATH}" ./scripts/publish_apk.sh "${APK_PATH}"
+          if [ -s "${APK_PATH}" ]; then
+            if [ -s "${NOTES_PATH}" ]; then
+              MOBILE_UPDATE_NOTES_FILE="${NOTES_PATH}" ./scripts/publish_apk.sh "${APK_PATH}"
+            else
+              ./scripts/publish_apk.sh "${APK_PATH}"
+            fi
           else
-            ./scripts/publish_apk.sh "${APK_PATH}"
+            echo "No new APK artifact for this run; keeping current published APK."
           fi
           # Build while the old container is still running, then recreate only the app.
           docker compose build penthouse-app
