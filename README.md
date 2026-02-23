@@ -20,7 +20,10 @@ It ships as an Android APK with a web landing page at `https://penthouse.blog`, 
 - `mobile/`: Expo + React Native app (Android APK + OTA support)
 - `server/`: Express + Socket.IO API, auth, media, friends, server/channel routes
 - `server/public/`: landing page served at `https://penthouse.blog`
-- `data/downloads/`: published APK + update manifest used by `/api/app/update`
+- `${PENTHOUSE_DATA_PATH:-./data}/downloads`: published APK + update manifest used by `/api/app/update`
+
+Persistence recommendation:
+- Set `PENTHOUSE_DATA_PATH` in root `.env` to an absolute host path (example: `/mnt/Storage_Pool/penthouse/data`) so user data persists across app updates/redeploys.
 
 ## Release and update pipeline
 
@@ -38,8 +41,8 @@ On every push to `main` (or manual dispatch):
    - APK asset
    - release notes
 5. Deploy to TrueNAS host:
-   - publish APK to `data/downloads/the-penthouse.apk`
-   - regenerate `data/downloads/app-update.json`
+   - publish APK to `${PENTHOUSE_DATA_PATH}/downloads/the-penthouse.apk`
+   - regenerate `${PENTHOUSE_DATA_PATH}/downloads/app-update.json`
    - rebuild/restart app container
    - health-check `/api/health` and APK URL
 

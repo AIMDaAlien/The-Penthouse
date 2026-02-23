@@ -14,13 +14,13 @@ set -euo pipefail
 # Optional env vars:
 #   SERVER_USER=root
 #   SERVER_PORT=22
-#   DEST_PATH=/mnt/Storage_Pool/penthouse/app/data/downloads/the-penthouse.apk
+#   DEST_PATH=/mnt/Storage_Pool/penthouse/data/downloads/the-penthouse.apk
 #   SSHPASS=...   (discouraged; only used if sshpass is installed)
 
 SERVER_HOST="${SERVER_HOST:-}"
 SERVER_USER="${SERVER_USER:-root}"
 SERVER_PORT="${SERVER_PORT:-22}"
-DEST_PATH="${DEST_PATH:-/mnt/Storage_Pool/penthouse/app/data/downloads/the-penthouse.apk}"
+DEST_PATH="${DEST_PATH:-/mnt/Storage_Pool/penthouse/data/downloads/the-penthouse.apk}"
 
 if [ -z "${SERVER_HOST}" ]; then
     echo "Error: SERVER_HOST is required."

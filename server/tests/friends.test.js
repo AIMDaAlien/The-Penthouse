@@ -17,15 +17,15 @@ describe('Friends Endpoints', () => {
     dbModule.db.prepare('DELETE FROM friendships').run();
 
     // Create 3 users
-    const res1 = await request(app).post('/api/auth/register').send({ username: 'user1', password: 'password123' });
+    const res1 = await request(app).post('/api/auth/register').send({ username: 'user1', password: 'Passw0rd!' });
     user1 = res1.body.user;
     token1 = res1.body.accessToken;
 
-    const res2 = await request(app).post('/api/auth/register').send({ username: 'user2', password: 'password123' });
+    const res2 = await request(app).post('/api/auth/register').send({ username: 'user2', password: 'Passw0rd!' });
     user2 = res2.body.user;
     token2 = res2.body.accessToken;
 
-    const res3 = await request(app).post('/api/auth/register').send({ username: 'user3', password: 'password123' });
+    const res3 = await request(app).post('/api/auth/register').send({ username: 'user3', password: 'Passw0rd!' });
     user3 = res3.body.user;
     token3 = res3.body.accessToken;
   });

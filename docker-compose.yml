@@ -11,7 +11,7 @@ services:
     expose:
       - "3000"
     volumes:
-      - ./data:/app/data
+      - ${PENTHOUSE_DATA_PATH:-./data}:/app/data
     security_opt:
       - no-new-privileges:true
     cap_drop:

@@ -4,6 +4,8 @@ import { Link } from 'expo-router';
 import { AuthScreenWrapper } from '../src/components/AuthScreenWrapper';
 import { BlurView } from 'expo-blur';
 import { forgotPassword } from '../src/services/api';
+import { getApiErrorMessage } from '../src/utils/apiErrors';
+import { isValidEmail } from '../src/utils/authRules';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -72,13 +74,16 @@ export default function ForgotPassword() {
   const f3Style = useAnimatedStyle(() => ({ opacity: form3Opacity.value, transform: [{ translateY: form3TranslateY.value }] }));
 
   const handleSubmit = async () => {
-    if (!email) { setError('Please enter your email or username'); return; }
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail) { setError('Please enter your email address'); return; }
+    if (!isValidEmail(normalizedEmail)) { setError('Please enter a valid email address'); return; }
     try {
       setError(''); setIsLoading(true);
-      await forgotPassword(email);
+      await forgotPassword(normalizedEmail);
       setSuccess(true);
     } catch (err: any) {
       // Always show success for security (don't reveal if account exists)
+      console.warn('Forgot password request failed:', getApiErrorMessage(err, 'Unknown error'));
       setSuccess(true);
     } finally { setIsLoading(false); }
   };
@@ -130,7 +135,7 @@ export default function ForgotPassword() {
 
         <Animated.View style={f1Style}>
           <View style={s.inputGroup}>
-            <Text style={s.label}>Email / Username</Text>
+            <Text style={s.label}>Email</Text>
             <TextInput style={s.input} placeholder="you@example.com" placeholderTextColor={COLORS.placeholderText}
               value={email} onChangeText={setEmail} autoCapitalize="none" autoCorrect={false} keyboardType="email-address" />
           </View>

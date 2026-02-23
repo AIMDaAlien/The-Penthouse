@@ -33,13 +33,13 @@ const authLimiter = createLimiter({
 
 /**
  * Registration Rate Limit
- * 3 registrations per hour per IP
+ * 10 registrations per hour per IP
  * Prevents mass account creation
  */
 const registerLimiter = createLimiter({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 3,
-  message: 'Too many accounts created, please try again in an hour.'
+  max: 10,
+  message: 'Too many registration attempts. Please wait before trying again.'
 });
 
 /**

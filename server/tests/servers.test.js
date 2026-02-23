@@ -21,13 +21,13 @@ describe('Servers / Channels / Member Management', () => {
 
     const owner = await request(app).post('/api/auth/register').send({
       username: 'owner_srv',
-      password: 'password123'
+      password: 'Passw0rd!'
     });
     ownerToken = owner.body.accessToken;
 
     const member = await request(app).post('/api/auth/register').send({
       username: 'member_srv',
-      password: 'password123'
+      password: 'Passw0rd!'
     });
     memberToken = member.body.accessToken;
     memberId = member.body.user.id;

@@ -20,12 +20,16 @@ router.post('/register', registerLimiter, validateRegister, asyncHandler(async (
     const { username, password, displayName } = req.body;
     const email = req.body.email?.trim() ? req.body.email.trim().toLowerCase() : null;
 
-    // Check if username or email exists
-    const existing = email
-        ? db.prepare('SELECT id FROM users WHERE username = ? OR email = ?').get(username, email)
-        : db.prepare('SELECT id FROM users WHERE username = ?').get(username);
-    if (existing) {
-        return res.status(409).json({ error: 'Username or email already taken' });
+    const existingUsername = db.prepare('SELECT id FROM users WHERE username = ?').get(username);
+    if (existingUsername) {
+        return res.status(409).json({ error: 'Username is already taken', field: 'username' });
+    }
+
+    if (email) {
+        const existingEmail = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+        if (existingEmail) {
+            return res.status(409).json({ error: 'Email is already in use', field: 'email' });
+        }
     }
 
     // Hash password with 12 rounds (more secure than default 10)
@@ -69,12 +73,13 @@ router.post('/register', registerLimiter, validateRegister, asyncHandler(async (
 
 // Login
 router.post('/login', authLimiter, validateLogin, asyncHandler(async (req, res) => {
-    const { username, password } = req.body;
+    const { password } = req.body;
+    const credential = req.body.username?.trim().toLowerCase() || '';
 
-    debugLog('Login attempt for:', username);
+    debugLog('Login attempt for:', credential);
 
-    // Find user
-    const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+    // Find user by username or email
+    const user = db.prepare('SELECT * FROM users WHERE username = ? OR email = ? LIMIT 1').get(credential, credential);
     if (!user) {
         return res.status(401).json({ error: 'Invalid username or password' });
     }

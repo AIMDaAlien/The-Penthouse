@@ -20,19 +20,19 @@ describe('Invite Endpoints', () => {
 
     const owner = await request(app).post('/api/auth/register').send({
       username: 'owner',
-      password: 'password123',
+      password: 'Passw0rd!',
     });
     ownerToken = owner.body.accessToken;
 
     const user2 = await request(app).post('/api/auth/register').send({
       username: 'user2_inv',
-      password: 'password123',
+      password: 'Passw0rd!',
     });
     user2Token = user2.body.accessToken;
 
     const user3 = await request(app).post('/api/auth/register').send({
       username: 'user3_inv',
-      password: 'password123',
+      password: 'Passw0rd!',
     });
     user3Token = user3.body.accessToken;
 

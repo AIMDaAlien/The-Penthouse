@@ -4,6 +4,7 @@ import { Link } from 'expo-router';
 import { useAuth } from '../src/context/AuthContext';
 import { AuthScreenWrapper } from '../src/components/AuthScreenWrapper';
 import { BlurView } from 'expo-blur';
+import { getApiErrorMessage } from '../src/utils/apiErrors';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -108,9 +109,9 @@ export default function Login() {
     if (!username || !password) { setError('Please fill in all fields'); return; }
     try {
       setError(''); setIsLoading(true);
-      await login(username, password);
+      await login(username.trim(), password);
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Login failed. Please check credentials.');
+      setError(getApiErrorMessage(err, 'Login failed. Please check credentials.'));
     } finally { setIsLoading(false); }
   };
 

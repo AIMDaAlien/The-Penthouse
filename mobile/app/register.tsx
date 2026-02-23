@@ -4,6 +4,8 @@ import { Link } from 'expo-router';
 import { useAuth } from '../src/context/AuthContext';
 import { AuthScreenWrapper } from '../src/components/AuthScreenWrapper';
 import { BlurView } from 'expo-blur';
+import { getApiErrorMessage } from '../src/utils/apiErrors';
+import { AUTH_COPY, getPasswordValidationError, isValidEmail, isValidUsername } from '../src/utils/authRules';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -71,17 +73,36 @@ export default function Register() {
   );
 
   const handleRegister = async () => {
-    if (!username || !email || !password || !confirmPassword) {
+    const normalizedUsername = username.trim().toLowerCase();
+    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedDisplayName = displayName.trim();
+
+    if (!normalizedUsername || !normalizedEmail || !password || !confirmPassword) {
       setError('Please fill in all required fields'); return;
+    }
+    if (!isValidUsername(normalizedUsername)) {
+      setError(AUTH_COPY.username); return;
+    }
+    if (!isValidEmail(normalizedEmail)) {
+      setError('Please enter a valid email address'); return;
+    }
+    const passwordError = getPasswordValidationError(password);
+    if (passwordError) {
+      setError(passwordError); return;
     }
     if (password !== confirmPassword) {
       setError('Passwords do not match'); return;
     }
     try {
       setError(''); setIsLoading(true);
-      await register(username, email, password, displayName);
+      await register(
+        normalizedUsername,
+        normalizedEmail,
+        password,
+        normalizedDisplayName || undefined
+      );
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Registration failed. Please try again.');
+      setError(getApiErrorMessage(err, 'Registration failed. Please try again.'));
     } finally { setIsLoading(false); }
   };
 
@@ -113,7 +134,8 @@ export default function Register() {
           <View style={s.inputGroup}>
             <Text style={s.label}>Username</Text>
             <TextInput style={s.input} placeholder="Choose a username" placeholderTextColor={COLORS.placeholderText}
-              value={username} onChangeText={setUsername} autoCapitalize="none" />
+              value={username} onChangeText={setUsername} autoCapitalize="none" autoCorrect={false} />
+            <Text style={s.helperText}>{AUTH_COPY.username}</Text>
           </View>
         </Animated.View>
 
@@ -138,6 +160,7 @@ export default function Register() {
             <Text style={s.label}>Password</Text>
             <TextInput style={s.input} placeholder="At least 8 characters" placeholderTextColor={COLORS.placeholderText}
               value={password} onChangeText={setPassword} secureTextEntry />
+            <Text style={s.helperText}>{AUTH_COPY.password}</Text>
           </View>
         </Animated.View>
 
@@ -177,6 +200,7 @@ const s = StyleSheet.create({
   inputGroup: { gap: 6 },
   label: { fontFamily: 'Ubuntu_500Medium', fontSize: 11, textTransform: 'uppercase', letterSpacing: 2, color: COLORS.textMuted },
   input: { backgroundColor: 'transparent', borderWidth: 0, borderBottomWidth: 1, borderBottomColor: COLORS.lineBorder, borderRadius: 0, paddingVertical: 8, paddingHorizontal: 0, fontFamily: 'Ubuntu_400Regular', fontSize: 16, color: '#fff' },
+  helperText: { fontFamily: 'Ubuntu_400Regular', fontSize: 11, color: COLORS.textMuted, opacity: 0.85 },
   frostedButton: { backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', borderRadius: 50, paddingVertical: 18, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', marginTop: 10 },
   frostedButtonPressed: { backgroundColor: 'rgba(255,255,255,0.25)' },
   buttonText: { fontFamily: 'Ubuntu_500Medium', fontSize: 16, color: '#fff', textTransform: 'uppercase', letterSpacing: 2 },

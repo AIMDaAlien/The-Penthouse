@@ -157,12 +157,15 @@ jobs:
         run: |
           set -euo pipefail
           APP_PATH="/mnt/Storage_Pool/penthouse/app"
+          DATA_PATH="/mnt/Storage_Pool/penthouse/data"
+          export PENTHOUSE_DATA_PATH="${DATA_PATH}"
           APK_PATH="${GITHUB_WORKSPACE}/apk-release/the-penthouse.apk"
           NOTES_PATH="${GITHUB_WORKSPACE}/apk-release/release-notes.txt"
           if [ ! -s "${APK_PATH}" ]; then
             echo "APK artifact missing: ${APK_PATH}"
             exit 1
           fi
+          mkdir -p "${DATA_PATH}"
           cd "$APP_PATH"
           git fetch --all --prune
           git checkout main

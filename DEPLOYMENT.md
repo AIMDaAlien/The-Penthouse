@@ -37,6 +37,7 @@ PORT=3000
 JWT_SECRET=<openssl rand -base64 32>
 CORS_ORIGIN=https://penthouse.blog,https://api.penthouse.blog
 DOMAIN=penthouse.blog
+PENTHOUSE_DATA_PATH=/mnt/Storage_Pool/penthouse/data
 ENABLE_DEBUG_ENDPOINTS=false
 ```
 
@@ -44,6 +45,7 @@ Notes:
 - `JWT_SECRET` must be set.
 - `CORS_ORIGIN` must be set.
 - Wildcard defaults are blocked by compose hardening.
+- `PENTHOUSE_DATA_PATH` should be an absolute host path outside the repo clone so user data persists across repo resets.
 
 ---
 
@@ -187,10 +189,13 @@ Workflow:
 
 Behavior:
 - Builds Android APK on EAS (GitHub-hosted runner) for each `main` push
-- Publishes APK to `data/downloads/the-penthouse.apk` on TrueNAS
-- Regenerates `data/downloads/app-update.json` with checksum + metadata
+- Publishes APK to `${PENTHOUSE_DATA_PATH}/downloads/the-penthouse.apk` on TrueNAS (default `/mnt/Storage_Pool/penthouse/data`)
+- Regenerates `${PENTHOUSE_DATA_PATH}/downloads/app-update.json` with checksum + metadata
 - Pulls `main`, rebuilds, restarts compose, then verifies health + APK URL
 - Generates release notes from commit range and publishes them as update changelog
+
+Persistence guardrail:
+- Set `PENTHOUSE_DATA_PATH` to an absolute host path (recommended: `/mnt/Storage_Pool/penthouse/data`) so user data survives app repo updates/rebuilds.
 
 Runner should be configured on TrueNAS and kept online at boot.
 

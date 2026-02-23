@@ -10,6 +10,9 @@
 const { body, param, query, validationResult } = require('express-validator');
 const sanitizeHtml = require('sanitize-html');
 
+const usernamePattern = /^[a-z0-9_@.-]+$/;
+const passwordStrengthPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/;
+
 /**
  * Handle validation errors
  * Returns 400 with error details if validation fails
@@ -49,12 +52,21 @@ const validateRegister = [
     .toLowerCase()
     .isLength({ min: 3, max: 20 })
     .withMessage('Username must be 3-20 characters')
-    .matches(/^[a-z0-9_@.-]+$/)
+    .matches(usernamePattern)
     .withMessage('Username can only contain letters, numbers, underscores, @, ., and -'),
+
+  body('email')
+    .optional({ nullable: true, checkFalsy: true })
+    .trim()
+    .toLowerCase()
+    .isEmail()
+    .withMessage('Please enter a valid email address'),
   
   body('password')
     .isLength({ min: 8 })
-    .withMessage('Password must be at least 8 characters'),
+    .withMessage('Password must be at least 8 characters')
+    .matches(passwordStrengthPattern)
+    .withMessage('Password must include uppercase, lowercase, number, and symbol'),
   
   body('displayName')
     .optional()
@@ -70,7 +82,7 @@ const validateLogin = [
     .trim()
     .toLowerCase()
     .notEmpty()
-    .withMessage('Username is required'),
+    .withMessage('Username or email is required'),
   
   body('password')
     .notEmpty()
@@ -88,7 +100,9 @@ const validateResetPassword = [
   body('token').notEmpty().withMessage('Token is required'),
   body('newPassword')
     .isLength({ min: 8 })
-    .withMessage('Password must be at least 8 characters'),
+    .withMessage('Password must be at least 8 characters')
+    .matches(passwordStrengthPattern)
+    .withMessage('Password must include uppercase, lowercase, number, and symbol'),
   handleValidation
 ];
 

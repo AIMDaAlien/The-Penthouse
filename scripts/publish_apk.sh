@@ -6,7 +6,17 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 APK_SOURCE="${1:-${REPO_ROOT}/artifacts/the-penthouse.apk}"
 APK_FILE_NAME="${MOBILE_APK_FILENAME:-the-penthouse.apk}"
-DOWNLOADS_DIR="${DOWNLOADS_DIR:-${REPO_ROOT}/data/downloads}"
+DOTENV_DATA_PATH=""
+if [ -z "${PENTHOUSE_DATA_PATH:-}" ] && [ -f "${REPO_ROOT}/.env" ]; then
+    DOTENV_DATA_PATH="$(grep -E '^PENTHOUSE_DATA_PATH=' "${REPO_ROOT}/.env" | tail -n 1 | cut -d= -f2- | tr -d '"' || true)"
+fi
+RAW_DATA_PATH="${PENTHOUSE_DATA_PATH:-${DOTENV_DATA_PATH:-${REPO_ROOT}/data}}"
+if [[ "$RAW_DATA_PATH" = /* ]]; then
+    DATA_ROOT="$RAW_DATA_PATH"
+else
+    DATA_ROOT="${REPO_ROOT}/${RAW_DATA_PATH}"
+fi
+DOWNLOADS_DIR="${DOWNLOADS_DIR:-${DATA_ROOT}/downloads}"
 TARGET_APK_PATH="${DOWNLOADS_DIR}/${APK_FILE_NAME}"
 MANIFEST_PATH="${DOWNLOADS_DIR}/app-update.json"
 

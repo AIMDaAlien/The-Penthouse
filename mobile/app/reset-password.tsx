@@ -5,6 +5,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Input from '../src/components/Input';
 import Button from '../src/components/Button';
 import { resetPassword } from '../src/services/api';
+import { getApiErrorMessage } from '../src/utils/apiErrors';
+import { AUTH_COPY, getPasswordValidationError } from '../src/utils/authRules';
 
 // Wrapper that dismisses keyboard on native, but not on web
 const DismissKeyboardView = ({ children }: { children: React.ReactNode }) => {
@@ -34,8 +36,9 @@ export default function ResetPassword() {
       return;
     }
 
-    if (newPassword.length < 8) {
-      setError('Password must be at least 8 characters');
+    const passwordError = getPasswordValidationError(newPassword);
+    if (passwordError) {
+      setError(passwordError);
       return;
     }
 
@@ -55,7 +58,7 @@ export default function ResetPassword() {
       await resetPassword(token, newPassword);
       setSuccess(true);
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to reset password. The link may be expired.');
+      setError(getApiErrorMessage(err, 'Failed to reset password. The link may be expired.'));
     } finally {
       setIsLoading(false);
     }
@@ -149,6 +152,9 @@ export default function ResetPassword() {
                 secureTextEntry
                 className="mb-6"
               />
+              <Text className="text-zinc-500 text-xs mb-6">
+                {AUTH_COPY.password}
+              </Text>
 
               <Button
                 title="RESET PASSWORD"

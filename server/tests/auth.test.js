@@ -21,7 +21,7 @@ describe('Auth Endpoints', () => {
         .post('/api/auth/register')
         .send({
           username: 'testuser',
-          password: 'password123',
+          password: 'Passw0rd!',
           displayName: 'Test User'
         });
       
@@ -38,7 +38,7 @@ describe('Auth Endpoints', () => {
         .post('/api/auth/register')
         .send({
           username: 'testuser',
-          password: 'password123'
+          password: 'Passw0rd!'
         });
 
       // Duplicate registration
@@ -46,11 +46,24 @@ describe('Auth Endpoints', () => {
         .post('/api/auth/register')
         .send({
           username: 'testuser',
-          password: 'newpassword'
+          password: 'Newpass1!'
         });
 
       expect(res.statusCode).toBe(409);
-      expect(res.body).toHaveProperty('error', 'Username or email already taken');
+      expect(res.body).toHaveProperty('error', 'Username is already taken');
+    });
+
+    it('should reject weak passwords', async () => {
+      const res = await request(app)
+        .post('/api/auth/register')
+        .send({
+          username: 'weakpassuser',
+          password: 'password123'
+        });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body.error).toBe('Validation failed');
+      expect(res.body.details.some((item) => item.field === 'password')).toBe(true);
     });
   });
 
@@ -61,7 +74,8 @@ describe('Auth Endpoints', () => {
         .post('/api/auth/register')
         .send({
           username: 'loginuser',
-          password: 'password123'
+          email: 'loginuser@example.com',
+          password: 'Passw0rd!'
         });
     });
 
@@ -70,12 +84,24 @@ describe('Auth Endpoints', () => {
         .post('/api/auth/login')
         .send({
           username: 'loginuser',
-          password: 'password123'
+          password: 'Passw0rd!'
         });
 
       expect(res.statusCode).toBe(200);
       expect(res.body).toHaveProperty('accessToken');
       expect(res.body).toHaveProperty('refreshToken');
+      expect(res.body.user.username).toBe('loginuser');
+    });
+
+    it('should login with email credentials', async () => {
+      const res = await request(app)
+        .post('/api/auth/login')
+        .send({
+          username: 'loginuser@example.com',
+          password: 'Passw0rd!'
+        });
+
+      expect(res.statusCode).toBe(200);
       expect(res.body.user.username).toBe('loginuser');
     });
 
@@ -109,7 +135,7 @@ describe('Auth Endpoints', () => {
         .send({
           username: 'recoveryuser',
           email: 'recovery@example.com',
-          password: 'oldpassword',
+          password: 'Oldpass1!',
           displayName: 'Recovery User'
         });
       authUser = res.body.user;
@@ -141,7 +167,7 @@ describe('Auth Endpoints', () => {
         .post('/api/auth/reset-password')
         .send({
           token: resetRecord.token,
-          newPassword: 'newsecurepassword'
+          newPassword: 'Newsecure1!'
         });
 
       expect(res.statusCode).toBe(200);
@@ -151,7 +177,7 @@ describe('Auth Endpoints', () => {
         .post('/api/auth/login')
         .send({
           username: 'recoveryuser',
-          password: 'newsecurepassword'
+          password: 'Newsecure1!'
         });
       
       expect(loginRes.statusCode).toBe(200);
