@@ -249,11 +249,20 @@ jobs:
         run: |
           set -euo pipefail
           APP_PATH="/mnt/Storage_Pool/penthouse/app"
-          DATA_PATH="/mnt/Storage_Pool/penthouse/data"
+          DEFAULT_DATA_PATH="/mnt/Storage_Pool/penthouse/data"
+          FALLBACK_DATA_PATH="${APP_PATH}/data"
+          DATA_PATH="${DEFAULT_DATA_PATH}"
+          if ! mkdir -p "${DATA_PATH}" 2>/dev/null; then
+            echo "Warning: cannot create ${DATA_PATH}; falling back to ${FALLBACK_DATA_PATH}"
+            DATA_PATH="${FALLBACK_DATA_PATH}"
+          fi
+          if ! mkdir -p "${DATA_PATH}" 2>/dev/null; then
+            echo "Error: unable to create data directory at ${DATA_PATH}"
+            exit 1
+          fi
           export PENTHOUSE_DATA_PATH="${DATA_PATH}"
           APK_PATH="${GITHUB_WORKSPACE}/apk-release/the-penthouse.apk"
           NOTES_PATH="${GITHUB_WORKSPACE}/apk-release/release-notes.txt"
-          mkdir -p "${DATA_PATH}"
           cd "$APP_PATH"
           git fetch --all --prune
           git checkout main
