@@ -35,10 +35,22 @@ router.post('/register', registerLimiter, validateRegister, asyncHandler(async (
     // Hash password with 12 rounds (more secure than default 10)
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    // Insert user
-    const result = db.prepare(
-        'INSERT INTO users (username, email, password, display_name) VALUES (?, ?, ?, ?)'
-    ).run(username, email, hashedPassword, displayName || username);
+    // Insert user (defensive handling for race-condition uniqueness conflicts)
+    let result;
+    try {
+        result = db.prepare(
+            'INSERT INTO users (username, email, password, display_name) VALUES (?, ?, ?, ?)'
+        ).run(username, email, hashedPassword, displayName || username);
+    } catch (err) {
+        const message = String(err?.message || '');
+        if (message.includes('users.username')) {
+            return res.status(409).json({ error: 'Username is already taken', field: 'username' });
+        }
+        if (message.includes('users.email')) {
+            return res.status(409).json({ error: 'Email is already in use', field: 'email' });
+        }
+        throw err;
+    }
 
     // Generate Access Token (15m)
     const accessToken = jwt.sign(

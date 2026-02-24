@@ -53,6 +53,27 @@ describe('Auth Endpoints', () => {
       expect(res.body).toHaveProperty('error', 'Username is already taken');
     });
 
+    it('should not allow duplicate emails', async () => {
+      await request(app)
+        .post('/api/auth/register')
+        .send({
+          username: 'firstuser',
+          email: 'dup@example.com',
+          password: 'Passw0rd!'
+        });
+
+      const res = await request(app)
+        .post('/api/auth/register')
+        .send({
+          username: 'seconduser',
+          email: 'dup@example.com',
+          password: 'Passw0rd!'
+        });
+
+      expect(res.statusCode).toBe(409);
+      expect(res.body).toHaveProperty('error', 'Email is already in use');
+    });
+
     it('should reject weak passwords', async () => {
       const res = await request(app)
         .post('/api/auth/register')
