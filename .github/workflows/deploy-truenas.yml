@@ -276,6 +276,24 @@ jobs:
           git checkout main
           git reset --hard origin/main
           ./scripts/prepare_data_dirs.sh
+          USE_SUDO_DOCKER="false"
+          if ! docker info >/dev/null 2>&1; then
+            if sudo -n docker info >/dev/null 2>&1; then
+              USE_SUDO_DOCKER="true"
+              echo "Docker requires sudo on this runner; using sudo -n docker compose"
+            else
+              echo "Error: runner user cannot access Docker socket, and sudo -n docker is unavailable."
+              echo "Fix host permissions: add runner user to docker group or allow passwordless sudo for docker."
+              exit 1
+            fi
+          fi
+          dc() {
+            if [ "${USE_SUDO_DOCKER}" = "true" ]; then
+              sudo -n docker compose "$@"
+            else
+              docker compose "$@"
+            fi
+          }
           if [ -s "${APK_PATH}" ]; then
             if [ -s "${NOTES_PATH}" ]; then
               MOBILE_UPDATE_NOTES_FILE="${NOTES_PATH}" ./scripts/publish_apk.sh "${APK_PATH}"
@@ -286,35 +304,35 @@ jobs:
             echo "No new APK artifact for this run; keeping current published APK."
           fi
           # Build while the old container is still running, then recreate only the app.
-          docker compose build penthouse-app
-          docker compose up -d --no-deps --force-recreate penthouse-app
+          dc build penthouse-app
+          dc up -d --no-deps --force-recreate penthouse-app
           # Apply any compose-level changes to caddy without re-evaluating app health dependencies.
-          docker compose up -d --no-deps caddy
+          dc up -d --no-deps caddy
           # Apply Caddyfile changes without restarting Caddy.
-          docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile || true
-          docker compose ps
+          dc exec -T caddy caddy reload --config /etc/caddy/Caddyfile || true
+          dc ps
           # Wait for health (handles brief restart window).
           for i in $(seq 1 30); do
-            if docker compose exec -T penthouse-app wget -q --spider http://localhost:3000/api/health; then
+            if dc exec -T penthouse-app wget -q --spider http://localhost:3000/api/health; then
               echo health_ok
               break
             fi
             sleep 2
           done
-          docker compose exec -T penthouse-app wget -q --spider http://localhost:3000/api/health || {
+          dc exec -T penthouse-app wget -q --spider http://localhost:3000/api/health || {
             echo "penthouse-app health check failed; recent logs:"
-            docker compose logs --tail=200 penthouse-app || true
+            dc logs --tail=200 penthouse-app || true
             exit 1
           }
-          docker compose exec -T penthouse-app wget -q --spider http://localhost:3000/app/ || {
+          dc exec -T penthouse-app wget -q --spider http://localhost:3000/app/ || {
             echo "Web app route check failed (/app). Recent logs:"
-            docker compose logs --tail=200 penthouse-app || true
+            dc logs --tail=200 penthouse-app || true
             exit 1
           }
-          docker compose exec -T penthouse-app wget -q --spider http://localhost:3000/app/metadata.json || {
+          dc exec -T penthouse-app wget -q --spider http://localhost:3000/app/metadata.json || {
             echo "Web app artifact missing (/app/metadata.json). Recent logs:"
-            docker compose logs --tail=200 penthouse-app || true
+            dc logs --tail=200 penthouse-app || true
             exit 1
           }
-          docker compose exec -T penthouse-app wget -q --spider http://localhost:3000/downloads/the-penthouse.apk
+          dc exec -T penthouse-app wget -q --spider http://localhost:3000/downloads/the-penthouse.apk
           echo deploy_ok
