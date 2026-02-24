@@ -269,6 +269,7 @@ jobs:
             exit 1
           fi
           export PENTHOUSE_DATA_PATH="${DATA_PATH}"
+          echo "Using data path: ${PENTHOUSE_DATA_PATH}"
           APK_PATH="${GITHUB_WORKSPACE}/apk-release/the-penthouse.apk"
           NOTES_PATH="${GITHUB_WORKSPACE}/apk-release/release-notes.txt"
           cd "$APP_PATH"
@@ -276,6 +277,8 @@ jobs:
           git checkout main
           git reset --hard origin/main
           ./scripts/prepare_data_dirs.sh
+          # Ensure the runtime user backing the Docker daemon can write SQLite + WAL files.
+          chmod -R a+rwX "${PENTHOUSE_DATA_PATH}" || true
           USE_SUDO_DOCKER="false"
           if ! docker info >/dev/null 2>&1; then
             if sudo -n docker info >/dev/null 2>&1; then
@@ -289,7 +292,7 @@ jobs:
           fi
           dc() {
             if [ "${USE_SUDO_DOCKER}" = "true" ]; then
-              sudo -n docker compose "$@"
+              sudo -n --preserve-env=PENTHOUSE_DATA_PATH docker compose "$@"
             else
               docker compose "$@"
             fi
