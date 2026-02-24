@@ -252,11 +252,19 @@ jobs:
           DEFAULT_DATA_PATH="/mnt/Storage_Pool/penthouse/data"
           FALLBACK_DATA_PATH="${APP_PATH}/data"
           DATA_PATH="${DEFAULT_DATA_PATH}"
-          if ! mkdir -p "${DATA_PATH}" 2>/dev/null; then
-            echo "Warning: cannot create ${DATA_PATH}; falling back to ${FALLBACK_DATA_PATH}"
+
+          can_use_data_path() {
+            local candidate="$1"
+            mkdir -p "${candidate}" 2>/dev/null || return 1
+            mkdir -p "${candidate}/uploads" "${candidate}/downloads" 2>/dev/null || return 1
+            return 0
+          }
+
+          if ! can_use_data_path "${DATA_PATH}"; then
+            echo "Warning: ${DATA_PATH} is not writable for uploads/downloads; falling back to ${FALLBACK_DATA_PATH}"
             DATA_PATH="${FALLBACK_DATA_PATH}"
           fi
-          if ! mkdir -p "${DATA_PATH}" 2>/dev/null; then
+          if ! can_use_data_path "${DATA_PATH}"; then
             echo "Error: unable to create data directory at ${DATA_PATH}"
             exit 1
           fi
