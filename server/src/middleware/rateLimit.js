@@ -17,7 +17,11 @@ const createLimiter = (options) => rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   // Skip rate limiting in test environment
-  skip: () => process.env.NODE_ENV === 'test',
+  skip: (req, res) => {
+    if (process.env.NODE_ENV === 'test') return true;
+    if (typeof options.skip === 'function') return options.skip(req, res);
+    return false;
+  },
 });
 
 /**
@@ -69,7 +73,10 @@ const uploadLimiter = createLimiter({
 const apiLimiter = createLimiter({
   windowMs: 60 * 1000, // 1 minute
   max: 100,
-  message: 'Too many requests, please slow down.'
+  message: 'Too many requests, please slow down.',
+  // Auth endpoints have their own dedicated limiters.
+  // Excluding them from the global API bucket avoids false positives behind reverse proxies.
+  skip: (req) => req.path.startsWith('/auth') || req.path === '/health',
 });
 
 /**
