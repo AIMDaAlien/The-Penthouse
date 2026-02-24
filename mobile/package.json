@@ -51,7 +51,6 @@
     "@babel/core": "^7.28.6",
     "@types/react": "~19.1.10",
     "babel-preset-expo": "^54.0.10",
-    "eas-cli": "^18.0.1",
     "tailwindcss": "^3.4.19",
     "typescript": "~5.9.2"
   },

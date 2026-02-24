@@ -37,22 +37,29 @@ jobs:
         run: |
           set -euo pipefail
           SHOULD_BUILD="false"
+          NATIVE_CHANGED="false"
 
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.force_apk_build }}" = "true" ]; then
             SHOULD_BUILD="true"
+            NATIVE_CHANGED="true"
           elif [ "${{ github.event_name }}" = "push" ]; then
             BEFORE_SHA="${{ github.event.before }}"
             if [ -z "${BEFORE_SHA}" ] || [ "${BEFORE_SHA}" = "0000000000000000000000000000000000000000" ]; then
               SHOULD_BUILD="true"
+              NATIVE_CHANGED="true"
             elif [ -n "${BEFORE_SHA}" ] && [ "${BEFORE_SHA}" != "0000000000000000000000000000000000000000" ]; then
-              if git diff --name-only "${BEFORE_SHA}" "${{ github.sha }}" | grep -q '^mobile/'; then
+              CHANGED_FILES="$(git diff --name-only "${BEFORE_SHA}" "${{ github.sha }}")"
+              if echo "${CHANGED_FILES}" | grep -Eq '^mobile/(android/|ios/|app\.json$|app\.config\.(js|ts|json)$|eas\.json$|package\.json$|package-lock\.json$|plugins/)'; then
+                NATIVE_CHANGED="true"
                 SHOULD_BUILD="true"
               fi
             fi
           fi
 
           echo "should_build=${SHOULD_BUILD}" >> "${GITHUB_OUTPUT}"
+          echo "native_changed=${NATIVE_CHANGED}" >> "${GITHUB_OUTPUT}"
           echo "APK build required: ${SHOULD_BUILD}"
+          echo "Native-impact change detected: ${NATIVE_CHANGED}"
 
       - name: Validate Expo token
         if: steps.build_gate.outputs.should_build == 'true'
@@ -130,6 +137,11 @@ jobs:
 
           if [ "${BUILD_EXIT}" -ne 0 ]; then
             if grep -qi "has used its Android builds from the Free plan this month" "${BUILD_JSON_PATH}"; then
+              if [ "${{ steps.build_gate.outputs.native_changed }}" = "true" ]; then
+                echo "EAS Android build quota exhausted, but native-impact changes require a fresh APK build."
+                cat "${BUILD_JSON_PATH}"
+                exit "${BUILD_EXIT}"
+              fi
               echo "EAS Android build quota exhausted. Skipping APK rebuild for this run."
               echo "apk_built=false" >> "${GITHUB_OUTPUT}"
               exit 0

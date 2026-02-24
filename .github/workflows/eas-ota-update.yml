@@ -40,6 +40,28 @@ jobs:
       - name: Install mobile dependencies
         run: npm ci --prefix mobile
 
+      - name: Guardrail check for native-impact changes
+        id: native_guardrail
+        run: |
+          set -euo pipefail
+          BEFORE_SHA="${{ github.event.before }}"
+          NATIVE_CHANGED="false"
+          if [ -n "${BEFORE_SHA}" ] && [ "${BEFORE_SHA}" != "0000000000000000000000000000000000000000" ]; then
+            CHANGED_FILES="$(git diff --name-only "${BEFORE_SHA}" "${{ github.sha }}")"
+            if echo "${CHANGED_FILES}" | grep -Eq '^mobile/(android/|ios/|app\.json$|app\.config\.(js|ts|json)$|eas\.json$|package\.json$|package-lock\.json$|plugins/)'; then
+              NATIVE_CHANGED="true"
+            fi
+          fi
+          echo "native_changed=${NATIVE_CHANGED}" >> "${GITHUB_OUTPUT}"
+          echo "Native-impact change detected: ${NATIVE_CHANGED}"
+
+      - name: Stop OTA publish for native-impact changes
+        if: steps.native_guardrail.outputs.native_changed == 'true'
+        run: |
+          echo "Native-impact changes detected in mobile config/deps/platform files."
+          echo "Publish a new APK/IPA build instead of OTA for this commit."
+          exit 1
+
       - name: Generate release notes
         run: |
           set -euo pipefail
