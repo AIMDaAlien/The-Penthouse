@@ -129,17 +129,18 @@ jobs:
         run: |
           set -euo pipefail
           cd mobile
-          BUILD_JSON_PATH="${RUNNER_TEMP}/eas-build.json"
+          BUILD_OUTPUT_PATH="${RUNNER_TEMP}/eas-build-output.txt"
+          BUILD_VIEW_JSON_PATH="${RUNNER_TEMP}/eas-build-view.json"
           set +e
-          npx eas-cli@latest build --platform android --profile preview --non-interactive --wait --json > "${BUILD_JSON_PATH}" 2>&1
+          npx eas-cli@latest build --platform android --profile preview --non-interactive --wait --json > "${BUILD_OUTPUT_PATH}" 2>&1
           BUILD_EXIT=$?
           set -e
 
           if [ "${BUILD_EXIT}" -ne 0 ]; then
-            if grep -qi "has used its Android builds from the Free plan this month" "${BUILD_JSON_PATH}"; then
+            if grep -qi "has used its Android builds from the Free plan this month" "${BUILD_OUTPUT_PATH}"; then
               if [ "${{ steps.build_gate.outputs.native_changed }}" = "true" ]; then
                 echo "EAS Android build quota exhausted, but native-impact changes require a fresh APK build."
-                cat "${BUILD_JSON_PATH}"
+                cat "${BUILD_OUTPUT_PATH}"
                 exit "${BUILD_EXIT}"
               fi
               echo "EAS Android build quota exhausted. Skipping APK rebuild for this run."
@@ -148,11 +149,26 @@ jobs:
             fi
 
             echo "EAS build failed unexpectedly:"
-            cat "${BUILD_JSON_PATH}"
+            cat "${BUILD_OUTPUT_PATH}"
             exit "${BUILD_EXIT}"
           fi
 
-          APK_URL="$(node -e 'const fs=require("fs");const raw=fs.readFileSync(process.argv[1],"utf8").trim();let parsed;try{parsed=JSON.parse(raw);}catch(_){const line=raw.split("\\n").reverse().find(l=>l.trim().startsWith("{")||l.trim().startsWith("["));if(!line){console.error("Unable to parse EAS build output as JSON.");process.exit(1);}parsed=JSON.parse(line);}const builds=Array.isArray(parsed)?parsed:[parsed];const build=builds.find(item=>item&&item.artifacts&&(item.artifacts.buildUrl||item.artifacts.applicationArchiveUrl));const apkUrl=build&&build.artifacts&&(build.artifacts.buildUrl||build.artifacts.applicationArchiveUrl);if(!apkUrl){console.error("APK URL missing in EAS build output.");process.exit(1);}process.stdout.write(apkUrl);' "${BUILD_JSON_PATH}")"
+          APK_URL="$(node -e 'const fs=require("fs");const raw=fs.readFileSync(process.argv[1],"utf8").trim();let parsed;try{parsed=JSON.parse(raw);}catch(_){const line=raw.split("\\n").reverse().find(l=>l.trim().startsWith("{")||l.trim().startsWith("["));if(!line){process.exit(2);}parsed=JSON.parse(line);}const builds=Array.isArray(parsed)?parsed:[parsed];const build=builds.find(item=>item&&item.artifacts&&(item.artifacts.buildUrl||item.artifacts.applicationArchiveUrl));const apkUrl=build&&build.artifacts&&(build.artifacts.buildUrl||build.artifacts.applicationArchiveUrl);if(!apkUrl){process.exit(3);}process.stdout.write(apkUrl);' "${BUILD_OUTPUT_PATH}" 2>/dev/null || true)"
+          if [ -z "${APK_URL}" ]; then
+            BUILD_ID="$(grep -Eo 'builds/[0-9a-fA-F-]{36}' "${BUILD_OUTPUT_PATH}" | tail -n1 | cut -d/ -f2 || true)"
+            if [ -n "${BUILD_ID}" ]; then
+              npx eas-cli@latest build:view "${BUILD_ID}" --json > "${BUILD_VIEW_JSON_PATH}"
+              APK_URL="$(node -e 'const fs=require("fs");const parsed=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));const apkUrl=parsed&&parsed.artifacts&&(parsed.artifacts.buildUrl||parsed.artifacts.applicationArchiveUrl);if(!apkUrl){process.exit(1);}process.stdout.write(apkUrl);' "${BUILD_VIEW_JSON_PATH}" 2>/dev/null || true)"
+            fi
+          fi
+          if [ -z "${APK_URL}" ]; then
+            echo "Unable to resolve APK URL from EAS output."
+            cat "${BUILD_OUTPUT_PATH}"
+            if [ -f "${BUILD_VIEW_JSON_PATH}" ]; then
+              cat "${BUILD_VIEW_JSON_PATH}"
+            fi
+            exit 1
+          fi
           cd "${GITHUB_WORKSPACE}"
           mkdir -p artifacts
           curl -fL "${APK_URL}" -o artifacts/the-penthouse.apk

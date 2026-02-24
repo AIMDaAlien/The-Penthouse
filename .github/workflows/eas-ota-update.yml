@@ -55,14 +55,14 @@ jobs:
           echo "native_changed=${NATIVE_CHANGED}" >> "${GITHUB_OUTPUT}"
           echo "Native-impact change detected: ${NATIVE_CHANGED}"
 
-      - name: Stop OTA publish for native-impact changes
+      - name: Skip OTA publish for native-impact changes
         if: steps.native_guardrail.outputs.native_changed == 'true'
         run: |
           echo "Native-impact changes detected in mobile config/deps/platform files."
           echo "Publish a new APK/IPA build instead of OTA for this commit."
-          exit 1
 
       - name: Generate release notes
+        if: steps.native_guardrail.outputs.native_changed != 'true'
         run: |
           set -euo pipefail
           mkdir -p artifacts
@@ -71,6 +71,7 @@ jobs:
           cat artifacts/release-notes.txt
 
       - name: Validate mobile version semantics
+        if: steps.native_guardrail.outputs.native_changed != 'true'
         run: |
           set -euo pipefail
           APP_VERSION="$(jq -r '.expo.version // empty' mobile/app.json)"
@@ -89,6 +90,7 @@ jobs:
           fi
 
       - name: Publish OTA update to preview branch
+        if: steps.native_guardrail.outputs.native_changed != 'true'
         run: |
           set -euo pipefail
           UPDATE_MESSAGE="$(tr '\n' ' ' < artifacts/release-notes.txt | sed 's/[[:space:]]\+/ /g' | sed 's/[[:space:]]*$//')"
