@@ -1,14 +1,10 @@
-import { View, Text, Modal, TextInput, Image, Pressable, ActivityIndicator, Dimensions, StyleSheet } from 'react-native';
+import { View, Text, Modal, TextInput, Pressable, ActivityIndicator, Dimensions, StyleSheet } from 'react-native';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
-import Constants from 'expo-constants';
-import { Colors } from '../designsystem/Colors';
-
-// Get keys from Expo config (fallback to empty string to prevent crash, but should be set in app.json)
-const GIPHY_API_KEY = Constants.expoConfig?.extra?.giphyApiKey || '';
-const KLIPY_API_KEY = Constants.expoConfig?.extra?.klipyApiKey || '';
+import api from '../services/api';
+import { AppImage } from './AppImage';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GIF_SIZE = (SCREEN_WIDTH - 48) / 2;
@@ -71,11 +67,11 @@ export default function UnifiedGifPicker({ visible, onClose, onSelect }: Unified
 
     const fetchGiphy = async (endpoint: 'trending' | 'search', query?: string) => {
         const url = endpoint === 'trending'
-            ? `https://api.giphy.com/v1/gifs/trending?api_key=${GIPHY_API_KEY}&limit=30&rating=pg-13`
-            : `https://api.giphy.com/v1/gifs/search?api_key=${GIPHY_API_KEY}&q=${encodeURIComponent(query || '')}&limit=30&rating=pg-13`;
+            ? `/gifs/giphy/trending`
+            : `/gifs/giphy/search?q=${encodeURIComponent(query || '')}`;
 
-        const response = await fetch(url);
-        const { data } = await response.json();
+        const response = await api.get(url);
+        const data = response.data.data;
         return data.map((g: any) => ({
             id: g.id,
             url: g.images.original.url,
@@ -88,13 +84,12 @@ export default function UnifiedGifPicker({ visible, onClose, onSelect }: Unified
     };
 
     const fetchKlipy = async (endpoint: 'trending' | 'search', query?: string) => {
-        const baseUrl = `https://api.klipy.com/api/v1/${KLIPY_API_KEY}`;
         const url = endpoint === 'trending'
-            ? `${baseUrl}/gifs/trending?per_page=30&page=1`
-            : `${baseUrl}/gifs/search?q=${encodeURIComponent(query || '')}&per_page=30&page=1`;
+            ? `/gifs/klipy/trending`
+            : `/gifs/klipy/search?q=${encodeURIComponent(query || '')}`;
 
-        const response = await fetch(url);
-        const json = await response.json();
+        const response = await api.get(url);
+        const json = response.data;
         const results = json?.data?.data || json?.data || [];
 
         if (!Array.isArray(results)) {
@@ -180,10 +175,11 @@ export default function UnifiedGifPicker({ visible, onClose, onSelect }: Unified
             onPress={() => handleSelect(item)}
             style={styles.gifItem}
         >
-            <Image
+            <AppImage
                 source={{ uri: item.previewUrl }}
                 style={styles.gifImage}
-                resizeMode="cover"
+                contentFit="cover"
+                variant="media"
             />
         </Pressable>
     ), [handleSelect]);
@@ -279,6 +275,7 @@ export default function UnifiedGifPicker({ visible, onClose, onSelect }: Unified
                             renderItem={renderGif}
                             keyExtractor={keyExtractor}
                             numColumns={2}
+                            estimatedItemSize={GIF_SIZE + 8}
                             contentContainerStyle={styles.listContent}
                             showsVerticalScrollIndicator={false}
                             ListEmptyComponent={ListEmptyComponent}

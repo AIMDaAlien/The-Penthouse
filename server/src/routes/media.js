@@ -14,7 +14,7 @@ const toPositiveInt = (value, fallback) => {
     const parsed = Number.parseInt(value, 10);
     return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 };
-const uploadMaxBytes = toPositiveInt(process.env.UPLOAD_MAX_BYTES, 25 * 1024 * 1024);
+const uploadMaxBytes = toPositiveInt(process.env.UPLOAD_MAX_BYTES, 100 * 1024 * 1024);
 const minFreeDiskBytes = toPositiveInt(process.env.MIN_FREE_DISK_BYTES, 512 * 1024 * 1024);
 const debugLog = (...args) => {
     if (!isProduction) console.log(...args);

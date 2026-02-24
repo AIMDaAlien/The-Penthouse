@@ -108,7 +108,7 @@ app.use(helmet({
       scriptSrc: ["'self'", "'unsafe-inline'"], // Allow inline scripts for landing page if needed
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'"],
+      connectSrc: ["'self'", "https://media.giphy.com", "https://media0.giphy.com", "https://media1.giphy.com", "https://media2.giphy.com", "https://media3.giphy.com", "https://media4.giphy.com", "https://media.klipy.com"],
       fontSrc: ["'self'", "https:", "data:"],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
@@ -150,6 +150,7 @@ app.use('/api/media', mediaRoutes);
 app.use('/api/push', pushRoutes);
 app.use('/api/friends', friendsRoutes);
 app.use('/api/app', appUpdateRoutes);
+app.use('/api/gifs', require('./routes/gifs'));
 
 // Global Error Handler
 app.use(errorHandler);

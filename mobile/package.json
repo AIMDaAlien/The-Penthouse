@@ -12,7 +12,7 @@
     "@expo-google-fonts/ubuntu": "^0.4.1",
     "@expo/vector-icons": "^15.0.3",
     "@react-navigation/drawer": "^7.5.0",
-    "@shopify/flash-list": "^2.2.2",
+    "@shopify/flash-list": "2.0.2",
     "axios": "^1.13.5",
     "date-fns": "^4.1.0",
     "expo": "~54.0.33",

@@ -10,7 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface MediaPreviewModalProps {
     visible: boolean;
-    file: { uri: string; type: string; name?: string } | null;
+    file: { uri: string; type: string; name?: string; size?: number } | null;
     onSend: (caption?: string) => void;
     onClose: () => void;
 }
@@ -44,7 +44,9 @@ export default function MediaPreviewModal({ visible, file, onSend, onClose }: Me
                         <Pressable onPress={onClose} style={styles.closeBtn}>
                             <Ionicons name="close" size={28} color="#fff" />
                         </Pressable>
-                        <Text style={styles.headerTitle}>Preview</Text>
+                        <Text style={styles.headerTitle}>
+                            Preview {file.size ? `(${(file.size / (1024 * 1024)).toFixed(1)} MB)` : ''}
+                        </Text>
                         <View style={{ width: 40 }} /> 
                     </View>
 

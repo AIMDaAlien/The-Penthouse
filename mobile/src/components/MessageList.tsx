@@ -411,6 +411,7 @@ export default function MessageList({
                 data={messages}
                 renderItem={renderItem}
                 keyExtractor={keyExtractor}
+                estimatedItemSize={120}
                 contentContainerStyle={LIST_CONTENT_STYLE}
                 onViewableItemsChanged={onViewableItemsChanged}
                 viewabilityConfig={VIEWABILITY_CONFIG}

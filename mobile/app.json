@@ -17,7 +17,6 @@
     },
     "android": {
       "package": "com.aimdaalien.thepenthouse",
-      "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -46,9 +45,7 @@
     "extra": {
       "eas": {
         "projectId": "ff3ecbc9-277a-48cf-9162-f85f03e976aa"
-      },
-      "giphyApiKey": "H2jGWv5wskQcoU1gMU2f3YuLCYYLHqjN",
-      "klipyApiKey": "tc14Tax6viWl5Cenp2rpn9Dj5WbIA4VPTHF0skyutWomHQUfNSSxn4bInYvUaLc0"
+      }
     },
     "updates": {
       "url": "https://u.expo.dev/ff3ecbc9-277a-48cf-9162-f85f03e976aa"

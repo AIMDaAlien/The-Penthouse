@@ -110,7 +110,7 @@ export default function MessageInput({
         }
     };
 
-    const [previewFile, setPreviewFile] = useState<{ uri: string; type: string; name?: string } | null>(null);
+    const [previewFile, setPreviewFile] = useState<{ uri: string; type: string; name?: string; size?: number } | null>(null);
 
     const handlePickImage = async () => {
         try {
@@ -121,10 +121,18 @@ export default function MessageInput({
 
             if (!result.canceled && result.assets && result.assets.length > 0) {
                 const asset = result.assets[0];
+                
+                // Enforce 100MB limit (100 * 1024 * 1024 bytes)
+                if (asset.fileSize && asset.fileSize > 104857600) {
+                    Alert.alert('File too large', 'Please select a file smaller than 100MB.');
+                    return;
+                }
+
                 setPreviewFile({
                     uri: asset.uri,
                     name: asset.fileName || `media.${asset.type === 'video' ? 'mp4' : 'jpg'}`,
                     type: asset.mimeType || (asset.type === 'video' ? 'video/mp4' : 'image/jpeg'),
+                    size: asset.fileSize,
                 });
             }
         } catch (err) {

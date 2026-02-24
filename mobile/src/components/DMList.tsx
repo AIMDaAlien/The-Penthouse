@@ -215,6 +215,7 @@ export function DMList({ onSelectDM, onNewDM }: DMListProps) {
           data={dms}
           keyExtractor={DM_KEY_EXTRACTOR}
           renderItem={renderDMItem}
+          estimatedItemSize={72}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
