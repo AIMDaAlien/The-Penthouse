@@ -24,6 +24,7 @@ import {
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { BlurView } from 'expo-blur';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
 import Animated, { 
   useSharedValue, 
   useAnimatedStyle, 
@@ -43,8 +44,15 @@ interface CreateServerModalProps {
 export default function CreateServerModal({ visible, onClose, onCreated }: CreateServerModalProps) {
   const [serverName, setServerName] = useState('');
   const [iconUri, setIconUri] = useState<string | null>(null);
+  const [iconFileSize, setIconFileSize] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
   const [uploadingIcon, setUploadingIcon] = useState(false);
+  const SERVER_ICON_MAX_BYTES = 25 * 1024 * 1024;
+
+  const iconTooLarge = !!iconFileSize && iconFileSize > SERVER_ICON_MAX_BYTES;
+  const formatMb = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  const getErrorMessage = (err: any, fallback: string) =>
+    err?.response?.data?.error || err?.response?.data?.message || err?.message || fallback;
 
   const handlePickIcon = async () => {
     try {
@@ -56,7 +64,26 @@ export default function CreateServerModal({ visible, onClose, onCreated }: Creat
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        setIconUri(result.assets[0].uri);
+        const asset = result.assets[0];
+        let fileSize = typeof asset.fileSize === 'number' ? asset.fileSize : null;
+
+        if (!fileSize && asset.uri) {
+          try {
+            const info = await FileSystem.getInfoAsync(asset.uri);
+            if (info.exists && typeof info.size === 'number') {
+              fileSize = info.size;
+            }
+          } catch (fileInfoErr) {
+            console.warn('Could not read selected icon size:', fileInfoErr);
+          }
+        }
+
+        setIconUri(asset.uri);
+        setIconFileSize(fileSize);
+
+        if (fileSize && fileSize > SERVER_ICON_MAX_BYTES) {
+          Alert.alert('Icon too large', `Server icon must be 25 MB or smaller. Selected: ${formatMb(fileSize)}.`);
+        }
       }
     } catch (err) {
       console.error('Image picker error:', err);
@@ -66,6 +93,10 @@ export default function CreateServerModal({ visible, onClose, onCreated }: Creat
   const handleCreate = async () => {
     if (!serverName.trim()) {
       Alert.alert('Error', 'Please enter a server name');
+      return;
+    }
+    if (iconTooLarge) {
+      Alert.alert('Icon too large', 'Please choose an image smaller than 25 MB.');
       return;
     }
 
@@ -86,7 +117,8 @@ export default function CreateServerModal({ visible, onClose, onCreated }: Creat
           iconUrl = (data as any).iconUrl;
         } catch (err) {
           console.error('Icon upload failed:', err);
-          // Continue without icon
+          Alert.alert('Icon upload failed', getErrorMessage(err, 'Unable to upload server icon.'));
+          return;
         } finally {
           setUploadingIcon(false);
         }
@@ -101,7 +133,7 @@ export default function CreateServerModal({ visible, onClose, onCreated }: Creat
       handleClose();
     } catch (err: any) {
       console.error('Failed to create server:', err);
-      Alert.alert('Error', err.response?.data?.error || 'Failed to create server');
+      Alert.alert('Error', getErrorMessage(err, 'Failed to create server'));
     } finally {
       setCreating(false);
     }
@@ -110,10 +142,11 @@ export default function CreateServerModal({ visible, onClose, onCreated }: Creat
   const handleClose = () => {
     setServerName('');
     setIconUri(null);
+    setIconFileSize(null);
     onClose();
   };
 
-  const isDisabled = creating || !serverName.trim();
+  const isDisabled = creating || !serverName.trim() || iconTooLarge;
 
   return (
     <Modal
@@ -164,6 +197,11 @@ export default function CreateServerModal({ visible, onClose, onCreated }: Creat
                     <Ionicons name="add" size={16} color={Colors.TEXT_NORMAL} />
                   </View>
                 </Pressable>
+                <Text style={[styles.iconMeta, iconTooLarge && styles.iconMetaError]}>
+                  {iconFileSize
+                    ? `Selected: ${formatMb(iconFileSize)} / Max: ${formatMb(SERVER_ICON_MAX_BYTES)}`
+                    : `Max icon size: ${formatMb(SERVER_ICON_MAX_BYTES)}`}
+                </Text>
 
                 {/* Server Name Input */}
                 <View style={styles.inputContainer}>
@@ -326,6 +364,15 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.ACCENT,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  iconMeta: {
+    ...Typography.MICRO,
+    color: Colors.TEXT_MUTED,
+    textAlign: 'center',
+    marginBottom: Spacing.M,
+  },
+  iconMetaError: {
+    color: Colors.ERROR,
   },
   inputContainer: {
     marginBottom: Spacing.L,

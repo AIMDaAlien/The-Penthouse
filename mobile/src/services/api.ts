@@ -180,6 +180,45 @@ export interface AppUpdateInfo {
     apkUrl: string;
 }
 
+type ParsedFetchError = {
+    status: number;
+    rawMessage: string;
+};
+
+const toUploadMessage = (status: number, rawMessage: string, fallback: string): string => {
+    if (status === 413) return 'File too large. Max size is 25 MB.';
+    if (status === 429) return 'Too many requests, calm down.';
+    if (rawMessage) return rawMessage;
+    return fallback;
+};
+
+const parseFetchError = async (response: Response, fallback: string): Promise<ParsedFetchError> => {
+    const status = response.status;
+    let rawMessage = '';
+
+    try {
+        const text = await response.text();
+        if (text) {
+            try {
+                const parsed = JSON.parse(text);
+                rawMessage = parsed?.error || parsed?.message || text;
+            } catch {
+                rawMessage = text;
+            }
+        }
+    } catch {
+        // Ignore parse errors and fall back to default messaging.
+    }
+
+    return { status, rawMessage: rawMessage || fallback };
+};
+
+const createUploadError = (status: number, message: string): Error & { status: number } => {
+    const err = new Error(message) as Error & { status: number };
+    err.status = status;
+    return err;
+};
+
 export const uploadFile = async (file: RNFile): Promise<{ data: { url: string; type: 'image' | 'video' | 'file'; mimeType: string; filename: string } }> => {
     const formData = new FormData();
     // React Native expects: { uri, type, name }
@@ -207,10 +246,13 @@ export const uploadFile = async (file: RNFile): Promise<{ data: { url: string; t
     }
 
     if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Upload failed:', response.status, errorText);
-        if (response.status >= 500) setServerOffline(`Upload server error (${response.status})`);
-        throw new Error(`Upload failed: ${response.status}`);
+        const parsedError = await parseFetchError(response, 'Upload failed');
+        console.error('Upload failed:', parsedError.status, parsedError.rawMessage);
+        if (parsedError.status >= 500) setServerOffline(`Upload server error (${parsedError.status})`);
+        throw createUploadError(
+            parsedError.status,
+            toUploadMessage(parsedError.status, parsedError.rawMessage, 'Upload failed')
+        );
     }
 
     setServerOnline();
@@ -243,8 +285,12 @@ export const uploadVoice = async (audioUri: string, duration: number, mimeType =
     }
 
     if (!response.ok) {
-        if (response.status >= 500) setServerOffline(`Upload server error (${response.status})`);
-        throw new Error(`Upload failed: ${response.status}`);
+        const parsedError = await parseFetchError(response, 'Voice upload failed');
+        if (parsedError.status >= 500) setServerOffline(`Upload server error (${parsedError.status})`);
+        throw createUploadError(
+            parsedError.status,
+            toUploadMessage(parsedError.status, parsedError.rawMessage, 'Voice upload failed')
+        );
     }
 
     setServerOnline();
@@ -320,10 +366,13 @@ export const uploadAvatar = async (file: RNFile): Promise<{ data: { avatarUrl: s
     }
 
     if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Avatar upload failed:', response.status, errorText);
-        if (response.status >= 500) setServerOffline(`Upload server error (${response.status})`);
-        throw new Error(`Avatar upload failed: ${response.status}`);
+        const parsedError = await parseFetchError(response, 'Avatar upload failed');
+        console.error('Avatar upload failed:', parsedError.status, parsedError.rawMessage);
+        if (parsedError.status >= 500) setServerOffline(`Upload server error (${parsedError.status})`);
+        throw createUploadError(
+            parsedError.status,
+            toUploadMessage(parsedError.status, parsedError.rawMessage, 'Avatar upload failed')
+        );
     }
 
     setServerOnline();
@@ -411,20 +460,31 @@ export const uploadServerIcon = async (file: RNFile): Promise<{ data: { iconUrl:
     } as any);
 
     const token = await storage.getItem('token');
-    const response = await fetch(`${API_URL}/media/server-icon`, {
-        method: 'POST',
-        headers: {
-            'Authorization': `Bearer ${token}`,
-        },
-        body: formData,
-    });
-
-    if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Server icon upload failed:', response.status, errorText);
-        throw new Error(`Server icon upload failed: ${response.status}`);
+    let response: Response;
+    try {
+        response = await fetch(`${API_URL}/media/server-icon`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+            },
+            body: formData,
+        });
+    } catch (e: any) {
+        setServerOffline(e?.message || 'Upload network error');
+        throw e;
     }
 
+    if (!response.ok) {
+        const parsedError = await parseFetchError(response, 'Server icon upload failed');
+        console.error('Server icon upload failed:', parsedError.status, parsedError.rawMessage);
+        if (parsedError.status >= 500) setServerOffline(`Upload server error (${parsedError.status})`);
+        throw createUploadError(
+            parsedError.status,
+            toUploadMessage(parsedError.status, parsedError.rawMessage, 'Server icon upload failed')
+        );
+    }
+
+    setServerOnline();
     const data = await response.json();
     return { data };
 };

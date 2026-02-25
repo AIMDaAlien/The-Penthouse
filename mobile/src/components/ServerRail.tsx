@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.EFFECTS.CARD_BG,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: Spacing.SM,
+    marginLeft: Spacing.S,
     overflow: 'hidden',
   },
   serverBtnSelected: {

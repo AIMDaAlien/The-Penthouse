@@ -9,6 +9,19 @@
 
 const rateLimit = require('express-rate-limit');
 
+const RATE_LIMIT_CALM_DOWN = 'Too many requests, calm down.';
+
+const shouldSkipForTest = () => (
+  process.env.NODE_ENV === 'test' &&
+  process.env.ENABLE_RATE_LIMIT_IN_TEST !== 'true'
+);
+
+const userAwareKeyGenerator = (req) => (
+  req.user && req.user.userId
+    ? `user:${req.user.userId}`
+    : `ip:${req.ip}`
+);
+
 // Store for rate limit data (in-memory, consider Redis for production cluster)
 const createLimiter = (options) => rateLimit({
   windowMs: options.windowMs,
@@ -16,9 +29,10 @@ const createLimiter = (options) => rateLimit({
   message: { error: options.message || 'Too many requests, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
+  ...(typeof options.keyGenerator === 'function' ? { keyGenerator: options.keyGenerator } : {}),
   // Skip rate limiting in test environment
   skip: (req, res) => {
-    if (process.env.NODE_ENV === 'test') return true;
+    if (shouldSkipForTest()) return true;
     if (typeof options.skip === 'function') return options.skip(req, res);
     return false;
   },
@@ -53,7 +67,8 @@ const registerLimiter = createLimiter({
 const messageLimiter = createLimiter({
   windowMs: 60 * 1000, // 1 minute
   max: 30,
-  message: 'Slow down! Too many messages sent.'
+  message: 'Slow down! Too many messages sent.',
+  keyGenerator: userAwareKeyGenerator,
 });
 
 /**
@@ -63,7 +78,19 @@ const messageLimiter = createLimiter({
 const uploadLimiter = createLimiter({
   windowMs: 60 * 1000, // 1 minute
   max: 10,
-  message: 'Too many uploads, please wait before uploading more files.'
+  message: RATE_LIMIT_CALM_DOWN,
+  keyGenerator: userAwareKeyGenerator,
+});
+
+/**
+ * Server Create Rate Limit
+ * 10 creates per minute per authenticated user
+ */
+const serverCreateLimiter = createLimiter({
+  windowMs: 60 * 1000,
+  max: 10,
+  message: RATE_LIMIT_CALM_DOWN,
+  keyGenerator: userAwareKeyGenerator,
 });
 
 /**
@@ -76,7 +103,12 @@ const apiLimiter = createLimiter({
   message: 'Too many requests, please slow down.',
   // Auth endpoints have their own dedicated limiters.
   // Excluding them from the global API bucket avoids false positives behind reverse proxies.
-  skip: (req) => req.path.startsWith('/auth') || req.path === '/health',
+  skip: (req) => (
+    req.path.startsWith('/auth') ||
+    req.path === '/health' ||
+    (req.method === 'POST' && req.path === '/servers') ||
+    (req.method === 'POST' && req.path.startsWith('/media/'))
+  ),
 });
 
 /**
@@ -86,7 +118,8 @@ const apiLimiter = createLimiter({
 const friendRequestLimiter = createLimiter({
   windowMs: 60 * 60 * 1000, // 1 hour
   max: 20,
-  message: 'Too many friend requests sent. Please wait before sending more.'
+  message: 'Too many friend requests sent. Please wait before sending more.',
+  keyGenerator: userAwareKeyGenerator,
 });
 
 /**
@@ -134,6 +167,7 @@ module.exports = {
   registerLimiter,
   messageLimiter,
   uploadLimiter,
+  serverCreateLimiter,
   apiLimiter,
   friendRequestLimiter,
   refreshLimiter,

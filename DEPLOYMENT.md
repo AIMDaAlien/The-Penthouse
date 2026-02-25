@@ -39,6 +39,7 @@ CORS_ORIGIN=https://penthouse.blog,https://api.penthouse.blog
 DOMAIN=penthouse.blog
 PENTHOUSE_DATA_PATH=/mnt/Storage_Pool/penthouse/data
 ENABLE_DEBUG_ENDPOINTS=false
+SERVER_ICON_MAX_BYTES=26214400
 ```
 
 Notes:
@@ -46,6 +47,7 @@ Notes:
 - `CORS_ORIGIN` must be set.
 - Wildcard defaults are blocked by compose hardening.
 - `PENTHOUSE_DATA_PATH` should be an absolute host path outside the repo clone so user data persists across repo resets.
+- `SERVER_ICON_MAX_BYTES` defaults to `26214400` (25 MB) if not set.
 
 ---
 

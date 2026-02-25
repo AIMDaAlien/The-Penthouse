@@ -234,37 +234,34 @@ export default function ProfileScreen() {
       {/* Divider */}
       <View style={styles.divider} />
 
-      {/* Data Incinerator */}
+      {/* Danger Zone */}
       <View style={styles.sectionHeader}>
         <Text style={[styles.sectionTitle, { color: Colors.ERROR }]}>DANGER ZONE</Text>
       </View>
       
       <Pressable
         style={({ pressed }) => [
-            styles.incineratorButton,
-            pressed && styles.incineratorButtonPressed
+            styles.dangerRow,
+            pressed && { opacity: 0.7 }
         ]}
         onPress={handleIncinerate}
       >
-        <Ionicons name="flame" size={24} color={Colors.TEXT_NORMAL} />
-        <Text style={styles.incineratorText}>DATA INCINERATOR</Text>
+        <Ionicons name="flame" size={18} color={Colors.ERROR} />
+        <Text style={styles.dangerRowText}>Wipe session data</Text>
+        <Ionicons name="chevron-forward" size={16} color={Colors.TEXT_MUTED} />
       </Pressable>
-      <Text style={styles.incineratorHint}>
-        This will wipe your session data and log you out immediately.
-      </Text>
 
-      <View style={{ height: Spacing.L }} />
-
-      {/* Account Section */}
-      <Text style={styles.sectionTitle}>Account</Text>
-
-      {/* Logout Button */}
-      <AnimatedButton
+      <Pressable
+        style={({ pressed }) => [
+            styles.dangerRow,
+            pressed && { opacity: 0.7 }
+        ]}
         onPress={handleLogout}
-        label="Logout"
-        variant="danger"
-        icon="log-out-outline"
-      />
+      >
+        <Ionicons name="log-out-outline" size={18} color={Colors.ERROR} />
+        <Text style={styles.dangerRowText}>Logout</Text>
+        <Ionicons name="chevron-forward" size={16} color={Colors.TEXT_MUTED} />
+      </Pressable>
 
       {/* App Version */}
       <View style={styles.versionContainer}>
@@ -346,7 +343,7 @@ const styles = StyleSheet.create({
   },
   avatarSection: {
     alignItems: 'center',
-    marginBottom: Spacing.XL,
+    marginBottom: Spacing.L,
   },
   avatarContainer: {
     width: 96,
@@ -446,34 +443,27 @@ const styles = StyleSheet.create({
     ...Typography.MICRO,
     color: Colors.TEXT_MUTED,
   },
-  incineratorButton: {
-    backgroundColor: Colors.ERROR,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: Spacing.M,
-    borderRadius: Radius.M,
-    marginTop: Spacing.S,
-    ...Glows.SELECTED, // Add a glow to make it dangerous looking
-    shadowColor: Colors.ERROR,
-  },
-  incineratorButtonPressed: {
-    opacity: 0.9,
-    transform: [{ scale: 0.98 }],
-  },
-  incineratorText: {
-    ...Typography.H3,
-    color: Colors.TEXT_NORMAL,
-    marginLeft: Spacing.S,
-    fontWeight: '800',
-    letterSpacing: 1,
-  },
   incineratorHint: {
     ...Typography.MICRO,
     color: Colors.TEXT_MUTED,
     marginTop: Spacing.S,
     textAlign: 'center',
     marginBottom: Spacing.M,
+  },
+  dangerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: `${Colors.ERROR}10`,
+    borderRadius: Radius.M,
+    paddingVertical: Spacing.SM,
+    paddingHorizontal: Spacing.M,
+    marginBottom: Spacing.S,
+  },
+  dangerRowText: {
+    ...Typography.BODY,
+    color: Colors.ERROR,
+    flex: 1,
+    marginLeft: Spacing.SM,
   },
   sectionHeader: {
     flexDirection: 'row', 

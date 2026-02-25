@@ -14,6 +14,7 @@ import { Spacing, Radius } from '../designsystem/Spacing';
 import { Shadows } from '../designsystem/Shadows';
 import { GlassInput } from './glass/GlassInput';
 import MediaPreviewModal from './media/MediaPreviewModal';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface MessageInputProps {
     chatId?: number;
@@ -49,6 +50,7 @@ export default function MessageInput({
     const [pickerMode, setPickerMode] = useState<PickerMode>('none');
     const inputRef = useRef<TextInput>(null);
     const typingTimeout = useRef<NodeJS.Timeout | null>(null);
+    const insets = useSafeAreaInsets();
 
     // Handle editing mode
     const isEditing = !!editingMessage;
@@ -249,71 +251,71 @@ export default function MessageInput({
             )}
 
             {/* Main input area */}
-            <BlurView intensity={20} tint="dark" style={styles.inputArea}>
-                {/* Attachment button */}
-                <Pressable onPress={handlePickImage} style={styles.iconBtn}>
-                    <Ionicons name="add-circle" size={26} color={Colors.OVERLAY1} />
-                </Pressable>
-
-                {/* Text input */}
-                <GlassInput
-                    ref={inputRef}
-                    placeholder="Message..."
-                    value={displayText}
-                    onChangeText={handleTextChange}
-                    returnKeyType="send"
-                    onSubmitEditing={handleSend}
-                    blurOnSubmit={false}
-                    multiline
-                    containerStyle={styles.textInputContainer}
-                    style={{ maxHeight: 100 }}
-                />
-
-                {/* Action buttons */}
-                <View style={styles.actionRow}>
-                    {/* Emoji button */}
+            <BlurView
+                intensity={20}
+                tint="dark"
+                style={[styles.inputArea, { paddingBottom: Math.max(Spacing.S, insets.bottom) }]}
+            >
+                {/* Tools row */}
+                <View style={styles.toolsRow}>
+                    <Pressable onPress={handlePickImage} style={styles.iconBtn}>
+                        <Ionicons name="add-circle" size={24} color={Colors.OVERLAY1} />
+                    </Pressable>
                     <Pressable onPress={() => togglePicker('emoji')} style={styles.iconBtn}>
                         <Ionicons
                             name={pickerMode === 'emoji' ? 'happy' : 'happy-outline'}
-                            size={24}
+                            size={22}
                             color={pickerMode === 'emoji' ? Colors.LAVENDER : Colors.OVERLAY1}
                         />
                     </Pressable>
-
-                    {/* GIF button */}
                     {!isEditing && (
                         <Pressable onPress={() => togglePicker('gif')} style={styles.iconBtn}>
-                            <Text style={[Typography.MICRO, { color: pickerMode === 'gif' ? Colors.LAVENDER : Colors.OVERLAY1, fontSize: 10 }]}>GIF</Text>
+                            <Text style={[Typography.MICRO, styles.gifLabel, { color: pickerMode === 'gif' ? Colors.LAVENDER : Colors.OVERLAY1 }]}>
+                                GIF
+                            </Text>
                         </Pressable>
                     )}
-
-                    {/* Voice button */}
                     {!isEditing && (
                         <Pressable onPress={() => togglePicker('voice')} style={styles.iconBtn}>
-                            <Ionicons name="mic" size={24} color={Colors.OVERLAY1} />
+                            <Ionicons name="mic" size={22} color={Colors.OVERLAY1} />
                         </Pressable>
                     )}
+                </View>
 
-                    {/* Send button (Always visible, disabled when no text) */}
+                {/* Composer row */}
+                <View style={styles.composeRow}>
+                    <GlassInput
+                        ref={inputRef}
+                        placeholder="Message..."
+                        value={displayText}
+                        onChangeText={handleTextChange}
+                        returnKeyType="send"
+                        onSubmitEditing={handleSend}
+                        blurOnSubmit={false}
+                        multiline
+                        containerStyle={styles.textInputContainer}
+                        style={{ maxHeight: 100 }}
+                    />
+
                     <Pressable
                         onPress={handleSend}
                         disabled={sending || (!displayText.trim() && !isEditing)}
                         style={({ pressed }) => [
                             styles.sendBtn,
                             pressed && { transform: [{ scale: 0.95 }], opacity: 0.8 },
-                            (!displayText.trim() && !isEditing) && { opacity: 0.5, backgroundColor: Colors.SURFACE1 }
+                            (!displayText.trim() && !isEditing) && styles.sendBtnDisabled
                         ]}
                     >
-                            {sending ? (
-                                <ActivityIndicator size="small" color={Colors.CRUST} />
-                            ) : (
-                                <Ionicons
-                                    name={isEditing ? 'checkmark' : 'arrow-up'}
-                                    size={20}
-                                    color={Colors.CRUST}
-                                />
-                            )}
-                        </Pressable>
+                        {sending ? (
+                            <ActivityIndicator size="small" color={Colors.CRUST} />
+                        ) : (
+                            <Ionicons
+                                name={isEditing ? 'checkmark' : 'arrow-up'}
+                                size={20}
+                                color={Colors.CRUST}
+                            />
+                        )}
+                    </Pressable>
                 </View>
             </BlurView>
 
@@ -355,16 +357,23 @@ const styles = StyleSheet.create({
         padding: Spacing.S,
     },
     inputArea: {
-        flexDirection: 'row',
-        alignItems: 'flex-end',
         padding: Spacing.S,
         backgroundColor: 'rgba(17, 17, 27, 0.7)', // Crust
         borderTopWidth: 1,
         borderTopColor: Colors.GLASS.PANEL_BORDER,
     },
+    toolsRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: Spacing.XS,
+    },
+    composeRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-end',
+    },
     textInputContainer: {
         flex: 1,
-        marginHorizontal: Spacing.XS,
+        marginRight: Spacing.XS,
         // Make GlassInput flexible height for multiline
         height: undefined, 
         minHeight: 44,
@@ -374,16 +383,20 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
-    actionRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingBottom: 4, // Align with input
+    gifLabel: {
+        fontSize: 10,
     },
     sendBtn: {
-        padding: Spacing.S,
-        marginLeft: Spacing.XS,
+        width: 42,
+        height: 42,
+        alignItems: 'center',
+        justifyContent: 'center',
         borderRadius: Radius.CIRCLE,
         backgroundColor: Colors.LAVENDER,
         ...Shadows.GLOW,
-    }
+    },
+    sendBtnDisabled: {
+        opacity: 0.5,
+        backgroundColor: Colors.SURFACE1,
+    },
 });

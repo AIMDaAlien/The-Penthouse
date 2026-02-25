@@ -38,6 +38,8 @@ export function ServerStatusBanner() {
 
   const top = insets.top + Spacing.S;
 
+  const isServerError = status.reason && /Server error \(5\d\d\)/.test(status.reason);
+
   return (
     <View pointerEvents="box-none" style={[styles.container, { top }]}>
       <Pressable
@@ -51,6 +53,11 @@ export function ServerStatusBanner() {
           {status.reason || 'Unable to reach server.'}
           {lastOkAgo ? ` Last connected ${lastOkAgo}.` : ''}
         </Text>
+        {isServerError && (
+          <Text style={styles.updateHint}>
+            You may need to update the app — visit penthouse.blog
+          </Text>
+        )}
       </Pressable>
     </View>
   );
@@ -81,6 +88,13 @@ const styles = StyleSheet.create({
     color: Colors.TEXT_MUTED,
     fontSize: 12,
     lineHeight: 16,
+  },
+  updateHint: {
+    color: Colors.ACCENT_LIGHT,
+    fontSize: 11,
+    lineHeight: 15,
+    marginTop: 4,
+    fontWeight: '500',
   },
 });
 

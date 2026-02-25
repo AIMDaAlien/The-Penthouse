@@ -15,6 +15,7 @@ const toPositiveInt = (value, fallback) => {
     return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 };
 const uploadMaxBytes = toPositiveInt(process.env.UPLOAD_MAX_BYTES, 100 * 1024 * 1024);
+const serverIconMaxBytes = toPositiveInt(process.env.SERVER_ICON_MAX_BYTES, 25 * 1024 * 1024);
 const minFreeDiskBytes = toPositiveInt(process.env.MIN_FREE_DISK_BYTES, 512 * 1024 * 1024);
 const debugLog = (...args) => {
     if (!isProduction) console.log(...args);
@@ -61,25 +62,49 @@ const storage = multer.diskStorage({
     }
 });
 
+const genericFileFilter = (req, file, cb) => {
+    // Allow common image and audio formats
+    const allowedExtensions = /jpeg|jpg|png|gif|webp|webm|mp3|wav|ogg|m4a|aac|mp4|caf|3gp|heic|heif/;
+    const extname = allowedExtensions.test(path.extname(file.originalname).toLowerCase());
+    // Accept image/*, audio/*, and video/* mime types
+    const mimetype = /^(image|audio|video)\/.+/.test(file.mimetype);
+
+    debugLog(`File filter check: name=${file.originalname}, ext=${path.extname(file.originalname)}, mime=${file.mimetype}, extOk=${extname}, mimeOk=${mimetype}`);
+
+    if (extname && mimetype) {
+        return cb(null, true);
+    }
+    const error = new Error(`File type not allowed. Got: ${file.mimetype}, ext: ${path.extname(file.originalname)}`);
+    console.error('File rejected:', error.message);
+    cb(error);
+};
+
+const serverIconFileFilter = (req, file, cb) => {
+    const allowedExtensions = /jpeg|jpg|png|gif|webp|heic|heif/;
+    const extname = allowedExtensions.test(path.extname(file.originalname).toLowerCase());
+    const isImageMime = /^image\/.+/.test(file.mimetype);
+
+    debugLog(`Server icon filter check: name=${file.originalname}, ext=${path.extname(file.originalname)}, mime=${file.mimetype}, extOk=${extname}, imageMime=${isImageMime}`);
+
+    if (extname && isImageMime) {
+        return cb(null, true);
+    }
+
+    const error = new Error(`Server icon must be an image. Got: ${file.mimetype}, ext: ${path.extname(file.originalname)}`);
+    console.error('Server icon rejected:', error.message);
+    cb(error);
+};
+
 const upload = multer({
     storage,
     limits: { fileSize: uploadMaxBytes, files: 1 },
-    fileFilter: (req, file, cb) => {
-        // Allow common image and audio formats
-        const allowedExtensions = /jpeg|jpg|png|gif|webp|webm|mp3|wav|ogg|m4a|aac|mp4|caf|3gp/;
-        const extname = allowedExtensions.test(path.extname(file.originalname).toLowerCase());
-        // Accept image/*, audio/*, and video/* mime types
-        const mimetype = /^(image|audio|video)\/.+/.test(file.mimetype);
+    fileFilter: genericFileFilter,
+});
 
-        debugLog(`File filter check: name=${file.originalname}, ext=${path.extname(file.originalname)}, mime=${file.mimetype}, extOk=${extname}, mimeOk=${mimetype}`);
-
-        if (extname && mimetype) {
-            return cb(null, true);
-        }
-        const error = new Error(`File type not allowed. Got: ${file.mimetype}, ext: ${path.extname(file.originalname)}`);
-        console.error('File rejected:', error.message);
-        cb(error);
-    }
+const serverIconUpload = multer({
+    storage,
+    limits: { fileSize: serverIconMaxBytes, files: 1 },
+    fileFilter: serverIconFileFilter,
 });
 
 // Generic file upload
@@ -145,7 +170,7 @@ router.post('/avatar', authenticateToken, uploadLimiter, upload.single('avatar')
 }));
 
 // Upload server icon
-router.post('/server-icon', authenticateToken, uploadLimiter, upload.single('icon'), asyncHandler(async (req, res) => {
+router.post('/server-icon', authenticateToken, uploadLimiter, serverIconUpload.single('icon'), asyncHandler(async (req, res) => {
     if (!req.file) {
         return res.status(400).json({ error: 'No file uploaded' });
     }

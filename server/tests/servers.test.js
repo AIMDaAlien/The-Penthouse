@@ -147,4 +147,30 @@ describe('Servers / Channels / Member Management', () => {
     expect(transferred.body.success).toBe(true);
     expect(transferred.body.ownerId).toBe(memberId);
   });
+
+  it('applies server creation rate limit with calm-down copy', async () => {
+    process.env.ENABLE_RATE_LIMIT_IN_TEST = 'true';
+
+    try {
+      let limitedResponse;
+
+      for (let i = 0; i < 15; i += 1) {
+        // eslint-disable-next-line no-await-in-loop
+        const res = await request(app)
+          .post('/api/servers')
+          .set('Authorization', `Bearer ${ownerToken}`)
+          .send({ name: `burst-${i}` });
+
+        if (res.statusCode === 429) {
+          limitedResponse = res;
+          break;
+        }
+      }
+
+      expect(limitedResponse).toBeDefined();
+      expect(limitedResponse.body.error).toBe('Too many requests, calm down.');
+    } finally {
+      delete process.env.ENABLE_RATE_LIMIT_IN_TEST;
+    }
+  });
 });

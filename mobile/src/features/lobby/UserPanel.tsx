@@ -60,10 +60,10 @@ export function UserPanel({ onOpenSettings }: UserPanelProps) {
 
 const styles = StyleSheet.create({
     container: {
-        height: 60,
+        height: 52,
         backgroundColor: Colors.EFFECTS.PANEL_BG,
-        borderTopWidth: 1,
-        borderTopColor: Colors.GLASS.PANEL_BORDER,
+        borderBottomWidth: 1,
+        borderBottomColor: Colors.GLASS.PANEL_BORDER,
         justifyContent: 'center',
     },
     content: {

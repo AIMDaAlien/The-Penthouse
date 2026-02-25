@@ -95,7 +95,7 @@ export const Sizes = {
   HEADER_HEIGHT: 48,
   
   /** Server rail width */
-  SERVER_RAIL_WIDTH: 72,
+  SERVER_RAIL_WIDTH: 64,
   
   /** Channel sidebar width */
   CHANNEL_SIDEBAR_WIDTH: 240,

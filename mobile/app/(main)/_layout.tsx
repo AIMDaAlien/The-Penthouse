@@ -159,8 +159,9 @@ export default function MainLayout() {
       screenOptions={{
         headerStyle: { 
           backgroundColor: Colors.SECONDARY,
-          borderBottomColor: Colors.EFFECTS.PANEL_BORDER,
-          borderBottomWidth: 1,
+          elevation: 0,
+          shadowOpacity: 0,
+          borderBottomWidth: 0,
         },
         headerTintColor: Colors.TEXT_NORMAL,
         headerTitleStyle: { 

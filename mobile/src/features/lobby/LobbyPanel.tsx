@@ -111,6 +111,9 @@ export function LobbyPanel({ onChannelSelect }: LobbyPanelProps) {
 
       {/* Main Content (Channel List) */}
       <View style={styles.main}>
+        {/* User panel at top */}
+        <UserPanel onOpenSettings={() => setShowSettings(true)} />
+
         {/* Search Input */}
         <View style={styles.searchContainer}>
           <BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFill} />
@@ -189,7 +192,6 @@ export function LobbyPanel({ onChannelSelect }: LobbyPanelProps) {
             />
           )}
         </ScrollView>
-        <UserPanel onOpenSettings={() => setShowSettings(true)} />
       </View>
 
       {/* Modals */}
@@ -360,7 +362,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   scrollContent: {
-    paddingHorizontal: Spacing.SM,
+    paddingHorizontal: Spacing.S,
     paddingBottom: 100,
   },
   sectionHeader: {

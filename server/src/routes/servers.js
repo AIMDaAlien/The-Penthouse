@@ -1,6 +1,7 @@
 const express = require('express');
 const { db } = require('../database');
 const { authenticateToken } = require('../middleware/auth');
+const { serverCreateLimiter } = require('../middleware/rateLimit');
 const { validateCreateServer, validateCreateChannel } = require('../middleware/validation');
 
 const router = express.Router();
@@ -46,7 +47,7 @@ router.get('/', authenticateToken, (req, res) => {
 });
 
 // Create a new server
-router.post('/', authenticateToken, validateCreateServer, (req, res) => {
+router.post('/', authenticateToken, serverCreateLimiter, validateCreateServer, (req, res) => {
     try {
         const { name, iconUrl } = req.body;
 

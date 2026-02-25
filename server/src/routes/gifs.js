@@ -9,7 +9,6 @@
 
 const express = require('express');
 const { authenticateToken } = require('../middleware/auth');
-const { apiLimiter } = require('../middleware/rateLimit');
 
 const router = express.Router();
 
@@ -18,7 +17,7 @@ const KLIPY_API_KEY = process.env.KLIPY_API_KEY || '';
 
 // ─── GIPHY ────────────────────────────────────────────────
 
-router.get('/giphy/trending', authenticateToken, apiLimiter, async (req, res) => {
+router.get('/giphy/trending', authenticateToken, async (req, res) => {
     if (!GIPHY_API_KEY) return res.status(503).json({ error: 'GIPHY not configured' });
 
     try {
@@ -33,7 +32,7 @@ router.get('/giphy/trending', authenticateToken, apiLimiter, async (req, res) =>
     }
 });
 
-router.get('/giphy/search', authenticateToken, apiLimiter, async (req, res) => {
+router.get('/giphy/search', authenticateToken, async (req, res) => {
     if (!GIPHY_API_KEY) return res.status(503).json({ error: 'GIPHY not configured' });
 
     const q = req.query.q;
@@ -53,7 +52,7 @@ router.get('/giphy/search', authenticateToken, apiLimiter, async (req, res) => {
 
 // ─── KLIPY ────────────────────────────────────────────────
 
-router.get('/klipy/trending', authenticateToken, apiLimiter, async (req, res) => {
+router.get('/klipy/trending', authenticateToken, async (req, res) => {
     if (!KLIPY_API_KEY) return res.status(503).json({ error: 'Klipy not configured' });
 
     try {
@@ -67,7 +66,7 @@ router.get('/klipy/trending', authenticateToken, apiLimiter, async (req, res) =>
     }
 });
 
-router.get('/klipy/search', authenticateToken, apiLimiter, async (req, res) => {
+router.get('/klipy/search', authenticateToken, async (req, res) => {
     if (!KLIPY_API_KEY) return res.status(503).json({ error: 'Klipy not configured' });
 
     const q = req.query.q;
