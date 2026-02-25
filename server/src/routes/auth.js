@@ -52,11 +52,11 @@ router.post('/register', registerLimiter, validateRegister, asyncHandler(async (
         throw err;
     }
 
-    // Generate Access Token (15m)
+    // Generate Access Token (7d)
     const accessToken = jwt.sign(
         { userId: result.lastInsertRowid, username },
         process.env.JWT_SECRET,
-        { expiresIn: '15m' }
+        { expiresIn: '7d' }
     );
 
     // Generate Refresh Token (7d)
@@ -103,11 +103,11 @@ router.post('/login', authLimiter, validateLogin, asyncHandler(async (req, res) 
         return res.status(401).json({ error: 'Invalid username or password' });
     }
 
-    // Generate Access Token (15m)
+    // Generate Access Token (7d)
     const accessToken = jwt.sign(
         { userId: user.id, username: user.username },
         process.env.JWT_SECRET,
-        { expiresIn: '15m' }
+        { expiresIn: '7d' }
     );
 
     // Generate Refresh Token (7d)
@@ -160,12 +160,12 @@ router.post('/refresh', refreshLimiter, asyncHandler(async (req, res) => {
     // Revoke used token (Rotation)
     db.prepare('DELETE FROM refresh_tokens WHERE id = ?').run(storedToken.id);
 
-    // Generate New Access Token (15m)
+    // Generate New Access Token (7d)
     const user = db.prepare('SELECT username FROM users WHERE id = ?').get(storedToken.user_id);
     const newAccessToken = jwt.sign(
         { userId: storedToken.user_id, username: user.username },
         process.env.JWT_SECRET,
-        { expiresIn: '15m' }
+        { expiresIn: '7d' }
     );
 
     // Generate New Refresh Token (7d)
