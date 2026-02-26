@@ -190,11 +190,11 @@ Workflow:
 - `.github/workflows/deploy-truenas.yml`
 
 Behavior:
-- Builds Android APK on EAS (GitHub-hosted runner) for each `main` push
+- Builds Android APK on EAS (GitHub-hosted runner) only when native-impact changes are detected (or when manually forced via `workflow_dispatch`)
 - Publishes APK to `${PENTHOUSE_DATA_PATH}/downloads/the-penthouse.apk` on TrueNAS (default `/mnt/Storage_Pool/penthouse/data`)
 - Regenerates `${PENTHOUSE_DATA_PATH}/downloads/app-update.json` with checksum + metadata
 - Pulls `main`, rebuilds, restarts compose, then verifies health + APK URL
-- Generates release notes from commit range and publishes them as update changelog
+- Prefers `CHANGELOG.md` version section for release notes; falls back to commit-range notes when missing
 
 Persistence guardrail:
 - Set `PENTHOUSE_DATA_PATH` to an absolute host path (recommended: `/mnt/Storage_Pool/penthouse/data`) so user data survives app repo updates/rebuilds.
@@ -230,6 +230,7 @@ Important:
 - Use OTA (`eas update`) for JS/asset-only changes within the same app version
 - Require APK upgrade when native dependencies/config change or when `expo.version` is bumped
 - Use `mandatory`/`minSupportedVersion` in update manifest to force upgrades when needed
+- If major fixes are still pending (auth/chat/create-server regressions, failing CI, or unresolved production issues), hold release/version bump and stabilize first
 
 ---
 
