@@ -38,7 +38,7 @@ export function WelcomePanel({ onEnter }: WelcomePanelProps) {
   return (
     <View style={styles.container}>
       <Animated.View 
-        entering={SlideInDown.springify().damping(18).stiffness(90)}
+        entering={SlideInDown.springify().damping(22).stiffness(260)}
         style={styles.cardContainer}
       >
         {/* Card with blur */}

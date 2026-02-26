@@ -162,7 +162,7 @@ export default function CreateServerModal({ visible, onClose, onCreated }: Creat
         >
           <Pressable onPress={e => e.stopPropagation()}>
             <Animated.View 
-              entering={SlideInDown.springify().damping(18).stiffness(90)}
+              entering={SlideInDown.springify().damping(22).stiffness(260)}
               style={styles.modal}
             >
               {/* Blur background */}

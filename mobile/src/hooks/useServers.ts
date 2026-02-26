@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Alert } from 'react-native';
 import {
     getServers,
@@ -52,6 +52,11 @@ export function useServers(): UseServersReturn {
             (data) => setServers(data)
         );
     }, []);
+
+    // Auto-load servers on mount
+    useEffect(() => {
+        loadServers();
+    }, [loadServers]);
 
     const loadServerDetails = useCallback(async (serverId: number) => {
         await safeApiCall(

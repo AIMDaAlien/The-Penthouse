@@ -146,7 +146,7 @@ export default function ChatScreen() {
         }
     };
 
-    if (!user || !id) return <View className="flex-1 bg-zinc-900" />;
+    if (!user || !id) return <View style={{ flex: 1, backgroundColor: '#18181b' }} />;
 
     return (
         <LinearGradient
@@ -169,12 +169,12 @@ export default function ChatScreen() {
             />
 
             <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                className="flex-1"
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                style={{ flex: 1 }}
                 keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
             >
-                <View style={{ flex: 1, marginTop: 100 }}> 
-                 {/* Margin top for transparent header */}
+                <View style={{ flex: 1, paddingTop: 100 }}> 
+                 {/* paddingTop for transparent header */}
                     <MessageList
                         messages={messages}
                         vibe={vibe}
@@ -188,8 +188,8 @@ export default function ChatScreen() {
 
                 {/* Typing indicator */}
                 {typingDisplay && (
-                    <View className="px-4 py-2 bg-zinc-800/80">
-                        <Text className="text-zinc-400 text-sm italic">{typingDisplay}</Text>
+                    <View style={{ paddingHorizontal: 16, paddingVertical: 8, backgroundColor: 'rgba(39, 39, 42, 0.8)' }}>
+                        <Text style={{ color: '#a1a1aa', fontSize: 14, fontStyle: 'italic' }}>{typingDisplay}</Text>
                     </View>
                 )}
 

@@ -14,13 +14,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { 
   useSharedValue, 
   useAnimatedStyle, 
-  withSpring 
+  withSpring,
+  interpolate,
+  interpolateColor
 } from 'react-native-reanimated';
 import { useServerContext } from '../../src/context/ServerContext';
 import { Colors, Spacing, Sizes, SpringConfig } from '../../src/designsystem';
 
 // ─────────────────────────────────────────────────────────────
-// Custom Tab Bar Component
+// Custom Tab Bar Component (Liquid Lens Container)
 // ─────────────────────────────────────────────────────────────
 
 interface TabBarProps {
@@ -31,16 +33,16 @@ interface TabBarProps {
 
 function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
   const insets = useSafeAreaInsets();
+  const bottomOffset = (insets.bottom || Spacing.XS) + Spacing.M;
 
   return (
-    <View style={[styles.tabBarContainer, { paddingBottom: insets.bottom || Spacing.S }]}>
-      {/* Backdrop blur */}
-      <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
+    <View style={[styles.tabBarContainer, { bottom: bottomOffset }]}>
+      <View style={[StyleSheet.absoluteFill, styles.blurViewAsymmetric]}>
+        <BlurView intensity={60} tint="dark" style={StyleSheet.absoluteFill} />
+      </View>
       
-      {/* Top border */}
       <View style={styles.topBorder} />
       
-      {/* Tabs */}
       <View style={styles.tabsRow}>
         {state.routes.map((route: any, index: number) => {
           const { options } = descriptors[route.key];
@@ -76,7 +78,7 @@ function CustomTabBar({ state, descriptors, navigation }: TabBarProps) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Tab Button with Glow Effect
+// Tab Button with Floating Gem Active State
 // ─────────────────────────────────────────────────────────────
 
 interface TabButtonProps {
@@ -90,11 +92,49 @@ interface TabButtonProps {
 
 function TabButton({ label, icon, iconFocused, isFocused, badge, onPress }: TabButtonProps) {
   const scale = useSharedValue(1);
+  const progress = useSharedValue(isFocused ? 1 : 0);
   const currentIcon = isFocused && iconFocused ? iconFocused : icon;
   
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
+  React.useEffect(() => {
+    progress.value = withSpring(isFocused ? 1 : 0, {
+      damping: 14,
+      stiffness: 120,
+      mass: 1,
+    });
+  }, [isFocused]);
+
+  const animatedContainerStyle = useAnimatedStyle(() => {
+    return {
+      width: interpolate(progress.value, [0, 1], [48, 110]),
+      backgroundColor: interpolateColor(
+        progress.value,
+        [0, 1],
+        ['rgba(136, 136, 184, 0)', 'rgba(136, 136, 184, 0.2)']
+      ),
+      borderColor: interpolateColor(
+        progress.value,
+        [0, 1],
+        ['rgba(255, 255, 255, 0)', 'rgba(255, 255, 255, 0.15)']
+      ),
+      borderWidth: 1,
+      borderRadius: 24,
+      transform: [
+        { scale: scale.value },
+        { translateY: interpolate(progress.value, [0, 1], [0, -6]) }
+      ]
+    };
+  });
+
+  const animatedTextStyle = useAnimatedStyle(() => {
+    return {
+      opacity: progress.value,
+      maxWidth: interpolate(progress.value, [0, 1], [0, 60]),
+      marginLeft: interpolate(progress.value, [0, 1], [0, 6]),
+      transform: [
+        { translateX: interpolate(progress.value, [0, 1], [-5, 0]) }
+      ]
+    };
+  });
 
   const handlePressIn = () => {
     scale.value = withSpring(0.92, SpringConfig.MICRO);
@@ -109,31 +149,23 @@ function TabButton({ label, icon, iconFocused, isFocused, badge, onPress }: TabB
       onPress={onPress}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
-      style={styles.tabButton}
+      style={styles.tabButtonWrapper}
       accessibilityRole="tab"
       accessibilityState={{ selected: isFocused }}
       accessibilityLabel={label}
     >
-      <Animated.View style={[styles.tabContent, animatedStyle]}>
-        {/* Icon with glow */}
-        <View style={styles.iconWrapper}>
+      <Animated.View style={[styles.tabContentGem, animatedContainerStyle]}>
+        <View style={styles.iconWrapperGem}>
           <Ionicons
             name={currentIcon}
-            size={24}
-            color={isFocused ? Colors.ACCENT_LIGHT : Colors.INTERACTIVE_NORMAL}
+            size={22}
+            color={isFocused ? '#ffffff' : Colors.TEXT_MUTED}
           />
-          {isFocused && <View style={styles.iconGlow} />}
         </View>
+        <Animated.View style={[styles.labelContainerGem, animatedTextStyle]}>
+          <Text style={styles.labelGem} numberOfLines={1}>{label}</Text>
+        </Animated.View>
         
-        {/* Label */}
-        <Text style={[
-          styles.label,
-          { color: isFocused ? Colors.ACCENT_LIGHT : Colors.INTERACTIVE_NORMAL }
-        ]}>
-          {label}
-        </Text>
-        
-        {/* Badge */}
         {badge !== undefined && badge > 0 && (
           <View style={styles.badge}>
             <Text style={styles.badgeText}>
@@ -157,18 +189,9 @@ export default function MainLayout() {
     <Tabs
       tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={{
-        headerStyle: { 
-          backgroundColor: Colors.SECONDARY,
-          elevation: 0,
-          shadowOpacity: 0,
-          borderBottomWidth: 0,
-        },
-        headerTintColor: Colors.TEXT_NORMAL,
-        headerTitleStyle: { 
-          fontWeight: '600',
-          fontSize: 16,
-        },
-        headerTransparent: false,
+        headerShown: false,
+        animation: 'shift',
+        sceneStyle: { backgroundColor: Colors.PRIMARY },
       }}
     >
       <Tabs.Screen
@@ -222,11 +245,23 @@ export default function MainLayout() {
 const styles = StyleSheet.create({
   tabBarContainer: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: Colors.EFFECTS.PANEL_BG,
-    minHeight: Sizes.TAB_BAR_HEIGHT,
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(28, 28, 40, 0.4)',
+    height: 72,
+    borderRadius: 28,
+    borderTopRightRadius: 4,
+    borderBottomLeftRadius: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  blurViewAsymmetric: {
+    borderRadius: 28,
+    borderTopRightRadius: 4,
+    borderBottomLeftRadius: 4,
     overflow: 'hidden',
   },
   topBorder: {
@@ -235,51 +270,48 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 1,
-    backgroundColor: Colors.EFFECTS.PANEL_BORDER,
+    backgroundColor: 'rgba(136, 136, 184, 0.3)',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 4,
   },
   tabsRow: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-around',
-    paddingTop: Spacing.S,
-    paddingHorizontal: Spacing.XS,
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
   },
-  tabButton: {
+  tabButtonWrapper: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 48,
   },
-  tabContent: {
+  tabContentGem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 48,
+    overflow: 'hidden',
+  },
+  iconWrapperGem: {
+    width: 24,
+    height: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconWrapper: {
-    width: 32,
-    height: 32,
-    alignItems: 'center',
+  labelContainerGem: {
+    overflow: 'hidden',
     justifyContent: 'center',
-    position: 'relative',
   },
-  iconGlow: {
-    position: 'absolute',
-    top: -4,
-    left: -4,
-    right: -4,
-    bottom: -4,
-    backgroundColor: Colors.ACCENT,
-    opacity: 0.15,
-    borderRadius: 20,
-  },
-  label: {
-    fontSize: 10,
+  labelGem: {
+    color: Colors.TEXT_NORMAL,
+    fontSize: 12,
     fontWeight: '600',
-    marginTop: 2,
   },
   badge: {
     position: 'absolute',
-    top: -2,
-    right: -12,
+    top: 4,
+    right: 4,
     minWidth: 16,
     height: 16,
     backgroundColor: Colors.ERROR,
@@ -287,6 +319,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
+    borderColor: 'rgba(28, 28, 40, 0.8)',
+    borderWidth: 1.5,
   },
   badgeText: {
     color: Colors.TEXT_NORMAL,

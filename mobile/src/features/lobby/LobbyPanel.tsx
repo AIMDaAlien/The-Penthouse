@@ -115,11 +115,6 @@ export function LobbyPanel({ onChannelSelect }: LobbyPanelProps) {
 
         {/* Main Content (Channel List) */}
         <View style={styles.main}>
-          {/* Custom Header replacing the Expo header */}
-          <View style={styles.headerContainer}>
-            <Text style={styles.headerTitle}>{selectedServerId ? 'Channels' : 'Messages'}</Text>
-          </View>
-
           {/* Search Input */}
           <View style={styles.searchContainer}>
             <BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFill} />
@@ -352,18 +347,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: Radius.L,
     overflow: 'hidden',
   },
-  headerContainer: {
-    paddingHorizontal: Spacing.M,
-    paddingTop: Spacing.M,
-    paddingBottom: Spacing.S,
-    alignItems: 'center',
-  },
-  headerTitle: {
-    ...Typography.H2,
-    fontSize: 16,
-    color: Colors.TEXT_NORMAL,
-    fontWeight: '600',
-  },
+
   searchContainer: {
     marginHorizontal: Spacing.SM,
     marginTop: Spacing.SM,

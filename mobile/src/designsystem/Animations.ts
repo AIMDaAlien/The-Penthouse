@@ -28,9 +28,9 @@ export const SpringConfig = {
 
   /** Smooth panels - sidebars, modals sliding in */
   PANEL: {
-    damping: 25,
-    stiffness: 200,
-    mass: 1.2,
+    damping: 30,
+    stiffness: 280,
+    mass: 1,
   } as WithSpringConfig,
 
   /** Bouncy - playful elements, reactions, animations */
@@ -51,6 +51,13 @@ export const SpringConfig = {
   MORPH: {
     damping: 18,
     stiffness: 250,
+    mass: 1,
+  } as WithSpringConfig,
+
+  /** Modal entrances - snappy with minimal overshoot */
+  MODAL: {
+    damping: 22,
+    stiffness: 260,
     mass: 1,
   } as WithSpringConfig,
 } as const;

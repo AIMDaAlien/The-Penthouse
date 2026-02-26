@@ -74,7 +74,7 @@ export default function CreateChannelModal({ visible, serverId, onClose, onCreat
         >
           <Pressable onPress={e => e.stopPropagation()}>
             <Animated.View 
-              entering={SlideInDown.springify().damping(18).stiffness(90)}
+              entering={SlideInDown.springify().damping(22).stiffness(260)}
               style={styles.modal}
             >
               <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />

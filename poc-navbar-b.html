@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>THE PENTHOUSE - POC B: Refraction Strip</title>
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@300;400;500;700&display=swap" rel="stylesheet">
+    
+    <!-- Ionicons -->
+    <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
+    <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
+    
+    <style>
+        :root {
+            --tertiary: #16161e;
+            --secondary: #1c1c28;
+            --primary: #242432;
+            --surface: #2e2e40;
+            --surface-hover: #383850;
+            
+            --text-normal: #d8d8e8;
+            --text-muted: #8888a8;
+            
+            --accent: #8888b8;
+            --accent-light: #a0a0d0;
+            --glow-accent: rgba(136, 136, 184, 0.6);
+            
+            --spring: cubic-bezier(0.34, 1.15, 0.64, 1);
+            --spring-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        body {
+            margin: 0;
+            padding: 50px 20px;
+            background-color: #0d0d12;
+            font-family: 'Ubuntu', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            color: var(--text-normal);
+            box-sizing: border-box;
+        }
+
+        * { box-sizing: inherit; }
+
+        .presentation-frame {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 24px;
+        }
+        
+        .poc-title {
+            text-align: center;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--text-muted);
+        }
+
+        /* Mobile Screen Mockup */
+        .mobile-device {
+            width: 375px;
+            height: 812px;
+            background-color: var(--tertiary);
+            border-radius: 40px;
+            box-shadow: 0 40px 80px rgba(0,0,0,0.6), 
+                        inset 0 0 0 8px #000;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* App Background Art */
+        .bg-art {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            z-index: 0;
+            background: radial-gradient(circle at 50% 100%, #2e2e40 0%, #16161e 100%);
+        }
+        
+        /* High contrast elements behind navbar to show off refraction */
+        .light-streak {
+            position: absolute;
+            bottom: 40px;
+            left: 20%;
+            width: 150px;
+            height: 60px;
+            background: var(--accent);
+            filter: blur(40px);
+            opacity: 0.8;
+            border-radius: 50%;
+            animation: slide 10s ease-in-out infinite alternate;
+        }
+        
+        @keyframes slide {
+            0% { transform: translateX(-50px); }
+            100% { transform: translateX(150px); }
+        }
+
+        /* Dummy Content */
+        .app-content {
+            position: relative;
+            z-index: 10;
+            flex-grow: 1;
+            padding: 40px 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        .header {
+            font-size: 28px;
+            font-weight: 500;
+            margin-top: 40px;
+            font-family: 'Erode', serif;
+        }
+
+        /* ========================================================
+           REFRACTION STRIP NAVBAR (Thick material glass)
+           ======================================================== */
+        
+        .navbar-container {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding-bottom: 30px; /* Safe area */
+            height: 100px; /* Taller to accommodate heavy glass edge */
+            z-index: 100;
+            
+            /* Deep, layered glass effect */
+            background: rgba(22, 22, 30, 0.45);
+            backdrop-filter: blur(30px) saturate(200%) brightness(1.2);
+            -webkit-backdrop-filter: blur(30px) saturate(200%) brightness(1.2);
+            
+            /* Morphing shape */
+            border-radius: 36px 36px 0 0;
+            
+            /* Thick specular highlight gradient simulating glass depth */
+            border-top: 2px solid;
+            border-image: linear-gradient(90deg, rgba(255,255,255,0.1) 0%, rgba(136,136,184,0.6) 20%, rgba(200,200,230,0.8) 50%, rgba(136,136,184,0.6) 80%, rgba(255,255,255,0.1) 100%) 1;
+            
+            box-shadow: 
+                0 -10px 40px rgba(0,0,0,0.4),
+                inset 0 1px 0 rgba(255, 255, 255, 0.2); /* Top rim inner highlight */
+        }
+        
+        /* Inner noise texture for material realism */
+        .navbar-container::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            opacity: 0.05;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+            border-radius: 36px 36px 0 0;
+            pointer-events: none;
+        }
+
+        /* The roaming refraction bloom created by active tab */
+        .refraction-bloom {
+            position: absolute;
+            top: 15px;
+            width: 50px;
+            height: 50px;
+            background: var(--accent-light);
+            border-radius: 50%;
+            filter: blur(25px);
+            opacity: 0.4;
+            transition: transform 0.6s var(--spring-bounce);
+            will-change: transform;
+            pointer-events: none;
+            mix-blend-mode: screen;
+        }
+
+        .nav-tabs {
+            position: relative;
+            width: 100%;
+            height: 70px;
+            display: flex;
+            z-index: 2;
+            padding: 0 10px;
+        }
+
+        .tab {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            position: relative;
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .icon-container {
+            width: 48px;
+            height: 48px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.6s var(--spring-bounce);
+        }
+
+        .tab ion-icon {
+            font-size: 26px;
+            color: rgba(216, 216, 232, 0.5); /* Dimmed text-normal */
+            transition: all 0.5s var(--spring);
+        }
+
+        .tab span {
+            position: absolute;
+            bottom: -15px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            color: #fff;
+            opacity: 0;
+            transform: scale(0.8) translateY(10px);
+            transition: all 0.5s var(--spring);
+            text-shadow: 0 2px 8px var(--glow-accent);
+        }
+
+        /* Active Tab State */
+        .tab.active .icon-container {
+            transform: translateY(-8px);
+        }
+
+        .tab.active ion-icon {
+            font-size: 32px;
+            color: #ffffff;
+            filter: drop-shadow(0 4px 12px var(--glow-accent));
+        }
+
+        .tab.active span {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+        }
+
+        /* Active highlight ring (the liquid swell) */
+        .tab-swell {
+            position: absolute;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(160,160,208,0.2) 0%, transparent 70%);
+            box-shadow: inset 0 2px 4px rgba(255,255,255,0.4), 
+                        inset 0 -1px 2px rgba(136,136,184,0.5);
+            opacity: 0;
+            transform: scale(0.5);
+            transition: all 0.5s var(--spring-bounce);
+        }
+
+        .tab.active .tab-swell {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        /* Press animation */
+        .tab:active .icon-container {
+            transform: scale(0.9) translateY(0);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="presentation-frame">
+        <div class="poc-title">POC B: Refraction Strip</div>
+        
+        <div class="mobile-device">
+            <!-- Background Art -->
+            <div class="bg-art">
+                <div class="light-streak"></div>
+            </div>
+            
+            <!-- App Content -->
+            <div class="app-content">
+                <div class="header">Servers</div>
+                <!-- Content cut down for brevity -->
+            </div>
+
+            <!-- Navbar -->
+            <div class="navbar-container">
+                <!-- Moving refraction bloom -->
+                <div class="refraction-bloom" id="bloom" style="transform: translateX(18px);"></div>
+                
+                <div class="nav-tabs" id="tabs">
+                    <div class="tab active" data-index="0" data-offset="18">
+                        <div class="icon-container">
+                            <div class="tab-swell"></div>
+                            <ion-icon name="chatbubbles"></ion-icon>
+                        </div>
+                        <span>Home</span>
+                    </div>
+                    <div class="tab" data-index="1" data-offset="108">
+                        <div class="icon-container">
+                            <div class="tab-swell"></div>
+                            <ion-icon name="grid-outline"></ion-icon>
+                        </div>
+                        <span>Servers</span>
+                    </div>
+                    <div class="tab" data-index="2" data-offset="196">
+                        <div class="icon-container">
+                            <div class="tab-swell"></div>
+                            <ion-icon name="people-outline"></ion-icon>
+                        </div>
+                        <span>Friends</span>
+                    </div>
+                    <div class="tab" data-index="3" data-offset="284">
+                        <div class="icon-container">
+                            <div class="tab-swell"></div>
+                            <ion-icon name="person-outline"></ion-icon>
+                        </div>
+                        <span>Me</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const tabs = document.querySelectorAll('.tab');
+            const bloom = document.getElementById('bloom');
+            
+            const iconMap = {
+                'chatbubbles': { outline: 'chatbubbles-outline', filled: 'chatbubbles' },
+                'grid': { outline: 'grid-outline', filled: 'grid' },
+                'people': { outline: 'people-outline', filled: 'people' },
+                'person': { outline: 'person-outline', filled: 'person' }
+            };
+
+            tabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    tabs.forEach(t => {
+                        t.classList.remove('active');
+                        const icon = t.querySelector('ion-icon');
+                        const iconName = icon.getAttribute('name').replace('-outline', '');
+                        if (iconMap[iconName]) {
+                            icon.setAttribute('name', iconMap[iconName].outline);
+                        }
+                    });
+                    
+                    tab.classList.add('active');
+                    
+                    const icon = tab.querySelector('ion-icon');
+                    const baseName = icon.getAttribute('name').replace('-outline', '');
+                    if (iconMap[baseName]) {
+                        icon.setAttribute('name', iconMap[baseName].filled);
+                    }
+                    
+                    // Move the refraction bloom via pre-calculated offsets to match tab centers
+                    const offset = tab.getAttribute('data-offset');
+                    bloom.style.transform = `translateX(${offset}px)`;
+                });
+            });
+            
+            const firstTabIcon = document.querySelector('.tab[data-index="0"] ion-icon');
+            firstTabIcon.setAttribute('name', iconMap['chatbubbles'].filled);
+        });
+    </script>
+</body>
+</html>
