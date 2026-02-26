@@ -1,0 +1,24 @@
+# VCS / CI metadata
+.git
+.github
+
+# Local dependencies and caches
+node_modules
+mobile/node_modules
+server/node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local runtime/output
+data
+artifacts
+apk-release
+
+# Docs and non-runtime references
+Spline
+poc*.html
+docs
+
+# OS/editor noise
+.DS_Store
