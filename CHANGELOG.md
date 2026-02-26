@@ -12,6 +12,7 @@ All notable changes to The Penthouse are documented in this file.
 
 ### Changed
 - Mobile `MessageInput` and lobby UI spacing/layout were tightened to keep controls visible and reduce crowding.
+- Access token lifetime was extended to reduce forced re-auth friction during normal use.
 - Deploy workflow now auto-falls back to `sudo docker compose` when runner socket permissions are restricted.
 - TrueNAS deploy flow now performs data-path writeability probing and uses a safe fallback path when needed.
 - OTA workflow native-impact guardrail is non-fatal (it now skips OTA and defers to APK release flow).

@@ -123,6 +123,30 @@ jobs:
           echo "release_tag=v${APP_VERSION}" >> "${GITHUB_OUTPUT}"
           echo "release_name=The Penthouse v${APP_VERSION}" >> "${GITHUB_OUTPUT}"
 
+      - name: Prefer changelog section for release notes
+        if: steps.build_gate.outputs.should_build == 'true'
+        env:
+          APP_VERSION: ${{ steps.version.outputs.app_version }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          CHANGELOG_NOTES="$(awk -v ver="${APP_VERSION}" '
+            $0 ~ "^## \\[" ver "\\]" {capture=1}
+            capture && $0 ~ /^## \[/ && $0 !~ "^## \\[" ver "\\]" {exit}
+            capture {print}
+          ' CHANGELOG.md || true)"
+          if [ -n "${CHANGELOG_NOTES}" ]; then
+            {
+              echo "what changed in this build:"
+              echo
+              echo "${CHANGELOG_NOTES}"
+            } > artifacts/release-notes.txt
+            echo "Using CHANGELOG.md section for release notes (${APP_VERSION})."
+            cat artifacts/release-notes.txt
+          else
+            echo "No CHANGELOG section found for ${APP_VERSION}; keeping commit-based notes fallback."
+          fi
+
       - name: Build Android APK with EAS
         id: build_apk
         if: steps.build_gate.outputs.should_build == 'true'
