@@ -4,29 +4,30 @@ All notable changes to The Penthouse are documented in this file.
 
 ## [1.3.0] - 2026-02-26
 
-### Added
-- Web client static asset compatibility routing so Expo bundles load from both `/_expo/*` and `/expo/*` paths.
-- CI deploy verification now checks actual `/app` referenced CSS/JS assets, not just route reachability.
-- Secured GIF search/trending flow through backend proxy endpoints to reduce client-side key exposure.
-- Server icon uploads now enforce image-only validation with a dedicated 25 MB ceiling (`SERVER_ICON_MAX_BYTES`).
+### What We Targeted
+- Make the web app launch reliably from `Open in Browser` on `penthouse.blog/app`.
+- Reduce false “too many requests” blocks during normal sign-up and server creation use.
+- Make deployment more resilient so routine host permission issues stop breaking releases.
+- Keep release notes and versioning more consistent so users can understand what changed.
 
-### Changed
-- Mobile `MessageInput` and lobby UI spacing/layout were tightened to keep controls visible and reduce crowding.
-- Access token lifetime was extended to reduce forced re-auth friction during normal use.
-- Deploy workflow now auto-falls back to `sudo docker compose` when runner socket permissions are restricted.
-- TrueNAS deploy flow now performs data-path writeability probing and uses a safe fallback path when needed.
-- OTA workflow native-impact guardrail is non-fatal (it now skips OTA and defers to APK release flow).
+### User-Facing Improvements
+- Fixed the blank white screen on `penthouse.blog/app` caused by missing web assets.
+- Chat/input layout was tightened so controls stay visible more consistently.
+- Sign-in sessions now last longer before you need to log in again.
+- Error responses during account/server creation are clearer and less generic.
 
-### Fixed
-- `https://penthouse.blog/app` no longer white-screens due to missing root Expo assets.
-- Registration failure paths now return clearer conflict/availability errors instead of generic failure copy.
-- Global API rate-limit false positives reduced by excluding `/api/auth` and `/api/health` from shared bucket pressure.
-- Media/server creation rate-limit responses align to the intended user-facing copy: `Too many requests, calm down.`
-- Deploy reliability improved for Docker socket permission mismatches and host data directory permission drifts.
+### Upload and Media
+- Server icon uploads now enforce image-only validation and a clear 25 MB max size.
+- GIF search/trending now goes through the backend proxy for safer key handling.
 
-### Ops
-- Release pipeline resilience improved for transient GitHub cache failures and EAS output parsing edge cases.
-- SemVer guardrails remained enforced during this release (version lock across `mobile/app.json` and `mobile/package.json`, including agent-assisted bump flow).
+### Stability and Deploy
+- Deploy pipeline now verifies that actual web app CSS/JS files are reachable after restart.
+- Deploy can fall back to `sudo docker compose` when Docker socket permissions differ on runner.
+- Data path write checks and fallback behavior were improved to avoid failed start/redeploy loops.
+
+### Notes
+- OTA native-impact guardrail now skips OTA gracefully instead of hard-failing the workflow.
+- Release/version guardrails remain enforced so app versions stay aligned across config files.
 
 ## [1.2.0] - 2026-02-22
 
