@@ -173,6 +173,7 @@ app.get('/api/health', (req, res) => {
 const path = require('path');
 const publicPath = path.join(__dirname, '../public');
 const downloadsPath = path.join(__dirname, '../data/downloads');
+const webAppPath = path.join(publicPath, 'app');
 
 // Serve static assets (landing page CSS/JS/images)
 app.use(express.static(publicPath));
@@ -180,8 +181,12 @@ app.use(express.static(publicPath));
 // Serve APK downloads
 app.use('/downloads', express.static(downloadsPath));
 
+// Expo web export references root asset paths (/_expo/* and sometimes /expo/*).
+// Mirror those to /public/app/_expo so /app renders correctly in production.
+app.use('/_expo', express.static(path.join(webAppPath, '_expo')));
+app.use('/expo', express.static(path.join(webAppPath, '_expo')));
+
 // Serve Expo web app at /app (SPA — all sub-routes serve app/index.html)
-const webAppPath = path.join(publicPath, 'app');
 app.use('/app', express.static(webAppPath));
 app.get('/app/*', (req, res) => {
   res.sendFile(path.join(webAppPath, 'index.html'));

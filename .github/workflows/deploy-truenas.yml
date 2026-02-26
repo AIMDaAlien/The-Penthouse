@@ -332,10 +332,20 @@ jobs:
             dc logs --tail=200 penthouse-app || true
             exit 1
           }
-          dc exec -T penthouse-app wget -q --spider http://localhost:3000/app/metadata.json || {
-            echo "Web app artifact missing (/app/metadata.json). Recent logs:"
+          APP_INDEX_HTML="$(dc exec -T penthouse-app sh -lc 'wget -qO- http://localhost:3000/app/' || true)"
+          APP_ASSET_PATHS="$(printf '%s' "${APP_INDEX_HTML}" | grep -Eo '(href|src)="/(_expo|expo)/static/[^"]+"' | sed -E 's/^(href|src)=\"//' | sed 's/"$//' | head -n 4 || true)"
+          if [ -z "${APP_ASSET_PATHS}" ]; then
+            echo "Web app route check failed: no Expo static assets referenced by /app/"
             dc logs --tail=200 penthouse-app || true
             exit 1
-          }
+          fi
+          printf '%s\n' "${APP_ASSET_PATHS}" | while IFS= read -r asset_path; do
+            [ -z "${asset_path}" ] && continue
+            dc exec -T penthouse-app wget -q --spider "http://localhost:3000${asset_path}" || {
+              echo "Web app asset missing (${asset_path}). Recent logs:"
+              dc logs --tail=200 penthouse-app || true
+              exit 1
+            }
+          done
           dc exec -T penthouse-app wget -q --spider http://localhost:3000/downloads/the-penthouse.apk
           echo deploy_ok

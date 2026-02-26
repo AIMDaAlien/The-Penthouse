@@ -27,22 +27,17 @@ fi
 INPUT="$1"
 INPUT="${INPUT#v}"
 
-case "${INPUT}" in
-  patch|minor|major)
-    TARGET="${INPUT}"
-    ;;
-  [0-9]*.[0-9])
-    TARGET="${INPUT}.0"
-    ;;
-  [0-9]*.[0-9].[0-9]*)
-    TARGET="${INPUT}"
-    ;;
-  *)
-    echo "Error: invalid version argument: ${1}"
-    usage
-    exit 1
-    ;;
-esac
+if [ "${INPUT}" = "patch" ] || [ "${INPUT}" = "minor" ] || [ "${INPUT}" = "major" ]; then
+  TARGET="${INPUT}"
+elif [[ "${INPUT}" =~ ^[0-9]+\.[0-9]+$ ]]; then
+  TARGET="${INPUT}.0"
+elif [[ "${INPUT}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  TARGET="${INPUT}"
+else
+  echo "Error: invalid version argument: ${1}"
+  usage
+  exit 1
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"

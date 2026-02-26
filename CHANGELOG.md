@@ -2,6 +2,31 @@
 
 All notable changes to The Penthouse are documented in this file.
 
+## [1.3.0] - 2026-02-26
+
+### Added
+- Web client static asset compatibility routing so Expo bundles load from both `/_expo/*` and `/expo/*` paths.
+- CI deploy verification now checks actual `/app` referenced CSS/JS assets, not just route reachability.
+- Secured GIF search/trending flow through backend proxy endpoints to reduce client-side key exposure.
+- Server icon uploads now enforce image-only validation with a dedicated 25 MB ceiling (`SERVER_ICON_MAX_BYTES`).
+
+### Changed
+- Mobile `MessageInput` and lobby UI spacing/layout were tightened to keep controls visible and reduce crowding.
+- Deploy workflow now auto-falls back to `sudo docker compose` when runner socket permissions are restricted.
+- TrueNAS deploy flow now performs data-path writeability probing and uses a safe fallback path when needed.
+- OTA workflow native-impact guardrail is non-fatal (it now skips OTA and defers to APK release flow).
+
+### Fixed
+- `https://penthouse.blog/app` no longer white-screens due to missing root Expo assets.
+- Registration failure paths now return clearer conflict/availability errors instead of generic failure copy.
+- Global API rate-limit false positives reduced by excluding `/api/auth` and `/api/health` from shared bucket pressure.
+- Media/server creation rate-limit responses align to the intended user-facing copy: `Too many requests, calm down.`
+- Deploy reliability improved for Docker socket permission mismatches and host data directory permission drifts.
+
+### Ops
+- Release pipeline resilience improved for transient GitHub cache failures and EAS output parsing edge cases.
+- SemVer guardrails remained enforced during this release (version lock across `mobile/app.json` and `mobile/package.json`, including agent-assisted bump flow).
+
 ## [1.2.0] - 2026-02-22
 
 ### Added
