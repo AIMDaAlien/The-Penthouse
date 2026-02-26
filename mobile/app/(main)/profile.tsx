@@ -236,32 +236,27 @@ export default function ProfileScreen() {
 
       {/* Danger Zone */}
       <View style={styles.sectionHeader}>
-        <Text style={[styles.sectionTitle, { color: Colors.ERROR }]}>DANGER ZONE</Text>
+        <Text style={[styles.sectionTitle, { color: Colors.ERROR }]}>DATA INCINERATOR</Text>
       </View>
+      <Text style={styles.dangerZoneSubtitle}>
+        Disabling your account means you can recover it at any time after taking this action.
+      </Text>
       
-      <Pressable
-        style={({ pressed }) => [
-            styles.dangerRow,
-            pressed && { opacity: 0.7 }
-        ]}
-        onPress={handleIncinerate}
-      >
-        <Ionicons name="flame" size={18} color={Colors.ERROR} />
-        <Text style={styles.dangerRowText}>Wipe session data</Text>
-        <Ionicons name="chevron-forward" size={16} color={Colors.TEXT_MUTED} />
-      </Pressable>
+      <View style={styles.dangerButtonsRow}>
+        <Pressable 
+          style={({ pressed }) => [styles.dangerBtnSolid, pressed && { opacity: 0.8 }]}
+          onPress={handleLogout}
+        >
+          <Text style={styles.dangerBtnSolidText}>Disable Account</Text>
+        </Pressable>
 
-      <Pressable
-        style={({ pressed }) => [
-            styles.dangerRow,
-            pressed && { opacity: 0.7 }
-        ]}
-        onPress={handleLogout}
-      >
-        <Ionicons name="log-out-outline" size={18} color={Colors.ERROR} />
-        <Text style={styles.dangerRowText}>Logout</Text>
-        <Ionicons name="chevron-forward" size={16} color={Colors.TEXT_MUTED} />
-      </Pressable>
+        <Pressable 
+          style={({ pressed }) => [styles.dangerBtnOutline, pressed && { backgroundColor: `${Colors.ERROR}20` }]}
+          onPress={handleIncinerate}
+        >
+          <Text style={styles.dangerBtnOutlineText}>Delete Account</Text>
+        </Pressable>
+      </View>
 
       {/* App Version */}
       <View style={styles.versionContainer}>
@@ -450,20 +445,45 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: Spacing.M,
   },
-  dangerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: `${Colors.ERROR}10`,
-    borderRadius: Radius.M,
-    paddingVertical: Spacing.SM,
-    paddingHorizontal: Spacing.M,
-    marginBottom: Spacing.S,
+  dangerZoneSubtitle: {
+    ...Typography.BODY,
+    color: Colors.TEXT_MUTED,
+    marginBottom: Spacing.M,
+    fontSize: 14,
+    lineHeight: 20,
   },
-  dangerRowText: {
+  dangerButtonsRow: {
+    flexDirection: 'row',
+    gap: Spacing.SM,
+    marginBottom: Spacing.L,
+  },
+  dangerBtnSolid: {
+    flex: 1,
+    backgroundColor: Colors.ERROR,
+    paddingVertical: Spacing.SM,
+    borderRadius: Radius.M,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dangerBtnSolidText: {
+    ...Typography.BODY,
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  dangerBtnOutline: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: Colors.ERROR,
+    paddingVertical: Spacing.SM,
+    borderRadius: Radius.M,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dangerBtnOutlineText: {
     ...Typography.BODY,
     color: Colors.ERROR,
-    flex: 1,
-    marginLeft: Spacing.SM,
+    fontWeight: '600',
   },
   sectionHeader: {
     flexDirection: 'row', 

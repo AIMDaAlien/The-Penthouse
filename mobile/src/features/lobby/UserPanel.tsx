@@ -4,6 +4,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Colors, Typography, Spacing, Radius } from '../../designsystem';
 import { useAuth } from '../../context/AuthContext';
 import { BlurView } from 'expo-blur';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface UserPanelProps {
     onOpenSettings: () => void;
@@ -11,11 +12,12 @@ interface UserPanelProps {
 
 export function UserPanel({ onOpenSettings }: UserPanelProps) {
     const { user } = useAuth();
+    const insets = useSafeAreaInsets();
 
     if (!user) return null;
 
     return (
-        <View style={styles.container}>
+        <View style={[styles.container, { paddingTop: insets.top }]}>
             <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
             
             <View style={styles.content}>
@@ -60,16 +62,15 @@ export function UserPanel({ onOpenSettings }: UserPanelProps) {
 
 const styles = StyleSheet.create({
     container: {
-        height: 52,
         backgroundColor: Colors.EFFECTS.PANEL_BG,
         borderBottomWidth: 1,
         borderBottomColor: Colors.GLASS.PANEL_BORDER,
-        justifyContent: 'center',
     },
     content: {
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: Spacing.SM,
+        paddingVertical: Spacing.SM,
         justifyContent: 'space-between',
     },
     userInfo: {

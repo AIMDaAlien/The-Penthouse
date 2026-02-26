@@ -104,30 +104,36 @@ export function LobbyPanel({ onChannelSelect }: LobbyPanelProps) {
 
   return (
     <View style={styles.container}>
-      {/* Left Rail (Server List) */}
-      <View style={styles.rail}>
-        <ServerRail onAddServer={() => setShowCreateServer(true)} />
-      </View>
+      {/* User panel at top (full width) */}
+      <UserPanel onOpenSettings={() => setShowSettings(true)} />
 
-      {/* Main Content (Channel List) */}
-      <View style={styles.main}>
-        {/* User panel at top */}
-        <UserPanel onOpenSettings={() => setShowSettings(true)} />
-
-        {/* Search Input */}
-        <View style={styles.searchContainer}>
-          <BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFill} />
-          <View style={styles.searchInner}>
-            <Ionicons name="search" size={16} color={Colors.TEXT_MUTED} />
-            <TextInput
-              placeholder="Find a room..."
-              placeholderTextColor={Colors.TEXT_MUTED}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              style={styles.searchInput}
-            />
-          </View>
+      <View style={styles.contentRow}>
+        {/* Left Rail (Server List) */}
+        <View style={styles.rail}>
+          <ServerRail onAddServer={() => setShowCreateServer(true)} />
         </View>
+
+        {/* Main Content (Channel List) */}
+        <View style={styles.main}>
+          {/* Custom Header replacing the Expo header */}
+          <View style={styles.headerContainer}>
+            <Text style={styles.headerTitle}>{selectedServerId ? 'Channels' : 'Messages'}</Text>
+          </View>
+
+          {/* Search Input */}
+          <View style={styles.searchContainer}>
+            <BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFill} />
+            <View style={styles.searchInner}>
+              <Ionicons name="search" size={16} color={Colors.TEXT_MUTED} />
+              <TextInput
+                placeholder="Find a room..."
+                placeholderTextColor={Colors.TEXT_MUTED}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                style={styles.searchInput}
+              />
+            </View>
+          </View>
 
         <ScrollView 
           contentContainerStyle={styles.scrollContent}
@@ -193,9 +199,10 @@ export function LobbyPanel({ onChannelSelect }: LobbyPanelProps) {
           )}
         </ScrollView>
       </View>
+    </View>
 
-      {/* Modals */}
-      <CreateServerModal
+    {/* Modals */}
+    <CreateServerModal
         visible={showCreateServer}
         onClose={() => setShowCreateServer(false)}
         onCreated={handleServerCreated}
@@ -329,8 +336,12 @@ function ChannelRow({ name, type, vibe, activeUsers, disabled, isLocked, hasUnre
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    flexDirection: 'row',
+    flexDirection: 'column',
     backgroundColor: Colors.BASE,
+  },
+  contentRow: {
+    flex: 1,
+    flexDirection: 'row',
   },
   rail: {
     backgroundColor: Colors.BASE,
@@ -340,6 +351,18 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.SECONDARY,
     borderTopLeftRadius: Radius.L,
     overflow: 'hidden',
+  },
+  headerContainer: {
+    paddingHorizontal: Spacing.M,
+    paddingTop: Spacing.M,
+    paddingBottom: Spacing.S,
+    alignItems: 'center',
+  },
+  headerTitle: {
+    ...Typography.H2,
+    fontSize: 16,
+    color: Colors.TEXT_NORMAL,
+    fontWeight: '600',
   },
   searchContainer: {
     marginHorizontal: Spacing.SM,

@@ -159,7 +159,7 @@ export function NewDMModal({ visible, onClose, onDMCreated }: NewDMModalProps) {
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.keyboardView}
         >
-          <Pressable onPress={e => e.stopPropagation()}>
+          <Pressable style={styles.modalContainerWrapper} onPress={e => e.stopPropagation()}>
             <Animated.View
               entering={SlideInDown.springify().damping(18).stiffness(90)}
               style={styles.modal}
@@ -247,8 +247,12 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'flex-end',
   },
+  modalContainerWrapper: {
+    flex: 1,
+  },
   modal: {
-    maxHeight: '80%',
+    flex: 1,
+    marginTop: 60,
     borderTopLeftRadius: Radius.L,
     borderTopRightRadius: Radius.L,
     overflow: 'hidden',
@@ -295,8 +299,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   results: {
-    minHeight: 200,
-    maxHeight: 400,
+    flex: 1,
     paddingBottom: Spacing.XL,
   },
   centered: {
