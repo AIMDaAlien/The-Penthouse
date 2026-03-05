@@ -15,7 +15,10 @@
         v-if="session"
         :isOnline="isOnline"
         :queuedCount="queued.length"
+        :hasPermanentError="hasPermanentSocketError"
+        :isReconnecting="isReconnecting"
         @flush="flushPending"
+        @reconnect="forceSocketReconnect"
       />
     </header>
 
@@ -58,7 +61,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { onMounted, onUnmounted, ref } from 'vue';
+import { ServerMessageAckEventSchema, ServerMessageNewEventSchema } from '@penthouse/contracts';
 import type { Chat, ChatMessage, PendingMessage, Session } from './types';
 import {
   getChats,
@@ -92,6 +96,8 @@ const messages = ref<ChatMessage[]>([]);
 const selectedChatId = ref<string>('');
 const queued = ref<PendingMessage[]>(getQueued());
 const isOnline = ref(navigator.onLine);
+const hasPermanentSocketError = ref(false);
+const isReconnecting = ref(false);
 
 
 
@@ -201,10 +207,14 @@ function wireSocketHandlers(): void {
   socket.removeAllListeners('message.ack');
   socket.removeAllListeners('connect');
   socket.removeAllListeners('disconnect');
+  socket.io.removeAllListeners('reconnect_attempt');
+  socket.io.removeAllListeners('reconnect_failed');
 
   socket.on('message.new', (event: any) => {
-    const payload = event?.payload;
-    if (!payload || payload.chatId !== selectedChatId.value) return;
+    const parsed = ServerMessageNewEventSchema.safeParse(event);
+    if (!parsed.success) return;
+    const payload = parsed.data.payload;
+    if (payload.chatId !== selectedChatId.value) return;
     
     // Check if we already optimistically rendered this (match by clientMessageId)
     // The server `id` is a UUID, local id starts with `local_`
@@ -221,22 +231,22 @@ function wireSocketHandlers(): void {
   });
 
   socket.on('message.ack', (event: any) => {
-    // Acknowledgment means server got our queued/sent message
-    const payload = event?.payload;
-    if (payload?.clientMessageId) {
-      // Find optimistic message and update its ID to the server UUID 
-      // This drops the 'local_' prefix, turning off the queued UI indicator
-      const existingMsg = messages.value.find(m => m.clientMessageId === payload.clientMessageId);
-      if (existingMsg) {
-        existingMsg.id = payload.messageId; 
-        cacheMessages(selectedChatId.value, messages.value);
-      }
+    const parsed = ServerMessageAckEventSchema.safeParse(event);
+    if (!parsed.success) return;
+    // Acknowledgment means server got our queued/sent message.
+    const payload = parsed.data.payload;
+    const existingMsg = messages.value.find(m => m.clientMessageId === payload.clientMessageId);
+    if (existingMsg) {
+      // Replace optimistic/local id with server id to reflect final delivery state.
+      existingMsg.id = payload.messageId;
+      cacheMessages(payload.chatId, messages.value);
     }
     queued.value = getQueued();
   });
 
   socket.on('connect', () => {
     isOnline.value = true;
+    hasPermanentSocketError.value = false;
     if (selectedChatId.value) {
       socket.emit('chat.join', { chatId: selectedChatId.value });
     }
@@ -246,6 +256,29 @@ function wireSocketHandlers(): void {
   socket.on('disconnect', () => {
     isOnline.value = false;
   });
+
+  socket.io.on('reconnect_attempt', () => {
+    hasPermanentSocketError.value = false;
+    isReconnecting.value = true;
+  });
+
+  socket.io.on('reconnect_failed', () => {
+    isOnline.value = false;
+    isReconnecting.value = false;
+    hasPermanentSocketError.value = true;
+  });
+
+  socket.io.on('reconnect', () => {
+    isReconnecting.value = false;
+  });
+}
+
+function forceSocketReconnect() {
+  const socket = getSocket();
+  if (!socket) return;
+  isReconnecting.value = true;
+  hasPermanentSocketError.value = false;
+  socket.connect();
 }
 
 async function doLogout(): Promise<void> {
@@ -260,6 +293,7 @@ async function doLogout(): Promise<void> {
 
 function onOnline(): void {
   isOnline.value = true;
+  hasPermanentSocketError.value = false;
   flushPending().catch(() => undefined);
 }
 
@@ -276,9 +310,7 @@ onMounted(() => {
       refreshToken: localStorage.getItem('refreshToken') || ''
     };
     wireSocketHandlers();
-    loadChats().catch(() => {
-      doLogout().catch(() => undefined);
-    });
+    loadChats().catch(() => undefined);
   }
 
   window.addEventListener('online', onOnline);

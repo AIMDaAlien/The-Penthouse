@@ -1,5 +1,4 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
+import { test, expect } from 'vitest';
 import { withBackoff } from './services/retry';
 
 test('withBackoff retries and eventually resolves', async () => {
@@ -11,6 +10,6 @@ test('withBackoff retries and eventually resolves', async () => {
     return 'ok';
   }, { maxAttempts: 4, baseMs: 1 });
 
-  assert.equal(value, 'ok');
-  assert.equal(attempts, 3);
+  expect(value).toBe('ok');
+  expect(attempts).toBe(3);
 });

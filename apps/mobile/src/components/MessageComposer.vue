@@ -5,7 +5,7 @@
       rows="2" 
       placeholder="Type a message..."
       :disabled="disabled"
-      @keydown.enter.prevent="handleEnter"
+      @keydown.enter.exact.prevent="handleEnter"
     ></textarea>
     <div class="actions">
       <button 
