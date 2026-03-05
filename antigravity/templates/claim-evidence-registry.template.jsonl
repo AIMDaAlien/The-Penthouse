@@ -1,0 +1,2 @@
+{"claim_id":"CLM-0001","model":"opus","claim_text":"Model X scored Y on benchmark Z","status":"provisional","source_type":"secondary","source_url":"https://benchmark.example.com/result","verified_on":"2026-03-05"}
+{"claim_id":"CLM-0002","model":"codex","claim_text":"Supports architecture pattern A","status":"verified","source_type":"primary","source_url":"https://developers.openai.com/api/docs/models/gpt-5.3-codex","verified_on":"2026-03-05"}

@@ -1,0 +1,77 @@
+import { z } from 'zod';
+
+export const ClientJoinChatEventSchema = z.object({
+  type: z.literal('chat.join'),
+  chatId: z.string()
+});
+
+export const ClientLeaveChatEventSchema = z.object({
+  type: z.literal('chat.leave'),
+  chatId: z.string()
+});
+
+export const ClientTypingStartEventSchema = z.object({
+  type: z.literal('typing.start'),
+  chatId: z.string()
+});
+
+export const ClientTypingStopEventSchema = z.object({
+  type: z.literal('typing.stop'),
+  chatId: z.string()
+});
+
+export const ClientMessageSendEventSchema = z.object({
+  type: z.literal('message.send'),
+  chatId: z.string(),
+  content: z.string().min(1).max(4000),
+  clientMessageId: z.string().min(8).max(128)
+});
+
+export const ServerMessageNewEventSchema = z.object({
+  type: z.literal('message.new'),
+  payload: z.object({
+    id: z.string(),
+    chatId: z.string(),
+    senderId: z.string(),
+    content: z.string(),
+    createdAt: z.string(),
+    clientMessageId: z.string().optional()
+  })
+});
+
+export const ServerMessageAckEventSchema = z.object({
+  type: z.literal('message.ack'),
+  payload: z.object({
+    clientMessageId: z.string(),
+    messageId: z.string(),
+    chatId: z.string(),
+    deliveredAt: z.string()
+  })
+});
+
+export const ServerTypingUpdateEventSchema = z.object({
+  type: z.literal('typing.update'),
+  payload: z.object({
+    chatId: z.string(),
+    userId: z.string(),
+    status: z.enum(['start', 'stop'])
+  })
+});
+
+export const ServerPresenceUpdateEventSchema = z.object({
+  type: z.literal('presence.update'),
+  payload: z.object({
+    userId: z.string(),
+    status: z.enum(['online', 'offline'])
+  })
+});
+
+export const ServerChatSyncRequiredEventSchema = z.object({
+  type: z.literal('chat.sync_required'),
+  payload: z.object({
+    chatId: z.string(),
+    reason: z.string()
+  })
+});
+
+export type ClientMessageSendEvent = z.infer<typeof ClientMessageSendEventSchema>;

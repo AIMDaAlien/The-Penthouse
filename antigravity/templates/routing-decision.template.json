@@ -1,0 +1,14 @@
+{
+  "task_id": "TASK-0001",
+  "primary_model": "codex",
+  "reviewer_model": "opus",
+  "arbiter_model": "codex",
+  "justification": "Category backend_api maps to codex ownership with opus review.",
+  "evidence_required": false,
+  "plan_phase_owner": null,
+  "implementation_phase_owner": null,
+  "blocked": false,
+  "block_reason": null,
+  "requires_human_signoff": false,
+  "requires_human_in_loop": false
+}

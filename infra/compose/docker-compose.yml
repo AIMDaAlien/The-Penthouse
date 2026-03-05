@@ -1,0 +1,46 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: penthouse
+      POSTGRES_PASSWORD: penthouse
+      POSTGRES_DB: penthouse
+    volumes:
+      - penthouse_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U penthouse"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ../../
+      dockerfile: services/api/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ../../services/api/.env.example
+    environment:
+      DATABASE_URL: postgresql://penthouse:penthouse@postgres:5432/penthouse
+      PORT: 3000
+      CORS_ORIGIN: http://localhost:5173
+    depends_on:
+      postgres:
+        condition: service_healthy
+    expose:
+      - "3000"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "9080:80"
+      - "9443:443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+
+volumes:
+  penthouse_pgdata:

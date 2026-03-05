@@ -1,0 +1,16 @@
+{
+  "client_to_server": [
+    "chat.join",
+    "chat.leave",
+    "typing.start",
+    "typing.stop",
+    "message.send"
+  ],
+  "server_to_client": [
+    "message.new",
+    "message.ack",
+    "typing.update",
+    "presence.update",
+    "chat.sync_required"
+  ]
+}

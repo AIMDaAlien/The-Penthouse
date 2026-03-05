@@ -1,0 +1,406 @@
+{
+  "version": "1.0.0",
+  "name": "Multi-Model Delegation Spec Sheet v1",
+  "project": "The Penthouse",
+  "effective_date": "2026-03-05",
+  "locked_decisions": {
+    "frontend_baseline": "vue3_vite_capacitor",
+    "backend_baseline": "fastify_postgresql",
+    "load_target": "small_private_circle",
+    "evidence_mode": "verify_first",
+    "arbitration_mode": "codex_final_arbiter",
+    "execution_mode": "serial_gated_flow",
+    "output_target": "antigravity_customizations"
+  },
+  "models": {
+    "codex": {
+      "display_name": "Codex 5.3",
+      "primary_domains": [
+        "backend_api",
+        "realtime",
+        "data",
+        "infra",
+        "security"
+      ],
+      "review_domains": [
+        "frontend_ui",
+        "frontend_arch",
+        "migration_flutter",
+        "qa",
+        "docs"
+      ],
+      "final_arbiter": true
+    },
+    "opus": {
+      "display_name": "Claude Opus 4.6",
+      "primary_domains": [
+        "frontend_arch",
+        "complex_refactor_planning",
+        "cross_file_debugging"
+      ],
+      "review_domains": [
+        "backend_api",
+        "realtime",
+        "data",
+        "infra",
+        "security"
+      ],
+      "final_arbiter": false
+    },
+    "gemini": {
+      "display_name": "Gemini 3.1 Pro",
+      "primary_domains": [
+        "frontend_ui",
+        "visual_polish",
+        "migration_flutter"
+      ],
+      "review_domains": [
+        "frontend_ui"
+      ],
+      "final_arbiter": false
+    }
+  },
+  "interfaces": {
+    "TaskEnvelope": {
+      "required": [
+        "id",
+        "title",
+        "category",
+        "risk",
+        "ambiguity",
+        "recency_risk",
+        "requires_native_debug",
+        "artifacts",
+        "acceptance_criteria"
+      ],
+      "optional": [
+        "tags",
+        "notes"
+      ],
+      "category": [
+        "frontend_ui",
+        "frontend_arch",
+        "backend_api",
+        "realtime",
+        "data",
+        "infra",
+        "security",
+        "migration_flutter",
+        "qa",
+        "docs"
+      ],
+      "risk": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ],
+      "ambiguity": [
+        "low",
+        "medium",
+        "high"
+      ]
+    },
+    "RoutingDecision": {
+      "required": [
+        "task_id",
+        "primary_model",
+        "reviewer_model",
+        "arbiter_model",
+        "justification",
+        "evidence_required"
+      ],
+      "optional": [
+        "plan_phase_owner",
+        "implementation_phase_owner",
+        "blocked",
+        "block_reason",
+        "requires_human_signoff",
+        "requires_human_in_loop"
+      ]
+    },
+    "ClaimEvidence": {
+      "required": [
+        "claim_id",
+        "model",
+        "claim_text",
+        "status",
+        "source_type",
+        "source_url",
+        "verified_on"
+      ],
+      "status": [
+        "provisional",
+        "verified",
+        "rejected"
+      ],
+      "source_type": [
+        "primary",
+        "secondary"
+      ]
+    },
+    "HandoffPacket": {
+      "required": [
+        "task_id",
+        "owner_model",
+        "summary",
+        "changes",
+        "tests_run",
+        "results",
+        "known_risks",
+        "open_questions"
+      ],
+      "optional": [
+        "rollback_notes",
+        "decision_record_id"
+      ]
+    }
+  },
+  "routing_rules": [
+    {
+      "id": "rule_backend_realtime_data_infra",
+      "if": {
+        "category_in": [
+          "backend_api",
+          "realtime",
+          "data",
+          "infra"
+        ]
+      },
+      "set": {
+        "primary_model": "codex",
+        "reviewer_model": "opus",
+        "arbiter_model": "codex"
+      }
+    },
+    {
+      "id": "rule_frontend_ui",
+      "if": {
+        "category_in": [
+          "frontend_ui"
+        ]
+      },
+      "set": {
+        "primary_model": "gemini",
+        "reviewer_model": "codex",
+        "arbiter_model": "codex"
+      }
+    },
+    {
+      "id": "rule_frontend_arch_or_flutter_high_ambiguity",
+      "if": {
+        "category_in": [
+          "frontend_arch",
+          "migration_flutter"
+        ],
+        "ambiguity_equals": "high"
+      },
+      "set": {
+        "primary_model": "opus",
+        "reviewer_model": "codex",
+        "arbiter_model": "codex",
+        "plan_phase_owner": "opus",
+        "implementation_phase_owner": "gemini"
+      }
+    },
+    {
+      "id": "rule_frontend_arch_or_flutter_default",
+      "if": {
+        "category_in": [
+          "frontend_arch",
+          "migration_flutter"
+        ],
+        "ambiguity_in": [
+          "low",
+          "medium"
+        ]
+      },
+      "set": {
+        "primary_model": "gemini",
+        "reviewer_model": "codex",
+        "arbiter_model": "codex"
+      }
+    },
+    {
+      "id": "rule_security_sensitive",
+      "if": {
+        "category_in": [
+          "security"
+        ]
+      },
+      "set": {
+        "primary_model": "codex",
+        "reviewer_model": "opus",
+        "arbiter_model": "codex",
+        "requires_human_signoff": true
+      }
+    }
+  ],
+  "global_guards": [
+    {
+      "id": "guard_high_or_critical_risk",
+      "if": {
+        "risk_in": [
+          "high",
+          "critical"
+        ]
+      },
+      "set": {
+        "evidence_required": true,
+        "arbiter_model": "codex",
+        "requires_human_signoff": true
+      }
+    },
+    {
+      "id": "guard_recency_risk_requires_primary_docs",
+      "if": {
+        "recency_risk_equals": true
+      },
+      "set": {
+        "evidence_required": true,
+        "block_if_no_primary_docs": true
+      }
+    },
+    {
+      "id": "guard_security_tags",
+      "if": {
+        "tags_intersect": [
+          "security",
+          "auth",
+          "crypto",
+          "permissions"
+        ]
+      },
+      "set": {
+        "requires_human_signoff": true
+      }
+    },
+    {
+      "id": "guard_destructive_production",
+      "if": {
+        "tags_intersect": [
+          "destructive",
+          "prod_ops"
+        ]
+      },
+      "set": {
+        "requires_human_in_loop": true
+      }
+    }
+  ],
+  "workflow_stages": [
+    {
+      "stage": 1,
+      "name": "intake_gate",
+      "required_artifact": "TaskEnvelope",
+      "pass_condition": "task envelope complete with category, risk, ambiguity"
+    },
+    {
+      "stage": 2,
+      "name": "evidence_gate",
+      "required_artifact": "ClaimEvidence",
+      "pass_condition": "high-risk and recency claims have required primary sources"
+    },
+    {
+      "stage": 3,
+      "name": "planning_gate",
+      "required_artifact": "owner plan and reviewer critique",
+      "pass_condition": "plan addresses acceptance criteria and rollback path"
+    },
+    {
+      "stage": 4,
+      "name": "execution_gate",
+      "required_artifact": "implementation diff",
+      "pass_condition": "execution follows approved plan"
+    },
+    {
+      "stage": 5,
+      "name": "review_gate",
+      "required_artifact": "review report",
+      "pass_condition": "tests pass and no blocking regressions"
+    },
+    {
+      "stage": 6,
+      "name": "arbitration_gate",
+      "required_artifact": "DecisionRecord",
+      "pass_condition": "all unresolved disagreement points have tie-break decision"
+    },
+    {
+      "stage": 7,
+      "name": "human_approval_gate",
+      "required_artifact": "human sign-off note",
+      "pass_condition": "high-risk, security, or production-impact changes approved"
+    },
+    {
+      "stage": 8,
+      "name": "closeout_gate",
+      "required_artifact": "HandoffPacket",
+      "pass_condition": "handoff includes test evidence and rollback notes"
+    }
+  ],
+  "disagreement_protocol": {
+    "max_rebuttal_rounds": 1,
+    "steps": [
+      "owner submits one-pass rationale with evidence",
+      "reviewer submits one-pass rationale with evidence",
+      "codex applies tie-break checklist",
+      "codex publishes DecisionRecord",
+      "human can override final decision"
+    ],
+    "tie_break_checklist": [
+      "meets acceptance criteria",
+      "lower operational risk on unstable host",
+      "fewer moving parts",
+      "better rollback path",
+      "verified dependency behavior"
+    ]
+  },
+  "evidence_policy": {
+    "source_priority": [
+      "official model docs",
+      "official API docs",
+      "official system/model cards",
+      "official changelogs"
+    ],
+    "secondary_source_policy": "Third-party benchmark sites are secondary only",
+    "self_report_policy": "Model self-reports remain provisional unless linked to primary source",
+    "high_risk_rule": "Unverified claims cannot be sole basis for high-risk delegation"
+  },
+  "acceptance_criteria": [
+    "100% of tasks have TaskEnvelope and explicit owner/reviewer/arbiter",
+    "0 high/critical tasks execute without evidence gate and human approval",
+    "100% disagreements end with DecisionRecord",
+    "At least 90% of routed tasks complete without reassignment in first 2 weeks",
+    "No production-impact change merges without rollback note"
+  ],
+  "source_registry": [
+    {
+      "title": "OpenAI GPT-5.3-Codex model docs",
+      "url": "https://developers.openai.com/api/docs/models/gpt-5.3-codex"
+    },
+    {
+      "title": "OpenAI GPT-5.3-Codex release",
+      "url": "https://openai.com/index/introducing-gpt-5-3-codex/"
+    },
+    {
+      "title": "Anthropic Opus model page",
+      "url": "https://www.anthropic.com/claude/opus"
+    },
+    {
+      "title": "Anthropic context window docs",
+      "url": "https://docs.anthropic.com/en/docs/build-with-claude/context-windows"
+    },
+    {
+      "title": "Anthropic system cards index",
+      "url": "https://www.anthropic.com/system-cards"
+    },
+    {
+      "title": "Gemini model list",
+      "url": "https://ai.google.dev/gemini-api/docs/models"
+    },
+    {
+      "title": "Gemini 3.1 Pro model card",
+      "url": "https://deepmind.google/models/model-cards/gemini-3-1-pro"
+    }
+  ]
+}

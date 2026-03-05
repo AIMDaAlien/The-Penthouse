@@ -1,0 +1,11 @@
+:80 {
+  encode gzip
+
+  @api path /api/* /uploads/* /socket.io/*
+  handle @api {
+    reverse_proxy api:3000
+  }
+
+  respond /health "ok" 200
+  respond "The Penthouse infra online" 200
+}

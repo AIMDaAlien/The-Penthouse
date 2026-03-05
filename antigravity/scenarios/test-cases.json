@@ -1,0 +1,168 @@
+{
+  "cases": [
+    {
+      "id": "SCN-001",
+      "description": "Backend endpoint + DB migration request routes to Codex with Opus review.",
+      "task": {
+        "id": "TASK-BE-001",
+        "title": "Add new endpoint and DB migration",
+        "category": "backend_api",
+        "risk": "medium",
+        "ambiguity": "low",
+        "recency_risk": false,
+        "requires_native_debug": false,
+        "artifacts": [
+          "https://developers.openai.com/api/docs/models/gpt-5.3-codex"
+        ],
+        "acceptance_criteria": [
+          "Endpoint returns expected payload",
+          "Migration runs cleanly"
+        ],
+        "tags": ["api", "data"]
+      },
+      "expected": {
+        "primary_model": "codex",
+        "reviewer_model": "opus",
+        "arbiter_model": "codex",
+        "blocked": false
+      }
+    },
+    {
+      "id": "SCN-002",
+      "description": "Mobile UI redesign routes to Gemini with Codex review.",
+      "task": {
+        "id": "TASK-FE-001",
+        "title": "Redesign chat composer UI",
+        "category": "frontend_ui",
+        "risk": "medium",
+        "ambiguity": "medium",
+        "recency_risk": false,
+        "requires_native_debug": false,
+        "artifacts": [
+          "https://ai.google.dev/gemini-api/docs/models"
+        ],
+        "acceptance_criteria": [
+          "Mobile-first layout",
+          "No regression in send flow"
+        ],
+        "tags": ["ui", "mobile"]
+      },
+      "expected": {
+        "primary_model": "gemini",
+        "reviewer_model": "codex",
+        "arbiter_model": "codex",
+        "blocked": false
+      }
+    },
+    {
+      "id": "SCN-003",
+      "description": "Ambiguous large refactor routes to Opus planning then Gemini implementation.",
+      "task": {
+        "id": "TASK-ARCH-001",
+        "title": "Restructure frontend architecture for modular features",
+        "category": "frontend_arch",
+        "risk": "medium",
+        "ambiguity": "high",
+        "recency_risk": false,
+        "requires_native_debug": false,
+        "artifacts": [
+          "https://www.anthropic.com/claude/opus"
+        ],
+        "acceptance_criteria": [
+          "Feature folders isolated",
+          "No regression in routing"
+        ],
+        "tags": ["refactor", "architecture"]
+      },
+      "expected": {
+        "primary_model": "opus",
+        "plan_phase_owner": "opus",
+        "implementation_phase_owner": "gemini",
+        "reviewer_model": "codex"
+      }
+    },
+    {
+      "id": "SCN-004",
+      "description": "New library last week blocks without primary docs.",
+      "task": {
+        "id": "TASK-RECENCY-001",
+        "title": "Use brand-new websocket plugin",
+        "category": "realtime",
+        "risk": "medium",
+        "ambiguity": "medium",
+        "recency_risk": true,
+        "requires_native_debug": false,
+        "artifacts": [
+          "https://example.com/random-blog-post"
+        ],
+        "acceptance_criteria": [
+          "Plugin integrated"
+        ],
+        "tags": ["dependency"]
+      },
+      "expected": {
+        "blocked": true,
+        "evidence_required": true
+      }
+    },
+    {
+      "id": "SCN-005",
+      "description": "Disagreement protocol enforces one rebuttal and Codex final arbiter.",
+      "policy_assertion": {
+        "disagreement_protocol.max_rebuttal_rounds": 1,
+        "disagreement_protocol.steps.2": "codex applies tie-break checklist"
+      }
+    },
+    {
+      "id": "SCN-006",
+      "description": "Security-sensitive auth change requires human approval.",
+      "task": {
+        "id": "TASK-SEC-001",
+        "title": "Harden auth refresh flow",
+        "category": "security",
+        "risk": "high",
+        "ambiguity": "medium",
+        "recency_risk": false,
+        "requires_native_debug": false,
+        "artifacts": [
+          "https://www.anthropic.com/system-cards"
+        ],
+        "acceptance_criteria": [
+          "No token replay accepted"
+        ],
+        "tags": ["security", "auth", "permissions"]
+      },
+      "expected": {
+        "primary_model": "codex",
+        "reviewer_model": "opus",
+        "requires_human_signoff": true,
+        "evidence_required": true
+      }
+    },
+    {
+      "id": "SCN-007",
+      "description": "Custom crypto utility cannot be model-only owned.",
+      "task": {
+        "id": "TASK-CRYPTO-001",
+        "title": "Implement custom crypto utility",
+        "category": "security",
+        "risk": "critical",
+        "ambiguity": "high",
+        "recency_risk": false,
+        "requires_native_debug": false,
+        "artifacts": [
+          "https://www.anthropic.com/system-cards"
+        ],
+        "acceptance_criteria": [
+          "Utility implemented"
+        ],
+        "tags": ["custom_crypto", "security", "crypto"]
+      },
+      "expected": {
+        "blocked": true,
+        "solo_owner_allowed": false,
+        "requires_human_signoff": true
+      }
+    }
+  ]
+}

@@ -1,0 +1,57 @@
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { pool } from './pool.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const migrations = [
+  '001_initial.sql'
+];
+
+export async function runMigrations(): Promise<void> {
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS schema_migrations (
+        id SERIAL PRIMARY KEY,
+        name TEXT UNIQUE NOT NULL,
+        applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+
+    for (const migrationName of migrations) {
+      const already = await client.query('SELECT 1 FROM schema_migrations WHERE name = $1', [migrationName]);
+      if (already.rowCount) continue;
+
+      const sqlPath = path.join(__dirname, 'migrations', migrationName);
+      const sql = await readFile(sqlPath, 'utf8');
+      await client.query(sql);
+      await client.query('INSERT INTO schema_migrations(name) VALUES($1)', [migrationName]);
+      console.log(`[migration] applied ${migrationName}`);
+    }
+
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  runMigrations()
+    .then(async () => {
+      await pool.end();
+      console.log('[migration] complete');
+    })
+    .catch(async (error) => {
+      console.error('[migration] failed', error);
+      await pool.end();
+      process.exit(1);
+    });
+}

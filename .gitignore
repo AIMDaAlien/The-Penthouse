@@ -1,0 +1,16 @@
+node_modules/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+*.log
+.vscode/
+.idea/
+.DS_Store
+.apps/
+services/api/uploads/
+services/api/tmp/
+apps/mobile/.capacitor/
+apps/mobile/android/
+apps/mobile/ios/

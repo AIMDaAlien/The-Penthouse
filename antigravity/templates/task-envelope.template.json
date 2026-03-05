@@ -1,0 +1,21 @@
+{
+  "id": "TASK-0001",
+  "title": "Short task title",
+  "category": "backend_api",
+  "risk": "medium",
+  "ambiguity": "low",
+  "recency_risk": false,
+  "requires_native_debug": false,
+  "artifacts": [
+    "https://docs.example.com/reference"
+  ],
+  "acceptance_criteria": [
+    "Criterion 1",
+    "Criterion 2"
+  ],
+  "tags": [
+    "api",
+    "stability"
+  ],
+  "notes": "Optional execution notes"
+}
