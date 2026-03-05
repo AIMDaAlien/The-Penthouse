@@ -18,9 +18,9 @@ export function connectSocket(): Socket {
     reconnectionAttempts: 10,
     reconnectionDelay: 800,
     reconnectionDelayMax: 6000,
-    auth: {
+    auth: () => ({
       token: getAccessToken()
-    }
+    })
   });
 
   socket.connect();

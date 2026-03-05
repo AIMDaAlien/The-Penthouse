@@ -39,7 +39,11 @@ export async function flushQueue(
   const queue = readQueue();
   for (const item of queue) {
     onAttempt?.(item);
-    await sender(item);
-    removeQueued(item.clientMessageId);
+    try {
+      await sender(item);
+      removeQueued(item.clientMessageId);
+    } catch {
+      // Leave in queue for next flush attempt; continue with remaining items
+    }
   }
 }

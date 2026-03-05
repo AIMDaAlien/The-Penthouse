@@ -93,7 +93,7 @@ const selectedChatId = ref<string>('');
 const queued = ref<PendingMessage[]>(getQueued());
 const isOnline = ref(navigator.onLine);
 
-const selectedChat = computed(() => chats.value.find((c) => c.id === selectedChatId.value));
+
 
 function generateClientMessageId(): string {
   return `local_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
@@ -237,6 +237,9 @@ function wireSocketHandlers(): void {
 
   socket.on('connect', () => {
     isOnline.value = true;
+    if (selectedChatId.value) {
+      socket.emit('chat.join', { chatId: selectedChatId.value });
+    }
     flushPending().catch(() => undefined);
   });
 
@@ -369,8 +372,7 @@ onUnmounted(() => {
     display: none;
   }
 
-  /* Show back button strictly when mobile and chat active */
-  .chat-layout.chat-active ~ .app-header .mobile-back-btn,
+  /* Show back button on mobile */
   .mobile-back-btn {
     display: flex;
   }
