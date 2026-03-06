@@ -132,7 +132,16 @@ export function getAccessToken(): string {
 
 export function getStoredUser(): { id: string; username: string } | null {
   const raw = localStorage.getItem('user');
-  return raw ? JSON.parse(raw) : null;
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as { id?: string; username?: string };
+    if (typeof parsed?.id === 'string' && typeof parsed?.username === 'string') {
+      return { id: parsed.id, username: parsed.username };
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 export function setStoredUser(user: { id: string; username: string } | null): void {

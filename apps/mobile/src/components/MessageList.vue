@@ -18,7 +18,20 @@
         <div class="msg-meta small">
           <span v-if="m.senderId !== currentUserId" class="sender-name">{{ m.senderId.slice(0, 8) }}</span>
           <span class="timestamp">{{ formatTime(m.createdAt) }}</span>
-          <span v-if="isLocalId(m.id)" class="status-indicator" title="Queued/Sending"> ⏳</span>
+          
+          <template v-if="m.senderId === currentUserId">
+            <span v-if="getDeliveryState(m) === 'delivered'" class="status-indicator success" title="Delivered"> ✓</span>
+            <span v-else-if="getDeliveryState(m) === 'queued'" class="status-indicator queued" title="Queued"> ⏸️</span>
+            <span v-else-if="getDeliveryState(m) === 'sending'" class="status-indicator sending" title="Sending"> ⏳</span>
+            <button 
+              v-else-if="getDeliveryState(m) === 'failed-retryable'" 
+              class="status-indicator failed retry-btn" 
+              title="Failed, tap to retry"
+              @click="m.clientMessageId && $emit('retry', m.clientMessageId)"
+            >
+              ❌
+            </button>
+          </template>
         </div>
         <div class="msg-content">{{ m.content }}</div>
       </div>
@@ -33,6 +46,12 @@ import type { Message } from '@penthouse/contracts';
 const props = defineProps<{
   messages: Message[];
   currentUserId: string;
+  queuedIds?: string[];
+  failedIds?: string[];
+}>();
+
+const emit = defineEmits<{
+  (e: 'retry', clientMessageId: string): void;
 }>();
 
 const scrollRef = ref<HTMLElement | null>(null);
@@ -53,6 +72,20 @@ watch(() => props.messages.length, async () => {
 
 function isLocalId(id: string): boolean {
   return id.startsWith('local_');
+}
+
+function getDeliveryState(m: Message): 'delivered' | 'failed-retryable' | 'queued' | 'sending' {
+  if (!isLocalId(m.id)) return 'delivered';
+  
+  if (m.clientMessageId && props.failedIds?.includes(m.clientMessageId)) {
+    return 'failed-retryable';
+  }
+  
+  if (m.clientMessageId && props.queuedIds?.includes(m.clientMessageId)) {
+    return 'queued';
+  }
+  
+  return 'sending';
 }
 
 function formatTime(isoStr: string): string {
@@ -139,6 +172,26 @@ function formatTime(isoStr: string): string {
 .msg-content {
   line-height: 1.4;
   white-space: pre-wrap;
+}
+
+.status-indicator {
+  margin-left: 2px;
+}
+
+.retry-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: 0.7rem;
+  transition: transform 0.15s ease;
+}
+
+.retry-btn:hover {
+  transform: scale(1.2);
+}
+.retry-btn:active {
+  transform: scale(0.9);
 }
 
 /* Custom Scrollbar */

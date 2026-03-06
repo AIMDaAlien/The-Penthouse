@@ -47,6 +47,9 @@
         <MessageList 
           :messages="messages"
           :currentUserId="session.user.id"
+          :queuedIds="queued.map(q => q.clientMessageId)"
+          :failedIds="Array.from(failedMessageIds)"
+          @retry="retrySpecificMessage"
         />
         <MessageComposer 
           :disabled="!selectedChatId"
@@ -95,6 +98,7 @@ const chats = ref<Chat[]>([]);
 const messages = ref<ChatMessage[]>([]);
 const selectedChatId = ref<string>('');
 const queued = ref<PendingMessage[]>(getQueued());
+const failedMessageIds = ref<Set<string>>(new Set(getQueued().map(q => q.clientMessageId)));
 const isOnline = ref(navigator.onLine);
 const hasPermanentSocketError = ref(false);
 const isReconnecting = ref(false);
@@ -139,6 +143,25 @@ async function sendOrQueue(chatId: string, content: string, clientMessageId: str
   } catch {
     enqueueMessage(pendingItem);
     queued.value = getQueued();
+    failedMessageIds.value.add(clientMessageId);
+  }
+}
+
+async function retrySpecificMessage(clientMessageId: string): Promise<void> {
+  const queuedItem = queued.value.find(q => q.clientMessageId === clientMessageId);
+  if (!queuedItem) return;
+
+  failedMessageIds.value.delete(clientMessageId);
+  try {
+    await withBackoff(() => sendMessage(queuedItem.chatId, queuedItem.content, clientMessageId));
+    // The socket ack will eventually handle removing it from queue, but we can optimistically clean up
+    // However, existing socket ack logic requires it to be delivered. The `flushQueue` implementation removes it upon success:
+    import('./services/offlineQueue').then(module => {
+      module.removeQueued(clientMessageId);
+      queued.value = module.getQueued();
+    });
+  } catch {
+    failedMessageIds.value.add(clientMessageId);
   }
 }
 
@@ -163,7 +186,13 @@ async function sendCurrent(content: string): Promise<void> {
 
 async function flushPending(): Promise<void> {
   await flushQueue(async (item) => {
-    await withBackoff(() => sendMessage(item.chatId, item.content, item.clientMessageId));
+    failedMessageIds.value.delete(item.clientMessageId);
+    try {
+      await withBackoff(() => sendMessage(item.chatId, item.content, item.clientMessageId));
+    } catch (e) {
+      failedMessageIds.value.add(item.clientMessageId);
+      throw e;
+    }
   });
   queued.value = getQueued();
 }
@@ -241,7 +270,13 @@ function wireSocketHandlers(): void {
       existingMsg.id = payload.messageId;
       cacheMessages(payload.chatId, messages.value);
     }
-    queued.value = getQueued();
+    
+    // We can also ensure it is removed from failed set
+    failedMessageIds.value.delete(payload.clientMessageId);
+    import('./services/offlineQueue').then(module => {
+      module.removeQueued(payload.clientMessageId);
+      queued.value = module.getQueued();
+    });
   });
 
   socket.on('connect', () => {
