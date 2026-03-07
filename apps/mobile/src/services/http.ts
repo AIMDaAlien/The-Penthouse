@@ -5,8 +5,9 @@ import type {
   Message,
   SendMessageResponse
 } from '@penthouse/contracts';
+import { resolveApiBase } from './runtime';
 
-const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
+const API_BASE = resolveApiBase();
 
 const http = axios.create({
   baseURL: API_BASE,

@@ -57,7 +57,7 @@
         />
       </div>
       <div class="chat-main empty-chat" v-else>
-        <p class="small">Select a chat to start messaging.</p>
+        <p class="small prompt-text">Select 'General' to join the shared test chat.</p>
       </div>
     </section>
   </main>
@@ -77,8 +77,9 @@ import {
   setStoredUser,
   logout
 } from './services/http';
+import { describeAuthError } from './services/errors';
 import { connectSocket, disconnectSocket, getSocket } from './services/socket';
-import { enqueueMessage, flushQueue, getQueued } from './services/offlineQueue';
+import { enqueueMessage, flushQueue, getQueued, removeQueued } from './services/offlineQueue';
 import { withBackoff } from './services/retry';
 import { cacheChats, cacheMessages, readCachedChats, readCachedMessages } from './services/cache';
 
@@ -99,7 +100,7 @@ const messages = ref<ChatMessage[]>([]);
 const selectedChatId = ref<string>('');
 const queued = ref<PendingMessage[]>(getQueued());
 const failedMessageIds = ref<Set<string>>(new Set(getQueued().map(q => q.clientMessageId)));
-const isOnline = ref(navigator.onLine);
+const isOnline = ref(false);
 const hasPermanentSocketError = ref(false);
 const isReconnecting = ref(false);
 
@@ -139,12 +140,25 @@ async function sendOrQueue(chatId: string, content: string, clientMessageId: str
   };
 
   try {
-    await withBackoff(() => sendMessage(chatId, content, clientMessageId));
+    const response = await withBackoff(() => sendMessage(chatId, content, clientMessageId));
+    markMessageDelivered(response.message.chatId, clientMessageId, response.message.id);
   } catch {
     enqueueMessage(pendingItem);
     queued.value = getQueued();
     failedMessageIds.value.add(clientMessageId);
   }
+}
+
+function markMessageDelivered(chatId: string, clientMessageId: string, messageId: string): void {
+  const existingMsg = messages.value.find((m) => m.clientMessageId === clientMessageId && m.chatId === chatId);
+  if (existingMsg) {
+    existingMsg.id = messageId;
+    cacheMessages(chatId, messages.value);
+  }
+
+  failedMessageIds.value.delete(clientMessageId);
+  removeQueued(clientMessageId);
+  queued.value = getQueued();
 }
 
 async function retrySpecificMessage(clientMessageId: string): Promise<void> {
@@ -153,13 +167,8 @@ async function retrySpecificMessage(clientMessageId: string): Promise<void> {
 
   failedMessageIds.value.delete(clientMessageId);
   try {
-    await withBackoff(() => sendMessage(queuedItem.chatId, queuedItem.content, clientMessageId));
-    // The socket ack will eventually handle removing it from queue, but we can optimistically clean up
-    // However, existing socket ack logic requires it to be delivered. The `flushQueue` implementation removes it upon success:
-    import('./services/offlineQueue').then(module => {
-      module.removeQueued(clientMessageId);
-      queued.value = module.getQueued();
-    });
+    const response = await withBackoff(() => sendMessage(queuedItem.chatId, queuedItem.content, clientMessageId));
+    markMessageDelivered(response.message.chatId, clientMessageId, response.message.id);
   } catch {
     failedMessageIds.value.add(clientMessageId);
   }
@@ -188,7 +197,8 @@ async function flushPending(): Promise<void> {
   await flushQueue(async (item) => {
     failedMessageIds.value.delete(item.clientMessageId);
     try {
-      await withBackoff(() => sendMessage(item.chatId, item.content, item.clientMessageId));
+      const response = await withBackoff(() => sendMessage(item.chatId, item.content, item.clientMessageId));
+      markMessageDelivered(response.message.chatId, item.clientMessageId, response.message.id);
     } catch (e) {
       failedMessageIds.value.add(item.clientMessageId);
       throw e;
@@ -203,8 +213,8 @@ async function handleLogin(username: string, pass: string) {
   try {
     const res = await login(username, pass);
     completeAuth(res);
-  } catch (error: any) {
-    authError.value = error?.response?.data?.error || 'Authentication failed';
+  } catch (error: unknown) {
+    authError.value = describeAuthError(error);
   } finally {
     isAuthenticating.value = false;
   }
@@ -216,8 +226,8 @@ async function handleRegister(username: string, pass: string, invite: string) {
   try {
     const res = await register(username, pass, invite);
     completeAuth(res);
-  } catch (error: any) {
-    authError.value = error?.response?.data?.error || 'Authentication failed';
+  } catch (error: unknown) {
+    authError.value = describeAuthError(error);
   } finally {
     isAuthenticating.value = false;
   }
@@ -235,27 +245,29 @@ function wireSocketHandlers(): void {
   socket.removeAllListeners('message.new');
   socket.removeAllListeners('message.ack');
   socket.removeAllListeners('connect');
+  socket.removeAllListeners('connect_error');
   socket.removeAllListeners('disconnect');
   socket.io.removeAllListeners('reconnect_attempt');
   socket.io.removeAllListeners('reconnect_failed');
+  socket.io.removeAllListeners('reconnect');
 
   socket.on('message.new', (event: any) => {
     const parsed = ServerMessageNewEventSchema.safeParse(event);
     if (!parsed.success) return;
     const payload = parsed.data.payload;
     if (payload.chatId !== selectedChatId.value) return;
-    
+
     // Check if we already optimistically rendered this (match by clientMessageId)
     // The server `id` is a UUID, local id starts with `local_`
     const existingIdx = messages.value.findIndex(m => m.clientMessageId === payload.clientMessageId);
-    
+
     if (existingIdx >= 0) {
       // Replace optimistic message with actual server message
       messages.value[existingIdx] = payload;
     } else if (!messages.value.some((m) => m.id === payload.id)) {
       messages.value.unshift(payload);
     }
-    
+
     cacheMessages(payload.chatId, messages.value);
   });
 
@@ -270,22 +282,23 @@ function wireSocketHandlers(): void {
       existingMsg.id = payload.messageId;
       cacheMessages(payload.chatId, messages.value);
     }
-    
+
     // We can also ensure it is removed from failed set
-    failedMessageIds.value.delete(payload.clientMessageId);
-    import('./services/offlineQueue').then(module => {
-      module.removeQueued(payload.clientMessageId);
-      queued.value = module.getQueued();
-    });
+    markMessageDelivered(payload.chatId, payload.clientMessageId, payload.messageId);
   });
 
   socket.on('connect', () => {
     isOnline.value = true;
+    isReconnecting.value = false;
     hasPermanentSocketError.value = false;
     if (selectedChatId.value) {
       socket.emit('chat.join', { chatId: selectedChatId.value });
     }
     flushPending().catch(() => undefined);
+  });
+
+  socket.on('connect_error', () => {
+    isOnline.value = false;
   });
 
   socket.on('disconnect', () => {
@@ -327,12 +340,19 @@ async function doLogout(): Promise<void> {
 }
 
 function onOnline(): void {
-  isOnline.value = true;
-  hasPermanentSocketError.value = false;
+  // Network is back — kick the socket to reconnect if it isn't already connected.
+  // Do NOT set isOnline here; let the socket 'connect' event be the single source of truth.
+  const sock = getSocket();
+  if (sock && !sock.connected) {
+    hasPermanentSocketError.value = false;
+    sock.connect();
+  }
   flushPending().catch(() => undefined);
 }
 
 function onOffline(): void {
+  // Immediately reflect network loss. The socket will also fire 'disconnect'
+  // once the transport times out, but this gives instant visual feedback.
   isOnline.value = false;
 }
 
@@ -420,6 +440,11 @@ onUnmounted(() => {
 .empty-chat {
   justify-content: center;
   align-items: center;
+}
+
+.prompt-text {
+  opacity: 0.7;
+  font-size: 1.1rem;
 }
 
 /* Mobile Responsive Adjustments */

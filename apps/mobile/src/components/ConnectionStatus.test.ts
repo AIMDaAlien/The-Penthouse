@@ -62,7 +62,7 @@ describe('ConnectionStatus.vue', () => {
     expect(wrapper.text()).toContain('Reconnect failed');
     expect(wrapper.text()).toContain('5 queued');
     
-    const btn = wrapper.find('button.tiny-btn');
+    const btn = wrapper.find('button.action-btn');
     expect(btn.exists()).toBe(true);
     expect(btn.text()).toBe('Try reconnect');
 
@@ -83,7 +83,7 @@ describe('ConnectionStatus.vue', () => {
     expect(wrapper.text()).toContain('Connected');
     expect(wrapper.text()).toContain('3 queued');
 
-    const btn = wrapper.find('button.tiny-btn');
+    const btn = wrapper.find('button.action-btn');
     expect(btn.exists()).toBe(true);
     expect(btn.text()).toBe('Retry');
 

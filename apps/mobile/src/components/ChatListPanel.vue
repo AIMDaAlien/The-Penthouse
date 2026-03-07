@@ -15,7 +15,11 @@
         :class="{ active: activeChatId === chat.id }"
         @click="$emit('select', chat.id)"
       >
-        <div class="chat-name">{{ chat.name }}</div>
+        <div class="chat-name">
+          <span class="chat-prefix" v-if="chat.type === 'channel'">#</span>
+          <span class="chat-prefix" v-if="chat.type === 'dm'">@</span>
+          {{ chat.name }}
+        </div>
         <div class="chat-meta small">
           <span class="badge" :class="chat.type">{{ chat.type }}</span>
         </div>
@@ -75,4 +79,10 @@ defineEmits<{
   background: rgba(255, 255, 255, 0.1);
 }
 .badge.dm { background: rgba(140, 216, 255, 0.15); color: var(--accent); }
+.badge.channel { background: rgba(255, 255, 255, 0.2); font-weight: bold; color: white; }
+.chat-prefix {
+  opacity: 0.5;
+  margin-right: 2px;
+  font-weight: normal;
+}
 </style>

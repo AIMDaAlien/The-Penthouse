@@ -1,7 +1,7 @@
 <template>
   <div class="messages-container" ref="scrollRef">
     <div v-if="messages.length === 0" class="empty-state">
-      <p class="small">No messages yet. Say hello!</p>
+      <p class="small">No messages here yet. Be the first to say hello!</p>
     </div>
     
     <div class="messages">

@@ -1,7 +1,8 @@
 import { io, type Socket } from 'socket.io-client';
 import { getAccessToken } from './http';
+import { resolveApiBase } from './runtime';
 
-const SOCKET_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
+const SOCKET_URL = resolveApiBase();
 
 let socket: Socket | null = null;
 
