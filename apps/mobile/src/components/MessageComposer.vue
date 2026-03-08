@@ -1,15 +1,19 @@
 <template>
   <div class="composer-container">
     <textarea 
+      ref="textareaRef"
       v-model="draft" 
       rows="2" 
       placeholder="Type a message..."
       :disabled="disabled"
       enterkeyhint="send"
+      @compositionstart="isComposing = true"
+      @compositionend="isComposing = false"
       @keydown.enter.exact.prevent="handleEnter"
     ></textarea>
     <div class="actions">
       <button 
+        type="button"
         class="send-btn" 
         :disabled="disabled || !draft.trim()" 
         @click="send"
@@ -21,7 +25,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { nextTick, ref } from 'vue';
 
 defineProps<{
   disabled: boolean;
@@ -32,17 +36,31 @@ const emit = defineEmits<{
 }>();
 
 const draft = ref('');
+const isComposing = ref(false);
+const textareaRef = ref<HTMLTextAreaElement | null>(null);
+
+function clearDraft() {
+  draft.value = '';
+  if (textareaRef.value) {
+    textareaRef.value.value = '';
+  }
+}
 
 function send() {
+  if (isComposing.value) return;
+
   const content = draft.value.trim();
   if (!content) return;
   emit('send', content);
-  draft.value = '';
+  clearDraft();
+  void nextTick(() => {
+    clearDraft();
+  });
 }
 
 function handleEnter(e: KeyboardEvent) {
   // Shift+Enter for newline, Enter to send
-  if (!e.shiftKey) {
+  if (!e.shiftKey && !isComposing.value) {
     send();
   }
 }

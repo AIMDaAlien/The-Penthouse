@@ -52,6 +52,7 @@ describe('MessageComposer.vue', () => {
 
     expect(wrapper.emitted('send')).toBeTruthy();
     expect(wrapper.emitted('send')![0]).toEqual(['Click me']);
+    expect((textarea.element as HTMLTextAreaElement).value).toBe('');
   });
 
   it('does not send empty messages', async () => {
@@ -66,6 +67,23 @@ describe('MessageComposer.vue', () => {
     await textarea.trigger('keydown.enter');
 
     expect(wrapper.emitted('send')).toBeFalsy();
+  });
+
+  it('does not send while IME composition is active', async () => {
+    const wrapper = mount(MessageComposer, {
+      props: { disabled: false }
+    });
+
+    const textarea = wrapper.find('textarea');
+    await textarea.setValue('Drafting');
+    await textarea.trigger('compositionstart');
+    await textarea.trigger('keydown.enter');
+
+    expect(wrapper.emitted('send')).toBeFalsy();
+
+    await textarea.trigger('compositionend');
+    await textarea.trigger('keydown.enter');
+    expect(wrapper.emitted('send')![0]).toEqual(['Drafting']);
   });
 
   it('disables input when requested', async () => {

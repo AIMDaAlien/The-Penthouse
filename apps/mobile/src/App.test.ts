@@ -10,6 +10,7 @@ vi.mock('./services/http', () => ({
   getStoredUser: vi.fn(() => ({ id: 'user-1', username: 'testuser' })),
   login: vi.fn(),
   register: vi.fn(),
+  resetPassword: vi.fn(),
   sendMessage: vi.fn((chatId: string, content: string, clientMessageId: string) =>
     Promise.resolve({
       message: {
@@ -164,7 +165,8 @@ describe('App.vue Connection State', () => {
 
     const status = getStatus(wrapper);
     expect(status.props('isOnline')).toBe(false);
-    expect(status.text()).toContain('Offline');
+    expect(status.props('hasNetwork')).toBe(true);
+    expect(status.text()).toContain('Realtime offline');
   });
 
   it('shows Connected after socket connect event fires', async () => {
@@ -178,6 +180,7 @@ describe('App.vue Connection State', () => {
 
     const status = getStatus(wrapper);
     expect(status.props('isOnline')).toBe(true);
+    expect(status.props('hasNetwork')).toBe(true);
     expect(status.text()).toContain('Connected');
   });
 
@@ -196,7 +199,8 @@ describe('App.vue Connection State', () => {
 
     const status = getStatus(wrapper);
     expect(status.props('isOnline')).toBe(false);
-    expect(status.text()).toContain('Offline');
+    expect(status.props('hasNetwork')).toBe(true);
+    expect(status.text()).toContain('Realtime offline');
   });
 
   it('shows Offline on connect_error (e.g. expired token)', async () => {
@@ -208,6 +212,21 @@ describe('App.vue Connection State', () => {
 
     const status = getStatus(wrapper);
     expect(status.props('isOnline')).toBe(false);
+    expect(status.props('hasNetwork')).toBe(true);
+    expect(status.text()).toContain('Realtime offline');
+  });
+
+  it('shows Offline after the browser offline event fires', async () => {
+    const wrapper = mount(App);
+    await flushPromises();
+
+    window.dispatchEvent(new Event('offline'));
+    await flushPromises();
+
+    const status = getStatus(wrapper);
+    expect(status.props('hasNetwork')).toBe(false);
+    expect(status.props('isOnline')).toBe(false);
+    expect(status.text()).toContain('Offline');
   });
 
   it('clears isReconnecting on successful connect', async () => {

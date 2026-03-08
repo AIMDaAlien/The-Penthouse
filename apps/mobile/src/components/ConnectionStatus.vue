@@ -6,7 +6,7 @@
       <template v-if="queuedCount > 0">
         <span class="separator">•</span>
         <span class="queue-badge">{{ queuedCount }} queued</span>
-        <button v-if="isOnline && !hasPermanentError && !isReconnecting" class="action-btn bg-retry" @click="$emit('flush')">Retry</button>
+        <button v-if="hasNetwork && !isReconnecting" class="action-btn bg-retry" @click="$emit('flush')">Retry sends</button>
       </template>
       <template v-if="hasPermanentError && !isReconnecting">
         <span class="separator">•</span>
@@ -21,6 +21,7 @@ import { computed } from 'vue';
 
 const props = defineProps<{
   isOnline: boolean;
+  hasNetwork: boolean;
   queuedCount: number;
   hasPermanentError: boolean;
   isReconnecting: boolean;
@@ -34,12 +35,14 @@ defineEmits<{
 const statusClass = computed(() => {
   if (props.isReconnecting) return 'warning';
   if (props.hasPermanentError) return 'danger';
-  return props.isOnline ? 'ok' : 'danger';
+  if (props.isOnline) return 'ok';
+  return props.hasNetwork ? 'warning' : 'danger';
 });
 
 const statusText = computed(() => {
   if (props.isReconnecting) return 'Reconnecting...';
   if (props.hasPermanentError) return 'Reconnect failed';
+  if (props.hasNetwork && !props.isOnline) return 'Realtime offline';
   return props.isOnline ? 'Connected' : 'Offline';
 });
 </script>

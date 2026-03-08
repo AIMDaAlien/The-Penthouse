@@ -16,7 +16,7 @@
         }"
       >
         <div class="msg-meta small">
-          <span v-if="m.senderId !== currentUserId" class="sender-name">{{ m.senderId.slice(0, 8) }}</span>
+          <span v-if="m.senderId !== currentUserId" class="sender-name">{{ getSenderLabel(m) }}</span>
           <span class="timestamp">{{ formatTime(m.createdAt) }}</span>
           
           <template v-if="m.senderId === currentUserId">
@@ -72,6 +72,11 @@ watch(() => props.messages.length, async () => {
 
 function isLocalId(id: string): boolean {
   return id.startsWith('local_');
+}
+
+function getSenderLabel(m: Message): string {
+  if (m.senderDisplayName) return m.senderDisplayName;
+  return m.senderUsername || m.senderId.slice(0, 8);
 }
 
 function getDeliveryState(m: Message): 'delivered' | 'failed-retryable' | 'queued' | 'sending' {

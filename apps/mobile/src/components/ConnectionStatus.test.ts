@@ -7,6 +7,7 @@ describe('ConnectionStatus.vue', () => {
     const wrapper = mount(ConnectionStatus, {
       props: {
         isOnline: true,
+        hasNetwork: true,
         queuedCount: 0,
         hasPermanentError: false,
         isReconnecting: false
@@ -17,13 +18,14 @@ describe('ConnectionStatus.vue', () => {
     expect(wrapper.find('.ok').exists()).toBe(true);
     // Should NOT have retry button or queued count
     expect(wrapper.text()).not.toContain('queued');
-    expect(wrapper.find('.tiny-btn').exists()).toBe(false);
+    expect(wrapper.find('button.action-btn').exists()).toBe(false);
   });
 
   it('renders Offline state', () => {
     const wrapper = mount(ConnectionStatus, {
       props: {
         isOnline: false,
+        hasNetwork: false,
         queuedCount: 0,
         hasPermanentError: false,
         isReconnecting: false
@@ -38,6 +40,7 @@ describe('ConnectionStatus.vue', () => {
     const wrapper = mount(ConnectionStatus, {
       props: {
         isOnline: false,
+        hasNetwork: true,
         queuedCount: 0,
         hasPermanentError: false,
         isReconnecting: true
@@ -53,6 +56,7 @@ describe('ConnectionStatus.vue', () => {
     const wrapper = mount(ConnectionStatus, {
       props: {
         isOnline: false,
+        hasNetwork: true,
         queuedCount: 5,
         hasPermanentError: true,
         isReconnecting: false
@@ -61,31 +65,37 @@ describe('ConnectionStatus.vue', () => {
 
     expect(wrapper.text()).toContain('Reconnect failed');
     expect(wrapper.text()).toContain('5 queued');
-    
-    const btn = wrapper.find('button.action-btn');
-    expect(btn.exists()).toBe(true);
-    expect(btn.text()).toBe('Try reconnect');
 
-    await btn.trigger('click');
+    const retryBtn = wrapper.find('button.bg-retry');
+    expect(retryBtn.exists()).toBe(true);
+    expect(retryBtn.text()).toBe('Retry sends');
+
+    const reconnectBtn = wrapper.find('button.bg-reconnect');
+    expect(reconnectBtn.exists()).toBe(true);
+    expect(reconnectBtn.text()).toBe('Try reconnect');
+
+    await reconnectBtn.trigger('click');
     expect(wrapper.emitted('reconnect')).toBeTruthy();
   });
 
   it('renders Offline with flush Retry button when queued > 0 but online', async () => {
     const wrapper = mount(ConnectionStatus, {
       props: {
-        isOnline: true,
+        isOnline: false,
+        hasNetwork: true,
         queuedCount: 3,
         hasPermanentError: false,
         isReconnecting: false
       }
     });
 
-    expect(wrapper.text()).toContain('Connected');
+    expect(wrapper.text()).toContain('Realtime offline');
     expect(wrapper.text()).toContain('3 queued');
+    expect(wrapper.find('.warning').exists()).toBe(true);
 
     const btn = wrapper.find('button.action-btn');
     expect(btn.exists()).toBe(true);
-    expect(btn.text()).toBe('Retry');
+    expect(btn.text()).toBe('Retry sends');
 
     await btn.trigger('click');
     expect(wrapper.emitted('flush')).toBeTruthy();

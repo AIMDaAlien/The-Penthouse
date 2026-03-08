@@ -3,9 +3,9 @@
     <header class="app-header">
       <div class="header-title">
         <button 
-          v-if="session && selectedChatId" 
+          v-if="session && isContentActive" 
           class="mobile-back-btn" 
-          @click="selectedChatId = ''"
+          @click="handleMobileBack"
         >
           ←
         </button>
@@ -14,6 +14,7 @@
       <ConnectionStatus 
         v-if="session"
         :isOnline="isOnline"
+        :hasNetwork="hasNetwork"
         :queuedCount="queued.length"
         :hasPermanentError="hasPermanentSocketError"
         :isReconnecting="isReconnecting"
@@ -28,12 +29,49 @@
       :loading="isAuthenticating"
       @login="handleLogin"
       @register="handleRegister"
+      @reset-password="handlePasswordReset"
     />
 
-    <section v-else class="chat-layout" :class="{ 'chat-active': !!selectedChatId }">
+    <section v-else-if="session.user.mustChangePassword" class="chat-shell forced-password-gate">
+      <div class="card forced-password-card">
+        <h2>Security Update Required</h2>
+        <p class="small" style="margin-bottom: 24px;">Your account requires a password change before continuing.</p>
+        <form @submit.prevent="handleForcedPasswordChange" class="list">
+          <input v-model="forcedPwForm.currentPassword" type="password" placeholder="Current Password" required />
+          <input v-model="forcedPwForm.newPassword" type="password" placeholder="New Password" required />
+          <input v-model="forcedPwConfirm" type="password" placeholder="Confirm New Password" required />
+          <button type="submit" :disabled="savingForcedPw">Update Password</button>
+          <p v-if="forcedPwError" class="status-danger small">{{ forcedPwError }}</p>
+        </form>
+        <button class="danger small-btn" style="margin-top: 16px;" @click="doLogout">Logout</button>
+      </div>
+    </section>
+
+    <section v-else class="chat-shell">
+      <div v-if="recoveryCodeNotice" class="recovery-banner">
+        <div>
+          <strong>Save your recovery code</strong>
+          <p class="small">
+            {{ formattedRecoveryCodeNotice }}
+          </p>
+          <p class="small recovery-copy">
+            You need this code to reset a lost password. It is only shown after signup, reset, or first login on older accounts.
+          </p>
+        </div>
+        <button class="secondary" @click="recoveryCodeNotice = ''">I saved it</button>
+      </div>
+
+      <section class="chat-layout" :class="{ 'content-active': isContentActive }">
       <!-- Sidebar / Chat List -->
       <div class="sidebar">
+        <div class="nav-tabs row" style="margin-bottom: 12px; gap: 8px;">
+          <button class="small-btn" :class="{ secondary: currentView !== 'chats' }" @click="currentView = 'chats'">Chats</button>
+          <button class="small-btn" :class="{ secondary: currentView !== 'directory' }" @click="currentView = 'directory'">Directory</button>
+          <button class="small-btn" :class="{ secondary: currentView !== 'settings' }" @click="currentView = 'settings'">Settings</button>
+        </div>
+
         <ChatListPanel 
+          v-if="currentView === 'chats'"
           :currentUsername="session.user.username"
           :chats="chats"
           :activeChatId="selectedChatId"
@@ -43,28 +81,45 @@
       </div>
 
       <!-- Main Chat Area -->
-      <div class="chat-main" v-if="selectedChatId">
-        <MessageList 
-          :messages="messages"
-          :currentUserId="session.user.id"
-          :queuedIds="queued.map(q => q.clientMessageId)"
-          :failedIds="Array.from(failedMessageIds)"
-          @retry="retrySpecificMessage"
-        />
-        <MessageComposer 
-          :disabled="!selectedChatId"
-          @send="sendCurrent"
-        />
+      <div class="chat-main">
+        <template v-if="currentView === 'chats'">
+          <template v-if="selectedChatId">
+            <MessageList 
+              :messages="messages"
+              :currentUserId="session.user.id"
+              :queuedIds="queued.map(q => q.clientMessageId)"
+              :failedIds="Array.from(failedMessageIds)"
+              @retry="retrySpecificMessage"
+            />
+            <MessageComposer 
+              :disabled="!selectedChatId"
+              @send="sendCurrent"
+            />
+          </template>
+          <div class="empty-chat" style="display:flex; height:100%; justify-content:center; align-items:center;" v-else>
+            <p class="small prompt-text">Select 'General' to join the shared test chat.</p>
+          </div>
+        </template>
+        <template v-else-if="currentView === 'directory'">
+          <MemberDirectory @select-member="selectedMemberId = $event" />
+          <MemberProfileSheet 
+            v-if="selectedMemberId" 
+            :memberId="selectedMemberId" 
+            @close="selectedMemberId = null" 
+          />
+        </template>
+        <template v-else-if="currentView === 'settings'">
+          <ProfileSettings />
+        </template>
       </div>
-      <div class="chat-main empty-chat" v-else>
-        <p class="small prompt-text">Select 'General' to join the shared test chat.</p>
-      </div>
+      </section>
     </section>
   </main>
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { formatRecoveryCode } from '@penthouse/contracts';
 import { ServerMessageAckEventSchema, ServerMessageNewEventSchema } from '@penthouse/contracts';
 import type { Chat, ChatMessage, PendingMessage, Session } from './types';
 import {
@@ -73,6 +128,7 @@ import {
   getStoredUser,
   login,
   register,
+  resetPassword,
   sendMessage,
   setStoredUser,
   logout
@@ -89,6 +145,9 @@ import ConnectionStatus from './components/ConnectionStatus.vue';
 import ChatListPanel from './components/ChatListPanel.vue';
 import MessageList from './components/MessageList.vue';
 import MessageComposer from './components/MessageComposer.vue';
+import ProfileSettings from './components/ProfileSettings.vue';
+import MemberDirectory from './components/MemberDirectory.vue';
+import MemberProfileSheet from './components/MemberProfileSheet.vue';
 
 // State
 const authError = ref('');
@@ -100,11 +159,37 @@ const messages = ref<ChatMessage[]>([]);
 const selectedChatId = ref<string>('');
 const queued = ref<PendingMessage[]>(getQueued());
 const failedMessageIds = ref<Set<string>>(new Set(getQueued().map(q => q.clientMessageId)));
+const hasNetwork = ref(navigator.onLine);
 const isOnline = ref(false);
 const hasPermanentSocketError = ref(false);
 const isReconnecting = ref(false);
+const recoveryCodeNotice = ref('');
 
+const currentView = ref<'chats' | 'directory' | 'settings'>('chats');
+const selectedMemberId = ref<string | null>(null);
 
+const forcedPwForm = ref({ currentPassword: '', newPassword: '' });
+const forcedPwConfirm = ref('');
+const savingForcedPw = ref(false);
+const forcedPwError = ref('');
+
+const formattedRecoveryCodeNotice = computed(() =>
+  recoveryCodeNotice.value ? formatRecoveryCode(recoveryCodeNotice.value) : ''
+);
+
+const isContentActive = computed(() => {
+  if (currentView.value === 'chats') return !!selectedChatId.value;
+  return true; // Directory and Settings always show content area
+});
+
+function handleMobileBack() {
+  if (currentView.value === 'chats') {
+    selectedChatId.value = '';
+  } else {
+    currentView.value = 'chats';
+    selectedMemberId.value = null;
+  }
+}
 
 function generateClientMessageId(): string {
   return `local_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
@@ -184,6 +269,7 @@ async function sendCurrent(content: string): Promise<void> {
     id: clientMessageId, // Real UUID assigned by server later
     chatId: selectedChatId.value,
     senderId: session.value?.user.id ?? 'me',
+    senderUsername: session.value?.user.username ?? 'me',
     content,
     createdAt: new Date().toISOString(),
     clientMessageId
@@ -233,9 +319,51 @@ async function handleRegister(username: string, pass: string, invite: string) {
   }
 }
 
+async function handlePasswordReset(username: string, recoveryCode: string, nextPassword: string) {
+  isAuthenticating.value = true;
+  authError.value = '';
+  try {
+    const res = await resetPassword(username, recoveryCode, nextPassword);
+    completeAuth(res);
+  } catch (error: unknown) {
+    authError.value = describeAuthError(error);
+  } finally {
+    isAuthenticating.value = false;
+  }
+}
+
+async function handleForcedPasswordChange() {
+  if (forcedPwForm.value.newPassword !== forcedPwConfirm.value) {
+    forcedPwError.value = 'New passwords do not match';
+    return;
+  }
+  savingForcedPw.value = true;
+  forcedPwError.value = '';
+  try {
+    // We import changePassword dynamically or we already imported it below (wait, we didn't import changePassword in App.vue).
+    // Let's import it at the top of the chunk by adding it to the imports if missing.
+    // Actually I'll just rely on http's changePassword. Let's make sure it's imported!
+    const { changePassword } = await import('./services/http');
+    await changePassword({ ...forcedPwForm.value });
+    
+    // Clear the gate
+    if (session.value) {
+      session.value.user.mustChangePassword = false;
+    }
+    
+    forcedPwForm.value = { currentPassword: '', newPassword: '' };
+    forcedPwConfirm.value = '';
+  } catch (err: any) {
+    forcedPwError.value = err.response?.data?.error || 'Failed to update password';
+  } finally {
+    savingForcedPw.value = false;
+  }
+}
+
 async function completeAuth(res: Session) {
   session.value = res;
   setStoredUser(res.user);
+  recoveryCodeNotice.value = res.recoveryCode ?? '';
   wireSocketHandlers();
   await loadChats();
 }
@@ -336,10 +464,12 @@ async function doLogout(): Promise<void> {
   chats.value = [];
   messages.value = [];
   selectedChatId.value = '';
+  recoveryCodeNotice.value = '';
   setStoredUser(null);
 }
 
 function onOnline(): void {
+  hasNetwork.value = true;
   // Network is back — kick the socket to reconnect if it isn't already connected.
   // Do NOT set isOnline here; let the socket 'connect' event be the single source of truth.
   const sock = getSocket();
@@ -351,6 +481,7 @@ function onOnline(): void {
 }
 
 function onOffline(): void {
+  hasNetwork.value = false;
   // Immediately reflect network loss. The socket will also fire 'disconnect'
   // once the transport times out, but this gives instant visual feedback.
   isOnline.value = false;
@@ -422,6 +553,45 @@ onUnmounted(() => {
   min-height: 500px;
 }
 
+.forced-password-gate {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 40px;
+}
+
+.forced-password-card {
+  width: 100%;
+  max-width: 400px;
+  padding: 24px;
+}
+
+.chat-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.recovery-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 12px 16px;
+  background: rgba(16, 24, 64, 0.82);
+  border: 1px solid rgba(111, 211, 255, 0.25);
+  border-radius: 14px;
+}
+
+.recovery-banner p {
+  margin: 4px 0 0;
+}
+
+.recovery-copy {
+  opacity: 0.72;
+  max-width: 580px;
+}
+
 .sidebar {
   display: flex;
   flex-direction: column;
@@ -454,13 +624,18 @@ onUnmounted(() => {
     height: calc(100vh - 80px); /* Tighter top spacing on mobile */
   }
 
-  /* When a chat is active, hide sidebar on mobile */
-  .chat-layout.chat-active .sidebar {
+  .recovery-banner {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  /* When content is active, hide sidebar on mobile */
+  .chat-layout.content-active .sidebar {
     display: none;
   }
 
-  /* When NO chat is active, hide main area on mobile */
-  .chat-layout:not(.chat-active) .chat-main {
+  /* When NO content is active, hide main area on mobile */
+  .chat-layout:not(.content-active) .chat-main {
     display: none;
   }
 

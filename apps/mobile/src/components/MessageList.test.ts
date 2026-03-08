@@ -100,4 +100,23 @@ describe('MessageList.vue Delivery States', () => {
     expect(wrapper.emitted('retry')).toBeTruthy();
     expect(wrapper.emitted('retry')![0]).toEqual(['cm-failed-123']);
   });
+
+  it('renders senderUsername for received messages when available', () => {
+    const wrapper = mount(MessageList, {
+      props: {
+        messages: [{
+          id: 'real-uuid-2',
+          chatId: 'chat-1',
+          senderId: 'user-2',
+          senderUsername: 'ryantest',
+          content: 'hi there',
+          createdAt: new Date().toISOString()
+        }],
+        currentUserId
+      }
+    });
+
+    expect(wrapper.text()).toContain('ryantest');
+    expect(wrapper.text()).not.toContain('user-2');
+  });
 });
