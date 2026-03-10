@@ -1,5 +1,5 @@
 <template>
-  <div class="messages-container" ref="scrollRef">
+  <div class="messages-container" ref="scrollRef" @scroll="emitViewportBottomChange">
     <div v-if="messages.length === 0" class="empty-state">
       <p class="small">No messages here yet. Be the first to say hello!</p>
     </div>
@@ -120,8 +120,9 @@ const props = defineProps<{
   typingMembers?: TypingParticipant[];
 }>();
 
-defineEmits<{
+const emit = defineEmits<{
   (e: 'retry', clientMessageId: string): void;
+  (e: 'viewport-bottom-change', isAtBottom: boolean): void;
 }>();
 
 const scrollRef = ref<HTMLElement | null>(null);
@@ -145,13 +146,18 @@ watch(
     if (scrollRef.value && shouldStickToBottom) {
       scrollRef.value.scrollTop = scrollRef.value.scrollHeight;
     }
+    emitViewportBottomChange();
   }
 );
 
 function isNearBottom(): boolean {
   if (!scrollRef.value) return true;
   const distance = scrollRef.value.scrollHeight - scrollRef.value.scrollTop - scrollRef.value.clientHeight;
-  return distance < 96;
+  return distance < 32;
+}
+
+function emitViewportBottomChange(): void {
+  emit('viewport-bottom-change', isNearBottom());
 }
 
 function isLocalId(id: string): boolean {
@@ -326,6 +332,7 @@ onMounted(() => {
     if (scrollRef.value) {
       scrollRef.value.scrollTop = scrollRef.value.scrollHeight;
     }
+    emitViewportBottomChange();
   });
 });
 

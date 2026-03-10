@@ -102,6 +102,7 @@
               :failedIds="Array.from(failedMessageIds)"
               :latencyByClientMessageId="latencyByClientMessageId"
               :typingMembers="typingMembers"
+              @viewport-bottom-change="handleViewportBottomChange"
               @retry="retrySpecificMessage"
             />
             <p v-if="chatActionError" class="small status-danger chat-action-error">{{ chatActionError }}</p>
@@ -187,6 +188,12 @@ import { connectSocket, disconnectSocket, getSocket } from './services/socket';
 import { enqueueMessage, flushQueue, getQueued, removeQueued } from './services/offlineQueue';
 import { withBackoff } from './services/retry';
 import { cacheChats, cacheMessages, readCachedChats, readCachedMessages } from './services/cache';
+import {
+  clearDeliveredNotificationsForChat,
+  ensureNotificationPermission,
+  initializeNotifications,
+  scheduleIncomingMessageNotification
+} from './services/notifications';
 
 // Components
 import AuthPanel from './components/AuthPanel.vue';
@@ -231,8 +238,12 @@ const debugRealtimeEnabled = import.meta.env.DEV;
 let fallbackRefreshTimer: ReturnType<typeof setInterval> | null = null;
 let lastFallbackSignature = '';
 let appStateListener: PluginListenerHandle | null = null;
+let appPauseListener: PluginListenerHandle | null = null;
+let appResumeListener: PluginListenerHandle | null = null;
 let suppressNextDisconnectTransition = false;
 let markReadTimer: ReturnType<typeof setTimeout> | null = null;
+const appIsActive = ref(typeof document === 'undefined' ? true : !document.hidden);
+const isViewingLatest = ref(true);
 
 const forcedPwForm = ref({ currentPassword: '', newPassword: '' });
 const forcedPwConfirm = ref('');
@@ -516,18 +527,33 @@ function clearMarkReadTimer(): void {
   markReadTimer = null;
 }
 
+function canMarkSelectedChatRead(): boolean {
+  return Boolean(
+    session.value &&
+    hasNetwork.value &&
+    appIsActive.value &&
+    currentView.value === 'chats' &&
+    selectedChatId.value &&
+    isViewingLatest.value
+  );
+}
+
 async function executeMarkSelectedChatRead(): Promise<void> {
-  if (!session.value || currentView.value !== 'chats' || !selectedChatId.value) return;
+  if (!canMarkSelectedChatRead()) return;
   try {
     const result = await markChatRead(selectedChatId.value);
     setChatUnreadCount(result.chatId, result.unreadCount);
+    await clearDeliveredNotificationsForChat(result.chatId);
   } catch {
     // Keep local unread state; another read attempt will happen on the next open/message event.
   }
 }
 
 function scheduleMarkSelectedChatRead(): void {
-  if (!session.value || currentView.value !== 'chats' || !selectedChatId.value) return;
+  if (!canMarkSelectedChatRead()) {
+    clearMarkReadTimer();
+    return;
+  }
   clearMarkReadTimer();
   markReadTimer = setTimeout(() => {
     void executeMarkSelectedChatRead();
@@ -567,14 +593,14 @@ function applySeenReceipt(chatId: string, readerUserId: string, seenAt: string):
 async function openChat(chatId: string): Promise<void> {
   chatActionError.value = '';
   selectedChatId.value = chatId;
+  isViewingLatest.value = false;
   try {
     messages.value = await withBackoff(() => getMessages(chatId));
     cacheMessages(chatId, messages.value);
   } catch {
     messages.value = readCachedMessages(chatId);
   }
-  setChatUnreadCount(chatId, 0);
-  scheduleMarkSelectedChatRead();
+  await clearDeliveredNotificationsForChat(chatId);
   const socket = getSocket();
   if (socket && !socket.connected && hasNetwork.value) {
     setRealtimeState('connecting');
@@ -723,6 +749,13 @@ function handleTypingStop(): void {
   const socket = getSocket();
   if (!socket?.connected) return;
   socket.emit('typing.stop', { chatId: selectedChatId.value });
+}
+
+function handleViewportBottomChange(isAtBottom: boolean): void {
+  isViewingLatest.value = isAtBottom;
+  if (isAtBottom) {
+    scheduleMarkSelectedChatRead();
+  }
 }
 
 async function sendOrQueue(pendingItem: PendingMessage): Promise<void> {
@@ -893,6 +926,11 @@ async function completeAuth(res: Session) {
   session.value = res;
   setStoredUser(res.user);
   recoveryCodeNotice.value = res.recoveryCode ?? '';
+  await ensureNotificationPermission();
+  await initializeNotifications((chatId) => {
+    currentView.value = 'chats';
+    void openChat(chatId);
+  });
   wireSocketHandlers();
   await loadChats();
 }
@@ -951,31 +989,39 @@ function wireSocketHandlers(): void {
     const payload = parsed.data.payload;
     touchChat(payload.chatId, payload.createdAt);
 
-    const isVisibleChat = currentView.value === 'chats' && payload.chatId === selectedChatId.value;
-    if (!isVisibleChat) {
-      if (payload.senderId !== session.value?.user.id) {
-        bumpChatUnreadCount(payload.chatId);
-      }
-      return;
-    }
+    const isSelectedChat = currentView.value === 'chats' && payload.chatId === selectedChatId.value;
+    const canTreatIncomingAsRead = isSelectedChat && appIsActive.value && isViewingLatest.value;
 
     // Check if we already optimistically rendered this (match by clientMessageId)
     // The server `id` is a UUID, local id starts with `local_`
     const existingIdx = messages.value.findIndex(m => m.clientMessageId === payload.clientMessageId);
 
-    if (existingIdx >= 0) {
+    if (isSelectedChat && existingIdx >= 0) {
       // Replace optimistic message with actual server message
       messages.value[existingIdx] = payload;
-    } else if (!messages.value.some((m) => m.id === payload.id)) {
+    } else if (isSelectedChat && !messages.value.some((m) => m.id === payload.id)) {
       messages.value.unshift(payload);
     }
     removeTypingParticipant(payload.chatId, payload.senderId);
 
-    cacheMessages(payload.chatId, messages.value);
     if (payload.senderId !== session.value?.user.id) {
-      setChatUnreadCount(payload.chatId, 0);
-      scheduleMarkSelectedChatRead();
+      if (!canTreatIncomingAsRead) {
+        bumpChatUnreadCount(payload.chatId);
+        if (!appIsActive.value || !isSelectedChat) {
+          void scheduleIncomingMessageNotification(payload, chats.value.find((chat) => chat.id === payload.chatId)?.name ?? null);
+        }
+      } else {
+        setChatUnreadCount(payload.chatId, 0);
+        scheduleMarkSelectedChatRead();
+      }
     }
+
+    if (!isSelectedChat) {
+      cacheChats(chats.value);
+      return;
+    }
+
+    cacheMessages(payload.chatId, messages.value);
   });
 
   socket.on('message.ack', (event: any) => {
@@ -1202,9 +1248,10 @@ async function handleAppResume(): Promise<void> {
   await loadChats();
   if (selectedChatId.value) {
     await refreshSelectedChatFromApi();
-    if (currentView.value === 'chats') {
+    if (currentView.value === 'chats' && isViewingLatest.value) {
       scheduleMarkSelectedChatRead();
     }
+    await clearDeliveredNotificationsForChat(selectedChatId.value);
   }
 
   if (hasNetwork.value && getSocket()) {
@@ -1212,15 +1259,45 @@ async function handleAppResume(): Promise<void> {
   }
 }
 
+function setAppActive(nextValue: boolean): void {
+  appIsActive.value = nextValue;
+  if (!nextValue) {
+    clearMarkReadTimer();
+    return;
+  }
+
+  if (selectedChatId.value && currentView.value === 'chats') {
+    void clearDeliveredNotificationsForChat(selectedChatId.value);
+    scheduleMarkSelectedChatRead();
+  }
+}
+
+function handleDocumentVisibilityChange(): void {
+  setAppActive(!document.hidden);
+}
+
 onMounted(() => {
   window.addEventListener('online', onOnline);
   window.addEventListener('offline', onOffline);
+  document.addEventListener('visibilitychange', handleDocumentVisibilityChange);
   void CapacitorApp.addListener('appStateChange', ({ isActive }) => {
+    setAppActive(isActive);
     if (isActive) {
       void handleAppResume();
     }
   }).then((listener) => {
     appStateListener = listener;
+  });
+  void CapacitorApp.addListener('pause', () => {
+    setAppActive(false);
+  }).then((listener) => {
+    appPauseListener = listener;
+  });
+  void CapacitorApp.addListener('resume', () => {
+    setAppActive(true);
+    void handleAppResume();
+  }).then((listener) => {
+    appResumeListener = listener;
   });
 
   void (async () => {
@@ -1229,6 +1306,11 @@ onMounted(() => {
       if (!restoredSession) return;
       presenceByUserId.value = { [restoredSession.user.id]: 'offline' };
       session.value = restoredSession;
+      await ensureNotificationPermission();
+      await initializeNotifications((chatId) => {
+        currentView.value = 'chats';
+        void openChat(chatId);
+      });
       wireSocketHandlers();
       await loadChats();
     } finally {
@@ -1244,15 +1326,20 @@ watch([selectedChatId, currentView, realtimeState, hasNetwork], () => {
 watch([selectedChatId, currentView], () => {
   if (selectedChatId.value && currentView.value === 'chats') {
     scheduleMarkSelectedChatRead();
+    return;
   }
+  isViewingLatest.value = false;
 });
 
 onUnmounted(() => {
   window.removeEventListener('online', onOnline);
   window.removeEventListener('offline', onOffline);
+  document.removeEventListener('visibilitychange', handleDocumentVisibilityChange);
   clearMarkReadTimer();
   clearFallbackRefreshTimer();
   void appStateListener?.remove();
+  void appPauseListener?.remove();
+  void appResumeListener?.remove();
   disconnectSocket();
 });
 </script>
@@ -1418,7 +1505,15 @@ onUnmounted(() => {
 /* Mobile Responsive Adjustments */
 @media (max-width: 760px) {
   .app-header {
-    gap: 10px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .app-header :deep(.conn-status) {
+    width: 100%;
+    max-width: none;
   }
 
   .chat-layout {

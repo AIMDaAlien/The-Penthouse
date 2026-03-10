@@ -258,22 +258,30 @@ textarea:focus {
   font-weight: 700;
 }
 
-.action-btn:disabled {
-  opacity: 0.5;
-}
-
 .hidden-file-input {
   display: none;
 }
 
 @media (max-width: 760px) {
   .composer-container {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
     gap: 8px;
     padding: 10px;
   }
 
   .actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 44px 64px minmax(0, 1fr);
     gap: 6px;
+  }
+
+  .action-btn,
+  .send-btn {
+    width: 100%;
+    min-width: 0;
   }
 
   .action-btn {
@@ -284,6 +292,10 @@ textarea:focus {
   .send-btn {
     padding: 0 14px;
   }
+}
+
+.action-btn:disabled {
+  opacity: 0.5;
 }
 
 @media (max-width: 400px) {

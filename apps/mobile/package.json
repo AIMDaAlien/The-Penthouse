@@ -16,6 +16,7 @@
     "@capacitor/android": "^6.2.0",
     "@capacitor/app": "^6.0.1",
     "@capacitor/core": "^6.2.0",
+    "@capacitor/local-notifications": "^6.1.3",
     "@capacitor/preferences": "^6.0.4",
     "@penthouse/contracts": "file:../../packages/contracts",
     "axios": "^1.7.9",

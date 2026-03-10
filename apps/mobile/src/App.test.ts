@@ -1,14 +1,21 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
 import App from './App.vue';
 import { installLocalStorageMock } from './test/localStorageMock';
 import * as http from './services/http';
 
+const mockAppListeners: Record<string, Function> = {};
+
 vi.mock('@capacitor/app', () => ({
   App: {
-    addListener: vi.fn(async () => ({
-      remove: vi.fn()
-    }))
+    addListener: vi.fn(async (eventName: string, handler: Function) => {
+      mockAppListeners[eventName] = handler;
+      return {
+        remove: vi.fn(() => {
+          delete mockAppListeners[eventName];
+        })
+      };
+    })
   }
 }));
 
@@ -125,9 +132,17 @@ vi.mock('./services/socket', () => ({
   getSocket: vi.fn(() => mockSocket)
 }));
 
+vi.mock('./services/notifications', () => ({
+  ensureNotificationPermission: vi.fn(() => Promise.resolve(false)),
+  initializeNotifications: vi.fn(() => Promise.resolve()),
+  scheduleIncomingMessageNotification: vi.fn(() => Promise.resolve()),
+  clearDeliveredNotificationsForChat: vi.fn(() => Promise.resolve())
+}));
+
 describe('App.vue Optimistic Flow', () => {
   beforeEach(() => {
     installLocalStorageMock();
+    Object.keys(mockAppListeners).forEach((key) => delete mockAppListeners[key]);
     Object.keys(mockSocketHandlers).forEach((key) => delete mockSocketHandlers[key]);
     Object.keys(mockManagerHandlers).forEach((key) => delete mockManagerHandlers[key]);
     Object.keys(mockEngineHandlers).forEach((key) => delete mockEngineHandlers[key]);
@@ -245,6 +260,7 @@ describe('App.vue Optimistic Flow', () => {
 describe('App.vue Connection State', () => {
   beforeEach(() => {
     installLocalStorageMock();
+    Object.keys(mockAppListeners).forEach((key) => delete mockAppListeners[key]);
     mockSocket.connected = false;
     mockSocket.io.engine.transport.name = 'polling';
     Object.keys(mockSocketHandlers).forEach((key) => delete mockSocketHandlers[key]);
@@ -421,5 +437,57 @@ describe('App.vue Connection State', () => {
 
     const chatList = wrapper.findComponent({ name: 'ChatListPanel' });
     expect(chatList.props('onlineCount')).toBe(3);
+  });
+});
+
+describe('App.vue read gating', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    installLocalStorageMock();
+    Object.keys(mockAppListeners).forEach((key) => delete mockAppListeners[key]);
+    Object.keys(mockSocketHandlers).forEach((key) => delete mockSocketHandlers[key]);
+    Object.keys(mockManagerHandlers).forEach((key) => delete mockManagerHandlers[key]);
+    Object.keys(mockEngineHandlers).forEach((key) => delete mockEngineHandlers[key]);
+    mockSocket.connected = true;
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('marks a chat read only after the viewport confirms the latest messages are visible', async () => {
+    const wrapper = mount(App);
+    await flushPromises();
+
+    const chatList = wrapper.findComponent({ name: 'ChatListPanel' });
+    await chatList.vm.$emit('select', 'chat-1');
+    await flushPromises();
+
+    expect(vi.mocked(http.markChatRead)).not.toHaveBeenCalled();
+
+    const messageList = wrapper.findComponent({ name: 'MessageList' });
+    await messageList.vm.$emit('viewport-bottom-change', true);
+    await vi.advanceTimersByTimeAsync(200);
+    await flushPromises();
+
+    expect(vi.mocked(http.markChatRead)).toHaveBeenCalledWith('chat-1');
+  });
+
+  it('does not mark a chat read while the app is backgrounded', async () => {
+    const wrapper = mount(App);
+    await flushPromises();
+
+    const chatList = wrapper.findComponent({ name: 'ChatListPanel' });
+    await chatList.vm.$emit('select', 'chat-1');
+    await flushPromises();
+
+    mockAppListeners.pause?.();
+    const messageList = wrapper.findComponent({ name: 'MessageList' });
+    await messageList.vm.$emit('viewport-bottom-change', true);
+    await vi.advanceTimersByTimeAsync(200);
+    await flushPromises();
+
+    expect(vi.mocked(http.markChatRead)).not.toHaveBeenCalled();
   });
 });

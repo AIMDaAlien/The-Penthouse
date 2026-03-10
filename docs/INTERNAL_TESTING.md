@@ -15,6 +15,8 @@ Validate the first stable slice on real hardware before adding more scope:
 - GIF picker via Giphy/Klipy
 - typing indicator
 - live presence badges/counts
+- strict read receipts only when the latest messages are actually visible
+- local native notifications for unread messages outside the active chat
 - offline queue and retry
 - reconnect after API/network interruption
 
@@ -178,6 +180,24 @@ Fail:
 - retry does nothing
 - same message appears twice
 
+### 3b. Read receipts
+
+1. Put client 1 in `General` and keep the message list scrolled to the bottom.
+2. Send a message from client 2.
+3. Confirm client 1 opening and actually viewing the latest message advances the sender to `✓✓`.
+4. Repeat, but send client 1 to Android home or turn the screen off before the message arrives.
+5. Confirm the sender stays at `✓` until client 1 comes back into the app and reaches the live bottom.
+
+Pass:
+
+- `✓✓` only appears when the receiving user is in-app, in the chat, and effectively at the latest message
+- being on the launcher or with the screen off does not advance seen state
+
+Fail:
+
+- `✓✓` appears while the other user is backgrounded
+- opening the chat but staying scrolled above the latest message still counts as seen
+
 ### 3a. Media
 
 1. Upload an image from Android.
@@ -196,6 +216,24 @@ Pass:
 - image/GIF modal opens and closes cleanly
 - GIF tiles appear in chat without caption text
 - Klipy never fakes an empty state when the provider is actually failing
+
+### 3c. Local notifications
+
+1. Put client 2 on Android home with the app still installed and logged in.
+2. Send a message from client 1 into `General`.
+3. If the runtime stays alive, confirm Android shows a local device notification.
+4. Tap the notification.
+5. Confirm the app opens back into `General`.
+
+Pass:
+
+- unread messages outside the active chat can trigger a local device notification
+- tapping the notification opens the target chat
+
+Note:
+
+- this is a local-notification slice, not true remote push
+- if Android suspends the runtime fully in background, delivery can still be missed until a future FCM/APNs push slice
 
 ### 4. Connection badge honesty
 
