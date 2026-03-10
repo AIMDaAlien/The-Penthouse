@@ -2,14 +2,14 @@
   <div class="composer-container">
     <textarea
       ref="textareaRef"
-      v-model="draft"
+      :value="draft"
       rows="2"
       placeholder="Type a message..."
       :disabled="disabled"
       enterkeyhint="send"
-      @input="noteTyping"
+      @input="handleInput"
       @compositionstart="isComposing = true"
-      @compositionend="isComposing = false; noteTyping()"
+      @compositionend="handleCompositionEnd"
       @blur="stopTyping"
       @keydown.enter.exact.prevent="handleEnter"
     ></textarea>
@@ -38,12 +38,7 @@
       >
         GIF
       </button>
-      <button
-        type="button"
-        class="send-btn"
-        :disabled="disabled || !draft.trim()"
-        @click="send"
-      >
+      <button type="button" class="send-btn" :disabled="disabled || !canSend" @click="send">
         Send
       </button>
     </div>
@@ -57,7 +52,7 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import type { GifResult } from '@penthouse/contracts';
 import GifPicker from './GifPicker.vue';
 
@@ -81,6 +76,7 @@ const typingActive = ref(false);
 const showGifPicker = ref(false);
 const TYPING_IDLE_MS = 5000;
 let typingStopTimer: ReturnType<typeof setTimeout> | null = null;
+const canSend = computed(() => draft.value.trim().length > 0);
 
 function clearTypingStopTimer() {
   if (!typingStopTimer) return;
@@ -103,7 +99,7 @@ function scheduleTypingStop() {
 }
 
 function noteTyping() {
-  if (props.disabled || !draft.value.trim()) {
+  if (props.disabled || !canSend.value) {
     stopTyping();
     return;
   }
@@ -118,9 +114,6 @@ function noteTyping() {
 
 function clearDraft() {
   draft.value = '';
-  if (textareaRef.value) {
-    textareaRef.value.value = '';
-  }
 }
 
 function send() {
@@ -132,8 +125,21 @@ function send() {
   stopTyping();
   clearDraft();
   void nextTick(() => {
-    clearDraft();
+    textareaRef.value?.focus();
   });
+}
+
+function handleInput(event: Event) {
+  const nextValue = (event.target as HTMLTextAreaElement | null)?.value ?? '';
+  draft.value = nextValue;
+  noteTyping();
+}
+
+function handleCompositionEnd(event: CompositionEvent) {
+  isComposing.value = false;
+  const nextValue = (event.target as HTMLTextAreaElement | null)?.value ?? draft.value;
+  draft.value = nextValue;
+  noteTyping();
 }
 
 function openFilePicker(): void {
@@ -264,24 +270,16 @@ textarea:focus {
 
 @media (max-width: 760px) {
   .composer-container {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    align-items: stretch;
+    display: flex;
+    align-items: flex-end;
     gap: 8px;
     padding: 10px;
   }
 
   .actions {
-    width: 100%;
-    display: grid;
-    grid-template-columns: 44px 64px minmax(0, 1fr);
+    width: auto;
+    display: flex;
     gap: 6px;
-  }
-
-  .action-btn,
-  .send-btn {
-    width: 100%;
-    min-width: 0;
   }
 
   .action-btn {
@@ -290,7 +288,8 @@ textarea:focus {
   }
 
   .send-btn {
-    padding: 0 14px;
+    min-width: 88px;
+    padding: 0 16px;
   }
 }
 
@@ -316,7 +315,8 @@ textarea:focus {
   }
   .send-btn {
     height: 40px;
-    padding: 0 16px;
+    min-width: 76px;
+    padding: 0 14px;
   }
 }
 </style>

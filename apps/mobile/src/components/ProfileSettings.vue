@@ -169,8 +169,25 @@ async function handleRotateRecoveryCode() {
 .profile-settings-page {
   padding: 16px;
   overflow-y: auto;
+  overflow-x: hidden;
+  width: 100%;
+  min-width: 0;
   max-width: 600px;
+  box-sizing: border-box;
   margin: 0 auto;
+}
+
+.card {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+input,
+textarea,
+button {
+  min-width: 0;
+  max-width: 100%;
 }
 
 h2 {
@@ -203,5 +220,11 @@ textarea {
 }
 .status-success {
   color: var(--ok);
+}
+
+@media (max-width: 760px) {
+  .profile-settings-page {
+    padding: 12px;
+  }
 }
 </style>

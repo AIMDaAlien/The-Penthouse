@@ -59,6 +59,22 @@ describe('MessageComposer.vue', () => {
     expect((textarea.element as HTMLTextAreaElement).value).toBe('');
   });
 
+  it('enables send on the first visible Android-style input character', async () => {
+    const wrapper = mount(MessageComposer, {
+      props: { disabled: false }
+    });
+
+    const textarea = wrapper.find('textarea');
+    const sendButton = wrapper.find('.send-btn');
+
+    expect(sendButton.attributes('disabled')).toBeDefined();
+
+    (textarea.element as HTMLTextAreaElement).value = 'h';
+    await textarea.trigger('input');
+
+    expect(wrapper.find('.send-btn').attributes('disabled')).toBeUndefined();
+  });
+
   it('does not send empty messages', async () => {
     const wrapper = mount(MessageComposer, {
       props: { disabled: false }

@@ -251,8 +251,8 @@ const formatTime = (ts: string | number | null | undefined) => {
 
 @media (max-width: 760px) {
   .conn-status {
-    max-width: 100%;
-    width: 100%;
+    width: auto;
+    max-width: min(46vw, 220px);
   }
 
   .conn-status-header {
@@ -261,6 +261,12 @@ const formatTime = (ts: string | number | null | undefined) => {
 
   .status-container {
     gap: 4px;
+    flex-wrap: nowrap;
+  }
+
+  .status-text {
+    min-width: 0;
+    max-width: 100%;
   }
 }
 </style>

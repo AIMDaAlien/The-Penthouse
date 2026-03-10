@@ -1505,15 +1505,14 @@ onUnmounted(() => {
 /* Mobile Responsive Adjustments */
 @media (max-width: 760px) {
   .app-header {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    align-items: stretch;
-    gap: 8px;
+    gap: 10px;
+    align-items: center;
   }
 
   .app-header :deep(.conn-status) {
-    width: 100%;
-    max-width: none;
+    width: auto;
+    max-width: min(46%, 220px);
+    flex: 0 1 auto;
   }
 
   .chat-layout {
@@ -1533,6 +1532,10 @@ onUnmounted(() => {
     font-size: 1.35rem;
   }
 
+  .mobile-back-btn {
+    flex: 0 0 auto;
+  }
+
   .recovery-banner {
     flex-direction: column;
     align-items: stretch;
@@ -1548,7 +1551,6 @@ onUnmounted(() => {
     display: none;
   }
 
-  /* Show back button on mobile */
   .mobile-back-btn {
     display: flex;
   }
