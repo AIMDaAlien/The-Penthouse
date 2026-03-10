@@ -119,4 +119,139 @@ describe('MessageList.vue Delivery States', () => {
     expect(wrapper.text()).toContain('ryantest');
     expect(wrapper.text()).not.toContain('user-2');
   });
+
+  it('renders local latency for delivered sent messages when provided', () => {
+    const wrapper = mount(MessageList, {
+      props: {
+        messages: [{
+          id: 'real-uuid-lat',
+          chatId: 'chat-1',
+          senderId: 'user-1',
+          content: 'latency sample',
+          createdAt: new Date().toISOString(),
+          clientMessageId: 'cm-lat'
+        }],
+        currentUserId,
+        latencyByClientMessageId: {
+          'cm-lat': 47
+        }
+      }
+    });
+
+    expect(wrapper.text()).toContain('47ms');
+  });
+
+  it('renders a typing indicator for active remote participants', () => {
+    const wrapper = mount(MessageList, {
+      props: {
+        messages: [],
+        currentUserId,
+        typingMembers: [
+          { userId: 'user-2', displayName: 'Ryan' }
+        ]
+      }
+    });
+
+    expect(wrapper.text()).toContain('Ryan is typing...');
+    expect(wrapper.find('.typing-indicator').exists()).toBe(true);
+  });
+
+  it('renders inline image messages from metadata without file caption text', () => {
+    const wrapper = mount(MessageList, {
+      props: {
+        messages: [{
+          id: 'img-1',
+          chatId: 'chat-1',
+          senderId: 'user-1',
+          content: 'photo.png',
+          type: 'image',
+          metadata: {
+            url: '/uploads/photo.png',
+            originalFileName: 'photo.png'
+          },
+          createdAt: new Date().toISOString()
+        }],
+        currentUserId
+      }
+    });
+
+    expect(wrapper.find('.media-image').exists()).toBe(true);
+    expect(wrapper.text()).not.toContain('photo.png');
+  });
+
+  it('renders gif messages without provider/title caption text', () => {
+    const wrapper = mount(MessageList, {
+      props: {
+        messages: [{
+          id: 'gif-1',
+          chatId: 'chat-1',
+          senderId: 'user-2',
+          senderUsername: 'ryantest',
+          content: 'Bobs Burgers GIF by Someone',
+          type: 'gif',
+          metadata: {
+            url: 'https://media.example/full.gif',
+            previewUrl: 'https://media.example/preview.gif',
+            title: 'Bobs Burgers GIF by Someone'
+          },
+          createdAt: new Date().toISOString()
+        }],
+        currentUserId
+      }
+    });
+
+    expect(wrapper.find('.media-image').exists()).toBe(true);
+    expect(wrapper.text()).not.toContain('Bobs Burgers GIF by Someone');
+  });
+
+  it('opens an image viewer modal when an image bubble is tapped', async () => {
+    const wrapper = mount(MessageList, {
+      props: {
+        messages: [{
+          id: 'img-2',
+          chatId: 'chat-1',
+          senderId: 'user-1',
+          content: 'photo.png',
+          type: 'image',
+          metadata: {
+            url: '/uploads/photo.png',
+            originalFileName: 'photo.png'
+          },
+          createdAt: new Date().toISOString()
+        }],
+        currentUserId
+      }
+    });
+
+    await wrapper.find('.media-tile').trigger('click');
+
+    expect(wrapper.find('.media-viewer').exists()).toBe(true);
+    expect(wrapper.find('.viewer-image').attributes('src')).toContain('/uploads/photo.png');
+  });
+
+  it('renders file attachments as linked cards', () => {
+    const wrapper = mount(MessageList, {
+      props: {
+        messages: [{
+          id: 'file-1',
+          chatId: 'chat-1',
+          senderId: 'user-2',
+          senderUsername: 'ryantest',
+          content: 'notes.txt',
+          type: 'file',
+          metadata: {
+            url: '/uploads/notes.txt',
+            originalFileName: 'notes.txt',
+            contentType: 'text/plain'
+          },
+          createdAt: new Date().toISOString()
+        }],
+        currentUserId
+      }
+    });
+
+    expect(wrapper.find('.file-card').exists()).toBe(true);
+    expect(wrapper.text()).toContain('notes.txt');
+    expect(wrapper.text()).toContain('text/plain');
+  });
 });

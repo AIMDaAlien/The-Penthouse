@@ -7,7 +7,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const migrations = [
-  '001_initial.sql'
+  '001_initial.sql',
+  '002_shared_general.sql',
+  '003_auth_recovery.sql',
+  '004_user_management.sql',
+  '005_media_messages.sql'
 ];
 
 export async function runMigrations(): Promise<void> {
@@ -15,6 +19,8 @@ export async function runMigrations(): Promise<void> {
 
   try {
     await client.query('BEGIN');
+    // Serialize migration runners so parallel test suites do not race on setup.
+    await client.query('SELECT pg_advisory_xact_lock($1)', [424242]);
     await client.query(`
       CREATE TABLE IF NOT EXISTS schema_migrations (
         id SERIAL PRIMARY KEY,

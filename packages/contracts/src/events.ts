@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MessageMetadataSchema, MessageTypeSchema } from './api.js';
 
 export const ClientJoinChatEventSchema = z.object({
   type: z.literal('chat.join'),
@@ -24,6 +25,8 @@ export const ClientMessageSendEventSchema = z.object({
   type: z.literal('message.send'),
   chatId: z.string(),
   content: z.string().min(1).max(4000),
+  messageType: MessageTypeSchema.optional().default('text'),
+  metadata: MessageMetadataSchema.nullable().optional(),
   clientMessageId: z.string().min(8).max(128)
 });
 
@@ -33,7 +36,12 @@ export const ServerMessageNewEventSchema = z.object({
     id: z.string(),
     chatId: z.string(),
     senderId: z.string(),
+    senderUsername: z.string().optional(),
+    senderDisplayName: z.string().optional(),
+    senderAvatarUrl: z.string().nullable().optional(),
     content: z.string(),
+    type: MessageTypeSchema.default('text'),
+    metadata: MessageMetadataSchema.nullable().optional(),
     createdAt: z.string(),
     clientMessageId: z.string().optional()
   })
@@ -54,7 +62,9 @@ export const ServerTypingUpdateEventSchema = z.object({
   payload: z.object({
     chatId: z.string(),
     userId: z.string(),
-    status: z.enum(['start', 'stop'])
+    status: z.enum(['start', 'stop']),
+    displayName: z.string().optional(),
+    avatarUrl: z.string().nullable().optional()
   })
 });
 
@@ -63,6 +73,13 @@ export const ServerPresenceUpdateEventSchema = z.object({
   payload: z.object({
     userId: z.string(),
     status: z.enum(['online', 'offline'])
+  })
+});
+
+export const ServerPresenceSyncEventSchema = z.object({
+  type: z.literal('presence.sync'),
+  payload: z.object({
+    onlineUserIds: z.array(z.string())
   })
 });
 

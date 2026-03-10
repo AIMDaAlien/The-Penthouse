@@ -13,9 +13,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  AUTH_CONSTRAINTS,
   RegisterRequestSchema,
   LoginRequestSchema,
   RefreshRequestSchema,
+  PasswordResetRequestSchema,
   AuthResponseSchema
 } from '@penthouse/contracts';
 
@@ -92,6 +94,35 @@ test('[schema] register: accepts valid payload', () => {
   assert.equal(result.success, true, 'valid register payload should pass');
 });
 
+test('[schema] register: normalizes username and invite code', () => {
+  const result = RegisterRequestSchema.safeParse({
+    username: '  Alice.Test  ',
+    password: 'supersecurepassword',
+    inviteCode: ' penthouse-alpha '
+  });
+  assert.equal(result.success, true);
+  assert.equal(result.data?.username, 'alice.test');
+  assert.equal(result.data?.inviteCode, 'PENTHOUSE-ALPHA');
+});
+
+test('[schema] register: rejects usernames with unsupported characters', () => {
+  const result = RegisterRequestSchema.safeParse({
+    username: 'alice test',
+    password: 'supersecurepassword',
+    inviteCode: 'PENTHOUSE-ALPHA'
+  });
+  assert.equal(result.success, false);
+});
+
+test('[schema] register: rejects password with leading or trailing spaces', () => {
+  const result = RegisterRequestSchema.safeParse({
+    username: 'alice',
+    password: 'supersecurepassword ',
+    inviteCode: 'PENTHOUSE-ALPHA'
+  });
+  assert.equal(result.success, false);
+});
+
 // ─── [schema] refresh token validation ─────────────────────────────────────
 
 test('[schema] refresh: rejects token shorter than 20 chars', () => {
@@ -112,7 +143,14 @@ test('[schema] refresh: accepts valid refresh token', () => {
 
 test('[schema] AuthResponse: parses correct shape', () => {
   const result = AuthResponseSchema.safeParse({
-    user: { id: 'some-uuid', username: 'alice' },
+    user: {
+      id: 'some-uuid',
+      username: 'alice',
+      displayName: 'Alice',
+      avatarUrl: null,
+      role: 'member',
+      mustChangePassword: false
+    },
     accessToken: 'header.payload.sig',
     refreshToken: 'a'.repeat(96)
   });
@@ -121,7 +159,14 @@ test('[schema] AuthResponse: parses correct shape', () => {
 
 test('[schema] AuthResponse: rejects missing accessToken', () => {
   const result = AuthResponseSchema.safeParse({
-    user: { id: 'some-uuid', username: 'alice' },
+    user: {
+      id: 'some-uuid',
+      username: 'alice',
+      displayName: 'Alice',
+      avatarUrl: null,
+      role: 'member',
+      mustChangePassword: false
+    },
     refreshToken: 'a'.repeat(96)
   });
   assert.equal(result.success, false, 'AuthResponse requires accessToken');
@@ -140,6 +185,25 @@ test('[schema] login: rejects short username', () => {
     password: 'supersecurepassword'
   });
   assert.equal(result.success, false, 'login username min is 3');
+});
+
+test('[schema] login: trims and lowercases username', () => {
+  const result = LoginRequestSchema.safeParse({
+    username: '  AIMTEST  ',
+    password: 'supersecurepassword'
+  });
+  assert.equal(result.success, true);
+  assert.equal(result.data?.username, 'aimtest');
+});
+
+test('[schema] password reset: accepts recovery code with hyphens', () => {
+  const result = PasswordResetRequestSchema.safeParse({
+    username: 'alice',
+    recoveryCode: 'ABCD-EFGH-JKLM-NPQR',
+    newPassword: 'supersecurepassword'
+  });
+  assert.equal(result.success, true);
+  assert.equal(result.data?.recoveryCode.length, AUTH_CONSTRAINTS.recoveryCodeLength);
 });
 
 // ─── [schema] error message determinism ────────────────────────────────────

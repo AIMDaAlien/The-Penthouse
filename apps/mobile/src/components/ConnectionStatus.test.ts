@@ -1,34 +1,38 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { mount } from '@vue/test-utils';
 import ConnectionStatus from './ConnectionStatus.vue';
+
+const baseDiagnostics = {
+  transport: 'unknown' as const,
+  lastError: null,
+  lastDisconnectReason: null,
+  lastConnectedAt: null,
+  fallbackActive: false
+};
 
 describe('ConnectionStatus.vue', () => {
   it('renders Connected state normally', () => {
     const wrapper = mount(ConnectionStatus, {
       props: {
-        isOnline: true,
+        realtimeState: 'connected',
         hasNetwork: true,
         queuedCount: 0,
-        hasPermanentError: false,
-        isReconnecting: false
+        diagnostics: baseDiagnostics
       }
     });
 
     expect(wrapper.text()).toContain('Connected');
     expect(wrapper.find('.ok').exists()).toBe(true);
-    // Should NOT have retry button or queued count
-    expect(wrapper.text()).not.toContain('queued');
     expect(wrapper.find('button.action-btn').exists()).toBe(false);
   });
 
-  it('renders Offline state', () => {
+  it('renders Offline state when network is unavailable', () => {
     const wrapper = mount(ConnectionStatus, {
       props: {
-        isOnline: false,
+        realtimeState: 'idle',
         hasNetwork: false,
         queuedCount: 0,
-        hasPermanentError: false,
-        isReconnecting: false
+        diagnostics: baseDiagnostics
       }
     });
 
@@ -36,14 +40,13 @@ describe('ConnectionStatus.vue', () => {
     expect(wrapper.find('.danger').exists()).toBe(true);
   });
 
-  it('renders Reconnecting state (warning yellow, pulsing)', () => {
+  it('renders Reconnecting state as a warning with pulse indicator', () => {
     const wrapper = mount(ConnectionStatus, {
       props: {
-        isOnline: false,
+        realtimeState: 'connecting',
         hasNetwork: true,
         queuedCount: 0,
-        hasPermanentError: false,
-        isReconnecting: true
+        diagnostics: baseDiagnostics
       }
     });
 
@@ -52,14 +55,17 @@ describe('ConnectionStatus.vue', () => {
     expect(wrapper.find('.pulsing').exists()).toBe(true);
   });
 
-  it('renders Reconnect failed state with Try reconnect button', async () => {
+  it('renders Reconnect failed with retry actions', async () => {
     const wrapper = mount(ConnectionStatus, {
       props: {
-        isOnline: false,
+        realtimeState: 'failed',
         hasNetwork: true,
         queuedCount: 5,
-        hasPermanentError: true,
-        isReconnecting: false
+        diagnostics: {
+          ...baseDiagnostics,
+          lastError: 'reconnect_failed',
+          fallbackActive: true
+        }
       }
     });
 
@@ -78,14 +84,16 @@ describe('ConnectionStatus.vue', () => {
     expect(wrapper.emitted('reconnect')).toBeTruthy();
   });
 
-  it('renders Offline with flush Retry button when queued > 0 but online', async () => {
+  it('renders degraded realtime with flush action when queued messages exist', async () => {
     const wrapper = mount(ConnectionStatus, {
       props: {
-        isOnline: false,
+        realtimeState: 'degraded',
         hasNetwork: true,
         queuedCount: 3,
-        hasPermanentError: false,
-        isReconnecting: false
+        diagnostics: {
+          ...baseDiagnostics,
+          fallbackActive: true
+        }
       }
     });
 
@@ -93,11 +101,45 @@ describe('ConnectionStatus.vue', () => {
     expect(wrapper.text()).toContain('3 queued');
     expect(wrapper.find('.warning').exists()).toBe(true);
 
-    const btn = wrapper.find('button.action-btn');
+    const btn = wrapper.find('button.bg-retry');
     expect(btn.exists()).toBe(true);
     expect(btn.text()).toBe('Retry sends');
 
     await btn.trigger('click');
     expect(wrapper.emitted('flush')).toBeTruthy();
+  });
+
+  it('shows diagnostics only when debug mode is enabled and toggled open', async () => {
+    const wrapper = mount(ConnectionStatus, {
+      props: {
+        realtimeState: 'degraded',
+        hasNetwork: true,
+        queuedCount: 1,
+        diagnostics: {
+          transport: 'polling',
+          lastError: 'xhr poll error',
+          lastDisconnectReason: 'transport close',
+          lastConnectedAt: '2026-03-09T12:00:00.000Z',
+          fallbackActive: true
+        },
+        debugEnabled: true
+      }
+    });
+
+    expect(wrapper.find('.diagnostic-panel').exists()).toBe(false);
+
+    await wrapper.find('button.debug-toggle').trigger('click');
+
+    expect(wrapper.find('.diagnostic-panel').exists()).toBe(true);
+    expect(wrapper.text()).toContain('State');
+    expect(wrapper.text()).toContain('degraded');
+    expect(wrapper.text()).toContain('Transport');
+    expect(wrapper.text()).toContain('polling');
+    expect(wrapper.text()).toContain('Fallback');
+    expect(wrapper.text()).toContain('Active');
+    expect(wrapper.text()).toContain('xhr poll error');
+    expect(wrapper.text()).toContain('transport close');
+    expect(wrapper.text()).toContain('Connected');
+    expect(wrapper.text()).toMatch(/\d{1,2}:\d{2}:\d{2}/);
   });
 });

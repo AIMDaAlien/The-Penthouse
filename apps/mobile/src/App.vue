@@ -13,18 +13,25 @@
       </div>
       <ConnectionStatus 
         v-if="session"
-        :isOnline="isOnline"
+        :realtimeState="realtimeState"
         :hasNetwork="hasNetwork"
         :queuedCount="queued.length"
-        :hasPermanentError="hasPermanentSocketError"
-        :isReconnecting="isReconnecting"
+        :diagnostics="realtimeDiagnostics"
+        :debugEnabled="debugRealtimeEnabled"
         @flush="flushPending"
         @reconnect="forceSocketReconnect"
       />
     </header>
 
+    <section v-if="isBooting" class="chat-shell loading-shell">
+      <div class="card loading-card">
+        <h2>Restoring session...</h2>
+        <p class="small">Checking stored credentials before showing the auth screen.</p>
+      </div>
+    </section>
+
     <AuthPanel 
-      v-if="!session"
+      v-else-if="!session"
       :error="authError"
       :loading="isAuthenticating"
       @login="handleLogin"
@@ -75,6 +82,7 @@
           :currentUsername="session.user.username"
           :chats="chats"
           :activeChatId="selectedChatId"
+          :onlineCount="onlineCount"
           @select="openChat"
           @logout="doLogout"
         />
@@ -83,17 +91,24 @@
       <!-- Main Chat Area -->
       <div class="chat-main">
         <template v-if="currentView === 'chats'">
-          <template v-if="selectedChatId">
+        <template v-if="selectedChatId">
             <MessageList 
               :messages="messages"
               :currentUserId="session.user.id"
               :queuedIds="queued.map(q => q.clientMessageId)"
               :failedIds="Array.from(failedMessageIds)"
+              :latencyByClientMessageId="latencyByClientMessageId"
+              :typingMembers="typingMembers"
               @retry="retrySpecificMessage"
             />
+            <p v-if="chatActionError" class="small status-danger chat-action-error">{{ chatActionError }}</p>
             <MessageComposer 
-              :disabled="!selectedChatId"
+              :disabled="!selectedChatId || uploadingAttachment"
               @send="sendCurrent"
+              @send-media="handleMediaSelected"
+              @send-gif="handleGifSelected"
+              @typing-start="handleTypingStart"
+              @typing-stop="handleTypingStop"
             />
           </template>
           <div class="empty-chat" style="display:flex; height:100%; justify-content:center; align-items:center;" v-else>
@@ -101,15 +116,19 @@
           </div>
         </template>
         <template v-else-if="currentView === 'directory'">
-          <MemberDirectory @select-member="selectedMemberId = $event" />
+          <MemberDirectory :presenceByUserId="presenceByUserId" @select-member="selectedMemberId = $event" />
           <MemberProfileSheet 
             v-if="selectedMemberId" 
             :memberId="selectedMemberId" 
+            :presenceByUserId="presenceByUserId"
             @close="selectedMemberId = null" 
           />
         </template>
         <template v-else-if="currentView === 'settings'">
-          <ProfileSettings />
+          <ProfileSettings
+            @profile-updated="handleProfileUpdated"
+            @auth-updated="completeAuth"
+          />
         </template>
       </div>
       </section>
@@ -118,19 +137,44 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue';
-import { formatRecoveryCode } from '@penthouse/contracts';
-import { ServerMessageAckEventSchema, ServerMessageNewEventSchema } from '@penthouse/contracts';
-import type { Chat, ChatMessage, PendingMessage, Session } from './types';
+import { App as CapacitorApp, type PluginListenerHandle } from '@capacitor/app';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import {
+  formatRecoveryCode,
+  type GifResult,
+  type MessageMetadata,
+  type MessageType,
+  type UploadResponse
+} from '@penthouse/contracts';
+import {
+  ServerMessageAckEventSchema,
+  ServerMessageNewEventSchema,
+  ServerPresenceSyncEventSchema,
+  ServerPresenceUpdateEventSchema,
+  ServerTypingUpdateEventSchema
+} from '@penthouse/contracts';
+import type {
+  Chat,
+  ChatMessage,
+  PendingMessage,
+  PresenceStatus,
+  RealtimeDiagnostics,
+  RealtimeState,
+  Session,
+  TypingParticipant
+} from './types';
+import {
+  changePassword,
   getChats,
   getMessages,
-  getStoredUser,
+  hydrateStoredSession,
   login,
   register,
   resetPassword,
   sendMessage,
+  sendStructuredMessage,
   setStoredUser,
+  uploadMedia,
   logout
 } from './services/http';
 import { describeAuthError } from './services/errors';
@@ -152,6 +196,9 @@ import MemberProfileSheet from './components/MemberProfileSheet.vue';
 // State
 const authError = ref('');
 const isAuthenticating = ref(false);
+const chatActionError = ref('');
+const uploadingAttachment = ref(false);
+const isBooting = ref(true);
 
 const session = ref<Session | null>(null);
 const chats = ref<Chat[]>([]);
@@ -159,14 +206,26 @@ const messages = ref<ChatMessage[]>([]);
 const selectedChatId = ref<string>('');
 const queued = ref<PendingMessage[]>(getQueued());
 const failedMessageIds = ref<Set<string>>(new Set(getQueued().map(q => q.clientMessageId)));
+const latencyByClientMessageId = ref<Record<string, number>>({});
 const hasNetwork = ref(navigator.onLine);
-const isOnline = ref(false);
-const hasPermanentSocketError = ref(false);
-const isReconnecting = ref(false);
+const realtimeState = ref<RealtimeState>('idle');
+const realtimeDiagnostics = ref<RealtimeDiagnostics>({
+  transport: 'unknown',
+  lastError: null,
+  lastDisconnectReason: null,
+  lastConnectedAt: null,
+  fallbackActive: false
+});
 const recoveryCodeNotice = ref('');
+const presenceByUserId = ref<Record<string, PresenceStatus>>({});
+const typingByChat = ref<Record<string, Record<string, TypingParticipant>>>({});
 
 const currentView = ref<'chats' | 'directory' | 'settings'>('chats');
 const selectedMemberId = ref<string | null>(null);
+const debugRealtimeEnabled = import.meta.env.DEV;
+let fallbackRefreshTimer: ReturnType<typeof setInterval> | null = null;
+let appStateListener: PluginListenerHandle | null = null;
+let suppressNextDisconnectTransition = false;
 
 const forcedPwForm = ref({ currentPassword: '', newPassword: '' });
 const forcedPwConfirm = ref('');
@@ -176,14 +235,60 @@ const forcedPwError = ref('');
 const formattedRecoveryCodeNotice = computed(() =>
   recoveryCodeNotice.value ? formatRecoveryCode(recoveryCodeNotice.value) : ''
 );
+const onlineCount = computed(() =>
+  Object.values(presenceByUserId.value).filter((status) => status === 'online').length
+);
+const typingMembers = computed(() =>
+  selectedChatId.value ? Object.values(typingByChat.value[selectedChatId.value] ?? {}) : []
+);
+const isOnline = computed(() => realtimeState.value === 'connected');
 
 const isContentActive = computed(() => {
   if (currentView.value === 'chats') return !!selectedChatId.value;
   return true; // Directory and Settings always show content area
 });
 
+function setRealtimeState(nextState: RealtimeState): void {
+  realtimeState.value = nextState;
+}
+
+function patchRealtimeDiagnostics(patch: Partial<RealtimeDiagnostics>): void {
+  realtimeDiagnostics.value = {
+    ...realtimeDiagnostics.value,
+    ...patch
+  };
+}
+
+function markRealtimeConnected(transport: string): void {
+  setRealtimeState('connected');
+  patchRealtimeDiagnostics({
+    transport: transport === 'polling' || transport === 'websocket' ? transport : 'unknown',
+    lastError: null,
+    lastDisconnectReason: null,
+    lastConnectedAt: new Date().toISOString()
+  });
+}
+
+function markRealtimeDegraded(errorMessage: string | null = null): void {
+  setRealtimeState('degraded');
+  patchRealtimeDiagnostics({
+    lastError: errorMessage ?? realtimeDiagnostics.value.lastError
+  });
+}
+
+function markRealtimeFailed(errorMessage: string | null = null): void {
+  setRealtimeState('failed');
+  patchRealtimeDiagnostics({
+    lastError: errorMessage ?? realtimeDiagnostics.value.lastError
+  });
+}
+
 function handleMobileBack() {
   if (currentView.value === 'chats') {
+    handleTypingStop();
+    if (selectedChatId.value) {
+      getSocket()?.emit('chat.leave', { chatId: selectedChatId.value });
+    }
     selectedChatId.value = '';
   } else {
     currentView.value = 'chats';
@@ -193,6 +298,159 @@ function handleMobileBack() {
 
 function generateClientMessageId(): string {
   return `local_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function buildPendingMessage(
+  chatId: string,
+  content: string,
+  type: MessageType,
+  metadata: MessageMetadata | null,
+  clientMessageId = generateClientMessageId()
+): PendingMessage {
+  return {
+    chatId,
+    content,
+    type,
+    metadata,
+    clientMessageId,
+    enqueuedAt: new Date().toISOString(),
+    attempts: 0
+  };
+}
+
+function addOptimisticMessage(item: PendingMessage): void {
+  messages.value.unshift({
+    id: item.clientMessageId,
+    chatId: item.chatId,
+    senderId: session.value?.user.id ?? 'me',
+    senderUsername: session.value?.user.username ?? 'me',
+    senderDisplayName: session.value?.user.displayName ?? session.value?.user.username ?? 'me',
+    senderAvatarUrl: session.value?.user.avatarUrl ?? null,
+    content: item.content,
+    type: item.type,
+    metadata: item.metadata ?? null,
+    createdAt: item.enqueuedAt,
+    clientMessageId: item.clientMessageId
+  });
+  cacheMessages(item.chatId, messages.value);
+}
+
+async function dispatchPendingMessage(item: PendingMessage) {
+  if (item.type === 'text' && !item.metadata) {
+    return sendMessage(item.chatId, item.content, item.clientMessageId);
+  }
+
+  return sendStructuredMessage(item.chatId, {
+    content: item.content,
+    type: item.type,
+    metadata: item.metadata ?? null,
+    clientMessageId: item.clientMessageId
+  });
+}
+
+function mediaTypeFromUpload(upload: UploadResponse): MessageType {
+  if (upload.mediaKind === 'image') return 'image';
+  if (upload.mediaKind === 'video') return 'video';
+  return 'file';
+}
+
+type MediaDimensions = {
+  width: number | null;
+  height: number | null;
+};
+
+function metadataFromUpload(upload: UploadResponse, dimensions?: MediaDimensions): MessageMetadata {
+  return {
+    uploadId: upload.id,
+    url: upload.url,
+    originalFileName: upload.originalFileName,
+    fileName: upload.fileName,
+    contentType: upload.contentType ?? null,
+    mediaKind: upload.mediaKind,
+    size: upload.size,
+    width: dimensions?.width ?? null,
+    height: dimensions?.height ?? null
+  };
+}
+
+function metadataFromGif(gif: GifResult): MessageMetadata {
+  return {
+    provider: gif.provider,
+    url: gif.url,
+    previewUrl: gif.previewUrl,
+    title: gif.title ?? `${gif.provider.toUpperCase()} GIF`,
+    width: gif.width ?? null,
+    height: gif.height ?? null
+  };
+}
+
+async function measureImageDimensions(file: File): Promise<MediaDimensions> {
+  return new Promise((resolve) => {
+    const objectUrl = URL.createObjectURL(file);
+    const image = new Image();
+
+    image.onload = () => {
+      resolve({
+        width: Number.isFinite(image.naturalWidth) ? image.naturalWidth : null,
+        height: Number.isFinite(image.naturalHeight) ? image.naturalHeight : null
+      });
+      URL.revokeObjectURL(objectUrl);
+    };
+
+    image.onerror = () => {
+      resolve({ width: null, height: null });
+      URL.revokeObjectURL(objectUrl);
+    };
+
+    image.src = objectUrl;
+  });
+}
+
+async function measureVideoDimensions(file: File): Promise<MediaDimensions> {
+  return new Promise((resolve) => {
+    const objectUrl = URL.createObjectURL(file);
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    video.muted = true;
+    video.playsInline = true;
+
+    const cleanup = () => {
+      URL.revokeObjectURL(objectUrl);
+      video.removeAttribute('src');
+      video.load();
+    };
+
+    video.onloadedmetadata = () => {
+      resolve({
+        width: Number.isFinite(video.videoWidth) ? video.videoWidth : null,
+        height: Number.isFinite(video.videoHeight) ? video.videoHeight : null
+      });
+      cleanup();
+    };
+
+    video.onerror = () => {
+      resolve({ width: null, height: null });
+      cleanup();
+    };
+
+    video.src = objectUrl;
+  });
+}
+
+async function deriveUploadDimensions(file: File, upload: UploadResponse): Promise<MediaDimensions> {
+  try {
+    if (upload.mediaKind === 'image') {
+      return await measureImageDimensions(file);
+    }
+
+    if (upload.mediaKind === 'video') {
+      return await measureVideoDimensions(file);
+    }
+  } catch {
+    // Fall through to null dimensions when the browser/runtime cannot probe media metadata.
+  }
+
+  return { width: null, height: null };
 }
 
 async function loadChats(): Promise<void> {
@@ -205,6 +463,10 @@ async function loadChats(): Promise<void> {
 }
 
 async function openChat(chatId: string): Promise<void> {
+  chatActionError.value = '';
+  if (selectedChatId.value && selectedChatId.value !== chatId) {
+    getSocket()?.emit('chat.leave', { chatId: selectedChatId.value });
+  }
   selectedChatId.value = chatId;
   try {
     messages.value = await withBackoff(() => getMessages(chatId));
@@ -212,33 +474,168 @@ async function openChat(chatId: string): Promise<void> {
   } catch {
     messages.value = readCachedMessages(chatId);
   }
-  getSocket()?.emit('chat.join', { chatId });
-}
-
-async function sendOrQueue(chatId: string, content: string, clientMessageId: string): Promise<void> {
-  const pendingItem: PendingMessage = {
-    chatId,
-    content,
-    clientMessageId,
-    enqueuedAt: new Date().toISOString(),
-    attempts: 0
-  };
-
-  try {
-    const response = await withBackoff(() => sendMessage(chatId, content, clientMessageId));
-    markMessageDelivered(response.message.chatId, clientMessageId, response.message.id);
-  } catch {
-    enqueueMessage(pendingItem);
-    queued.value = getQueued();
-    failedMessageIds.value.add(clientMessageId);
+  const socket = getSocket();
+  if (socket && !socket.connected && hasNetwork.value) {
+    setRealtimeState('connecting');
+    socket.connect();
+  }
+  if (socket?.connected) {
+    socket.emit('chat.join', { chatId });
   }
 }
 
-function markMessageDelivered(chatId: string, clientMessageId: string, messageId: string): void {
+function clearFallbackRefreshTimer(): void {
+  if (!fallbackRefreshTimer) return;
+  clearInterval(fallbackRefreshTimer);
+  fallbackRefreshTimer = null;
+}
+
+function mergeServerMessages(chatId: string, fetched: ChatMessage[]): void {
+  const pendingLocal = messages.value.filter((message) => message.chatId === chatId && message.id.startsWith('local_'));
+  const fetchedClientIds = new Set(
+    fetched
+      .map((message) => message.clientMessageId)
+      .filter((id): id is string => typeof id === 'string' && id.length > 0)
+  );
+  const unresolvedLocal = pendingLocal.filter(
+    (message) => !message.clientMessageId || !fetchedClientIds.has(message.clientMessageId)
+  );
+
+  messages.value = [...unresolvedLocal, ...fetched];
+  cacheMessages(chatId, messages.value);
+}
+
+async function refreshSelectedChatFromApi(): Promise<void> {
+  if (!selectedChatId.value) return;
+  try {
+    const latest = await getMessages(selectedChatId.value);
+    mergeServerMessages(selectedChatId.value, latest);
+  } catch {
+    // Keep current local/cached state; refresh will retry on next interval.
+  }
+}
+
+function syncFallbackRefreshState(): void {
+  clearFallbackRefreshTimer();
+  const fallbackActive = Boolean(
+    currentView.value === 'chats' &&
+    selectedChatId.value &&
+    session.value &&
+    hasNetwork.value &&
+    (realtimeState.value === 'degraded' || realtimeState.value === 'failed')
+  );
+  patchRealtimeDiagnostics({ fallbackActive });
+  if (!fallbackActive) return;
+  void refreshSelectedChatFromApi();
+  fallbackRefreshTimer = setInterval(() => {
+    void refreshSelectedChatFromApi();
+  }, 2500);
+}
+
+function setPresenceStatus(userId: string, status: PresenceStatus): void {
+  presenceByUserId.value = {
+    ...presenceByUserId.value,
+    [userId]: status
+  };
+}
+
+function applyPresenceSync(onlineUserIds: string[]): void {
+  const next: Record<string, PresenceStatus> = {};
+  Object.keys(presenceByUserId.value).forEach((userId) => {
+    next[userId] = 'offline';
+  });
+  onlineUserIds.forEach((userId) => {
+    next[userId] = 'online';
+  });
+  presenceByUserId.value = next;
+}
+
+function markAllPresenceOffline(): void {
+  const next: Record<string, PresenceStatus> = {};
+  Object.keys(presenceByUserId.value).forEach((userId) => {
+    next[userId] = 'offline';
+  });
+  presenceByUserId.value = next;
+}
+
+function upsertTypingParticipant(chatId: string, participant: TypingParticipant): void {
+  typingByChat.value = {
+    ...typingByChat.value,
+    [chatId]: {
+      ...(typingByChat.value[chatId] ?? {}),
+      [participant.userId]: participant
+    }
+  };
+}
+
+function removeTypingParticipant(chatId: string, userId: string): void {
+  const chatTyping = { ...(typingByChat.value[chatId] ?? {}) };
+  if (!chatTyping[userId]) return;
+  delete chatTyping[userId];
+
+  const next = { ...typingByChat.value };
+  if (Object.keys(chatTyping).length > 0) {
+    next[chatId] = chatTyping;
+  } else {
+    delete next[chatId];
+  }
+  typingByChat.value = next;
+}
+
+function clearTypingForUser(userId: string): void {
+  const next: Record<string, Record<string, TypingParticipant>> = {};
+  Object.entries(typingByChat.value).forEach(([chatId, participants]) => {
+    const chatParticipants = { ...participants };
+    delete chatParticipants[userId];
+    if (Object.keys(chatParticipants).length > 0) {
+      next[chatId] = chatParticipants;
+    }
+  });
+  typingByChat.value = next;
+}
+
+function clearTypingState(): void {
+  typingByChat.value = {};
+}
+
+function handleTypingStart(): void {
+  if (!selectedChatId.value) return;
+  const socket = getSocket();
+  if (!socket?.connected) return;
+  socket.emit('typing.start', { chatId: selectedChatId.value });
+}
+
+function handleTypingStop(): void {
+  if (!selectedChatId.value) return;
+  const socket = getSocket();
+  if (!socket?.connected) return;
+  socket.emit('typing.stop', { chatId: selectedChatId.value });
+}
+
+async function sendOrQueue(pendingItem: PendingMessage): Promise<void> {
+  try {
+    const startedAt = Date.now();
+    const response = await withBackoff(() => dispatchPendingMessage(pendingItem));
+    markMessageDelivered(response.message.chatId, pendingItem.clientMessageId, response.message.id, Date.now() - startedAt);
+  } catch {
+    enqueueMessage(pendingItem);
+    queued.value = getQueued();
+    failedMessageIds.value.add(pendingItem.clientMessageId);
+  }
+}
+
+function markMessageDelivered(chatId: string, clientMessageId: string, messageId: string, latencyMs?: number): void {
   const existingMsg = messages.value.find((m) => m.clientMessageId === clientMessageId && m.chatId === chatId);
   if (existingMsg) {
     existingMsg.id = messageId;
     cacheMessages(chatId, messages.value);
+  }
+
+  if (typeof latencyMs === 'number' && Number.isFinite(latencyMs) && latencyMs >= 0) {
+    latencyByClientMessageId.value = {
+      ...latencyByClientMessageId.value,
+      [clientMessageId]: Math.round(latencyMs)
+    };
   }
 
   failedMessageIds.value.delete(clientMessageId);
@@ -252,8 +649,9 @@ async function retrySpecificMessage(clientMessageId: string): Promise<void> {
 
   failedMessageIds.value.delete(clientMessageId);
   try {
-    const response = await withBackoff(() => sendMessage(queuedItem.chatId, queuedItem.content, clientMessageId));
-    markMessageDelivered(response.message.chatId, clientMessageId, response.message.id);
+    const startedAt = Date.now();
+    const response = await withBackoff(() => dispatchPendingMessage(queuedItem));
+    markMessageDelivered(response.message.chatId, clientMessageId, response.message.id, Date.now() - startedAt);
   } catch {
     failedMessageIds.value.add(clientMessageId);
   }
@@ -261,30 +659,57 @@ async function retrySpecificMessage(clientMessageId: string): Promise<void> {
 
 async function sendCurrent(content: string): Promise<void> {
   if (!selectedChatId.value) return;
-  
-  const clientMessageId = generateClientMessageId();
+  chatActionError.value = '';
 
-  // Optimistic UI update
-  messages.value.unshift({
-    id: clientMessageId, // Real UUID assigned by server later
-    chatId: selectedChatId.value,
-    senderId: session.value?.user.id ?? 'me',
-    senderUsername: session.value?.user.username ?? 'me',
-    content,
-    createdAt: new Date().toISOString(),
-    clientMessageId
-  });
-  cacheMessages(selectedChatId.value, messages.value);
+  const pendingItem = buildPendingMessage(selectedChatId.value, content, 'text', null);
+  addOptimisticMessage(pendingItem);
+  await sendOrQueue(pendingItem);
+}
 
-  await sendOrQueue(selectedChatId.value, content, clientMessageId);
+async function handleMediaSelected(file: File): Promise<void> {
+  if (!selectedChatId.value) return;
+  chatActionError.value = '';
+  uploadingAttachment.value = true;
+
+  try {
+    const upload = await withBackoff(() => uploadMedia(file));
+    const dimensions = await deriveUploadDimensions(file, upload);
+    const pendingItem = buildPendingMessage(
+      selectedChatId.value,
+      upload.originalFileName,
+      mediaTypeFromUpload(upload),
+      metadataFromUpload(upload, dimensions)
+    );
+    addOptimisticMessage(pendingItem);
+    await sendOrQueue(pendingItem);
+  } catch (error: any) {
+    chatActionError.value = error?.response?.data?.error || 'Failed to upload attachment';
+  } finally {
+    uploadingAttachment.value = false;
+  }
+}
+
+async function handleGifSelected(gif: GifResult): Promise<void> {
+  if (!selectedChatId.value) return;
+  chatActionError.value = '';
+
+  const pendingItem = buildPendingMessage(
+    selectedChatId.value,
+    gif.title?.trim() || `${gif.provider.toUpperCase()} GIF`,
+    'gif',
+    metadataFromGif(gif)
+  );
+  addOptimisticMessage(pendingItem);
+  await sendOrQueue(pendingItem);
 }
 
 async function flushPending(): Promise<void> {
   await flushQueue(async (item) => {
     failedMessageIds.value.delete(item.clientMessageId);
     try {
-      const response = await withBackoff(() => sendMessage(item.chatId, item.content, item.clientMessageId));
-      markMessageDelivered(response.message.chatId, item.clientMessageId, response.message.id);
+      const startedAt = Date.now();
+      const response = await withBackoff(() => dispatchPendingMessage(item));
+      markMessageDelivered(response.message.chatId, item.clientMessageId, response.message.id, Date.now() - startedAt);
     } catch (e) {
       failedMessageIds.value.add(item.clientMessageId);
       throw e;
@@ -340,17 +765,8 @@ async function handleForcedPasswordChange() {
   savingForcedPw.value = true;
   forcedPwError.value = '';
   try {
-    // We import changePassword dynamically or we already imported it below (wait, we didn't import changePassword in App.vue).
-    // Let's import it at the top of the chunk by adding it to the imports if missing.
-    // Actually I'll just rely on http's changePassword. Let's make sure it's imported!
-    const { changePassword } = await import('./services/http');
-    await changePassword({ ...forcedPwForm.value });
-    
-    // Clear the gate
-    if (session.value) {
-      session.value.user.mustChangePassword = false;
-    }
-    
+    const updatedSession = await changePassword({ ...forcedPwForm.value });
+    await completeAuth(updatedSession);
     forcedPwForm.value = { currentPassword: '', newPassword: '' };
     forcedPwConfirm.value = '';
   } catch (err: any) {
@@ -368,16 +784,52 @@ async function completeAuth(res: Session) {
   await loadChats();
 }
 
+function handleProfileUpdated(profile: { displayName: string; avatarUrl: string | null }): void {
+  if (!session.value) return;
+  session.value = {
+    ...session.value,
+    user: {
+      ...session.value.user,
+      displayName: profile.displayName,
+      avatarUrl: profile.avatarUrl
+    }
+  };
+  setStoredUser(session.value.user);
+  setPresenceStatus(session.value.user.id, presenceByUserId.value[session.value.user.id] ?? 'offline');
+}
+
 function wireSocketHandlers(): void {
   const socket = connectSocket();
   socket.removeAllListeners('message.new');
   socket.removeAllListeners('message.ack');
+  socket.removeAllListeners('typing.update');
+  socket.removeAllListeners('presence.update');
+  socket.removeAllListeners('presence.sync');
   socket.removeAllListeners('connect');
   socket.removeAllListeners('connect_error');
   socket.removeAllListeners('disconnect');
   socket.io.removeAllListeners('reconnect_attempt');
   socket.io.removeAllListeners('reconnect_failed');
   socket.io.removeAllListeners('reconnect');
+
+  const syncTransport = () => {
+    const transportName = socket.io.engine?.transport?.name;
+    patchRealtimeDiagnostics({
+      transport: transportName === 'polling' || transportName === 'websocket' ? transportName : 'unknown'
+    });
+  };
+
+  const bindEngineUpgradeListener = () => {
+    const engine = socket.io.engine as
+      | { once?: (event: string, handler: (transport: { name?: string }) => void) => void }
+      | undefined;
+    if (!engine?.once) return;
+    engine.once('upgrade', (transport) => {
+      patchRealtimeDiagnostics({
+        transport: transport?.name === 'polling' || transport?.name === 'websocket' ? transport.name : 'unknown'
+      });
+    });
+  };
 
   socket.on('message.new', (event: any) => {
     const parsed = ServerMessageNewEventSchema.safeParse(event);
@@ -395,6 +847,7 @@ function wireSocketHandlers(): void {
     } else if (!messages.value.some((m) => m.id === payload.id)) {
       messages.value.unshift(payload);
     }
+    removeTypingParticipant(payload.chatId, payload.senderId);
 
     cacheMessages(payload.chatId, messages.value);
   });
@@ -412,49 +865,155 @@ function wireSocketHandlers(): void {
     }
 
     // We can also ensure it is removed from failed set
-    markMessageDelivered(payload.chatId, payload.clientMessageId, payload.messageId);
+    const existingLatency = latencyByClientMessageId.value[payload.clientMessageId];
+    if (typeof existingLatency === 'number') {
+      markMessageDelivered(payload.chatId, payload.clientMessageId, payload.messageId, existingLatency);
+      return;
+    }
+
+    const deliveryMs = existingMsg
+      ? Date.parse(payload.deliveredAt) - Date.parse(existingMsg.createdAt)
+      : undefined;
+    markMessageDelivered(payload.chatId, payload.clientMessageId, payload.messageId, deliveryMs);
   });
 
   socket.on('connect', () => {
-    isOnline.value = true;
-    isReconnecting.value = false;
-    hasPermanentSocketError.value = false;
+    syncTransport();
+    bindEngineUpgradeListener();
+    markRealtimeConnected(socket.io.engine?.transport?.name ?? 'unknown');
+    if (session.value?.user.id) {
+      setPresenceStatus(session.value.user.id, 'online');
+    }
     if (selectedChatId.value) {
       socket.emit('chat.join', { chatId: selectedChatId.value });
     }
     flushPending().catch(() => undefined);
   });
 
-  socket.on('connect_error', () => {
-    isOnline.value = false;
+  socket.on('typing.update', (event: unknown) => {
+    const parsed = ServerTypingUpdateEventSchema.safeParse(event);
+    if (!parsed.success) return;
+
+    const { chatId, userId, status, displayName, avatarUrl } = parsed.data.payload;
+    if (userId === session.value?.user.id) return;
+
+    if (status === 'start') {
+      upsertTypingParticipant(chatId, { userId, displayName, avatarUrl });
+      return;
+    }
+
+    removeTypingParticipant(chatId, userId);
   });
 
-  socket.on('disconnect', () => {
-    isOnline.value = false;
+  socket.on('presence.update', (event: unknown) => {
+    const parsed = ServerPresenceUpdateEventSchema.safeParse(event);
+    if (!parsed.success) return;
+    const { userId, status } = parsed.data.payload;
+    setPresenceStatus(userId, status);
+    if (status === 'offline') {
+      clearTypingForUser(userId);
+    }
+  });
+
+  socket.on('presence.sync', (event: unknown) => {
+    const parsed = ServerPresenceSyncEventSchema.safeParse(event);
+    if (!parsed.success) return;
+    applyPresenceSync(parsed.data.payload.onlineUserIds);
+  });
+
+  socket.on('connect_error', (error: Error) => {
+    if (!hasNetwork.value) {
+      setRealtimeState('idle');
+      patchRealtimeDiagnostics({
+        lastError: null,
+        lastDisconnectReason: 'network offline'
+      });
+      return;
+    }
+
+    clearTypingState();
+    markAllPresenceOffline();
+    patchRealtimeDiagnostics({
+      lastError: error?.message ?? 'connect_error',
+      lastDisconnectReason: null
+    });
+    markRealtimeDegraded(error?.message ?? 'connect_error');
+  });
+
+  socket.on('disconnect', (reason: string) => {
+    if (suppressNextDisconnectTransition) {
+      suppressNextDisconnectTransition = false;
+      return;
+    }
+
+    clearTypingState();
+    markAllPresenceOffline();
+    patchRealtimeDiagnostics({
+      lastDisconnectReason: reason,
+      transport: socket.io.engine?.transport?.name === 'polling' || socket.io.engine?.transport?.name === 'websocket'
+        ? socket.io.engine.transport.name
+        : realtimeDiagnostics.value.transport
+    });
+    if (hasNetwork.value) {
+      markRealtimeDegraded(reason);
+    } else {
+      setRealtimeState('idle');
+    }
   });
 
   socket.io.on('reconnect_attempt', () => {
-    hasPermanentSocketError.value = false;
-    isReconnecting.value = true;
+    if (!hasNetwork.value) return;
+    patchRealtimeDiagnostics({ lastError: null });
+    if (realtimeState.value === 'idle') {
+      setRealtimeState('connecting');
+    }
   });
 
   socket.io.on('reconnect_failed', () => {
-    isOnline.value = false;
-    isReconnecting.value = false;
-    hasPermanentSocketError.value = true;
+    clearTypingState();
+    markAllPresenceOffline();
+    markRealtimeFailed(realtimeDiagnostics.value.lastError ?? 'reconnect_failed');
   });
 
-  socket.io.on('reconnect', () => {
-    isReconnecting.value = false;
+  socket.io.on('reconnect', syncTransport);
+
+  if (socket.connected) {
+    syncTransport();
+    bindEngineUpgradeListener();
+    markRealtimeConnected(socket.io.engine?.transport?.name ?? 'unknown');
+    if (selectedChatId.value) {
+      socket.emit('chat.join', { chatId: selectedChatId.value });
+    }
+  } else if (hasNetwork.value) {
+    setRealtimeState('connecting');
+    socket.connect();
+  } else {
+    setRealtimeState('idle');
+  }
+}
+
+function restartSocketConnection(reason: string): void {
+  const socket = getSocket();
+  if (!socket || !hasNetwork.value) return;
+
+  clearTypingState();
+  markAllPresenceOffline();
+  patchRealtimeDiagnostics({
+    lastError: null,
+    lastDisconnectReason: reason
   });
+  setRealtimeState('connecting');
+
+  if (socket.connected) {
+    suppressNextDisconnectTransition = true;
+    socket.disconnect();
+  }
+
+  socket.connect();
 }
 
 function forceSocketReconnect() {
-  const socket = getSocket();
-  if (!socket) return;
-  isReconnecting.value = true;
-  hasPermanentSocketError.value = false;
-  socket.connect();
+  restartSocketConnection('manual reconnect');
 }
 
 async function doLogout(): Promise<void> {
@@ -465,47 +1024,91 @@ async function doLogout(): Promise<void> {
   messages.value = [];
   selectedChatId.value = '';
   recoveryCodeNotice.value = '';
+  presenceByUserId.value = {};
+  typingByChat.value = {};
+  latencyByClientMessageId.value = {};
+  chatActionError.value = '';
+  uploadingAttachment.value = false;
+  realtimeDiagnostics.value = {
+    transport: 'unknown',
+    lastError: null,
+    lastDisconnectReason: null,
+    lastConnectedAt: null,
+    fallbackActive: false
+  };
+  realtimeState.value = 'idle';
   setStoredUser(null);
 }
 
 function onOnline(): void {
   hasNetwork.value = true;
-  // Network is back — kick the socket to reconnect if it isn't already connected.
-  // Do NOT set isOnline here; let the socket 'connect' event be the single source of truth.
-  const sock = getSocket();
-  if (sock && !sock.connected) {
-    hasPermanentSocketError.value = false;
-    sock.connect();
+  const socket = getSocket();
+  if (socket) {
+    restartSocketConnection('network restored');
   }
   flushPending().catch(() => undefined);
 }
 
 function onOffline(): void {
   hasNetwork.value = false;
-  // Immediately reflect network loss. The socket will also fire 'disconnect'
-  // once the transport times out, but this gives instant visual feedback.
-  isOnline.value = false;
+  getSocket()?.disconnect();
+  setRealtimeState('idle');
+  patchRealtimeDiagnostics({
+    lastError: null,
+    lastDisconnectReason: 'network offline',
+    fallbackActive: false
+  });
+  clearTypingState();
+  markAllPresenceOffline();
+}
+
+async function handleAppResume(): Promise<void> {
+  if (!session.value) return;
+
+  await loadChats();
+  if (selectedChatId.value) {
+    await refreshSelectedChatFromApi();
+  }
+
+  if (hasNetwork.value && getSocket()) {
+    restartSocketConnection('app resume');
+  }
 }
 
 onMounted(() => {
-  const user = getStoredUser();
-  if (user) {
-    session.value = {
-      user,
-      accessToken: localStorage.getItem('accessToken') || '',
-      refreshToken: localStorage.getItem('refreshToken') || ''
-    };
-    wireSocketHandlers();
-    loadChats().catch(() => undefined);
-  }
-
   window.addEventListener('online', onOnline);
   window.addEventListener('offline', onOffline);
+  void CapacitorApp.addListener('appStateChange', ({ isActive }) => {
+    if (isActive) {
+      void handleAppResume();
+    }
+  }).then((listener) => {
+    appStateListener = listener;
+  });
+
+  void (async () => {
+    try {
+      const restoredSession = await hydrateStoredSession();
+      if (!restoredSession) return;
+      presenceByUserId.value = { [restoredSession.user.id]: 'offline' };
+      session.value = restoredSession;
+      wireSocketHandlers();
+      await loadChats();
+    } finally {
+      isBooting.value = false;
+    }
+  })();
+});
+
+watch([selectedChatId, currentView, realtimeState, hasNetwork], () => {
+  syncFallbackRefreshState();
 });
 
 onUnmounted(() => {
   window.removeEventListener('online', onOnline);
   window.removeEventListener('offline', onOffline);
+  clearFallbackRefreshTimer();
+  void appStateListener?.remove();
   disconnectSocket();
 });
 </script>
@@ -516,6 +1119,7 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
+  flex-shrink: 0;
 }
 
 .header-title {
@@ -549,8 +1153,9 @@ onUnmounted(() => {
   display: grid;
   grid-template-columns: 260px 1fr;
   gap: 16px;
-  height: calc(100vh - 100px);
-  min-height: 500px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .forced-password-gate {
@@ -570,6 +1175,19 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.loading-shell {
+  align-items: center;
+  justify-content: center;
+}
+
+.loading-card {
+  width: 100%;
+  max-width: 420px;
 }
 
 .recovery-banner {
@@ -581,6 +1199,7 @@ onUnmounted(() => {
   background: rgba(16, 24, 64, 0.82);
   border: 1px solid rgba(111, 211, 255, 0.25);
   border-radius: 14px;
+  flex-shrink: 0;
 }
 
 .recovery-banner p {
@@ -595,6 +1214,8 @@ onUnmounted(() => {
 .sidebar {
   display: flex;
   flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .chat-main {
@@ -605,6 +1226,12 @@ onUnmounted(() => {
   border-radius: 16px;
   padding: 12px;
   position: relative;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.chat-action-error {
+  margin: 0 0 10px;
 }
 
 .empty-chat {
@@ -621,7 +1248,11 @@ onUnmounted(() => {
 @media (max-width: 760px) {
   .chat-layout {
     grid-template-columns: 1fr;
-    height: calc(100vh - 80px); /* Tighter top spacing on mobile */
+    min-height: 0;
+  }
+  
+  .chat-main {
+    padding: 8px;
   }
 
   .recovery-banner {

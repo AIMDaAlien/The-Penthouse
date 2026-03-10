@@ -17,3 +17,31 @@ jobs:
       - run: npm ci
       - run: npm run validate
       - run: npm run scenario:test
+
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: penthouse
+          POSTGRES_PASSWORD: penthouse
+          POSTGRES_DB: penthouse_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U penthouse"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://penthouse:penthouse@localhost:5432/penthouse_test
+      JWT_SECRET: ci-test-jwt-secret-long-enough
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm --workspace services/api run test:integration

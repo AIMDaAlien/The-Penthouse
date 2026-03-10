@@ -6,6 +6,8 @@ services:
       POSTGRES_USER: penthouse
       POSTGRES_PASSWORD: penthouse
       POSTGRES_DB: penthouse
+    ports:
+      - "5432:5432"
     volumes:
       - penthouse_pgdata:/var/lib/postgresql/data
     healthcheck:

@@ -7,8 +7,28 @@ function readQueue(): PendingMessage[] {
   if (!raw) return [];
 
   try {
-    const parsed = JSON.parse(raw) as PendingMessage[];
-    return Array.isArray(parsed) ? parsed : [];
+    const parsed = JSON.parse(raw) as Array<Partial<PendingMessage>>;
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed
+      .filter((item): item is Partial<PendingMessage> & { chatId: string; content: string; clientMessageId: string; enqueuedAt: string } =>
+        Boolean(
+          item &&
+          typeof item.chatId === 'string' &&
+          typeof item.content === 'string' &&
+          typeof item.clientMessageId === 'string' &&
+          typeof item.enqueuedAt === 'string'
+        )
+      )
+      .map((item) => ({
+        chatId: item.chatId,
+        content: item.content,
+        type: item.type ?? 'text',
+        metadata: item.metadata ?? null,
+        clientMessageId: item.clientMessageId,
+        enqueuedAt: item.enqueuedAt,
+        attempts: typeof item.attempts === 'number' ? item.attempts : 0
+      }));
   } catch {
     return [];
   }

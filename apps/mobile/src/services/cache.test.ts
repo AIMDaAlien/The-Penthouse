@@ -18,6 +18,7 @@ test('cacheMessages and readCachedMessages round trip message arrays', () => {
       chatId: 'chat-2',
       senderId: 'user-1',
       content: 'hello',
+      type: 'text',
       createdAt: new Date().toISOString(),
       clientMessageId: 'cm-1'
     }

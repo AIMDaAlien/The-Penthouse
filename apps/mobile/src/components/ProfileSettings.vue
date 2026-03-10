@@ -58,10 +58,11 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
 import { getMe, updateProfile, changePassword, rotateRecoveryCode } from '../services/http';
-import { formatRecoveryCode, type MeResponse } from '@penthouse/contracts';
+import { formatRecoveryCode, type AuthResponse, type MeResponse } from '@penthouse/contracts';
 
 const emit = defineEmits<{
-  (e: 'password-changed'): void;
+  (e: 'profile-updated', profile: MeResponse): void;
+  (e: 'auth-updated', session: AuthResponse): void;
 }>();
 
 const loading = ref(true);
@@ -114,6 +115,7 @@ async function handleSaveProfile() {
       bio: profileForm.value.bio.trim() || null
     });
     me.value = updated;
+    emit('profile-updated', updated);
     profileSuccess.value = true;
     setTimeout(() => { profileSuccess.value = false; }, 3000);
   } catch (err: any) {
@@ -132,12 +134,14 @@ async function handleChangePassword() {
   pwError.value = '';
   pwSuccess.value = false;
   try {
-    await changePassword({ ...pwForm.value });
+    const updatedSession = await changePassword({ ...pwForm.value });
+    me.value = await getMe();
+    emit('auth-updated', updatedSession);
     pwSuccess.value = true;
     pwForm.value = { currentPassword: '', newPassword: '' };
     pwConfirm.value = '';
+    newRecoveryCode.value = updatedSession.recoveryCode ?? '';
     setTimeout(() => { pwSuccess.value = false; }, 3000);
-    emit('password-changed');
   } catch (err: any) {
     pwError.value = err.response?.data?.error || 'Failed to update password';
   } finally {

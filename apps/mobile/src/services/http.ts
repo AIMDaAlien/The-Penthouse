@@ -1,25 +1,35 @@
 import axios from 'axios';
 import type {
   AuthResponse,
-  ChatSummary,
-  Message,
-  PasswordResetRequest,
-  SendMessageResponse,
-  RefreshRequest,
-  RefreshRequest,
-  RotateRecoveryCodeResponse,
-  MemberSummary,
-  MemberDetail,
-  UpdateProfileRequest,
+  AuthUser,
   ChangePasswordRequest,
+  ChatSummary,
+  GifProvider,
+  GifSearchResponse,
   MeResponse,
-  AuthUser
+  MemberDetail,
+  MemberSummary,
+  Message,
+  MessageMetadata,
+  MessageType,
+  PasswordResetRequest,
+  RotateRecoveryCodeResponse,
+  SendMessageResponse,
+  UploadResponse,
+  UpdateProfileRequest
 } from '@penthouse/contracts';
 import {
   normalizeInviteCode,
   normalizeRecoveryCode,
   normalizeUsername
 } from '@penthouse/contracts';
+import type { Session } from '../types';
+import {
+  clearStoredSessionState,
+  loadStoredSessionState,
+  persistStoredTokens,
+  persistStoredUser
+} from './sessionStorage';
 import { resolveApiBase } from './runtime';
 
 const API_BASE = resolveApiBase();
@@ -29,21 +39,63 @@ const http = axios.create({
   timeout: 15_000
 });
 
-let accessToken = localStorage.getItem('accessToken') || '';
-let refreshToken = localStorage.getItem('refreshToken') || '';
+let accessToken = '';
+let refreshToken = '';
+let cachedUser: AuthUser | null = null;
+let hydrated = false;
+let hydratingPromise: Promise<Session | null> | null = null;
 
-function setTokens(nextAccessToken: string, nextRefreshToken: string) {
-  accessToken = nextAccessToken;
-  refreshToken = nextRefreshToken;
-  localStorage.setItem('accessToken', accessToken);
-  localStorage.setItem('refreshToken', refreshToken);
+function decodeJwtExp(token: string): number | null {
+  const parts = token.split('.');
+  if (parts.length < 2) return null;
+
+  try {
+    const normalized = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), '=');
+    const payload = JSON.parse(globalThis.atob(padded)) as { exp?: unknown };
+    return typeof payload.exp === 'number' ? payload.exp * 1000 : null;
+  } catch {
+    return null;
+  }
 }
 
-function clearTokens() {
+function tokenNeedsRefresh(token: string, minValidityMs: number): boolean {
+  if (!token) return true;
+  const exp = decodeJwtExp(token);
+  if (!exp) return false;
+  return exp <= Date.now() + minValidityMs;
+}
+
+function persistTokens(): void {
+  void persistStoredTokens(accessToken, refreshToken);
+}
+
+function setTokens(nextAccessToken: string, nextRefreshToken: string): void {
+  accessToken = nextAccessToken;
+  refreshToken = nextRefreshToken;
+  hydrated = true;
+  persistTokens();
+}
+
+function clearTokens(): void {
   accessToken = '';
   refreshToken = '';
-  localStorage.removeItem('accessToken');
-  localStorage.removeItem('refreshToken');
+  hydrated = true;
+  persistTokens();
+}
+
+export function setStoredUser(user: AuthUser | null): void {
+  cachedUser = user;
+  hydrated = true;
+  void persistStoredUser(user);
+}
+
+async function clearStoredAuthState(): Promise<void> {
+  accessToken = '';
+  refreshToken = '';
+  cachedUser = null;
+  hydrated = true;
+  await clearStoredSessionState();
 }
 
 http.interceptors.request.use((config) => {
@@ -71,11 +123,12 @@ async function refreshAccessToken(): Promise<string | null> {
       refreshToken
     });
     setTokens(response.data.accessToken, response.data.refreshToken);
+    setStoredUser(response.data.user);
     queuedResolvers.forEach((resolve) => resolve(response.data.accessToken));
     queuedResolvers = [];
     return response.data.accessToken;
   } catch {
-    clearTokens();
+    await clearStoredAuthState();
     queuedResolvers.forEach((resolve) => resolve(null));
     queuedResolvers = [];
     return null;
@@ -87,20 +140,80 @@ async function refreshAccessToken(): Promise<string | null> {
 http.interceptors.response.use(
   (res) => res,
   async (error) => {
-    const original = error.config as any;
+    const original = error.config as Record<string, any> | undefined;
     if (!original || original._retry) throw error;
 
     if (error.response?.status === 401) {
       original._retry = true;
       const token = await refreshAccessToken();
       if (!token) throw error;
-      original.headers.Authorization = `Bearer ${token}`;
+      original.headers = {
+        ...(original.headers ?? {}),
+        Authorization: `Bearer ${token}`
+      };
       return http(original);
     }
 
     throw error;
   }
 );
+
+function buildCurrentSession(): Session | null {
+  if (!cachedUser || !accessToken || !refreshToken) {
+    return null;
+  }
+
+  return {
+    user: cachedUser,
+    accessToken,
+    refreshToken
+  };
+}
+
+export async function hydrateStoredSession(): Promise<Session | null> {
+  if (hydrated && !hydratingPromise) {
+    return buildCurrentSession();
+  }
+
+  if (hydratingPromise) {
+    return hydratingPromise;
+  }
+
+  hydratingPromise = (async () => {
+    const stored = await loadStoredSessionState();
+    accessToken = stored.accessToken;
+    refreshToken = stored.refreshToken;
+    cachedUser = stored.user;
+    hydrated = true;
+
+    if (!accessToken && !refreshToken && !cachedUser) {
+      return null;
+    }
+
+    if (refreshToken && (tokenNeedsRefresh(accessToken, 60_000) || !cachedUser)) {
+      const refreshedToken = await refreshAccessToken();
+      if (!refreshedToken || !cachedUser) {
+        return null;
+      }
+    }
+
+    if (!cachedUser || !accessToken || !refreshToken) {
+      return null;
+    }
+
+    return {
+      user: cachedUser,
+      accessToken,
+      refreshToken
+    };
+  })();
+
+  try {
+    return await hydratingPromise;
+  } finally {
+    hydratingPromise = null;
+  }
+}
 
 export async function register(username: string, password: string, inviteCode: string): Promise<AuthResponse> {
   const response = await http.post<AuthResponse>('/api/v1/auth/register', {
@@ -109,6 +222,7 @@ export async function register(username: string, password: string, inviteCode: s
     inviteCode: normalizeInviteCode(inviteCode)
   });
   setTokens(response.data.accessToken, response.data.refreshToken);
+  setStoredUser(response.data.user);
   return response.data;
 }
 
@@ -118,6 +232,7 @@ export async function login(username: string, password: string): Promise<AuthRes
     password
   });
   setTokens(response.data.accessToken, response.data.refreshToken);
+  setStoredUser(response.data.user);
   return response.data;
 }
 
@@ -133,6 +248,7 @@ export async function resetPassword(
   };
   const response = await http.post<AuthResponse>('/api/v1/auth/password-reset', payload);
   setTokens(response.data.accessToken, response.data.refreshToken);
+  setStoredUser(response.data.user);
   return response.data;
 }
 
@@ -140,7 +256,7 @@ export async function logout(): Promise<void> {
   if (refreshToken) {
     await http.post('/api/v1/auth/logout', { refreshToken }).catch(() => undefined);
   }
-  clearTokens();
+  await clearStoredAuthState();
 }
 
 export async function getChats(): Promise<ChatSummary[]> {
@@ -159,7 +275,28 @@ export async function sendMessage(chatId: string, content: string, clientMessage
   const response = await http.post<SendMessageResponse>(`/api/v1/chats/${chatId}/messages`, {
     chatId,
     content,
+    type: 'text',
+    metadata: null,
     clientMessageId
+  });
+  return response.data;
+}
+
+export async function sendStructuredMessage(
+  chatId: string,
+  payload: {
+    content: string;
+    type: MessageType;
+    metadata?: MessageMetadata | null;
+    clientMessageId: string;
+  }
+): Promise<SendMessageResponse> {
+  const response = await http.post<SendMessageResponse>(`/api/v1/chats/${chatId}/messages`, {
+    chatId,
+    content: payload.content,
+    type: payload.type,
+    metadata: payload.metadata ?? null,
+    clientMessageId: payload.clientMessageId
   });
   return response.data;
 }
@@ -174,8 +311,11 @@ export async function updateProfile(data: UpdateProfileRequest): Promise<MeRespo
   return response.data;
 }
 
-export async function changePassword(data: ChangePasswordRequest): Promise<void> {
-  await http.post('/api/v1/me/password', data);
+export async function changePassword(data: ChangePasswordRequest): Promise<AuthResponse> {
+  const response = await http.post<AuthResponse>('/api/v1/me/password', data);
+  setTokens(response.data.accessToken, response.data.refreshToken);
+  setStoredUser(response.data.user);
+  return response.data;
 }
 
 export async function rotateRecoveryCode(): Promise<RotateRecoveryCodeResponse> {
@@ -183,8 +323,10 @@ export async function rotateRecoveryCode(): Promise<RotateRecoveryCodeResponse> 
   return response.data;
 }
 
-export async function getMembers(): Promise<MemberSummary[]> {
-  const response = await http.get<MemberSummary[]>('/api/v1/members');
+export async function getMembers(q = ''): Promise<MemberSummary[]> {
+  const response = await http.get<MemberSummary[]>('/api/v1/members', {
+    params: q.trim() ? { q: q.trim() } : undefined
+  });
   return response.data;
 }
 
@@ -193,25 +335,49 @@ export async function getMember(memberId: string): Promise<MemberDetail> {
   return response.data;
 }
 
+export async function uploadMedia(file: File): Promise<UploadResponse> {
+  const form = new FormData();
+  form.append('file', file);
+  const response = await http.post<UploadResponse>('/api/v1/media/upload', form);
+  return response.data;
+}
+
+export async function getTrendingGifs(provider: GifProvider): Promise<GifSearchResponse> {
+  const response = await http.get<GifSearchResponse>(`/api/v1/gifs/${provider}/trending`);
+  return response.data;
+}
+
+export async function searchGifs(provider: GifProvider, query: string): Promise<GifSearchResponse> {
+  const response = await http.get<GifSearchResponse>(`/api/v1/gifs/${provider}/search`, {
+    params: { q: query.trim() }
+  });
+  return response.data;
+}
+
+export function resolveMediaUrl(url: string | null | undefined): string {
+  if (!url) return '';
+  if (/^https?:\/\//i.test(url)) return url;
+  if (url.startsWith('/')) return `${API_BASE}${url}`;
+  return `${API_BASE}/${url}`;
+}
+
 export function getAccessToken(): string {
   return accessToken;
 }
 
-export function getStoredUser(): AuthUser | null {
-  const raw = localStorage.getItem('user');
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed?.id === 'string' && typeof parsed?.username === 'string') {
-      return parsed as AuthUser;
-    }
-    return null;
-  } catch {
-    return null;
+export async function ensureRealtimeAccessToken(minValidityMs = 60_000): Promise<string | null> {
+  if (!accessToken) {
+    return refreshAccessToken();
   }
+
+  if (!tokenNeedsRefresh(accessToken, minValidityMs)) {
+    return accessToken;
+  }
+
+  const refreshed = await refreshAccessToken();
+  return refreshed ?? accessToken;
 }
 
-export function setStoredUser(user: AuthUser | null): void {
-  if (!user) return localStorage.removeItem('user');
-  localStorage.setItem('user', JSON.stringify(user));
+export function getStoredUser(): AuthUser | null {
+  return cachedUser;
 }

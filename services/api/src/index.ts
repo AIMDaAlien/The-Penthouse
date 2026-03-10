@@ -3,9 +3,11 @@ import { env } from './config/env.js';
 import { runMigrations } from './db/migrate.js';
 import { pool } from './db/pool.js';
 import { initRealtime } from './realtime/socket.js';
+import { maybeBootstrapAdmin } from './utils/users.js';
 
 async function main() {
   await runMigrations();
+  await maybeBootstrapAdmin(pool);
 
   const app = await createApp();
   app.decorate('io', initRealtime(app));

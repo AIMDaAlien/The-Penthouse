@@ -4,22 +4,83 @@ import App from './App.vue';
 import { installLocalStorageMock } from './test/localStorageMock';
 import * as http from './services/http';
 
+vi.mock('@capacitor/app', () => ({
+  App: {
+    addListener: vi.fn(async () => ({
+      remove: vi.fn()
+    }))
+  }
+}));
+
 vi.mock('./services/http', () => ({
   getChats: vi.fn(() => Promise.resolve([{ id: 'chat-1', name: 'General', type: 'channel' }])),
   getMessages: vi.fn(() => Promise.resolve([])),
-  getStoredUser: vi.fn(() => ({ id: 'user-1', username: 'testuser' })),
+  hydrateStoredSession: vi.fn(() => Promise.resolve({
+    user: {
+      id: 'user-1',
+      username: 'testuser',
+      displayName: 'Test User',
+      avatarUrl: null,
+      role: 'member',
+      mustChangePassword: false
+    },
+    accessToken: 'mock-token',
+    refreshToken: 'mock-refresh-token'
+  })),
+  getMe: vi.fn(() => Promise.resolve({
+    id: 'user-1',
+    username: 'testuser',
+    displayName: 'Test User',
+    avatarUrl: null,
+    role: 'member',
+    mustChangePassword: false,
+    bio: null,
+    avatarMediaId: null
+  })),
+  getMembers: vi.fn(() => Promise.resolve([])),
+  getMember: vi.fn(),
   login: vi.fn(),
   register: vi.fn(),
   resetPassword: vi.fn(),
+  changePassword: vi.fn(),
+  updateProfile: vi.fn(),
+  rotateRecoveryCode: vi.fn(),
+  uploadMedia: vi.fn(),
+  getTrendingGifs: vi.fn(() => Promise.resolve({ provider: 'giphy', results: [] })),
+  searchGifs: vi.fn(() => Promise.resolve({ provider: 'giphy', results: [] })),
+  resolveMediaUrl: vi.fn((url: string) => `http://localhost:3000${url}`),
   sendMessage: vi.fn((chatId: string, content: string, clientMessageId: string) =>
     Promise.resolve({
       message: {
         id: `server-id-for-${clientMessageId}`,
         chatId,
         senderId: 'user-1',
+        senderUsername: 'testuser',
+        senderDisplayName: 'Test User',
+        senderAvatarUrl: null,
         content,
+        type: 'text',
+        metadata: null,
         createdAt: new Date().toISOString(),
         clientMessageId
+      },
+      deduped: false
+    })
+  ),
+  sendStructuredMessage: vi.fn((chatId: string, payload: { content: string; type: string; metadata: unknown; clientMessageId: string }) =>
+    Promise.resolve({
+      message: {
+        id: `server-id-for-${payload.clientMessageId}`,
+        chatId,
+        senderId: 'user-1',
+        senderUsername: 'testuser',
+        senderDisplayName: 'Test User',
+        senderAvatarUrl: null,
+        content: payload.content,
+        type: payload.type,
+        metadata: payload.metadata,
+        createdAt: new Date().toISOString(),
+        clientMessageId: payload.clientMessageId
       },
       deduped: false
     })
@@ -31,6 +92,7 @@ vi.mock('./services/http', () => ({
 const mockSocketHandlers: Record<string, Function> = {};
 
 const mockManagerHandlers: Record<string, Function> = {};
+const mockEngineHandlers: Record<string, Function> = {};
 
 const mockSocket = {
   connected: false,
@@ -43,6 +105,12 @@ const mockSocket = {
   connect: vi.fn(),
   disconnect: vi.fn(),
   io: {
+    engine: {
+      transport: { name: 'polling' },
+      once: vi.fn((event: string, handler: Function) => {
+        mockEngineHandlers[event] = handler;
+      })
+    },
     on: vi.fn((event: string, handler: Function) => {
       mockManagerHandlers[event] = handler;
     }),
@@ -59,7 +127,11 @@ vi.mock('./services/socket', () => ({
 describe('App.vue Optimistic Flow', () => {
   beforeEach(() => {
     installLocalStorageMock();
-    localStorage.setItem('accessToken', 'mock-token');
+    Object.keys(mockSocketHandlers).forEach((key) => delete mockSocketHandlers[key]);
+    Object.keys(mockManagerHandlers).forEach((key) => delete mockManagerHandlers[key]);
+    Object.keys(mockEngineHandlers).forEach((key) => delete mockEngineHandlers[key]);
+    mockSocket.connected = false;
+    mockSocket.io.engine.transport.name = 'polling';
     vi.clearAllMocks();
   });
 
@@ -145,13 +217,38 @@ describe('App.vue Optimistic Flow', () => {
     expect(updatedMessages[0].id).toBe('new-server-uuid');
     expect(updatedMessages[0].content).toBe('Race condition text');
   });
+
+  it('shows a typing indicator for the active chat when typing.update arrives', async () => {
+    const wrapper = mount(App);
+    await flushPromises();
+
+    const chatList = wrapper.findComponent({ name: 'ChatListPanel' });
+    await chatList.vm.$emit('select', 'chat-1');
+    await flushPromises();
+
+    mockSocketHandlers['typing.update']({
+      type: 'typing.update',
+      payload: {
+        chatId: 'chat-1',
+        userId: 'user-2',
+        status: 'start',
+        displayName: 'Ryan'
+      }
+    });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('Ryan is typing...');
+  });
 });
 
 describe('App.vue Connection State', () => {
   beforeEach(() => {
     installLocalStorageMock();
-    localStorage.setItem('accessToken', 'mock-token');
     mockSocket.connected = false;
+    mockSocket.io.engine.transport.name = 'polling';
+    Object.keys(mockSocketHandlers).forEach((key) => delete mockSocketHandlers[key]);
+    Object.keys(mockManagerHandlers).forEach((key) => delete mockManagerHandlers[key]);
+    Object.keys(mockEngineHandlers).forEach((key) => delete mockEngineHandlers[key]);
     vi.clearAllMocks();
   });
 
@@ -159,14 +256,15 @@ describe('App.vue Connection State', () => {
     return wrapper.findComponent({ name: 'ConnectionStatus' });
   }
 
-  it('starts with isOnline=false before socket connects', async () => {
+  it('starts in connecting state before socket connects', async () => {
     const wrapper = mount(App);
     await flushPromises();
 
     const status = getStatus(wrapper);
-    expect(status.props('isOnline')).toBe(false);
+    expect(mockSocket.connect).toHaveBeenCalled();
+    expect(status.props('realtimeState')).toBe('connecting');
     expect(status.props('hasNetwork')).toBe(true);
-    expect(status.text()).toContain('Realtime offline');
+    expect(status.text()).toContain('Reconnecting...');
   });
 
   it('shows Connected after socket connect event fires', async () => {
@@ -179,12 +277,13 @@ describe('App.vue Connection State', () => {
     await flushPromises();
 
     const status = getStatus(wrapper);
-    expect(status.props('isOnline')).toBe(true);
+    expect(status.props('realtimeState')).toBe('connected');
     expect(status.props('hasNetwork')).toBe(true);
+    expect(status.props('diagnostics').transport).toBe('polling');
     expect(status.text()).toContain('Connected');
   });
 
-  it('shows Offline after socket disconnect', async () => {
+  it('enters degraded mode after socket disconnect while network is still up', async () => {
     const wrapper = mount(App);
     await flushPromises();
 
@@ -194,26 +293,35 @@ describe('App.vue Connection State', () => {
     await flushPromises();
 
     mockSocket.connected = false;
-    mockSocketHandlers['disconnect']();
+    mockSocketHandlers['disconnect']('transport close');
     await flushPromises();
 
     const status = getStatus(wrapper);
-    expect(status.props('isOnline')).toBe(false);
+    expect(status.props('realtimeState')).toBe('degraded');
     expect(status.props('hasNetwork')).toBe(true);
     expect(status.text()).toContain('Realtime offline');
+    expect(status.props('diagnostics').lastDisconnectReason).toBe('transport close');
   });
 
-  it('shows Offline on connect_error (e.g. expired token)', async () => {
+  it('enters degraded mode on connect_error and enables fallback only for selected chat', async () => {
     const wrapper = mount(App);
     await flushPromises();
 
-    mockSocketHandlers['connect_error']();
+    const chatList = wrapper.findComponent({ name: 'ChatListPanel' });
+    await chatList.vm.$emit('select', 'chat-1');
+    await flushPromises();
+
+    const previousFetchCount = vi.mocked(http.getMessages).mock.calls.length;
+    mockSocketHandlers['connect_error'](new Error('xhr poll error'));
     await flushPromises();
 
     const status = getStatus(wrapper);
-    expect(status.props('isOnline')).toBe(false);
+    expect(status.props('realtimeState')).toBe('degraded');
     expect(status.props('hasNetwork')).toBe(true);
     expect(status.text()).toContain('Realtime offline');
+    expect(status.props('diagnostics').lastError).toBe('xhr poll error');
+    expect(status.props('diagnostics').fallbackActive).toBe(true);
+    expect(vi.mocked(http.getMessages).mock.calls.length).toBeGreaterThan(previousFetchCount);
   });
 
   it('shows Offline after the browser offline event fires', async () => {
@@ -224,25 +332,93 @@ describe('App.vue Connection State', () => {
     await flushPromises();
 
     const status = getStatus(wrapper);
+    expect(mockSocket.disconnect).toHaveBeenCalled();
     expect(status.props('hasNetwork')).toBe(false);
-    expect(status.props('isOnline')).toBe(false);
+    expect(status.props('realtimeState')).toBe('idle');
     expect(status.text()).toContain('Offline');
   });
 
-  it('clears isReconnecting on successful connect', async () => {
+  it('keeps the UI offline when reconnect events fire after the browser goes offline', async () => {
     const wrapper = mount(App);
     await flushPromises();
 
-    // Simulate reconnect_attempt → isReconnecting = true
+    window.dispatchEvent(new Event('offline'));
+    await flushPromises();
+
+    mockManagerHandlers['reconnect_attempt']?.();
+    mockSocketHandlers['connect_error']?.(new Error('xhr poll error'));
+    await flushPromises();
+
+    const status = getStatus(wrapper);
+    expect(status.props('hasNetwork')).toBe(false);
+    expect(status.props('realtimeState')).toBe('idle');
+    expect(status.text()).toContain('Offline');
+  });
+
+  it('moves from reconnecting to connected and rejoins the active chat', async () => {
+    const wrapper = mount(App);
+    await flushPromises();
+
+    const chatList = wrapper.findComponent({ name: 'ChatListPanel' });
+    await chatList.vm.$emit('select', 'chat-1');
+    await flushPromises();
+
     mockManagerHandlers['reconnect_attempt']();
     await flushPromises();
-    expect(getStatus(wrapper).props('isReconnecting')).toBe(true);
+    expect(getStatus(wrapper).props('realtimeState')).toBe('connecting');
 
-    // Simulate successful reconnect via connect event
     mockSocket.connected = true;
     mockSocketHandlers['connect']();
     await flushPromises();
-    expect(getStatus(wrapper).props('isReconnecting')).toBe(false);
-    expect(getStatus(wrapper).props('isOnline')).toBe(true);
+    expect(getStatus(wrapper).props('realtimeState')).toBe('connected');
+    expect(mockSocket.emit).toHaveBeenCalledWith('chat.join', { chatId: 'chat-1' });
+  });
+
+  it('marks the socket as failed after reconnect exhaustion', async () => {
+    const wrapper = mount(App);
+    await flushPromises();
+
+    mockManagerHandlers['reconnect_failed']();
+    await flushPromises();
+
+    const status = getStatus(wrapper);
+    expect(status.props('realtimeState')).toBe('failed');
+    expect(status.text()).toContain('Reconnect failed');
+  });
+
+  it('disables fallback polling outside the chat view', async () => {
+    const wrapper = mount(App);
+    await flushPromises();
+
+    const chatList = wrapper.findComponent({ name: 'ChatListPanel' });
+    await chatList.vm.$emit('select', 'chat-1');
+    await flushPromises();
+
+    mockSocketHandlers['connect_error'](new Error('xhr poll error'));
+    await flushPromises();
+    expect(getStatus(wrapper).props('diagnostics').fallbackActive).toBe(true);
+
+    const directoryTab = wrapper.findAll('button.small-btn').find((button) => button.text() === 'Directory');
+    expect(directoryTab).toBeTruthy();
+    await directoryTab!.trigger('click');
+    await flushPromises();
+
+    expect(getStatus(wrapper).props('diagnostics').fallbackActive).toBe(false);
+  });
+
+  it('tracks online member count from presence.sync', async () => {
+    const wrapper = mount(App);
+    await flushPromises();
+
+    mockSocketHandlers['presence.sync']({
+      type: 'presence.sync',
+      payload: {
+        onlineUserIds: ['user-1', 'user-2', 'user-3']
+      }
+    });
+    await flushPromises();
+
+    const chatList = wrapper.findComponent({ name: 'ChatListPanel' });
+    expect(chatList.props('onlineCount')).toBe(3);
   });
 });

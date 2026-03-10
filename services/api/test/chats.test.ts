@@ -184,6 +184,7 @@ test('[schema] Message: clientMessageId is optional (server-originated messages)
     id: 'msg-uuid',
     chatId: 'chat-uuid',
     senderId: 'user-uuid',
+    senderUsername: 'alice',
     content: 'Hello',
     createdAt: new Date().toISOString()
     // clientMessageId absent

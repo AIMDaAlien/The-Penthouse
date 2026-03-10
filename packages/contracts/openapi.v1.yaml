@@ -33,14 +33,18 @@ components:
           type: string
           minLength: 3
           maxLength: 32
+          pattern: '^[a-z0-9._-]+$'
+          description: Trimmed and lowercased by the server
         password:
           type: string
           minLength: 10
           maxLength: 128
+          description: Must not start or end with spaces
         inviteCode:
           type: string
           minLength: 6
           maxLength: 64
+          description: Trimmed and uppercased by the server
 
     LoginRequest:
       type: object
@@ -49,7 +53,9 @@ components:
         username:
           type: string
           minLength: 3
-          maxLength: 64
+          maxLength: 32
+          pattern: '^[a-z0-9._-]+$'
+          description: Trimmed and lowercased by the server
         password:
           type: string
           minLength: 10
@@ -64,25 +70,121 @@ components:
           minLength: 20
           description: Opaque refresh token (96-char hex from server)
 
+    PasswordResetRequest:
+      type: object
+      required: [username, recoveryCode, newPassword]
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 32
+          pattern: '^[a-z0-9._-]+$'
+          description: Trimmed and lowercased by the server
+        recoveryCode:
+          type: string
+          minLength: 16
+          maxLength: 24
+          description: Signup recovery code. Hyphens and spaces are ignored.
+        newPassword:
+          type: string
+          minLength: 10
+          maxLength: 128
+          description: Must not start or end with spaces
+
+    UserRole:
+      type: string
+      enum: [admin, member]
+
+    UserStatus:
+      type: string
+      enum: [active, removed, banned]
+
+    AuthUser:
+      type: object
+      required: [id, username, displayName, avatarUrl, role, mustChangePassword]
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        displayName:
+          type: string
+        avatarUrl:
+          type: string
+          nullable: true
+        role:
+          $ref: '#/components/schemas/UserRole'
+        mustChangePassword:
+          type: boolean
+
     AuthResponse:
       type: object
       required: [user, accessToken, refreshToken]
       properties:
         user:
-          type: object
-          required: [id, username]
-          properties:
-            id:
-              type: string
-              format: uuid
-            username:
-              type: string
+          $ref: '#/components/schemas/AuthUser'
         accessToken:
           type: string
           description: Short-lived JWT (default 15m)
         refreshToken:
           type: string
           description: Long-lived opaque token for rotation (default 7d)
+        recoveryCode:
+          type: string
+          description: One-time recovery code display for signup, reset, or backfilled older accounts
+
+    MeResponse:
+      allOf:
+        - $ref: '#/components/schemas/AuthUser'
+        - type: object
+          required: [bio, avatarMediaId]
+          properties:
+            bio:
+              type: string
+              nullable: true
+            avatarMediaId:
+              type: string
+              format: uuid
+              nullable: true
+
+    UpdateProfileRequest:
+      type: object
+      minProperties: 1
+      properties:
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 40
+        bio:
+          type: string
+          maxLength: 160
+          nullable: true
+        avatarUploadId:
+          type: string
+          format: uuid
+          nullable: true
+
+    ChangePasswordRequest:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword:
+          type: string
+          minLength: 10
+          maxLength: 128
+        newPassword:
+          type: string
+          minLength: 10
+          maxLength: 128
+          description: Must not start or end with spaces
+
+    RotateRecoveryCodeResponse:
+      type: object
+      required: [recoveryCode]
+      properties:
+        recoveryCode:
+          type: string
 
     ChatSummary:
       type: object
@@ -102,7 +204,7 @@ components:
 
     Message:
       type: object
-      required: [id, chatId, senderId, content, createdAt]
+      required: [id, chatId, senderId, content, type, createdAt]
       properties:
         id:
           type: string
@@ -113,8 +215,23 @@ components:
         senderId:
           type: string
           format: uuid
+        senderUsername:
+          type: string
+          description: Immutable login identifier. May be omitted in future member-facing clients.
+        senderDisplayName:
+          type: string
+        senderAvatarUrl:
+          type: string
+          nullable: true
         content:
           type: string
+        type:
+          type: string
+          enum: [text, image, video, gif, file]
+        metadata:
+          type: object
+          nullable: true
+          additionalProperties: true
         createdAt:
           type: string
           format: date-time
@@ -124,12 +241,19 @@ components:
 
     SendMessageRequest:
       type: object
-      required: [content, clientMessageId]
+      required: [content, type, clientMessageId]
       properties:
         content:
           type: string
           minLength: 1
           maxLength: 4000
+        type:
+          type: string
+          enum: [text, image, video, gif, file]
+        metadata:
+          type: object
+          nullable: true
+          additionalProperties: true
         clientMessageId:
           type: string
           minLength: 8
@@ -148,18 +272,140 @@ components:
 
     UploadResponse:
       type: object
-      required: [id, fileName, url, size]
+      required: [id, fileName, originalFileName, url, size, mediaKind]
       properties:
         id:
           type: string
           format: uuid
         fileName:
           type: string
+        originalFileName:
+          type: string
         url:
           type: string
         size:
           type: integer
           description: File size in bytes
+        contentType:
+          type: string
+        mediaKind:
+          type: string
+          enum: [image, video, file]
+
+    GifResult:
+      type: object
+      required: [id, url, previewUrl, provider]
+      properties:
+        id:
+          type: string
+        url:
+          type: string
+        previewUrl:
+          type: string
+        title:
+          type: string
+          nullable: true
+        width:
+          type: integer
+          nullable: true
+        height:
+          type: integer
+          nullable: true
+        provider:
+          type: string
+          enum: [giphy, klipy]
+
+    GifSearchResponse:
+      type: object
+      required: [provider, results]
+      properties:
+        provider:
+          type: string
+          enum: [giphy, klipy]
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/GifResult'
+
+    MemberSummary:
+      type: object
+      required: [id, username, displayName, avatarUrl]
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        displayName:
+          type: string
+        avatarUrl:
+          type: string
+          nullable: true
+
+    MemberDetail:
+      allOf:
+        - $ref: '#/components/schemas/MemberSummary'
+        - type: object
+          required: [bio]
+          properties:
+            bio:
+              type: string
+              nullable: true
+
+    AdminMemberSummary:
+      allOf:
+        - $ref: '#/components/schemas/MemberDetail'
+        - type: object
+          required: [role, status, mustChangePassword, createdAt]
+          properties:
+            role:
+              $ref: '#/components/schemas/UserRole'
+            status:
+              $ref: '#/components/schemas/UserStatus'
+            mustChangePassword:
+              type: boolean
+            createdAt:
+              type: string
+              format: date-time
+
+    AdminInviteResponse:
+      type: object
+      required: [code, uses, maxUses, createdAt]
+      properties:
+        code:
+          type: string
+        uses:
+          type: integer
+          minimum: 0
+        maxUses:
+          type: integer
+          minimum: 1
+        createdAt:
+          type: string
+          format: date-time
+
+    AdminTempPasswordResponse:
+      type: object
+      required: [userId, username, temporaryPassword]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        username:
+          type: string
+        temporaryPassword:
+          type: string
+
+    AdminMessage:
+      allOf:
+        - $ref: '#/components/schemas/Message'
+        - type: object
+          required: [senderStatus, hidden]
+          properties:
+            senderStatus:
+              $ref: '#/components/schemas/UserStatus'
+            hidden:
+              type: boolean
 
 paths:
   /api/v1/health:
@@ -296,6 +542,44 @@ paths:
               example:
                 error: 'Invalid or expired refresh token'
 
+  /api/v1/auth/password-reset:
+    post:
+      summary: Reset password using username and recovery code
+      operationId: authPasswordReset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetRequest'
+      responses:
+        '200':
+          description: Password reset complete and authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Invalid username or recovery code
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: 'Invalid recovery code or username'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/v1/auth/logout:
     post:
       summary: Logout current refresh token
@@ -311,6 +595,416 @@ paths:
           description: Logged out (refresh token deleted)
         '400':
           description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/me:
+    get:
+      summary: Get current member profile
+      operationId: getMe
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current member profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeResponse'
+        '401':
+          description: Unauthorized or invalid user session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Account unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/me/profile:
+    patch:
+      summary: Update current member profile
+      operationId: updateMeProfile
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfileRequest'
+      responses:
+        '200':
+          description: Updated member profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeResponse'
+        '400':
+          description: Validation error or invalid avatar selection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Password change required or account unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/me/password:
+    post:
+      summary: Change current member password
+      operationId: changeMePassword
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '200':
+          description: Password changed, recovery code rotated, and fresh session issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized or current password incorrect
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/me/recovery-code/rotate:
+    post:
+      summary: Rotate the current member recovery code
+      operationId: rotateMeRecoveryCode
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: New recovery code issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RotateRecoveryCodeResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/members:
+    get:
+      summary: Search active members
+      operationId: listMembers
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: false
+          description: Case-insensitive search across username and display name
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Active member directory
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MemberSummary'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Password change required or account unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/members/{memberId}:
+    get:
+      summary: Get a public-facing active member profile
+      operationId: getMemberById
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Active member profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberDetail'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Password change required or account unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Member not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/admin/invite:
+    get:
+      summary: Get the current master invite code
+      operationId: adminGetInvite
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current master invite
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminInviteResponse'
+        '403':
+          description: Admin only, password change required, or account unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/admin/invite/rotate:
+    post:
+      summary: Rotate the master invite code
+      operationId: adminRotateInvite
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: New master invite code
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminInviteResponse'
+        '403':
+          description: Admin only, password change required, or account unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/admin/members:
+    get:
+      summary: Search all members, including removed and banned accounts
+      operationId: adminListMembers
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Full member directory for admin review
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AdminMemberSummary'
+        '403':
+          description: Admin only, password change required, or account unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/admin/members/{memberId}/remove:
+    post:
+      summary: Remove a member account
+      operationId: adminRemoveMember
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Member removed, refresh tokens revoked, and memberships cleared
+        '403':
+          description: Admin only, password change required, or account unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Member not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Cannot remove self or another admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/admin/members/{memberId}/ban:
+    post:
+      summary: Ban a member account
+      operationId: adminBanMember
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Member banned, refresh tokens revoked, and memberships cleared
+        '403':
+          description: Admin only, password change required, or account unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Member not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Cannot ban self or another admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/admin/members/{memberId}/temp-password:
+    post:
+      summary: Issue a temporary password and force password change
+      operationId: adminIssueTempPassword
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Temporary password issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminTempPasswordResponse'
+        '403':
+          description: Admin only, password change required, or account unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Member not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Cannot modify self or another admin, or target account is not active
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/admin/chats/{chatId}/messages:
+    get:
+      summary: Audit chat history including hidden messages
+      operationId: adminListChatMessages
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: chatId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 30
+      responses:
+        '200':
+          description: Full audit-visible chat history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AdminMessage'
+        '403':
+          description: Admin only, password change required, or account unavailable
           content:
             application/json:
               schema:
@@ -472,6 +1166,83 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/gifs/{provider}/trending:
+    get:
+      summary: Get trending GIFs from a configured provider
+      operationId: getTrendingGifs
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: provider
+          required: true
+          schema:
+            type: string
+            enum: [giphy, klipy]
+      responses:
+        '200':
+          description: Trending GIF results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GifSearchResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: GIF provider not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/gifs/{provider}/search:
+    get:
+      summary: Search GIFs from a configured provider
+      operationId: searchGifs
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: provider
+          required: true
+          schema:
+            type: string
+            enum: [giphy, klipy]
+        - in: query
+          name: q
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Matching GIF results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GifSearchResponse'
+        '400':
+          description: Missing search query
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: GIF provider not configured
           content:
             application/json:
               schema:

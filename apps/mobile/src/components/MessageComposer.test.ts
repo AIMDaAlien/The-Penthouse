@@ -1,6 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { mount } from '@vue/test-utils';
 import MessageComposer from './MessageComposer.vue';
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe('MessageComposer.vue', () => {
   it('emits send event and clears draft on plain Enter', async () => {
@@ -96,5 +100,85 @@ describe('MessageComposer.vue', () => {
 
     expect(textarea.attributes('disabled')).toBeDefined();
     expect(button.attributes('disabled')).toBeDefined();
+  });
+
+  it('emits typing lifecycle events while drafting', async () => {
+    vi.useFakeTimers();
+
+    const wrapper = mount(MessageComposer, {
+      props: { disabled: false }
+    });
+
+    const textarea = wrapper.find('textarea');
+    await textarea.setValue('Typing now');
+
+    expect(wrapper.emitted('typing-start')).toBeTruthy();
+
+    vi.advanceTimersByTime(4999);
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.emitted('typing-stop')).toBeFalsy();
+
+    vi.advanceTimersByTime(1);
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.emitted('typing-stop')).toBeTruthy();
+  });
+
+  it('keeps typing active across repeated soft-keyboard style input before idle timeout', async () => {
+    vi.useFakeTimers();
+
+    const wrapper = mount(MessageComposer, {
+      props: { disabled: false }
+    });
+
+    const textarea = wrapper.find('textarea');
+    await textarea.setValue('h');
+    await textarea.trigger('compositionstart');
+    await textarea.setValue('he');
+    vi.advanceTimersByTime(2500);
+    await textarea.setValue('hel');
+    await textarea.trigger('compositionend');
+    vi.advanceTimersByTime(4999);
+
+    expect(wrapper.emitted('typing-start')).toHaveLength(1);
+    expect(wrapper.emitted('typing-stop')).toBeFalsy();
+
+    vi.advanceTimersByTime(1);
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.emitted('typing-stop')).toHaveLength(1);
+  });
+
+  it('emits typing-stop when sending a drafted message', async () => {
+    const wrapper = mount(MessageComposer, {
+      props: { disabled: false }
+    });
+
+    const textarea = wrapper.find('textarea');
+    await textarea.setValue('Clear on send');
+    await wrapper.find('.send-btn').trigger('click');
+
+    expect(wrapper.emitted('typing-start')).toBeTruthy();
+    expect(wrapper.emitted('typing-stop')).toBeTruthy();
+  });
+
+  it('emits send-media when a file is selected', async () => {
+    const wrapper = mount(MessageComposer, {
+      props: { disabled: false }
+    });
+
+    const file = new File(['hello'], 'notes.txt', { type: 'text/plain' });
+    const input = wrapper.find('input[type="file"]');
+
+    Object.defineProperty(input.element, 'files', {
+      configurable: true,
+      value: [file]
+    });
+
+    await input.trigger('change');
+
+    expect(wrapper.emitted('send-media')).toBeTruthy();
+    expect(wrapper.emitted('send-media')![0]).toEqual([file]);
   });
 });

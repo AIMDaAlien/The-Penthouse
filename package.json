@@ -14,7 +14,8 @@
     "lint": "npm run --workspaces --if-present lint",
     "test": "npm run --workspaces --if-present test",
     "validate": "npm run typecheck && npm run test",
-    "scenario:test": "node antigravity/scripts/run-scenarios.mjs"
+    "scenario:test": "node antigravity/scripts/run-scenarios.mjs",
+    "release:gate": "node scripts/run-release-gate.mjs"
   },
   "engines": {
     "node": ">=22"

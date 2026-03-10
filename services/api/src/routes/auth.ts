@@ -3,18 +3,57 @@ import type { FastifyInstance } from 'fastify';
 import {
   AuthResponseSchema,
   LoginRequestSchema,
+  PasswordResetRequestSchema,
   RefreshRequestSchema,
   RegisterRequestSchema
 } from '@penthouse/contracts';
 import { pool } from '../db/pool.js';
 import {
+  createRecoveryCode,
   createOpaqueToken,
   hashPassword,
   hashToken,
   refreshExpiryDate,
+  safeEqualHash,
   signAccessToken,
   verifyPassword
 } from '../utils/security.js';
+import type { PoolClient } from 'pg';
+import {
+  getUserById,
+  getUserByUsername,
+  mapAuthUser,
+  maybeBootstrapAdmin,
+  type UserRow
+} from '../utils/users.js';
+import { createAuthResponse, issueRecoveryCode } from '../utils/sessions.js';
+
+const SHARED_GENERAL_CHAT_ID = '00000000-0000-0000-0000-000000000001';
+const SHARED_GENERAL_SYSTEM_KEY = 'general';
+const MASTER_INVITE_SYSTEM_KEY = 'master';
+
+async function ensureSharedGeneralChannel(client: PoolClient): Promise<string> {
+  await client.query(
+    `INSERT INTO chats(id, type, name, system_key)
+     VALUES($1, 'channel', 'General', $2)
+     ON CONFLICT (system_key) DO NOTHING`,
+    [SHARED_GENERAL_CHAT_ID, SHARED_GENERAL_SYSTEM_KEY]
+  );
+
+  const channel = await client.query('SELECT id FROM chats WHERE system_key = $1', [SHARED_GENERAL_SYSTEM_KEY]);
+  if (!channel.rowCount) {
+    throw new Error('Shared General channel is missing');
+  }
+
+  return channel.rows[0].id as string;
+}
+
+function blockInactiveUser(reply: any, user: Pick<UserRow, 'status'>) {
+  if (user.status !== 'active') {
+    return reply.status(403).send({ error: 'Account unavailable' });
+  }
+  return null;
+}
 
 export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   app.post('/api/v1/auth/register', async (request, reply) => {
@@ -31,8 +70,9 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         `SELECT code, max_uses, uses, expires_at, revoked_at
          FROM signup_invites
          WHERE code = $1
+           AND system_key = $2
          FOR UPDATE`,
-        [inviteCode]
+        [inviteCode, MASTER_INVITE_SYSTEM_KEY]
       );
 
       if (!invite.rowCount) {
@@ -52,10 +92,12 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
 
       const id = randomUUID();
       const passwordHash = await hashPassword(password);
+      const recoveryCode = createRecoveryCode();
 
       await client.query(
-        'INSERT INTO users(id, username, password_hash) VALUES($1, $2, $3)',
-        [id, username.toLowerCase(), passwordHash]
+        `INSERT INTO users(id, username, display_name, password_hash, recovery_code_hash)
+         VALUES($1, $2, $3, $4, $5)`,
+        [id, username, username, passwordHash, hashToken(recoveryCode.replaceAll('-', ''))]
       );
 
       await client.query(
@@ -63,38 +105,20 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         [inviteCode]
       );
 
-      const defaultChatId = randomUUID();
+      const generalChatId = await ensureSharedGeneralChannel(client);
       await client.query(
-        "INSERT INTO chats(id, type, name) VALUES($1, 'channel', $2)",
-        [defaultChatId, 'General']
-      );
-      await client.query(
-        'INSERT INTO chat_members(chat_id, user_id) VALUES($1, $2)',
-        [defaultChatId, id]
+        'INSERT INTO chat_members(chat_id, user_id) VALUES($1, $2) ON CONFLICT (chat_id, user_id) DO NOTHING',
+        [generalChatId, id]
       );
 
-      const accessToken = await signAccessToken(app, id, username.toLowerCase());
-      const refreshToken = createOpaqueToken();
-      const refreshTokenHash = hashToken(refreshToken);
-      const expiresAt = refreshExpiryDate();
-
-      await client.query(
-        'INSERT INTO refresh_tokens(id, user_id, token_hash, expires_at) VALUES($1, $2, $3, $4)',
-        [randomUUID(), id, refreshTokenHash, expiresAt.toISOString()]
-      );
+      await maybeBootstrapAdmin(client, username);
+      const response = await createAuthResponse(app, client, id, recoveryCode);
 
       await client.query('COMMIT');
-
-      const response = AuthResponseSchema.parse({
-        user: { id, username: username.toLowerCase() },
-        accessToken,
-        refreshToken
-      });
-
       return reply.status(201).send(response);
     } catch (error: any) {
       await client.query('ROLLBACK');
-      if (String(error?.message || '').includes('users_username_key')) {
+      if (error?.code === '23505' && error?.constraint === 'users_username_key') {
         return reply.status(409).send({ error: 'Username already exists' });
       }
       request.log.error(error);
@@ -109,35 +133,67 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() });
 
     const { username, password } = parsed.data;
-    const userRes = await pool.query('SELECT id, username, password_hash FROM users WHERE username = $1', [
-      username.toLowerCase()
-    ]);
+    const user = await getUserByUsername(pool, username);
 
-    if (!userRes.rowCount) return reply.status(401).send({ error: 'Invalid credentials' });
+    if (!user || !user.password_hash) return reply.status(401).send({ error: 'Invalid credentials' });
 
-    const user = userRes.rows[0];
     const ok = await verifyPassword(password, user.password_hash);
     if (!ok) return reply.status(401).send({ error: 'Invalid credentials' });
 
-    const accessToken = await signAccessToken(app, user.id, user.username);
-    const refreshToken = createOpaqueToken();
-    const refreshTokenHash = hashToken(refreshToken);
-    const expiresAt = refreshExpiryDate();
+    const inactive = blockInactiveUser(reply, user);
+    if (inactive) return inactive;
 
-    await pool.query('INSERT INTO refresh_tokens(id, user_id, token_hash, expires_at) VALUES($1, $2, $3, $4)', [
-      randomUUID(),
-      user.id,
-      refreshTokenHash,
-      expiresAt.toISOString()
-    ]);
+    await maybeBootstrapAdmin(pool, username);
 
-    const response = AuthResponseSchema.parse({
-      user: { id: user.id, username: user.username },
-      accessToken,
-      refreshToken
-    });
+    let recoveryCode: string | undefined;
+    if (!user.recovery_code_hash) {
+      recoveryCode = createRecoveryCode();
+      await issueRecoveryCode(pool, user.id, recoveryCode);
+    }
 
+    const response = await createAuthResponse(app, pool, user.id, recoveryCode);
     return reply.send(response);
+  });
+
+  app.post('/api/v1/auth/password-reset', async (request, reply) => {
+    const parsed = PasswordResetRequestSchema.safeParse(request.body);
+    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() });
+
+    const { username, recoveryCode, newPassword } = parsed.data;
+    const user = await getUserByUsername(pool, username);
+    if (!user || !user.recovery_code_hash) {
+      return reply.status(401).send({ error: 'Invalid recovery code or username' });
+    }
+
+    const inactive = blockInactiveUser(reply, user);
+    if (inactive) return inactive;
+
+    if (!safeEqualHash(hashToken(recoveryCode), user.recovery_code_hash)) {
+      return reply.status(401).send({ error: 'Invalid recovery code or username' });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const nextRecoveryCode = createRecoveryCode();
+      await issueRecoveryCode(client, user.id, nextRecoveryCode);
+      await client.query(
+        'UPDATE users SET password_hash = $1, must_change_password = FALSE WHERE id = $2',
+        [await hashPassword(newPassword), user.id]
+      );
+      await client.query('DELETE FROM refresh_tokens WHERE user_id = $1', [user.id]);
+
+      const response = await createAuthResponse(app, client, user.id, nextRecoveryCode);
+
+      await client.query('COMMIT');
+      return reply.send(response);
+    } catch (error) {
+      await client.query('ROLLBACK');
+      request.log.error(error);
+      return reply.status(500).send({ error: 'Failed to reset password' });
+    } finally {
+      client.release();
+    }
   });
 
   app.post('/api/v1/auth/refresh', async (request, reply) => {
@@ -145,31 +201,40 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() });
 
     const oldHash = hashToken(parsed.data.refreshToken);
-    const tokenRes = await pool.query(
-      'SELECT user_id, expires_at FROM refresh_tokens WHERE token_hash = $1',
-      [oldHash]
-    );
-
-    if (!tokenRes.rowCount) return reply.status(401).send({ error: 'Invalid or expired refresh token' });
-
-    const tokenRow = tokenRes.rows[0];
-    if (new Date(tokenRow.expires_at) < new Date()) {
-      await pool.query('DELETE FROM refresh_tokens WHERE token_hash = $1', [oldHash]);
-      return reply.status(401).send({ error: 'Invalid or expired refresh token' });
-    }
-
-    const userRes = await pool.query('SELECT id, username FROM users WHERE id = $1', [tokenRow.user_id]);
-    if (!userRes.rowCount) return reply.status(401).send({ error: 'Invalid user session' });
-    const user = userRes.rows[0];
-
-    const newRefreshToken = createOpaqueToken();
-    const newHash = hashToken(newRefreshToken);
-    const expiresAt = refreshExpiryDate();
-
     const client = await pool.connect();
+    let userId = '';
+    let newRefreshToken = '';
+
     try {
       await client.query('BEGIN');
-      await client.query('DELETE FROM refresh_tokens WHERE token_hash = $1', [oldHash]);
+
+      const tokenRes = await client.query(
+        `DELETE FROM refresh_tokens
+         WHERE token_hash = $1
+           AND expires_at > NOW()
+         RETURNING user_id`,
+        [oldHash]
+      );
+      if (!tokenRes.rowCount) {
+        await client.query('ROLLBACK');
+        return reply.status(401).send({ error: 'Invalid or expired refresh token' });
+      }
+
+      userId = tokenRes.rows[0].user_id as string;
+      const user = await getUserById(client, userId);
+      if (!user) {
+        await client.query('ROLLBACK');
+        return reply.status(401).send({ error: 'Invalid user session' });
+      }
+      if (user.status !== 'active') {
+        await client.query('DELETE FROM refresh_tokens WHERE user_id = $1', [user.id]);
+        await client.query('COMMIT');
+        return reply.status(403).send({ error: 'Account unavailable' });
+      }
+
+      newRefreshToken = createOpaqueToken();
+      const newHash = hashToken(newRefreshToken);
+      const expiresAt = refreshExpiryDate();
       await client.query('INSERT INTO refresh_tokens(id, user_id, token_hash, expires_at) VALUES($1, $2, $3, $4)', [
         randomUUID(),
         user.id,
@@ -184,10 +249,13 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       client.release();
     }
 
+    const user = await getUserById(pool, userId);
+    if (!user) return reply.status(401).send({ error: 'Invalid user session' });
+
     const accessToken = await signAccessToken(app, user.id, user.username);
 
     const response = AuthResponseSchema.parse({
-      user,
+      user: mapAuthUser(user),
       accessToken,
       refreshToken: newRefreshToken
     });

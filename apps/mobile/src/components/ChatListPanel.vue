@@ -22,6 +22,9 @@
         </div>
         <div class="chat-meta small">
           <span class="badge" :class="chat.type">{{ chat.type }}</span>
+          <span v-if="chat.type === 'channel' && onlineCount > 0" class="online-pill">
+            {{ onlineCount }} online
+          </span>
         </div>
       </div>
     </div>
@@ -35,6 +38,7 @@ defineProps<{
   currentUsername: string;
   chats: ChatSummary[];
   activeChatId: string | null;
+  onlineCount?: number;
 }>();
 
 defineEmits<{
@@ -49,6 +53,7 @@ defineEmits<{
   flex-direction: column;
   gap: 16px;
   height: 100%;
+  min-height: 0;
 }
 .header {
   justify-content: space-between;
@@ -56,9 +61,14 @@ defineEmits<{
   padding-bottom: 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
+.list {
+  min-height: 0;
+  overflow-y: auto;
+}
 .small-btn {
   padding: 6px 12px;
   font-size: 0.8rem;
+  width: auto;
 }
 .empty-state {
   text-align: center;
@@ -80,9 +90,21 @@ defineEmits<{
 }
 .badge.dm { background: rgba(140, 216, 255, 0.15); color: var(--accent); }
 .badge.channel { background: rgba(255, 255, 255, 0.2); font-weight: bold; color: white; }
+.chat-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 .chat-prefix {
   opacity: 0.5;
   margin-right: 2px;
   font-weight: normal;
+}
+.online-pill {
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(114, 214, 255, 0.14);
+  color: var(--accent);
+  font-weight: 600;
 }
 </style>

@@ -43,6 +43,17 @@ npm --workspace apps/mobile run dev
 ```bash
 npm run validate
 npm run scenario:test
+npm run release:gate
 ```
 
-Both must pass.
+All must pass.
+
+## Obsidian knowledge notes
+
+If you are onboarding others, start with:
+
+- `docs/obsidian/00 - Knowledge Hub.md`
+
+## Internal device testing
+
+- `docs/INTERNAL_TESTING.md`

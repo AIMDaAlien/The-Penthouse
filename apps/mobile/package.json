@@ -8,12 +8,15 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run --environment happy-dom"
+    "test": "vitest run --environment happy-dom",
+    "android:prep": "../../scripts/prepare-android-testing.sh",
+    "android:build:debug": "../../scripts/build-android-debug.sh"
   },
   "dependencies": {
     "@capacitor/android": "^6.2.0",
     "@capacitor/app": "^6.0.1",
     "@capacitor/core": "^6.2.0",
+    "@capacitor/preferences": "^6.0.4",
     "@penthouse/contracts": "file:../../packages/contracts",
     "axios": "^1.7.9",
     "socket.io-client": "^4.8.1",

@@ -24,6 +24,11 @@ Clean-room rebuild of The Penthouse with a stability-first architecture.
 
 - `npm run validate`
 - `npm run scenario:test`
+- `npm run release:gate` (runs release-readiness checks in one pass)
+
+## Internal Testing
+
+- [docs/INTERNAL_TESTING.md](/Users/aim/Documents/The%20Penthouse/docs/INTERNAL_TESTING.md)
 
 ## Policy / Delegation
 

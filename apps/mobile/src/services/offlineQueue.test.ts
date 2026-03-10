@@ -8,6 +8,7 @@ test('flushQueue continues after one item fails and keeps failed item queued', a
   enqueueMessage({
     chatId: 'chat-1',
     content: 'first',
+    type: 'text',
     clientMessageId: 'm-1',
     enqueuedAt: new Date().toISOString(),
     attempts: 0
@@ -16,6 +17,7 @@ test('flushQueue continues after one item fails and keeps failed item queued', a
   enqueueMessage({
     chatId: 'chat-1',
     content: 'second',
+    type: 'text',
     clientMessageId: 'm-2',
     enqueuedAt: new Date().toISOString(),
     attempts: 0
