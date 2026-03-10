@@ -250,28 +250,20 @@ const formatTime = (ts: string | number | null | undefined) => {
 .time-val { color: rgba(255, 255, 255, 0.5); }
 
 @media (max-width: 760px) {
-  .conn-status {
-    width: auto;
-    max-width: min(55vw, 240px);
-  }
-
   .conn-status-header {
     padding: 8px 10px;
   }
 
   .status-container {
     gap: 4px;
-    flex-wrap: nowrap;
-    overflow: hidden;
+    flex-wrap: wrap;
+    overflow: visible;
   }
 
   .status-text {
-    flex-shrink: 1;
+    flex-shrink: 0;
     min-width: 0;
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    max-width: none;
   }
 }
 </style>

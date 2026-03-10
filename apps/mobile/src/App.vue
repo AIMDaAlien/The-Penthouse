@@ -1533,6 +1533,7 @@ onUnmounted(() => {
   }
 
   .mobile-back-btn {
+    display: flex;
     flex: 0 0 auto;
   }
 
@@ -1551,8 +1552,5 @@ onUnmounted(() => {
     display: none;
   }
 
-  .mobile-back-btn {
-    display: flex;
-  }
 }
 </style>

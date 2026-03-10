@@ -163,8 +163,8 @@ function handleGifSelect(gif: GifResult): void {
 }
 
 function handleEnter(e: KeyboardEvent) {
-  // Shift+Enter for newline, Enter to send
-  if (!e.shiftKey && !isComposing.value) {
+  // Template uses `@keydown.enter.exact`, so only plain Enter reaches here.
+  if (!isComposing.value) {
     send();
   }
 }
