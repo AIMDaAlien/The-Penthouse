@@ -62,7 +62,7 @@ function decodeJwtExp(token: string): number | null {
 function tokenNeedsRefresh(token: string, minValidityMs: number): boolean {
   if (!token) return true;
   const exp = decodeJwtExp(token);
-  if (!exp) return false;
+  if (!exp) return true;
   return exp <= Date.now() + minValidityMs;
 }
 
@@ -127,8 +127,11 @@ async function refreshAccessToken(): Promise<string | null> {
     queuedResolvers.forEach((resolve) => resolve(response.data.accessToken));
     queuedResolvers = [];
     return response.data.accessToken;
-  } catch {
-    await clearStoredAuthState();
+  } catch (error: any) {
+    const status = typeof error?.response?.status === 'number' ? error.response.status : 0;
+    if (status >= 400 && status < 500) {
+      await clearStoredAuthState();
+    }
     queuedResolvers.forEach((resolve) => resolve(null));
     queuedResolvers = [];
     return null;

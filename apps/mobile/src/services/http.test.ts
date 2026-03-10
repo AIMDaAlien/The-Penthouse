@@ -94,4 +94,54 @@ describe('http session hydration', () => {
     expect(mockPersistStoredTokens).toHaveBeenCalledWith('refreshed-access-token', 'rotated-refresh-token');
     expect(mockPersistStoredUser).toHaveBeenCalled();
   });
+
+  it('preserves stored credentials when hydration refresh fails due to network error', async () => {
+    mockLoadStoredSessionState.mockResolvedValue({
+      accessToken: '',
+      refreshToken: 'stored-refresh-token',
+      user: null
+    });
+    mockAxiosPost.mockRejectedValue(new Error('Network Error'));
+
+    const mod = await import('./http');
+    const session = await mod.hydrateStoredSession();
+
+    expect(session).toBeNull();
+    expect(mockClearStoredSessionState).not.toHaveBeenCalled();
+  });
+
+  it('treats malformed stored access tokens as needing refresh', async () => {
+    mockLoadStoredSessionState.mockResolvedValue({
+      accessToken: 'not-a-jwt',
+      refreshToken: 'stored-refresh-token',
+      user: {
+        id: 'user-1',
+        username: 'aimtest',
+        displayName: 'Aim',
+        avatarUrl: null,
+        role: 'member',
+        mustChangePassword: false
+      }
+    });
+    mockAxiosPost.mockResolvedValue({
+      data: {
+        user: {
+          id: 'user-1',
+          username: 'aimtest',
+          displayName: 'Aim',
+          avatarUrl: null,
+          role: 'member',
+          mustChangePassword: false
+        },
+        accessToken: 'refreshed-access-token',
+        refreshToken: 'rotated-refresh-token'
+      }
+    });
+
+    const mod = await import('./http');
+    const session = await mod.hydrateStoredSession();
+
+    expect(session?.accessToken).toBe('refreshed-access-token');
+    expect(mockAxiosPost).toHaveBeenCalledTimes(1);
+  });
 });

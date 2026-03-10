@@ -42,6 +42,33 @@ test('[media] extractKlipyResults supports current file-based response shape', (
   assert.equal(results[0].height, 112);
 });
 
+test('[media] extractKlipyResults supports Klipy v2 media_formats payloads', () => {
+  const results = __testables.extractKlipyResults({
+    results: [
+      {
+        id: 'gif-v2',
+        title: 'Modern GIF',
+        media_formats: {
+          mediumgif: {
+            url: 'https://cdn.klipy.test/v2-medium.gif',
+            dims: [320, 180]
+          },
+          preview: {
+            url: 'https://cdn.klipy.test/v2-preview.jpg',
+            dims: [320, 180]
+          }
+        }
+      }
+    ]
+  });
+
+  assert.equal(results.length, 1);
+  assert.equal(results[0].url, 'https://cdn.klipy.test/v2-medium.gif');
+  assert.equal(results[0].previewUrl, 'https://cdn.klipy.test/v2-preview.jpg');
+  assert.equal(results[0].width, 320);
+  assert.equal(results[0].height, 180);
+});
+
 test('[media] extractKlipyResults throws on unsupported provider shape instead of faking empty results', () => {
   assert.throws(
     () => __testables.extractKlipyResults({ result: true, data: { unexpected: true } }),

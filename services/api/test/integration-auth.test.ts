@@ -4,7 +4,7 @@
  * Requires a running PostgreSQL instance with DATABASE_URL set.
  * Skips gracefully when DATABASE_URL is not available.
  */
-import test, { describe, before, after } from 'node:test';
+import test, { describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 
 const SKIP = !process.env.DATABASE_URL ? 'DATABASE_URL not set — skipping integration tests' : undefined;
@@ -20,10 +20,15 @@ async function withBootstrapUsername(username: string, run: () => Promise<void>)
   }
 }
 
-describe('[integration] refresh token rotation', { skip: SKIP }, () => {
+async function promoteAdmin(username: string) {
+  const { pool } = await import('./helpers.js');
+  await pool.query(`UPDATE users SET role = 'admin' WHERE username = $1`, [username]);
+}
+
+describe('[integration] refresh token rotation', { skip: SKIP, concurrency: false }, () => {
   let app: any;
 
-  before(async () => {
+  beforeEach(async () => {
     process.env.JWT_SECRET ??= 'integration-test-jwt-secret-long-enough';
     const helpers = await import('./helpers.js');
     await helpers.migrate();
@@ -32,7 +37,7 @@ describe('[integration] refresh token rotation', { skip: SKIP }, () => {
     app = result.app;
   });
 
-  after(async () => {
+  afterEach(async () => {
     await app?.close();
     const helpers = await import('./helpers.js');
     await helpers.cleanup();
@@ -190,10 +195,10 @@ describe('[integration] refresh token rotation', { skip: SKIP }, () => {
   });
 });
 
-describe('[integration] member self-service', { skip: SKIP }, () => {
+describe('[integration] member self-service', { skip: SKIP, concurrency: false }, () => {
   let app: any;
 
-  before(async () => {
+  beforeEach(async () => {
     process.env.JWT_SECRET ??= 'integration-test-jwt-secret-long-enough';
     const helpers = await import('./helpers.js');
     await helpers.migrate();
@@ -202,7 +207,7 @@ describe('[integration] member self-service', { skip: SKIP }, () => {
     app = result.app;
   });
 
-  after(async () => {
+  afterEach(async () => {
     await app?.close();
     const helpers = await import('./helpers.js');
     await helpers.cleanup();
@@ -329,10 +334,10 @@ describe('[integration] member self-service', { skip: SKIP }, () => {
   });
 });
 
-describe('[integration] admin user management', { skip: SKIP }, () => {
+describe('[integration] admin user management', { skip: SKIP, concurrency: false }, () => {
   let app: any;
 
-  before(async () => {
+  beforeEach(async () => {
     process.env.JWT_SECRET ??= 'integration-test-jwt-secret-long-enough';
     const helpers = await import('./helpers.js');
     await helpers.migrate();
@@ -341,7 +346,7 @@ describe('[integration] admin user management', { skip: SKIP }, () => {
     app = result.app;
   });
 
-  after(async () => {
+  afterEach(async () => {
     await app?.close();
     const helpers = await import('./helpers.js');
     await helpers.cleanup();
@@ -402,8 +407,8 @@ describe('[integration] admin user management', { skip: SKIP }, () => {
     const { authHeaders, cleanup, registerUser } = await import('./helpers.js');
     await cleanup();
 
-    await withBootstrapUsername('owner_temp', async () => {
-      const admin = await registerUser(app, 'owner_temp');
+    const admin = await registerUser(app, 'owner_temp');
+    await promoteAdmin('owner_temp');
       const member = await registerUser(app, 'temp_target');
 
       const tempPasswordRes = await app.inject({
@@ -470,15 +475,14 @@ describe('[integration] admin user management', { skip: SKIP }, () => {
         headers: authHeaders(changedSession.accessToken)
       });
       assert.equal(chatsRes.statusCode, 200, 'full access should resume after password change');
-    });
   });
 
   test('admin remove revokes member access immediately and hides them from the active directory', async () => {
     const { authHeaders, cleanup, registerUser } = await import('./helpers.js');
     await cleanup();
 
-    await withBootstrapUsername('owner_remove', async () => {
-      const admin = await registerUser(app, 'owner_remove');
+    const admin = await registerUser(app, 'owner_remove');
+    await promoteAdmin('owner_remove');
       const member = await registerUser(app, 'remove_target');
 
       const removeRes = await app.inject({
@@ -529,15 +533,14 @@ describe('[integration] admin user management', { skip: SKIP }, () => {
       assert.equal(adminMembersRes.statusCode, 200);
       const adminMembers = JSON.parse(adminMembersRes.payload);
       assert.equal(adminMembers.find((row: any) => row.username === 'remove_target')?.status, 'removed');
-    });
   });
 
   test('admin ban blocks login and keeps the username reserved', async () => {
     const { authHeaders, cleanup, registerUser } = await import('./helpers.js');
     await cleanup();
 
-    await withBootstrapUsername('owner_ban', async () => {
-      const admin = await registerUser(app, 'owner_ban');
+    const admin = await registerUser(app, 'owner_ban');
+    await promoteAdmin('owner_ban');
       const member = await registerUser(app, 'ban_target');
 
       const banRes = await app.inject({
@@ -576,6 +579,5 @@ describe('[integration] admin user management', { skip: SKIP }, () => {
       assert.equal(adminMembersRes.statusCode, 200);
       const adminMembers = JSON.parse(adminMembersRes.payload);
       assert.equal(adminMembers.find((row: any) => row.username === 'ban_target')?.status, 'banned');
-    });
   });
 });

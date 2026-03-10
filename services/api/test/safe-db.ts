@@ -5,7 +5,7 @@ export function assertSafeTestDatabase(databaseUrl = process.env.DATABASE_URL): 
 
   const parsed = new URL(databaseUrl);
   const databaseName = parsed.pathname.replace(/^\//, '').split('/').filter(Boolean).pop() ?? '';
-  if (!databaseName || !/test/i.test(databaseName)) {
+  if (!databaseName || !/(^|[_-])test($|[_-])/i.test(databaseName)) {
     throw new Error(`Refusing to run destructive tests against non-test database "${databaseName || 'unknown'}"`);
   }
 }

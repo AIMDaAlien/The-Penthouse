@@ -224,6 +224,7 @@ const currentView = ref<'chats' | 'directory' | 'settings'>('chats');
 const selectedMemberId = ref<string | null>(null);
 const debugRealtimeEnabled = import.meta.env.DEV;
 let fallbackRefreshTimer: ReturnType<typeof setInterval> | null = null;
+let lastFallbackSignature = '';
 let appStateListener: PluginListenerHandle | null = null;
 let suppressNextDisconnectTransition = false;
 
@@ -516,7 +517,6 @@ async function refreshSelectedChatFromApi(): Promise<void> {
 }
 
 function syncFallbackRefreshState(): void {
-  clearFallbackRefreshTimer();
   const fallbackActive = Boolean(
     currentView.value === 'chats' &&
     selectedChatId.value &&
@@ -524,6 +524,19 @@ function syncFallbackRefreshState(): void {
     hasNetwork.value &&
     (realtimeState.value === 'degraded' || realtimeState.value === 'failed')
   );
+  const signature = JSON.stringify({
+    fallbackActive,
+    currentView: currentView.value,
+    selectedChatId: selectedChatId.value,
+    realtimeState: realtimeState.value,
+    hasNetwork: hasNetwork.value
+  });
+  if (signature === lastFallbackSignature && Boolean(fallbackRefreshTimer) === fallbackActive) {
+    patchRealtimeDiagnostics({ fallbackActive });
+    return;
+  }
+  lastFallbackSignature = signature;
+  clearFallbackRefreshTimer();
   patchRealtimeDiagnostics({ fallbackActive });
   if (!fallbackActive) return;
   void refreshSelectedChatFromApi();

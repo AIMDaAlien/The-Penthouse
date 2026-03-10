@@ -7,8 +7,8 @@
     "start": "node dist/index.js",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test --test-concurrency=1 ./test/**/*.test.ts",
-    "test:integration": "tsx --test --test-concurrency=1 ./test/integration-*.test.ts",
+    "test": "tsx --test --test-concurrency=1 ./test/auth.test.ts ./test/chats.test.ts ./test/contracts-smoke.test.ts ./test/media.test.ts",
+    "test:integration": "tsx --test --test-concurrency=1 ./test/integration-auth.test.ts && tsx --test --test-concurrency=1 ./test/integration-chats.test.ts && tsx --test --test-concurrency=1 ./test/integration-realtime.test.ts",
     "migrate": "tsx src/db/migrate.ts"
   },
   "dependencies": {

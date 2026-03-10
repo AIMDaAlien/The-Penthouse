@@ -229,6 +229,35 @@ describe('MessageList.vue Delivery States', () => {
     expect(wrapper.find('.viewer-image').attributes('src')).toContain('/uploads/photo.png');
   });
 
+  it('closes the image viewer when Escape is pressed', async () => {
+    const wrapper = mount(MessageList, {
+      attachTo: document.body,
+      props: {
+        messages: [{
+          id: 'img-esc',
+          chatId: 'chat-1',
+          senderId: 'user-1',
+          content: 'photo.png',
+          type: 'image',
+          metadata: {
+            url: '/uploads/photo.png',
+            originalFileName: 'photo.png'
+          },
+          createdAt: new Date().toISOString()
+        }],
+        currentUserId
+      }
+    });
+
+    await wrapper.find('.media-tile').trigger('click');
+    expect(wrapper.find('.media-viewer').exists()).toBe(true);
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.find('.media-viewer').exists()).toBe(false);
+  });
+
   it('renders file attachments as linked cards', () => {
     const wrapper = mount(MessageList, {
       props: {

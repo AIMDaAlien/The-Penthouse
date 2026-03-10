@@ -105,7 +105,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import type { Message, MessageType } from '@penthouse/contracts';
 import type { TypingParticipant } from '../types';
 import { resolveMediaUrl } from '../services/http';
@@ -139,12 +139,19 @@ const typingText = computed(() => {
 watch(
   () => props.messages.length,
   async () => {
+    const shouldStickToBottom = isNearBottom();
     await nextTick();
-    if (scrollRef.value) {
+    if (scrollRef.value && shouldStickToBottom) {
       scrollRef.value.scrollTop = scrollRef.value.scrollHeight;
     }
   }
 );
+
+function isNearBottom(): boolean {
+  if (!scrollRef.value) return true;
+  const distance = scrollRef.value.scrollHeight - scrollRef.value.scrollTop - scrollRef.value.clientHeight;
+  return distance < 96;
+}
 
 function isLocalId(id: string): boolean {
   return id.startsWith('local_');
@@ -305,6 +312,25 @@ function zoomOut(): void {
     scale: Math.max(0.75, Number((viewer.value.scale - 0.25).toFixed(2)))
   };
 }
+
+function handleKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Escape' && viewer.value) {
+    closeViewer();
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', handleKeydown);
+  nextTick(() => {
+    if (scrollRef.value) {
+      scrollRef.value.scrollTop = scrollRef.value.scrollHeight;
+    }
+  });
+});
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeydown);
+});
 </script>
 
 <style scoped>

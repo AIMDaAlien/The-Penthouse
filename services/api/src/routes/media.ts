@@ -1,5 +1,5 @@
 import { createWriteStream } from 'node:fs';
-import { mkdir, rm } from 'node:fs/promises';
+import { rm } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
@@ -13,6 +13,7 @@ import {
 } from '@penthouse/contracts';
 import { env } from '../config/env.js';
 import { pool } from '../db/pool.js';
+import { ensureUploadsDirReady } from '../utils/uploads.js';
 
 const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.heic', '.heif']);
 const VIDEO_EXTENSIONS = new Set(['.mp4', '.mov', '.m4v', '.webm']);
@@ -69,11 +70,25 @@ function classifyUpload(fileName: string, mimeType: string): MediaKind | null {
 }
 
 async function fetchJsonWithCache(url: string): Promise<unknown> {
-  const response = await fetch(url, {
-    headers: {
-      Accept: 'application/json'
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8_000);
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      headers: {
+        Accept: 'application/json'
+      },
+      signal: controller.signal
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('GIF provider timeout');
     }
-  });
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 
   if (!response.ok) {
     throw new Error(`Upstream responded ${response.status}`);
@@ -98,29 +113,84 @@ function extractGiphyResults(json: any): ReturnType<typeof GifSearchResponseSche
 function extractKlipyResults(json: any): ReturnType<typeof GifSearchResponseSchema.parse>['results'] {
   const nestedRows = json?.data?.data;
   const directRows = json?.data;
+  const v2Rows = json?.results;
   let rows: any[] = [];
 
-  if (Array.isArray(nestedRows)) {
+  if (Array.isArray(v2Rows)) {
+    rows = v2Rows;
+  } else if (Array.isArray(nestedRows)) {
     rows = nestedRows;
   } else if (Array.isArray(directRows)) {
     rows = directRows;
-  } else if (json && typeof json === 'object' && ('data' in json || 'result' in json)) {
+  } else if (json && typeof json === 'object') {
     throw new Error('Klipy provider parse failure');
   }
 
   const results = rows.map((gif: any) => {
     const file = gif?.file ?? {};
     const files = gif?.files ?? {};
-    const url = file?.url || files?.gif?.url || files?.webp?.url || files?.mp4?.url || gif?.url || '';
-    const previewUrl = file?.preview_url || gif?.blur_preview || files?.preview?.url || gif?.preview_url || url;
+    const formats = gif?.media_formats ?? {};
+    const selectedFormat =
+      formats.mediumgif ??
+      formats.gif ??
+      formats.tinygif ??
+      formats.nanogif ??
+      file?.md?.gif ??
+      file?.hd?.gif ??
+      file?.gif ??
+      files?.gif ??
+      files?.webp ??
+      files?.mp4 ??
+      null;
+    const previewFormat =
+      formats.preview ??
+      formats.gifpreview ??
+      formats.tinygifpreview ??
+      file?.preview ??
+      file?.jpg ??
+      file?.md?.jpg ??
+      file?.hd?.jpg ??
+      files?.preview ??
+      null;
+    const url =
+      selectedFormat?.url ||
+      file?.url ||
+      gif?.url ||
+      '';
+    const previewUrl =
+      previewFormat?.url ||
+      file?.preview_url ||
+      gif?.blur_preview ||
+      gif?.preview_url ||
+      url;
+    const dims = Array.isArray(selectedFormat?.dims) ? selectedFormat.dims : null;
+    const previewDims = Array.isArray(previewFormat?.dims) ? previewFormat.dims : null;
 
     return {
       id: String(gif?.id || gif?.slug || randomUUID()),
       url: String(url),
       previewUrl: String(previewUrl),
       title: typeof gif?.title === 'string' && gif.title.trim() ? gif.title : null,
-      width: Number.parseInt(String(gif?.width || file?.width || files?.gif?.width || ''), 10) || null,
-      height: Number.parseInt(String(gif?.height || file?.height || files?.gif?.height || ''), 10) || null,
+      width: Number.parseInt(String(
+        gif?.width ||
+        selectedFormat?.width ||
+        dims?.[0] ||
+        previewFormat?.width ||
+        previewDims?.[0] ||
+        file?.width ||
+        files?.gif?.width ||
+        ''
+      ), 10) || null,
+      height: Number.parseInt(String(
+        gif?.height ||
+        selectedFormat?.height ||
+        dims?.[1] ||
+        previewFormat?.height ||
+        previewDims?.[1] ||
+        file?.height ||
+        files?.gif?.height ||
+        ''
+      ), 10) || null,
       provider: 'klipy' as const
     };
   }).filter((item: any) => item.url && item.previewUrl);
@@ -150,14 +220,15 @@ async function fetchGifProvider(provider: GifProvider, mode: 'trending' | 'searc
   }
 
   const url = mode === 'trending'
-    ? `https://api.klipy.com/api/v1/${encodeURIComponent(env.KLIPY_API_KEY)}/gifs/trending?per_page=30&page=1`
-    : `https://api.klipy.com/api/v1/${encodeURIComponent(env.KLIPY_API_KEY)}/gifs/search?q=${encodeURIComponent(query || '')}&per_page=30&page=1`;
+    ? `https://api.klipy.com/v2/featured?key=${encodeURIComponent(env.KLIPY_API_KEY)}&limit=30`
+    : `https://api.klipy.com/v2/search?key=${encodeURIComponent(env.KLIPY_API_KEY)}&q=${encodeURIComponent(query || '')}&limit=30`;
   return extractKlipyResults(await fetchJsonWithCache(url));
 }
 
 export const __testables = {
   classifyUpload,
-  extractKlipyResults
+  extractKlipyResults,
+  fetchJsonWithCache
 };
 
 export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
@@ -171,8 +242,7 @@ export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(415).send({ error: 'Unsupported file type' });
     }
 
-    const uploadDir = path.join(process.cwd(), 'services/api/uploads');
-    await mkdir(uploadDir, { recursive: true });
+    const uploadDir = await ensureUploadsDirReady();
 
     const extension = extensionForFile(originalFileName, part.mimetype).slice(0, 10);
     const id = randomUUID();
@@ -234,7 +304,13 @@ export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to fetch GIFs';
       const statusCode = /not configured/i.test(message) ? 503 : 502;
-      return reply.status(statusCode).send({ error: message });
+      const publicError = /not configured/i.test(message)
+        ? message
+        : provider.data === 'klipy'
+          ? 'Klipy temporarily unavailable'
+          : 'Failed to fetch GIFs';
+      request.log.warn({ provider: provider.data, error: message }, 'gif provider trending failed');
+      return reply.status(statusCode).send({ error: publicError });
     }
   });
 
@@ -257,7 +333,13 @@ export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to search GIFs';
       const statusCode = /not configured/i.test(message) ? 503 : 502;
-      return reply.status(statusCode).send({ error: message });
+      const publicError = /not configured/i.test(message)
+        ? message
+        : provider.data === 'klipy'
+          ? 'Klipy temporarily unavailable'
+          : 'Failed to search GIFs';
+      request.log.warn({ provider: provider.data, error: message }, 'gif provider search failed');
+      return reply.status(statusCode).send({ error: publicError });
     }
   });
 }

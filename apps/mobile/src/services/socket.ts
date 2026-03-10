@@ -33,6 +33,8 @@ export function connectSocket(): Socket {
     auth: (callback) => {
       void ensureRealtimeAccessToken().then((token) => {
         callback(token ? { token } : {});
+      }).catch(() => {
+        callback({});
       });
     }
   });

@@ -15,12 +15,14 @@ import { registerAdminRoutes } from './routes/admin.js';
 import { registerObservability } from './observability.js';
 import { pool } from './db/pool.js';
 import { avatarUrlFromFileName, getUserById } from './utils/users.js';
+import { ensureUploadsDirReady } from './utils/uploads.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export async function createApp() {
   const app = Fastify({ logger: true, disableRequestLogging: true });
+  const uploadsDir = await ensureUploadsDirReady();
 
   app.setErrorHandler((error, request, reply) => {
     request.log.error(error);
@@ -84,7 +86,7 @@ export async function createApp() {
   });
 
   await app.register(fastifyStatic, {
-    root: path.join(__dirname, '../uploads'),
+    root: uploadsDir,
     prefix: '/uploads/'
   });
 
