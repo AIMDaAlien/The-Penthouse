@@ -299,8 +299,8 @@ textarea:focus {
 
 @media (max-width: 400px) {
   .composer-container {
-    gap: 8px;
-    padding: 8px;
+    gap: 6px;
+    padding: 6px;
   }
   textarea {
     padding: 8px 10px;
@@ -310,13 +310,13 @@ textarea:focus {
   }
   .action-btn {
     height: 40px;
-    min-width: 40px;
-    padding: 0 8px;
+    min-width: 36px;
+    padding: 0 6px;
   }
   .send-btn {
     height: 40px;
-    min-width: 76px;
-    padding: 0 14px;
+    min-width: auto;
+    padding: 0 12px;
   }
 }
 </style>

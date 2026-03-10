@@ -1511,7 +1511,7 @@ onUnmounted(() => {
 
   .app-header :deep(.conn-status) {
     width: auto;
-    max-width: min(46%, 220px);
+    max-width: min(55vw, 240px);
     flex: 0 1 auto;
   }
 

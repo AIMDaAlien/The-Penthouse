@@ -217,6 +217,8 @@ textarea {
   background: rgba(114, 214, 255, 0.1);
   border: 1px solid rgba(114, 214, 255, 0.3);
   border-radius: 8px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .status-success {
   color: var(--ok);

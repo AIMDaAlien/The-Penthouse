@@ -252,7 +252,7 @@ const formatTime = (ts: string | number | null | undefined) => {
 @media (max-width: 760px) {
   .conn-status {
     width: auto;
-    max-width: min(46vw, 220px);
+    max-width: min(55vw, 240px);
   }
 
   .conn-status-header {
@@ -262,11 +262,16 @@ const formatTime = (ts: string | number | null | undefined) => {
   .status-container {
     gap: 4px;
     flex-wrap: nowrap;
+    overflow: hidden;
   }
 
   .status-text {
+    flex-shrink: 1;
     min-width: 0;
     max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 </style>
