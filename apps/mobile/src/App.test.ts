@@ -13,8 +13,9 @@ vi.mock('@capacitor/app', () => ({
 }));
 
 vi.mock('./services/http', () => ({
-  getChats: vi.fn(() => Promise.resolve([{ id: 'chat-1', name: 'General', type: 'channel' }])),
+  getChats: vi.fn(() => Promise.resolve([{ id: 'chat-1', name: 'General', type: 'channel', updatedAt: new Date().toISOString(), unreadCount: 0 }])),
   getMessages: vi.fn(() => Promise.resolve([])),
+  markChatRead: vi.fn(() => Promise.resolve({ chatId: 'chat-1', unreadCount: 0, lastReadAt: new Date().toISOString(), seenThroughMessageId: null })),
   hydrateStoredSession: vi.fn(() => Promise.resolve({
     user: {
       id: 'user-1',

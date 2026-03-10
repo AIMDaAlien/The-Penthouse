@@ -11,6 +11,11 @@ async function isMember(userId: string, chatId: string): Promise<boolean> {
   return Boolean(res.rowCount);
 }
 
+async function listChatIdsForUser(userId: string): Promise<string[]> {
+  const res = await pool.query('SELECT chat_id FROM chat_members WHERE user_id = $1', [userId]);
+  return res.rows.map((row) => String(row.chat_id));
+}
+
 function parseAllowedOrigins(): Set<string> {
   const allowed = new Set(
     env.CORS_ORIGIN.split(',')
@@ -213,6 +218,19 @@ export function initRealtime(app: FastifyInstance): Server {
     });
 
     socket.join(`user:${userId}`);
+    void listChatIdsForUser(userId).then((chatIds) => {
+      chatIds.forEach((chatId) => socket.join(`chat:${chatId}`));
+      app.log.info(
+        {
+          userId,
+          socketId: socket.id,
+          chatCount: chatIds.length
+        },
+        'socket joined member chats'
+      );
+    }).catch((error) => {
+      app.log.warn({ error, userId, socketId: socket.id }, 'failed to join member chats');
+    });
     const set = onlineUsers.get(userId) ?? new Set<string>();
     set.add(socket.id);
     onlineUsers.set(userId, set);
@@ -311,6 +329,10 @@ export function initRealtime(app: FastifyInstance): Server {
 
       if (!row) return;
 
+      if (inserted.rowCount) {
+        await pool.query('UPDATE chats SET updated_at = NOW() WHERE id = $1', [event.chatId]);
+      }
+
       app.log.info(
         {
           userId,
@@ -332,7 +354,8 @@ export function initRealtime(app: FastifyInstance): Server {
         type: (row.message_type as MessageType | null) ?? 'text',
         metadata: row.metadata ?? null,
         createdAt: new Date(row.created_at).toISOString(),
-        clientMessageId: row.client_message_id ?? undefined
+        clientMessageId: row.client_message_id ?? undefined,
+        seenAt: null
       };
 
       io.to(`chat:${event.chatId}`).emit('message.new', {

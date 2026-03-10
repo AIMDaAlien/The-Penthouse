@@ -154,7 +154,8 @@ export const ChatSummarySchema = z.object({
   id: z.string(),
   type: z.enum(['dm', 'channel']),
   name: z.string(),
-  updatedAt: z.string()
+  updatedAt: z.string(),
+  unreadCount: z.number().int().nonnegative().default(0)
 });
 
 export const MemberSummarySchema = z.object({
@@ -186,7 +187,8 @@ export const MessageSchema = z.object({
   type: MessageTypeSchema.default('text'),
   metadata: MessageMetadataSchema.nullable().optional(),
   createdAt: z.string(),
-  clientMessageId: z.string().optional()
+  clientMessageId: z.string().optional(),
+  seenAt: z.string().nullable().optional()
 });
 
 export const AdminMessageSchema = MessageSchema.extend({
@@ -205,6 +207,13 @@ export const SendMessageRequestSchema = z.object({
 export const SendMessageResponseSchema = z.object({
   message: MessageSchema,
   deduped: z.boolean()
+});
+
+export const MarkChatReadResponseSchema = z.object({
+  chatId: z.string(),
+  unreadCount: z.number().int().nonnegative(),
+  lastReadAt: z.string().nullable(),
+  seenThroughMessageId: z.string().nullable().optional()
 });
 
 export const UploadResponseSchema = z.object({
@@ -269,6 +278,7 @@ export type Message = z.infer<typeof MessageSchema>;
 export type AdminMessage = z.infer<typeof AdminMessageSchema>;
 export type SendMessageRequest = z.infer<typeof SendMessageRequestSchema>;
 export type SendMessageResponse = z.infer<typeof SendMessageResponseSchema>;
+export type MarkChatReadResponse = z.infer<typeof MarkChatReadResponseSchema>;
 export type UploadResponse = z.infer<typeof UploadResponseSchema>;
 export type GifResult = z.infer<typeof GifResultSchema>;
 export type GifSearchResponse = z.infer<typeof GifSearchResponseSchema>;

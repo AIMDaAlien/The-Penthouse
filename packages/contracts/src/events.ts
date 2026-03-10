@@ -43,7 +43,8 @@ export const ServerMessageNewEventSchema = z.object({
     type: MessageTypeSchema.default('text'),
     metadata: MessageMetadataSchema.nullable().optional(),
     createdAt: z.string(),
-    clientMessageId: z.string().optional()
+    clientMessageId: z.string().optional(),
+    seenAt: z.string().nullable().optional()
   })
 });
 
@@ -54,6 +55,16 @@ export const ServerMessageAckEventSchema = z.object({
     messageId: z.string(),
     chatId: z.string(),
     deliveredAt: z.string()
+  })
+});
+
+export const ServerMessageReadEventSchema = z.object({
+  type: z.literal('message.read'),
+  payload: z.object({
+    chatId: z.string(),
+    readerUserId: z.string(),
+    seenAt: z.string(),
+    seenThroughMessageId: z.string().nullable().optional()
   })
 });
 

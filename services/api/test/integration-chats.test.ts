@@ -166,6 +166,98 @@ describe('[integration] shared General channel', { skip: SKIP }, () => {
     assert.equal(sharedMessage.senderUsername, 'general_sender');
     assert.equal(sharedMessage.senderDisplayName, 'general_sender');
   });
+
+  test('chat unread count clears after the member marks the chat as read', async () => {
+    const { registerUser } = await import('./helpers.js');
+    const sender = await registerUser(app, 'general_unread_sender');
+    const reader = await registerUser(app, 'general_unread_reader');
+
+    const senderChats = await app.inject({
+      method: 'GET',
+      url: '/api/v1/chats',
+      headers: { authorization: `Bearer ${sender.accessToken}` }
+    });
+    const generalChatId = JSON.parse(senderChats.payload).find((chat: any) => chat.name === 'General').id;
+
+    const send = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${generalChatId}/messages`,
+      headers: { authorization: `Bearer ${sender.accessToken}` },
+      payload: {
+        content: 'unread counter test',
+        clientMessageId: 'shared-general-unread-001'
+      }
+    });
+    assert.equal(send.statusCode, 200);
+
+    const beforeReadChats = await app.inject({
+      method: 'GET',
+      url: '/api/v1/chats',
+      headers: { authorization: `Bearer ${reader.accessToken}` }
+    });
+    const beforeReadGeneral = JSON.parse(beforeReadChats.payload).find((chat: any) => chat.name === 'General');
+    assert.equal(beforeReadGeneral.unreadCount, 1);
+
+    const markRead = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${generalChatId}/read`,
+      headers: { authorization: `Bearer ${reader.accessToken}` }
+    });
+    assert.equal(markRead.statusCode, 200);
+
+    const afterReadChats = await app.inject({
+      method: 'GET',
+      url: '/api/v1/chats',
+      headers: { authorization: `Bearer ${reader.accessToken}` }
+    });
+    const afterReadGeneral = JSON.parse(afterReadChats.payload).find((chat: any) => chat.name === 'General');
+    assert.equal(afterReadGeneral.unreadCount, 0);
+  });
+
+  test('sender sees seenAt after another member reads the message', async () => {
+    const { registerUser } = await import('./helpers.js');
+    const sender = await registerUser(app, 'general_seen_sender');
+    const reader = await registerUser(app, 'general_seen_reader');
+
+    const senderChats = await app.inject({
+      method: 'GET',
+      url: '/api/v1/chats',
+      headers: { authorization: `Bearer ${sender.accessToken}` }
+    });
+    const generalChatId = JSON.parse(senderChats.payload).find((chat: any) => chat.name === 'General').id;
+
+    const send = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${generalChatId}/messages`,
+      headers: { authorization: `Bearer ${sender.accessToken}` },
+      payload: {
+        content: 'seen receipt test',
+        clientMessageId: 'shared-general-seen-001'
+      }
+    });
+    assert.equal(send.statusCode, 200);
+    const sentMessage = JSON.parse(send.payload).message;
+    assert.equal(sentMessage.seenAt, null);
+
+    const markRead = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${generalChatId}/read`,
+      headers: { authorization: `Bearer ${reader.accessToken}` }
+    });
+    assert.equal(markRead.statusCode, 200);
+
+    const senderRead = await app.inject({
+      method: 'GET',
+      url: `/api/v1/chats/${generalChatId}/messages`,
+      headers: { authorization: `Bearer ${sender.accessToken}` }
+    });
+    assert.equal(senderRead.statusCode, 200);
+
+    const senderMessages = JSON.parse(senderRead.payload);
+    const seenMessage = senderMessages.find((message: any) => message.content === 'seen receipt test');
+    assert.ok(seenMessage, 'sender should still see the original message');
+    assert.ok(seenMessage.seenAt, 'sender message should include a seenAt timestamp after read');
+  });
 });
 
 describe('[integration] message idempotency', { skip: SKIP }, () => {

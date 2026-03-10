@@ -141,6 +141,25 @@ describe('MessageList.vue Delivery States', () => {
     expect(wrapper.text()).toContain('47ms');
   });
 
+  it('renders a seen indicator when a sent message has seenAt', () => {
+    const wrapper = mount(MessageList, {
+      props: {
+        messages: [{
+          id: 'real-uuid-seen',
+          chatId: 'chat-1',
+          senderId: 'user-1',
+          content: 'seen message',
+          createdAt: new Date().toISOString(),
+          seenAt: new Date().toISOString()
+        }],
+        currentUserId
+      }
+    });
+
+    expect(wrapper.find('.status-indicator.seen').exists()).toBe(true);
+    expect(wrapper.find('.status-indicator.seen').text()).toContain('✓✓');
+  });
+
   it('renders a typing indicator for active remote participants', () => {
     const wrapper = mount(MessageList, {
       props: {

@@ -7,6 +7,7 @@ import type {
   GifProvider,
   GifSearchResponse,
   MeResponse,
+  MarkChatReadResponse,
   MemberDetail,
   MemberSummary,
   Message,
@@ -271,6 +272,11 @@ export async function getMessages(chatId: string, cursor?: string): Promise<Mess
   const response = await http.get<Message[]>(`/api/v1/chats/${chatId}/messages`, {
     params: cursor ? { cursor } : undefined
   });
+  return response.data;
+}
+
+export async function markChatRead(chatId: string): Promise<MarkChatReadResponse> {
+  const response = await http.post<MarkChatReadResponse>(`/api/v1/chats/${chatId}/read`);
   return response.data;
 }
 

@@ -19,6 +19,7 @@
           <span class="chat-prefix" v-if="chat.type === 'channel'">#</span>
           <span class="chat-prefix" v-if="chat.type === 'dm'">@</span>
           {{ chat.name }}
+          <span v-if="chat.unreadCount > 0" class="unread-pill">{{ chat.unreadCount }}</span>
         </div>
         <div class="chat-meta small">
           <span class="badge" :class="chat.type">{{ chat.type }}</span>
@@ -78,6 +79,10 @@ defineEmits<{
 .chat-name {
   font-weight: 600;
   margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
 }
 .badge {
   display: inline-block;
@@ -106,5 +111,19 @@ defineEmits<{
   background: rgba(114, 214, 255, 0.14);
   color: var(--accent);
   font-weight: 600;
+}
+
+.unread-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(255, 140, 166, 0.18);
+  color: var(--danger);
+  font-size: 0.72rem;
+  line-height: 1;
 }
 </style>

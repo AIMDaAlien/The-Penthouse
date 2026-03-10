@@ -22,7 +22,8 @@
           <span v-if="m.senderId === currentUserId && getLatencyLabel(m)" class="latency">{{ getLatencyLabel(m) }}</span>
 
           <template v-if="m.senderId === currentUserId">
-            <span v-if="getDeliveryState(m) === 'delivered'" class="status-indicator success" title="Delivered"> ✓</span>
+            <span v-if="getDeliveryState(m) === 'delivered' && m.seenAt" class="status-indicator seen" title="Seen"> ✓✓</span>
+            <span v-else-if="getDeliveryState(m) === 'delivered'" class="status-indicator success" title="Sent"> ✓</span>
             <span v-else-if="getDeliveryState(m) === 'queued'" class="status-indicator queued" title="Queued"> ⏸️</span>
             <span v-else-if="getDeliveryState(m) === 'sending'" class="status-indicator sending" title="Sending"> ⏳</span>
             <button
@@ -337,6 +338,7 @@ onUnmounted(() => {
 .messages-container {
   flex: 1;
   min-height: 0;
+  min-width: 0;
   overflow-y: auto;
   overflow-x: hidden;
   padding: 12px 16px;
@@ -353,6 +355,7 @@ onUnmounted(() => {
   gap: 12px;
   margin-top: auto;
   min-height: 0;
+  min-width: 0;
 }
 
 .empty-state {
@@ -403,6 +406,7 @@ onUnmounted(() => {
 
 .msg-bubble {
   max-width: min(85%, 320px);
+  min-width: 0;
   padding: 10px 14px;
   border-radius: 16px;
   position: relative;
@@ -506,6 +510,10 @@ onUnmounted(() => {
 .latency {
   font-variant-numeric: tabular-nums;
   opacity: 0.8;
+}
+
+.seen {
+  color: var(--accent);
 }
 
 .retry-btn {

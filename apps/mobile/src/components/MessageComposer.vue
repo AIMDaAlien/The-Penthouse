@@ -194,6 +194,7 @@ onBeforeUnmount(() => {
   border: 1px solid rgba(255, 255, 255, 0.05);
   width: 100%;
   min-width: 0;
+  max-width: 100%;
   overflow: hidden;
 }
 
@@ -242,6 +243,7 @@ textarea:focus {
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
+  min-width: 0;
 }
 
 .action-btn {
@@ -262,6 +264,26 @@ textarea:focus {
 
 .hidden-file-input {
   display: none;
+}
+
+@media (max-width: 760px) {
+  .composer-container {
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .actions {
+    gap: 6px;
+  }
+
+  .action-btn {
+    min-width: 40px;
+    padding: 0 10px;
+  }
+
+  .send-btn {
+    padding: 0 14px;
+  }
 }
 
 @media (max-width: 400px) {

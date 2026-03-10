@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import {
   ChatSummarySchema,
+  MarkChatReadResponseSchema,
   MessageSchema,
   SendMessageRequestSchema,
   SendMessageResponseSchema,
@@ -15,24 +16,106 @@ async function ensureMembership(userId: string, chatId: string): Promise<boolean
   return Boolean(res.rowCount);
 }
 
+async function markChatRead(chatId: string, userId: string): Promise<{
+  advanced: boolean;
+  lastReadAt: string | null;
+  unreadCount: number;
+  seenThroughMessageId: string | null;
+}> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const membership = await client.query(
+      'SELECT last_read_at FROM chat_members WHERE chat_id = $1 AND user_id = $2 FOR UPDATE',
+      [chatId, userId]
+    );
+
+    if (!membership.rowCount) {
+      throw new Error('Forbidden');
+    }
+
+    const latestMessage = await client.query(
+      `SELECT m.id, m.created_at
+       FROM messages m
+       JOIN users u ON u.id = m.sender_id
+       WHERE m.chat_id = $1
+         AND u.status = 'active'
+       ORDER BY m.created_at DESC
+       LIMIT 1`,
+      [chatId]
+    );
+
+    const currentLastReadAt = membership.rows[0].last_read_at
+      ? new Date(membership.rows[0].last_read_at as string)
+      : null;
+    const latestRow = latestMessage.rows[0] as { id: string; created_at: string } | undefined;
+    const latestMessageAt = latestRow?.created_at ? new Date(latestRow.created_at) : null;
+    const advanced = Boolean(latestMessageAt && (!currentLastReadAt || latestMessageAt > currentLastReadAt));
+    const nextReadAt = new Date();
+    const effectiveReadAt = advanced ? nextReadAt : (currentLastReadAt ?? nextReadAt);
+
+    if (advanced) {
+      await client.query(
+        'UPDATE chat_members SET last_read_at = $1 WHERE chat_id = $2 AND user_id = $3',
+        [nextReadAt.toISOString(), chatId, userId]
+      );
+    }
+
+    const unread = await client.query(
+      `SELECT COUNT(*)::int AS unread_count
+       FROM messages m
+       JOIN users u ON u.id = m.sender_id
+       WHERE m.chat_id = $1
+         AND m.sender_id <> $2
+         AND u.status = 'active'
+         AND m.created_at > $3`,
+      [chatId, userId, effectiveReadAt.toISOString()]
+    );
+
+    await client.query('COMMIT');
+
+    return {
+      advanced,
+      lastReadAt: effectiveReadAt.toISOString(),
+      unreadCount: Number(unread.rows[0]?.unread_count ?? 0),
+      seenThroughMessageId: latestRow?.id ?? null
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/v1/chats', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request) => {
     const userId = request.user.userId;
     const rows = await pool.query(
-      `SELECT c.id, c.type, c.name, c.updated_at
+      `SELECT c.id, c.type, c.name, c.updated_at,
+              COUNT(m.id) FILTER (
+                WHERE m.sender_id <> $1
+                  AND u.status = 'active'
+                  AND m.created_at > cm.last_read_at
+              )::int AS unread_count
        FROM chats c
        JOIN chat_members cm ON cm.chat_id = c.id
+       LEFT JOIN messages m ON m.chat_id = c.id
+       LEFT JOIN users u ON u.id = m.sender_id
        WHERE cm.user_id = $1
+       GROUP BY c.id, c.type, c.name, c.updated_at, cm.last_read_at
        ORDER BY c.updated_at DESC`,
       [userId]
     );
 
-    return rows.rows.map((r: { id: string; type: 'dm' | 'channel'; name: string; updated_at: string }) =>
+    return rows.rows.map((r: { id: string; type: 'dm' | 'channel'; name: string; updated_at: string; unread_count: number }) =>
       ChatSummarySchema.parse({
         id: r.id,
         type: r.type,
         name: r.name,
-        updatedAt: new Date(r.updated_at).toISOString()
+        updatedAt: new Date(r.updated_at).toISOString(),
+        unreadCount: Number(r.unread_count ?? 0)
       })
     );
   });
@@ -49,19 +132,37 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
 
     const query = cursor
       ? `SELECT m.id, m.chat_id, m.sender_id, u.username AS sender_username, u.display_name AS sender_display_name,
-                media.storage_key AS avatar_storage_key, m.content, m.message_type, m.metadata, m.created_at, m.client_message_id
+                media.storage_key AS avatar_storage_key, m.content, m.message_type, m.metadata, m.created_at, m.client_message_id,
+                seen.seen_at
          FROM messages m
          JOIN users u ON u.id = m.sender_id
          LEFT JOIN media_uploads media ON media.id = u.avatar_media_id
+         LEFT JOIN LATERAL (
+           SELECT MAX(cm_seen.last_read_at) AS seen_at
+           FROM chat_members cm_seen
+           JOIN users u_seen ON u_seen.id = cm_seen.user_id
+           WHERE cm_seen.chat_id = m.chat_id
+             AND cm_seen.user_id <> m.sender_id
+             AND u_seen.status = 'active'
+         ) seen ON TRUE
          WHERE m.chat_id = $1 AND m.created_at < (SELECT created_at FROM messages WHERE id = $2)
            AND u.status = 'active'
          ORDER BY m.created_at DESC
          LIMIT $3`
       : `SELECT m.id, m.chat_id, m.sender_id, u.username AS sender_username, u.display_name AS sender_display_name,
-                media.storage_key AS avatar_storage_key, m.content, m.message_type, m.metadata, m.created_at, m.client_message_id
+                media.storage_key AS avatar_storage_key, m.content, m.message_type, m.metadata, m.created_at, m.client_message_id,
+                seen.seen_at
          FROM messages m
          JOIN users u ON u.id = m.sender_id
          LEFT JOIN media_uploads media ON media.id = u.avatar_media_id
+         LEFT JOIN LATERAL (
+           SELECT MAX(cm_seen.last_read_at) AS seen_at
+           FROM chat_members cm_seen
+           JOIN users u_seen ON u_seen.id = cm_seen.user_id
+           WHERE cm_seen.chat_id = m.chat_id
+             AND cm_seen.user_id <> m.sender_id
+             AND u_seen.status = 'active'
+         ) seen ON TRUE
          WHERE m.chat_id = $1
            AND u.status = 'active'
          ORDER BY m.created_at DESC
@@ -82,7 +183,8 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
         type: (m.message_type as MessageType | null) ?? 'text',
         metadata: m.metadata ?? null,
         createdAt: new Date(m.created_at).toISOString(),
-        clientMessageId: m.client_message_id ?? undefined
+        clientMessageId: m.client_message_id ?? undefined,
+        seenAt: m.seen_at ? new Date(m.seen_at).toISOString() : null
       })
     );
   });
@@ -144,7 +246,8 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
       type: (msg.message_type as MessageType | null) ?? 'text',
       metadata: msg.metadata ?? null,
       createdAt: new Date(msg.created_at).toISOString(),
-      clientMessageId: msg.client_message_id ?? undefined
+      clientMessageId: msg.client_message_id ?? undefined,
+      seenAt: null
     };
 
     app.io.to(`chat:${parsed.data.chatId}`).emit('message.new', {
@@ -168,5 +271,44 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
     });
 
     return reply.send(response);
+  });
+
+  app.post('/api/v1/chats/:chatId/read', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
+    const userId = request.user.userId;
+    const { chatId } = request.params as { chatId: string };
+
+    const isMember = await ensureMembership(userId, chatId);
+    if (!isMember) return reply.status(403).send({ error: 'Forbidden' });
+
+    try {
+      const result = await markChatRead(chatId, userId);
+
+      if (result.advanced) {
+        app.io.to(`chat:${chatId}`).emit('message.read', {
+          type: 'message.read',
+          payload: {
+            chatId,
+            readerUserId: userId,
+            seenAt: result.lastReadAt,
+            seenThroughMessageId: result.seenThroughMessageId
+          }
+        });
+      }
+
+      return reply.send(
+        MarkChatReadResponseSchema.parse({
+          chatId,
+          unreadCount: result.unreadCount,
+          lastReadAt: result.lastReadAt,
+          seenThroughMessageId: result.seenThroughMessageId
+        })
+      );
+    } catch (error: any) {
+      if (error?.message === 'Forbidden') {
+        return reply.status(403).send({ error: 'Forbidden' });
+      }
+      request.log.error({ error, chatId, userId }, 'failed to mark chat read');
+      return reply.status(500).send({ error: 'Failed to mark chat read' });
+    }
   });
 }

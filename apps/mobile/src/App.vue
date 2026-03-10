@@ -72,7 +72,10 @@
       <!-- Sidebar / Chat List -->
       <div class="sidebar">
         <div class="nav-tabs row" style="margin-bottom: 12px; gap: 8px;">
-          <button class="small-btn" :class="{ secondary: currentView !== 'chats' }" @click="currentView = 'chats'">Chats</button>
+          <button class="small-btn" :class="{ secondary: currentView !== 'chats' }" @click="currentView = 'chats'">
+            Chats
+            <span v-if="totalUnreadCount > 0" class="nav-unread-badge">{{ totalUnreadCount }}</span>
+          </button>
           <button class="small-btn" :class="{ secondary: currentView !== 'directory' }" @click="currentView = 'directory'">Directory</button>
           <button class="small-btn" :class="{ secondary: currentView !== 'settings' }" @click="currentView = 'settings'">Settings</button>
         </div>
@@ -149,6 +152,7 @@ import {
 import {
   ServerMessageAckEventSchema,
   ServerMessageNewEventSchema,
+  ServerMessageReadEventSchema,
   ServerPresenceSyncEventSchema,
   ServerPresenceUpdateEventSchema,
   ServerTypingUpdateEventSchema
@@ -169,6 +173,7 @@ import {
   getMessages,
   hydrateStoredSession,
   login,
+  markChatRead,
   register,
   resetPassword,
   sendMessage,
@@ -227,6 +232,7 @@ let fallbackRefreshTimer: ReturnType<typeof setInterval> | null = null;
 let lastFallbackSignature = '';
 let appStateListener: PluginListenerHandle | null = null;
 let suppressNextDisconnectTransition = false;
+let markReadTimer: ReturnType<typeof setTimeout> | null = null;
 
 const forcedPwForm = ref({ currentPassword: '', newPassword: '' });
 const forcedPwConfirm = ref('');
@@ -238,6 +244,9 @@ const formattedRecoveryCodeNotice = computed(() =>
 );
 const onlineCount = computed(() =>
   Object.values(presenceByUserId.value).filter((status) => status === 'online').length
+);
+const totalUnreadCount = computed(() =>
+  chats.value.reduce((sum, chat) => sum + Math.max(0, chat.unreadCount ?? 0), 0)
 );
 const typingMembers = computed(() =>
   selectedChatId.value ? Object.values(typingByChat.value[selectedChatId.value] ?? {}) : []
@@ -287,9 +296,6 @@ function markRealtimeFailed(errorMessage: string | null = null): void {
 function handleMobileBack() {
   if (currentView.value === 'chats') {
     handleTypingStop();
-    if (selectedChatId.value) {
-      getSocket()?.emit('chat.leave', { chatId: selectedChatId.value });
-    }
     selectedChatId.value = '';
   } else {
     currentView.value = 'chats';
@@ -456,18 +462,110 @@ async function deriveUploadDimensions(file: File, upload: UploadResponse): Promi
 
 async function loadChats(): Promise<void> {
   try {
-    chats.value = await withBackoff(() => getChats());
+    chats.value = sortChats(await withBackoff(() => getChats()));
     cacheChats(chats.value);
   } catch {
-    chats.value = readCachedChats();
+    chats.value = sortChats(readCachedChats());
+  }
+}
+
+function sortChats(nextChats: Chat[]): Chat[] {
+  return [...nextChats].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+}
+
+function setChatUnreadCount(chatId: string, unreadCount: number): void {
+  chats.value = sortChats(
+    chats.value.map((chat) =>
+      chat.id === chatId ? { ...chat, unreadCount: Math.max(0, unreadCount) } : chat
+    )
+  );
+  cacheChats(chats.value);
+}
+
+function bumpChatUnreadCount(chatId: string): void {
+  chats.value = sortChats(
+    chats.value.map((chat) =>
+      chat.id === chatId
+        ? {
+            ...chat,
+            unreadCount: Math.max(0, (chat.unreadCount ?? 0) + 1)
+          }
+        : chat
+    )
+  );
+  cacheChats(chats.value);
+}
+
+function touchChat(chatId: string, updatedAt: string): void {
+  chats.value = sortChats(
+    chats.value.map((chat) =>
+      chat.id === chatId
+        ? {
+            ...chat,
+            updatedAt
+          }
+        : chat
+    )
+  );
+  cacheChats(chats.value);
+}
+
+function clearMarkReadTimer(): void {
+  if (!markReadTimer) return;
+  clearTimeout(markReadTimer);
+  markReadTimer = null;
+}
+
+async function executeMarkSelectedChatRead(): Promise<void> {
+  if (!session.value || currentView.value !== 'chats' || !selectedChatId.value) return;
+  try {
+    const result = await markChatRead(selectedChatId.value);
+    setChatUnreadCount(result.chatId, result.unreadCount);
+  } catch {
+    // Keep local unread state; another read attempt will happen on the next open/message event.
+  }
+}
+
+function scheduleMarkSelectedChatRead(): void {
+  if (!session.value || currentView.value !== 'chats' || !selectedChatId.value) return;
+  clearMarkReadTimer();
+  markReadTimer = setTimeout(() => {
+    void executeMarkSelectedChatRead();
+  }, 150);
+}
+
+function applySeenReceipt(chatId: string, readerUserId: string, seenAt: string): void {
+  if (!session.value || readerUserId === session.value.user.id) return;
+  const seenAtMs = Date.parse(seenAt);
+  if (!Number.isFinite(seenAtMs)) return;
+
+  let changed = false;
+  messages.value = messages.value.map((message) => {
+    if (message.chatId !== chatId || message.senderId !== session.value?.user.id) {
+      return message;
+    }
+
+    const createdAtMs = Date.parse(message.createdAt);
+    if (!Number.isFinite(createdAtMs) || createdAtMs > seenAtMs) {
+      return message;
+    }
+
+    const nextSeenAt = !message.seenAt || Date.parse(message.seenAt) < seenAtMs ? seenAt : message.seenAt;
+    if (nextSeenAt === message.seenAt) return message;
+    changed = true;
+    return {
+      ...message,
+      seenAt: nextSeenAt
+    };
+  });
+
+  if (changed && selectedChatId.value) {
+    cacheMessages(selectedChatId.value, messages.value);
   }
 }
 
 async function openChat(chatId: string): Promise<void> {
   chatActionError.value = '';
-  if (selectedChatId.value && selectedChatId.value !== chatId) {
-    getSocket()?.emit('chat.leave', { chatId: selectedChatId.value });
-  }
   selectedChatId.value = chatId;
   try {
     messages.value = await withBackoff(() => getMessages(chatId));
@@ -475,6 +573,8 @@ async function openChat(chatId: string): Promise<void> {
   } catch {
     messages.value = readCachedMessages(chatId);
   }
+  setChatUnreadCount(chatId, 0);
+  scheduleMarkSelectedChatRead();
   const socket = getSocket();
   if (socket && !socket.connected && hasNetwork.value) {
     setRealtimeState('connecting');
@@ -815,6 +915,7 @@ function wireSocketHandlers(): void {
   const socket = connectSocket();
   socket.removeAllListeners('message.new');
   socket.removeAllListeners('message.ack');
+  socket.removeAllListeners('message.read');
   socket.removeAllListeners('typing.update');
   socket.removeAllListeners('presence.update');
   socket.removeAllListeners('presence.sync');
@@ -848,7 +949,15 @@ function wireSocketHandlers(): void {
     const parsed = ServerMessageNewEventSchema.safeParse(event);
     if (!parsed.success) return;
     const payload = parsed.data.payload;
-    if (payload.chatId !== selectedChatId.value) return;
+    touchChat(payload.chatId, payload.createdAt);
+
+    const isVisibleChat = currentView.value === 'chats' && payload.chatId === selectedChatId.value;
+    if (!isVisibleChat) {
+      if (payload.senderId !== session.value?.user.id) {
+        bumpChatUnreadCount(payload.chatId);
+      }
+      return;
+    }
 
     // Check if we already optimistically rendered this (match by clientMessageId)
     // The server `id` is a UUID, local id starts with `local_`
@@ -863,6 +972,10 @@ function wireSocketHandlers(): void {
     removeTypingParticipant(payload.chatId, payload.senderId);
 
     cacheMessages(payload.chatId, messages.value);
+    if (payload.senderId !== session.value?.user.id) {
+      setChatUnreadCount(payload.chatId, 0);
+      scheduleMarkSelectedChatRead();
+    }
   });
 
   socket.on('message.ack', (event: any) => {
@@ -888,6 +1001,13 @@ function wireSocketHandlers(): void {
       ? Date.parse(payload.deliveredAt) - Date.parse(existingMsg.createdAt)
       : undefined;
     markMessageDelivered(payload.chatId, payload.clientMessageId, payload.messageId, deliveryMs);
+  });
+
+  socket.on('message.read', (event: unknown) => {
+    const parsed = ServerMessageReadEventSchema.safeParse(event);
+    if (!parsed.success) return;
+    const { chatId, readerUserId, seenAt } = parsed.data.payload;
+    applySeenReceipt(chatId, readerUserId, seenAt);
   });
 
   socket.on('connect', () => {
@@ -1032,6 +1152,7 @@ function forceSocketReconnect() {
 async function doLogout(): Promise<void> {
   await logout();
   disconnectSocket();
+  clearMarkReadTimer();
   session.value = null;
   chats.value = [];
   messages.value = [];
@@ -1081,6 +1202,9 @@ async function handleAppResume(): Promise<void> {
   await loadChats();
   if (selectedChatId.value) {
     await refreshSelectedChatFromApi();
+    if (currentView.value === 'chats') {
+      scheduleMarkSelectedChatRead();
+    }
   }
 
   if (hasNetwork.value && getSocket()) {
@@ -1117,9 +1241,16 @@ watch([selectedChatId, currentView, realtimeState, hasNetwork], () => {
   syncFallbackRefreshState();
 });
 
+watch([selectedChatId, currentView], () => {
+  if (selectedChatId.value && currentView.value === 'chats') {
+    scheduleMarkSelectedChatRead();
+  }
+});
+
 onUnmounted(() => {
   window.removeEventListener('online', onOnline);
   window.removeEventListener('offline', onOffline);
+  clearMarkReadTimer();
   clearFallbackRefreshTimer();
   void appStateListener?.remove();
   disconnectSocket();
@@ -1131,14 +1262,18 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
   margin-bottom: 20px;
   flex-shrink: 0;
+  min-width: 0;
 }
 
 .header-title {
   display: flex;
   align-items: center;
   gap: 12px;
+  flex: 1;
+  min-width: 0;
 }
 
 .header-title h1 {
@@ -1146,6 +1281,10 @@ onUnmounted(() => {
   font-size: 1.5rem;
   font-weight: 700;
   letter-spacing: -0.02em;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .mobile-back-btn {
@@ -1168,6 +1307,7 @@ onUnmounted(() => {
   gap: 16px;
   flex: 1;
   min-height: 0;
+  min-width: 0;
   overflow: hidden;
 }
 
@@ -1190,6 +1330,7 @@ onUnmounted(() => {
   gap: 12px;
   flex: 1;
   min-height: 0;
+  min-width: 0;
   overflow: hidden;
 }
 
@@ -1228,6 +1369,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  min-width: 0;
   overflow: hidden;
 }
 
@@ -1240,7 +1382,23 @@ onUnmounted(() => {
   padding: 12px;
   position: relative;
   min-height: 0;
+  min-width: 0;
   overflow: hidden;
+}
+
+.nav-unread-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  margin-left: 6px;
+  border-radius: 999px;
+  background: rgba(255, 140, 166, 0.18);
+  color: var(--danger);
+  font-size: 0.72rem;
+  line-height: 1;
 }
 
 .chat-action-error {
@@ -1259,6 +1417,10 @@ onUnmounted(() => {
 
 /* Mobile Responsive Adjustments */
 @media (max-width: 760px) {
+  .app-header {
+    gap: 10px;
+  }
+
   .chat-layout {
     grid-template-columns: 1fr;
     min-height: 0;
@@ -1266,6 +1428,14 @@ onUnmounted(() => {
   
   .chat-main {
     padding: 8px;
+  }
+
+  .header-title {
+    gap: 10px;
+  }
+
+  .header-title h1 {
+    font-size: 1.35rem;
   }
 
   .recovery-banner {

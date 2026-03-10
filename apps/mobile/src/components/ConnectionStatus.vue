@@ -107,6 +107,9 @@ const formatTime = (ts: string | number | null | undefined) => {
   border: 1px solid rgba(255, 255, 255, 0.05);
   overflow: hidden;
   transition: all 0.2s ease;
+  max-width: min(100%, 320px);
+  min-width: 0;
+  flex-shrink: 1;
 }
 
 .conn-status-header {
@@ -142,9 +145,13 @@ const formatTime = (ts: string | number | null | undefined) => {
   gap: 6px;
   flex-wrap: wrap;
   flex: 1;
+  min-width: 0;
 }
 .status-text {
   font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .separator {
   opacity: 0.4;
@@ -163,6 +170,8 @@ const formatTime = (ts: string | number | null | undefined) => {
   border: none;
   cursor: pointer;
   transition: opacity 0.2s;
+  width: auto;
+  min-width: 0;
 }
 .action-btn:active {
   opacity: 0.8;
@@ -186,6 +195,7 @@ const formatTime = (ts: string | number | null | undefined) => {
   color: var(--text);
   cursor: pointer;
   transition: all 0.2s ease;
+  width: auto;
 }
 .debug-toggle:hover {
   background: rgba(255, 255, 255, 0.1);
@@ -238,4 +248,18 @@ const formatTime = (ts: string | number | null | undefined) => {
 .error-val { color: var(--danger); }
 .highlight-val { color: #fff; font-weight: 600; }
 .time-val { color: rgba(255, 255, 255, 0.5); }
+
+@media (max-width: 760px) {
+  .conn-status {
+    max-width: min(100%, 190px);
+  }
+
+  .conn-status-header {
+    padding: 8px 10px;
+  }
+
+  .status-container {
+    gap: 4px;
+  }
+}
 </style>
