@@ -65,6 +65,7 @@ defineEmits<{
 .list {
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 .small-btn {
   padding: 6px 12px;
@@ -99,6 +100,8 @@ defineEmits<{
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
+  overflow: hidden;
 }
 .chat-prefix {
   opacity: 0.5;

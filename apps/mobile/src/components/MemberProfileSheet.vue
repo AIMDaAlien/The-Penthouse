@@ -101,6 +101,8 @@ const presenceText = computed(() => (presenceStatus.value === 'online' ? 'Online
   font-size: 24px;
   cursor: pointer;
   opacity: 0.6;
+  width: auto;
+  min-width: 0;
 }
 
 .profile-details {

@@ -61,6 +61,8 @@ html,
   border-radius: 16px;
   padding: 16px;
   backdrop-filter: blur(12px);
+  min-width: 0;
+  max-width: 100%;
 }
 
 .row {
@@ -100,7 +102,15 @@ button {
   font-weight: 700;
   cursor: pointer;
   transition: opacity 0.2s, transform 0.1s;
-  width: 100%; /* Default full width for modern mobile forms */
+  width: auto;
+}
+
+.form-btn {
+  width: 100%;
+}
+
+.small-btn {
+  width: auto;
 }
 
 button:active {
@@ -136,6 +146,8 @@ button.danger {
   padding: 12px;
   cursor: pointer;
   transition: background 0.2s, border-color 0.2s;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .list-item:active {

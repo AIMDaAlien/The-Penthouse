@@ -15,7 +15,7 @@
         
         <p class="small">Role: <strong>{{ me?.role }}</strong></p>
         
-        <button type="submit" :disabled="savingProfile">
+        <button type="submit" class="form-btn" :disabled="savingProfile">
           {{ savingProfile ? 'Saving...' : 'Save Profile' }}
         </button>
         <p v-if="profileError" class="status-danger small">{{ profileError }}</p>
@@ -28,7 +28,7 @@
         <input v-model="pwForm.newPassword" type="password" placeholder="New Password" required />
         <input v-model="pwConfirm" type="password" placeholder="Confirm New Password" required />
         
-        <button type="submit" :disabled="savingPw">
+        <button type="submit" class="form-btn" :disabled="savingPw">
           {{ savingPw ? 'Updating...' : 'Update Password' }}
         </button>
         <p v-if="pwError" class="status-danger small">{{ pwError }}</p>
@@ -41,7 +41,7 @@
           Rotate your recovery code if you suspect it is compromised. 
           Your old code will immediately stop working.
         </p>
-        <button class="danger" @click="handleRotateRecoveryCode" :disabled="rotatingRc">
+        <button class="danger form-btn" @click="handleRotateRecoveryCode" :disabled="rotatingRc">
           Rotate Recovery Code
         </button>
         

@@ -103,7 +103,7 @@ const formatTime = (ts: string | number | null | undefined) => {
   display: flex;
   flex-direction: column;
   background: var(--panel);
-  border-radius: 20px;
+  border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.05);
   overflow: hidden;
   transition: all 0.2s ease;
@@ -150,6 +150,7 @@ const formatTime = (ts: string | number | null | undefined) => {
 .status-text {
   font-weight: 500;
   min-width: 0;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -261,9 +262,12 @@ const formatTime = (ts: string | number | null | undefined) => {
   }
 
   .status-text {
-    flex-shrink: 0;
+    flex-shrink: 1;
     min-width: 0;
-    max-width: none;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }
 </style>

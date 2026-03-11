@@ -62,7 +62,7 @@
         @blur="recoveryCode = formatRecoveryCode(recoveryCode)"
       />
       <p class="small auth-help">{{ helperText }}</p>
-      <button type="submit" :disabled="loading">
+      <button type="submit" class="form-btn" :disabled="loading">
         {{ loading ? 'Saving...' : submitLabel }}
       </button>
       <p v-if="displayError" class="status-danger small" style="margin-top: 4px;">{{ displayError }}</p>

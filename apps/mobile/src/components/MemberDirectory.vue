@@ -101,6 +101,9 @@ function presenceClass(memberId: string): string {
 .member-directory-page {
   padding: 16px;
   overflow-y: auto;
+  overflow-x: hidden;
+  width: 100%;
+  min-width: 0;
   max-width: 600px;
   margin: 0 auto;
 }
@@ -121,6 +124,8 @@ h2 {
   padding: 12px 16px;
   cursor: pointer;
   transition: transform 0.1s;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .member-card:active {
@@ -151,6 +156,7 @@ h2 {
   display: flex;
   flex-direction: column;
   flex: 1;
+  min-width: 0;
 }
 
 .display-name {

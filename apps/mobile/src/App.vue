@@ -47,7 +47,7 @@
           <input v-model="forcedPwForm.currentPassword" type="password" placeholder="Current Password" required />
           <input v-model="forcedPwForm.newPassword" type="password" placeholder="New Password" required />
           <input v-model="forcedPwConfirm" type="password" placeholder="Confirm New Password" required />
-          <button type="submit" :disabled="savingForcedPw">Update Password</button>
+          <button type="submit" class="form-btn" :disabled="savingForcedPw">Update Password</button>
           <p v-if="forcedPwError" class="status-danger small">{{ forcedPwError }}</p>
         </form>
         <button class="danger small-btn" style="margin-top: 16px;" @click="doLogout">Logout</button>
@@ -1488,6 +1488,16 @@ onUnmounted(() => {
   line-height: 1;
 }
 
+.nav-tabs {
+  flex-wrap: wrap;
+}
+
+.nav-tabs .small-btn {
+  width: auto;
+  min-width: 0;
+  padding: 8px 14px;
+}
+
 .chat-action-error {
   margin: 0 0 10px;
 }
@@ -1511,7 +1521,7 @@ onUnmounted(() => {
 
   .app-header :deep(.conn-status) {
     width: auto;
-    max-width: min(55vw, 240px);
+    max-width: min(52%, 220px);
     flex: 0 1 auto;
   }
 

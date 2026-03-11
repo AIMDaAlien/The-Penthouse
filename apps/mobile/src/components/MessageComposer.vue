@@ -248,7 +248,7 @@ textarea:focus {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-shrink: 0;
+  flex-shrink: 1;
   min-width: 0;
 }
 
@@ -285,11 +285,13 @@ textarea:focus {
   .action-btn {
     min-width: 40px;
     padding: 0 10px;
+    flex-shrink: 1;
   }
 
   .send-btn {
-    min-width: 88px;
+    min-width: 72px;
     padding: 0 16px;
+    flex-shrink: 1;
   }
 }
 
@@ -315,7 +317,7 @@ textarea:focus {
   }
   .send-btn {
     height: 40px;
-    min-width: auto;
+    min-width: 64px;
     padding: 0 12px;
   }
 }

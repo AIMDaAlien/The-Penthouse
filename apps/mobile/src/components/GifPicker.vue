@@ -174,6 +174,8 @@ onBeforeUnmount(() => {
   border-radius: 999px;
   padding: 8px 12px;
   font-size: 0.8rem;
+  width: auto;
+  min-width: 0;
 }
 
 .tab-btn.active {
