@@ -3,6 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils';
 import App from './App.vue';
 import { installLocalStorageMock } from './test/localStorageMock';
 import * as http from './services/http';
+import * as notifications from './services/notifications';
 
 const mockAppListeners: Record<string, Function> = {};
 
@@ -136,7 +137,8 @@ vi.mock('./services/notifications', () => ({
   ensureNotificationPermission: vi.fn(() => Promise.resolve(false)),
   initializeNotifications: vi.fn(() => Promise.resolve()),
   scheduleIncomingMessageNotification: vi.fn(() => Promise.resolve()),
-  clearDeliveredNotificationsForChat: vi.fn(() => Promise.resolve())
+  clearDeliveredNotificationsForChat: vi.fn(() => Promise.resolve()),
+  clearAllDeliveredNotifications: vi.fn(() => Promise.resolve())
 }));
 
 describe('App.vue Optimistic Flow', () => {
@@ -489,5 +491,82 @@ describe('App.vue read gating', () => {
     await flushPromises();
 
     expect(vi.mocked(http.markChatRead)).not.toHaveBeenCalled();
+  });
+});
+
+describe('App.vue notification hardening', () => {
+  beforeEach(() => {
+    installLocalStorageMock();
+    Object.keys(mockAppListeners).forEach((key) => delete mockAppListeners[key]);
+    Object.keys(mockSocketHandlers).forEach((key) => delete mockSocketHandlers[key]);
+    Object.keys(mockManagerHandlers).forEach((key) => delete mockManagerHandlers[key]);
+    Object.keys(mockEngineHandlers).forEach((key) => delete mockEngineHandlers[key]);
+    mockSocket.connected = true;
+    vi.clearAllMocks();
+  });
+
+  it('does not schedule a local notification while app is foregrounded', async () => {
+    const wrapper = mount(App);
+    await flushPromises();
+
+    const chatList = wrapper.findComponent({ name: 'ChatListPanel' });
+    await chatList.vm.$emit('select', 'chat-1');
+    await flushPromises();
+
+    const directoryTab = wrapper.findAll('button.small-btn').find((button) => button.text() === 'Directory');
+    expect(directoryTab).toBeTruthy();
+    await directoryTab!.trigger('click');
+    await flushPromises();
+
+    mockSocketHandlers['message.new']({
+      type: 'message.new',
+      payload: {
+        id: 'msg-foreground-1',
+        chatId: 'chat-1',
+        senderId: 'user-2',
+        senderUsername: 'other-user',
+        senderDisplayName: 'Other User',
+        senderAvatarUrl: null,
+        content: 'foreground message',
+        type: 'text',
+        metadata: null,
+        createdAt: new Date().toISOString(),
+        clientMessageId: 'client-foreground-1'
+      }
+    });
+    await flushPromises();
+
+    expect(vi.mocked(notifications.scheduleIncomingMessageNotification)).not.toHaveBeenCalled();
+  });
+
+  it('schedules a local notification when app is backgrounded', async () => {
+    const wrapper = mount(App);
+    await flushPromises();
+
+    const chatList = wrapper.findComponent({ name: 'ChatListPanel' });
+    await chatList.vm.$emit('select', 'chat-1');
+    await flushPromises();
+
+    mockAppListeners.pause?.();
+
+    mockSocketHandlers['message.new']({
+      type: 'message.new',
+      payload: {
+        id: 'msg-background-1',
+        chatId: 'chat-1',
+        senderId: 'user-2',
+        senderUsername: 'other-user',
+        senderDisplayName: 'Other User',
+        senderAvatarUrl: null,
+        content: 'background message',
+        type: 'text',
+        metadata: null,
+        createdAt: new Date().toISOString(),
+        clientMessageId: 'client-background-1'
+      }
+    });
+    await flushPromises();
+
+    expect(vi.mocked(notifications.scheduleIncomingMessageNotification)).toHaveBeenCalledTimes(1);
   });
 });

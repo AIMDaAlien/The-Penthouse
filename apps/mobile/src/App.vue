@@ -189,6 +189,7 @@ import { enqueueMessage, flushQueue, getQueued, removeQueued } from './services/
 import { withBackoff } from './services/retry';
 import { cacheChats, cacheMessages, readCachedChats, readCachedMessages } from './services/cache';
 import {
+  clearAllDeliveredNotifications,
   clearDeliveredNotificationsForChat,
   ensureNotificationPermission,
   initializeNotifications,
@@ -600,7 +601,6 @@ async function openChat(chatId: string): Promise<void> {
   } catch {
     messages.value = readCachedMessages(chatId);
   }
-  await clearDeliveredNotificationsForChat(chatId);
   const socket = getSocket();
   if (socket && !socket.connected && hasNetwork.value) {
     setRealtimeState('connecting');
@@ -1007,7 +1007,7 @@ function wireSocketHandlers(): void {
     if (payload.senderId !== session.value?.user.id) {
       if (!canTreatIncomingAsRead) {
         bumpChatUnreadCount(payload.chatId);
-        if (!appIsActive.value || !isSelectedChat) {
+        if (!appIsActive.value) {
           void scheduleIncomingMessageNotification(payload, chats.value.find((chat) => chat.id === payload.chatId)?.name ?? null);
         }
       } else {
@@ -1197,6 +1197,7 @@ function forceSocketReconnect() {
 
 async function doLogout(): Promise<void> {
   await logout();
+  await clearAllDeliveredNotifications();
   disconnectSocket();
   clearMarkReadTimer();
   session.value = null;
@@ -1251,7 +1252,6 @@ async function handleAppResume(): Promise<void> {
     if (currentView.value === 'chats' && isViewingLatest.value) {
       scheduleMarkSelectedChatRead();
     }
-    await clearDeliveredNotificationsForChat(selectedChatId.value);
   }
 
   if (hasNetwork.value && getSocket()) {
@@ -1267,7 +1267,6 @@ function setAppActive(nextValue: boolean): void {
   }
 
   if (selectedChatId.value && currentView.value === 'chats') {
-    void clearDeliveredNotificationsForChat(selectedChatId.value);
     scheduleMarkSelectedChatRead();
   }
 }
