@@ -141,7 +141,7 @@ describe('MessageComposer.vue', () => {
     expect(wrapper.emitted('typing-stop')).toBeTruthy();
   });
 
-  it('keeps typing active across repeated soft-keyboard style input before idle timeout', async () => {
+  it('refreshes typing-start while typing continues so realtime typing state stays alive', async () => {
     vi.useFakeTimers();
 
     const wrapper = mount(MessageComposer, {
@@ -157,7 +157,7 @@ describe('MessageComposer.vue', () => {
     await textarea.trigger('compositionend');
     vi.advanceTimersByTime(4999);
 
-    expect(wrapper.emitted('typing-start')).toHaveLength(1);
+    expect(wrapper.emitted('typing-start')).toHaveLength(2);
     expect(wrapper.emitted('typing-stop')).toBeFalsy();
 
     vi.advanceTimersByTime(1);

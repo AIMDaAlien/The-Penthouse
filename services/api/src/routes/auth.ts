@@ -8,6 +8,7 @@ import {
   RegisterRequestSchema
 } from '@penthouse/contracts';
 import { pool } from '../db/pool.js';
+import { env } from '../config/env.js';
 import {
   createRecoveryCode,
   createOpaqueToken,
@@ -60,7 +61,21 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     const parsed = RegisterRequestSchema.safeParse(request.body);
     if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() });
 
-    const { username, password, inviteCode } = parsed.data;
+    const { username, password, inviteCode, testNoticeVersion } = parsed.data;
+    if (testNoticeVersion !== env.TEST_ACCOUNT_NOTICE_VERSION) {
+      request.log.info(
+        {
+          username,
+          providedVersion: testNoticeVersion,
+          requiredVersion: env.TEST_ACCOUNT_NOTICE_VERSION
+        },
+        'register rejected: stale test notice acknowledgement'
+      );
+      return reply.status(400).send({
+        error: `Please acknowledge the current test notice (${env.TEST_ACCOUNT_NOTICE_VERSION})`
+      });
+    }
+
     const client = await pool.connect();
 
     try {
@@ -95,9 +110,23 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       const recoveryCode = createRecoveryCode();
 
       await client.query(
-        `INSERT INTO users(id, username, display_name, password_hash, recovery_code_hash)
-         VALUES($1, $2, $3, $4, $5)`,
-        [id, username, username, passwordHash, hashToken(recoveryCode.replaceAll('-', ''))]
+        `INSERT INTO users(
+           id,
+           username,
+           display_name,
+           password_hash,
+           recovery_code_hash,
+           test_notice_accepted_version,
+           test_notice_accepted_at
+         ) VALUES($1, $2, $3, $4, $5, $6, NOW())`,
+        [
+          id,
+          username,
+          username,
+          passwordHash,
+          hashToken(recoveryCode.replaceAll('-', '')),
+          env.TEST_ACCOUNT_NOTICE_VERSION
+        ]
       );
 
       await client.query(

@@ -21,20 +21,26 @@ import {
   AuthResponseSchema
 } from '@penthouse/contracts';
 
+function validRegisterPayload() {
+  return {
+    username: 'alice',
+    password: 'supersecurepassword',
+    inviteCode: 'PENTHOUSE-ALPHA',
+    acceptTestNotice: true as const,
+    testNoticeVersion: 'alpha-v1'
+  };
+}
+
 // ─── [schema] invite validation edge cases ─────────────────────────────────
 
 test('[schema] register: rejects missing inviteCode', () => {
-  const result = RegisterRequestSchema.safeParse({
-    username: 'alice',
-    password: 'supersecurepassword'
-  });
+  const result = RegisterRequestSchema.safeParse({ ...validRegisterPayload(), inviteCode: undefined });
   assert.equal(result.success, false, 'should fail without inviteCode');
 });
 
 test('[schema] register: rejects inviteCode shorter than 6 chars', () => {
   const result = RegisterRequestSchema.safeParse({
-    username: 'alice',
-    password: 'supersecurepassword',
+    ...validRegisterPayload(),
     inviteCode: 'AB'
   });
   assert.equal(result.success, false, 'inviteCode min length is 6');
@@ -42,8 +48,7 @@ test('[schema] register: rejects inviteCode shorter than 6 chars', () => {
 
 test('[schema] register: rejects inviteCode longer than 64 chars', () => {
   const result = RegisterRequestSchema.safeParse({
-    username: 'alice',
-    password: 'supersecurepassword',
+    ...validRegisterPayload(),
     inviteCode: 'A'.repeat(65)
   });
   assert.equal(result.success, false, 'inviteCode max length is 64');
@@ -51,53 +56,45 @@ test('[schema] register: rejects inviteCode longer than 64 chars', () => {
 
 test('[schema] register: rejects username shorter than 3 chars', () => {
   const result = RegisterRequestSchema.safeParse({
+    ...validRegisterPayload(),
     username: 'ab',
-    password: 'supersecurepassword',
-    inviteCode: 'PENTHOUSE-ALPHA'
   });
   assert.equal(result.success, false, 'username min length is 3');
 });
 
 test('[schema] register: rejects username longer than 32 chars', () => {
   const result = RegisterRequestSchema.safeParse({
+    ...validRegisterPayload(),
     username: 'a'.repeat(33),
-    password: 'supersecurepassword',
-    inviteCode: 'PENTHOUSE-ALPHA'
   });
   assert.equal(result.success, false, 'username max length is 32');
 });
 
 test('[schema] register: rejects password shorter than 10 chars', () => {
   const result = RegisterRequestSchema.safeParse({
-    username: 'alice',
+    ...validRegisterPayload(),
     password: 'short',
-    inviteCode: 'PENTHOUSE-ALPHA'
   });
   assert.equal(result.success, false, 'password min length is 10');
 });
 
 test('[schema] register: rejects password longer than 128 chars', () => {
   const result = RegisterRequestSchema.safeParse({
-    username: 'alice',
+    ...validRegisterPayload(),
     password: 'a'.repeat(129),
-    inviteCode: 'PENTHOUSE-ALPHA'
   });
   assert.equal(result.success, false, 'password max length is 128');
 });
 
 test('[schema] register: accepts valid payload', () => {
-  const result = RegisterRequestSchema.safeParse({
-    username: 'alice',
-    password: 'supersecurepassword',
-    inviteCode: 'PENTHOUSE-ALPHA'
-  });
+  const result = RegisterRequestSchema.safeParse(validRegisterPayload());
   assert.equal(result.success, true, 'valid register payload should pass');
 });
 
 test('[schema] register: normalizes username and invite code', () => {
   const result = RegisterRequestSchema.safeParse({
+    ...validRegisterPayload(),
     username: '  Alice.Test  ',
-    password: 'supersecurepassword',
     inviteCode: ' penthouse-alpha '
   });
   assert.equal(result.success, true);
@@ -107,18 +104,32 @@ test('[schema] register: normalizes username and invite code', () => {
 
 test('[schema] register: rejects usernames with unsupported characters', () => {
   const result = RegisterRequestSchema.safeParse({
+    ...validRegisterPayload(),
     username: 'alice test',
-    password: 'supersecurepassword',
-    inviteCode: 'PENTHOUSE-ALPHA'
   });
   assert.equal(result.success, false);
 });
 
 test('[schema] register: rejects password with leading or trailing spaces', () => {
   const result = RegisterRequestSchema.safeParse({
-    username: 'alice',
+    ...validRegisterPayload(),
     password: 'supersecurepassword ',
-    inviteCode: 'PENTHOUSE-ALPHA'
+  });
+  assert.equal(result.success, false);
+});
+
+test('[schema] register: requires explicit test notice acknowledgement', () => {
+  const result = RegisterRequestSchema.safeParse({
+    ...validRegisterPayload(),
+    acceptTestNotice: false
+  });
+  assert.equal(result.success, false);
+});
+
+test('[schema] register: requires test notice version', () => {
+  const result = RegisterRequestSchema.safeParse({
+    ...validRegisterPayload(),
+    testNoticeVersion: ' '
   });
   assert.equal(result.success, false);
 });
@@ -149,7 +160,10 @@ test('[schema] AuthResponse: parses correct shape', () => {
       displayName: 'Alice',
       avatarUrl: null,
       role: 'member',
-      mustChangePassword: false
+      mustChangePassword: false,
+      mustAcceptTestNotice: false,
+      requiredTestNoticeVersion: 'alpha-v1',
+      acceptedTestNoticeVersion: 'alpha-v1'
     },
     accessToken: 'header.payload.sig',
     refreshToken: 'a'.repeat(96)
@@ -165,7 +179,10 @@ test('[schema] AuthResponse: rejects missing accessToken', () => {
       displayName: 'Alice',
       avatarUrl: null,
       role: 'member',
-      mustChangePassword: false
+      mustChangePassword: false,
+      mustAcceptTestNotice: false,
+      requiredTestNoticeVersion: 'alpha-v1',
+      acceptedTestNoticeVersion: 'alpha-v1'
     },
     refreshToken: 'a'.repeat(96)
   });
@@ -212,7 +229,9 @@ test('[schema] error shape: flatten() returns fieldErrors structure', () => {
   const result = RegisterRequestSchema.safeParse({
     username: 'ab',         // too short
     password: 'short',      // too short
-    inviteCode: 'AB'        // too short
+    inviteCode: 'AB',       // too short
+    acceptTestNotice: false,
+    testNoticeVersion: ' '
   });
   assert.equal(result.success, false);
   const flat = result.error!.flatten();

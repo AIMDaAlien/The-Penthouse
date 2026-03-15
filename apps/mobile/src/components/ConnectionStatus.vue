@@ -117,6 +117,7 @@ const formatTime = (ts: string | number | null | undefined) => {
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
+  min-width: 0;
 }
 
 .indicator {
@@ -143,12 +144,13 @@ const formatTime = (ts: string | number | null | undefined) => {
   display: flex;
   align-items: center;
   gap: 6px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   flex: 1;
   min-width: 0;
 }
 .status-text {
   font-weight: 500;
+  flex-shrink: 1;
   min-width: 0;
   white-space: nowrap;
   overflow: hidden;
@@ -251,13 +253,18 @@ const formatTime = (ts: string | number | null | undefined) => {
 .time-val { color: rgba(255, 255, 255, 0.5); }
 
 @media (max-width: 760px) {
+  .conn-status {
+    width: 100%;
+    max-width: 100%;
+  }
+
   .conn-status-header {
     padding: 8px 10px;
   }
 
   .status-container {
     gap: 4px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     overflow: visible;
   }
 

@@ -6,7 +6,14 @@
     </div>
     
     <div class="list">
-      <div v-if="chats.length === 0" class="empty-state small">No chats available</div>
+      <div v-if="chats.length === 0 && loadState !== 'ready'" class="empty-state small">
+        <p>{{ loadState === 'error' ? loadError || 'We are still syncing your chats.' : 'Loading chats...' }}</p>
+        <button v-if="loadState === 'error'" type="button" class="secondary small-btn retry-btn" @click="$emit('retry-load')">
+          Retry
+        </button>
+      </div>
+
+      <div v-else-if="chats.length === 0" class="empty-state small">No chats available</div>
       
       <div
         v-for="chat in chats"
@@ -39,11 +46,14 @@ defineProps<{
   currentUsername: string;
   chats: ChatSummary[];
   activeChatId: string | null;
+  loadState?: 'loading' | 'ready' | 'error';
+  loadError?: string;
   onlineCount?: number;
 }>();
 
 defineEmits<{
   (e: 'logout'): void;
+  (e: 'retry-load'): void;
   (e: 'select', chatId: string): void;
 }>();
 </script>
@@ -61,6 +71,14 @@ defineEmits<{
   align-items: center;
   padding-bottom: 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  min-width: 0;
+}
+
+.header strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .list {
   min-height: 0;
@@ -77,11 +95,20 @@ defineEmits<{
   padding: 20px 0;
   opacity: 0.5;
 }
+
+.empty-state p {
+  margin: 0;
+}
+
+.retry-btn {
+  margin-top: 12px;
+}
 .chat-name {
   font-weight: 600;
   margin-bottom: 4px;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
   min-width: 0;
 }

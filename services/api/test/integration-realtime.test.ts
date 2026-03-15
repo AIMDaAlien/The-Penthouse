@@ -5,13 +5,14 @@
  */
 import test, { after, before, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { once } from 'node:events';
 import type { AddressInfo } from 'node:net';
 import { io as createClient, type Socket } from 'socket.io-client';
 
 const SKIP = !process.env.DATABASE_URL ? 'DATABASE_URL not set — skipping integration tests' : undefined;
 
 type CapturedLog = Record<string, unknown> & { msg?: string };
+
+const GENERAL_CHAT_ID = '00000000-0000-0000-0000-000000000001';
 
 function captureLog(args: unknown[]): CapturedLog {
   if (typeof args[0] === 'string') {
@@ -31,6 +32,63 @@ async function closeSocket(socket: Socket): Promise<void> {
   await new Promise<void>((resolve) => {
     socket.once('disconnect', () => resolve());
     socket.disconnect();
+  });
+}
+
+async function waitForSocketConnect(socket: Socket, timeoutMs = 1_500): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      socket.off('connect', handleConnect);
+      reject(new Error('Timed out waiting for connect'));
+    }, timeoutMs);
+
+    const handleConnect = () => {
+      clearTimeout(timeout);
+      socket.off('connect', handleConnect);
+      resolve();
+    };
+
+    socket.once('connect', handleConnect);
+  });
+}
+
+async function waitForConnectError(socket: Socket, timeoutMs = 1_500): Promise<Error> {
+  return new Promise<Error>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      socket.off('connect_error', handleError);
+      reject(new Error('Timed out waiting for connect_error'));
+    }, timeoutMs);
+
+    const handleError = (error: Error) => {
+      clearTimeout(timeout);
+      socket.off('connect_error', handleError);
+      resolve(error);
+    };
+
+    socket.once('connect_error', handleError);
+  });
+}
+
+async function waitForSocketEvent<T>(
+  socket: Socket,
+  eventName: string,
+  predicate: (payload: T) => boolean,
+  timeoutMs: number
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      socket.off(eventName, handler as (...args: any[]) => void);
+      reject(new Error(`Timed out waiting for ${eventName}`));
+    }, timeoutMs);
+
+    const handler = (payload: T) => {
+      if (!predicate(payload)) return;
+      clearTimeout(timeout);
+      socket.off(eventName, handler as (...args: any[]) => void);
+      resolve(payload);
+    };
+
+    socket.on(eventName, handler as (...args: any[]) => void);
   });
 }
 
@@ -99,7 +157,7 @@ describe('[integration] realtime observability', { skip: SKIP }, () => {
       forceNew: true
     });
 
-    await once(socket, 'connect');
+    await waitForSocketConnect(socket);
     await new Promise((resolve) => setTimeout(resolve, 30));
 
     assert.ok(
@@ -137,7 +195,7 @@ describe('[integration] realtime observability', { skip: SKIP }, () => {
       forceNew: true
     });
 
-    const [error] = (await once(socket, 'connect_error')) as [Error];
+    const error = await waitForConnectError(socket);
     assert.equal(error.message, 'Unauthorized');
     await new Promise((resolve) => setTimeout(resolve, 30));
 
@@ -166,7 +224,7 @@ describe('[integration] realtime observability', { skip: SKIP }, () => {
       forceNew: true
     });
 
-    const [error] = (await once(socket, 'connect_error')) as [Error];
+    const error = await waitForConnectError(socket);
     assert.equal(error.message, 'Account unavailable');
     await new Promise((resolve) => setTimeout(resolve, 30));
 
@@ -176,5 +234,109 @@ describe('[integration] realtime observability', { skip: SKIP }, () => {
     );
 
     await closeSocket(socket);
+  });
+
+  test('marks a backgrounded user offline after 10 seconds and back online on foreground', async () => {
+    const { cleanup, registerUser } = await import('./helpers.js');
+    await cleanup();
+
+    const actor = await registerUser(app, 'presence_actor');
+    const observer = await registerUser(app, 'presence_observer');
+
+    const observerSocket = createClient(baseUrl, {
+      path: '/socket.io/',
+      transports: ['polling'],
+      auth: { token: observer.accessToken },
+      reconnection: false,
+      forceNew: true
+    });
+    await waitForSocketConnect(observerSocket);
+
+    const actorSocket = createClient(baseUrl, {
+      path: '/socket.io/',
+      transports: ['polling'],
+      auth: { token: actor.accessToken },
+      reconnection: false,
+      forceNew: true
+    });
+    await waitForSocketConnect(actorSocket);
+
+    await waitForSocketEvent(observerSocket, 'presence.update', (event: any) => (
+      event?.payload?.userId === actor.user.id && event?.payload?.status === 'online'
+    ), 1_500);
+
+    actorSocket.emit('app.state', { active: false });
+
+    await waitForSocketEvent(observerSocket, 'presence.update', (event: any) => (
+      event?.payload?.userId === actor.user.id && event?.payload?.status === 'offline'
+    ), 12_000);
+
+    actorSocket.emit('app.state', { active: true });
+
+    await waitForSocketEvent(observerSocket, 'presence.update', (event: any) => (
+      event?.payload?.userId === actor.user.id && event?.payload?.status === 'online'
+    ), 1_500);
+
+    await closeSocket(actorSocket);
+    await closeSocket(observerSocket);
+  });
+
+  test('replays active typing state to a member who joins after typing has started', async () => {
+    const { cleanup, registerUser } = await import('./helpers.js');
+    await cleanup();
+
+    const sender = await registerUser(app, 'typing_sender');
+    const receiver = await registerUser(app, 'typing_receiver');
+
+    const senderSocket = createClient(baseUrl, {
+      path: '/socket.io/',
+      transports: ['polling'],
+      auth: { token: sender.accessToken },
+      reconnection: false,
+      forceNew: true
+    });
+    await waitForSocketConnect(senderSocket);
+
+    const receiverSocket = createClient(baseUrl, {
+      path: '/socket.io/',
+      transports: ['polling'],
+      auth: { token: receiver.accessToken },
+      reconnection: false,
+      forceNew: true
+    });
+    await waitForSocketConnect(receiverSocket);
+
+    await new Promise<void>((resolve, reject) => {
+      senderSocket.emit('chat.join', { chatId: GENERAL_CHAT_ID }, (response: { ok?: boolean }) => {
+        if (response?.ok) {
+          resolve();
+          return;
+        }
+        reject(new Error('sender join failed'));
+      });
+    });
+
+    senderSocket.emit('typing.start', { chatId: GENERAL_CHAT_ID });
+
+    const typingReplay = waitForSocketEvent(receiverSocket, 'typing.update', (event: any) => (
+      event?.payload?.chatId === GENERAL_CHAT_ID &&
+      event?.payload?.userId === sender.user.id &&
+      event?.payload?.status === 'start'
+    ), 1_500);
+
+    await new Promise<void>((resolve, reject) => {
+      receiverSocket.emit('chat.join', { chatId: GENERAL_CHAT_ID }, (response: { ok?: boolean }) => {
+        if (response?.ok) {
+          resolve();
+          return;
+        }
+        reject(new Error('receiver join failed'));
+      });
+    });
+
+    await typingReplay;
+
+    await closeSocket(senderSocket);
+    await closeSocket(receiverSocket);
   });
 });

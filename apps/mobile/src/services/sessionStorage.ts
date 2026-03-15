@@ -65,7 +65,10 @@ function parseStoredUser(raw: string | null): AuthUser | null {
       typeof parsed?.displayName === 'string' &&
       (parsed?.avatarUrl === null || typeof parsed?.avatarUrl === 'string') &&
       (parsed?.role === 'admin' || parsed?.role === 'member') &&
-      typeof parsed?.mustChangePassword === 'boolean'
+      typeof parsed?.mustChangePassword === 'boolean' &&
+      typeof parsed?.mustAcceptTestNotice === 'boolean' &&
+      typeof parsed?.requiredTestNoticeVersion === 'string' &&
+      (parsed?.acceptedTestNoticeVersion === null || typeof parsed?.acceptedTestNoticeVersion === 'string')
     ) {
       return parsed as AuthUser;
     }

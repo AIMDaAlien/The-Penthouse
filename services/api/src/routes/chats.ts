@@ -282,6 +282,16 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
 
     try {
       const result = await markChatRead(chatId, userId);
+      request.log.info(
+        {
+          chatId,
+          userId,
+          advanced: result.advanced,
+          unreadCount: result.unreadCount,
+          seenThroughMessageId: result.seenThroughMessageId
+        },
+        'chat read state updated'
+      );
 
       if (result.advanced) {
         app.io.to(`chat:${chatId}`).emit('message.read', {

@@ -43,6 +43,8 @@ describe('http session hydration', () => {
     mockPersistStoredTokens.mockReset();
     mockPersistStoredUser.mockReset();
     mockClearStoredSessionState.mockReset();
+    mockHttp.interceptors.request.use.mockReset();
+    mockHttp.interceptors.response.use.mockReset();
     mockHttp.get.mockReset();
     mockHttp.post.mockReset();
     mockHttp.patch.mockReset();
@@ -66,7 +68,10 @@ describe('http session hydration', () => {
           displayName: 'Aim',
           avatarUrl: null,
           role: 'member',
-          mustChangePassword: false
+          mustChangePassword: false,
+          mustAcceptTestNotice: false,
+          requiredTestNoticeVersion: 'alpha-v1',
+          acceptedTestNoticeVersion: 'alpha-v1'
         },
         accessToken: 'refreshed-access-token',
         refreshToken: 'rotated-refresh-token'
@@ -83,7 +88,10 @@ describe('http session hydration', () => {
         displayName: 'Aim',
         avatarUrl: null,
         role: 'member',
-        mustChangePassword: false
+        mustChangePassword: false,
+        mustAcceptTestNotice: false,
+        requiredTestNoticeVersion: 'alpha-v1',
+        acceptedTestNoticeVersion: 'alpha-v1'
       },
       accessToken: 'refreshed-access-token',
       refreshToken: 'rotated-refresh-token'
@@ -120,7 +128,10 @@ describe('http session hydration', () => {
         displayName: 'Aim',
         avatarUrl: null,
         role: 'member',
-        mustChangePassword: false
+        mustChangePassword: false,
+        mustAcceptTestNotice: false,
+        requiredTestNoticeVersion: 'alpha-v1',
+        acceptedTestNoticeVersion: 'alpha-v1'
       }
     });
     mockAxiosPost.mockResolvedValue({
@@ -131,7 +142,10 @@ describe('http session hydration', () => {
           displayName: 'Aim',
           avatarUrl: null,
           role: 'member',
-          mustChangePassword: false
+          mustChangePassword: false,
+          mustAcceptTestNotice: false,
+          requiredTestNoticeVersion: 'alpha-v1',
+          acceptedTestNoticeVersion: 'alpha-v1'
         },
         accessToken: 'refreshed-access-token',
         refreshToken: 'rotated-refresh-token'
@@ -143,5 +157,136 @@ describe('http session hydration', () => {
 
     expect(session?.accessToken).toBe('refreshed-access-token');
     expect(mockAxiosPost).toHaveBeenCalledTimes(1);
+  });
+
+  it('sends test notice acknowledgement fields during register', async () => {
+    mockHttp.post.mockResolvedValue({
+      data: {
+        user: {
+          id: 'user-1',
+          username: 'aimtest',
+          displayName: 'Aim',
+          avatarUrl: null,
+          role: 'member',
+          mustChangePassword: false,
+          mustAcceptTestNotice: false,
+          requiredTestNoticeVersion: 'alpha-v1',
+          acceptedTestNoticeVersion: 'alpha-v1'
+        },
+        accessToken: 'new-access-token',
+        refreshToken: 'new-refresh-token'
+      }
+    });
+
+    const mod = await import('./http');
+    await mod.register('  AIMTEST ', 'supersecurepassword', ' penthouse-alpha ');
+
+    expect(mockHttp.post).toHaveBeenCalledWith('/api/v1/auth/register', {
+      username: 'aimtest',
+      password: 'supersecurepassword',
+      inviteCode: 'PENTHOUSE-ALPHA',
+      acceptTestNotice: true,
+      testNoticeVersion: 'alpha-v1'
+    });
+  });
+
+  it('persists the updated user after acknowledging the test notice', async () => {
+    mockHttp.post.mockResolvedValue({
+      data: {
+        user: {
+          id: 'user-1',
+          username: 'aimtest',
+          displayName: 'Aim',
+          avatarUrl: null,
+          role: 'member',
+          mustChangePassword: false,
+          mustAcceptTestNotice: false,
+          requiredTestNoticeVersion: 'alpha-v2',
+          acceptedTestNoticeVersion: 'alpha-v2'
+        },
+        acceptedAt: new Date().toISOString()
+      }
+    });
+
+    const mod = await import('./http');
+    const result = await mod.acknowledgeTestNotice('alpha-v2');
+
+    expect(mockHttp.post).toHaveBeenCalledWith('/api/v1/me/test-notice/ack', {
+      version: 'alpha-v2'
+    });
+    expect(result.user.acceptedTestNoticeVersion).toBe('alpha-v2');
+    expect(mockPersistStoredUser).toHaveBeenCalledWith(expect.objectContaining({
+      acceptedTestNoticeVersion: 'alpha-v2'
+    }));
+  });
+
+  it('emits user_updated when refresh rotates tokens with a fresh user', async () => {
+    mockLoadStoredSessionState.mockResolvedValue({
+      accessToken: '',
+      refreshToken: 'stored-refresh-token',
+      user: null
+    });
+    mockAxiosPost.mockResolvedValue({
+      data: {
+        user: {
+          id: 'user-1',
+          username: 'aimtest',
+          displayName: 'Aim',
+          avatarUrl: null,
+          role: 'member',
+          mustChangePassword: false,
+          mustAcceptTestNotice: true,
+          requiredTestNoticeVersion: 'alpha-v2',
+          acceptedTestNoticeVersion: 'alpha-v1'
+        },
+        accessToken: 'refreshed-access-token',
+        refreshToken: 'rotated-refresh-token'
+      }
+    });
+
+    const mod = await import('./http');
+    const listener = vi.fn();
+    const unsubscribe = mod.subscribeAuthEvents(listener);
+
+    await mod.hydrateStoredSession();
+
+    expect(listener).toHaveBeenCalledWith({
+      type: 'user_updated',
+      user: expect.objectContaining({
+        mustAcceptTestNotice: true,
+        requiredTestNoticeVersion: 'alpha-v2'
+      })
+    });
+
+    unsubscribe();
+  });
+
+  it('emits notice_required on exact 403 acknowledgement errors', async () => {
+    const mod = await import('./http');
+    const listener = vi.fn();
+    const unsubscribe = mod.subscribeAuthEvents(listener);
+    const responseRejected = mockHttp.interceptors.response.use.mock.calls[0]?.[1];
+
+    await expect(
+      responseRejected({
+        config: { url: '/api/v1/chats' },
+        response: {
+          status: 403,
+          data: {
+            error: 'Test account acknowledgement required'
+          }
+        }
+      })
+    ).rejects.toEqual(
+      expect.objectContaining({
+        response: expect.objectContaining({
+          status: 403
+        })
+      })
+    );
+
+    expect(listener).toHaveBeenCalledWith({ type: 'notice_required' });
+
+    unsubscribe();
   });
 });

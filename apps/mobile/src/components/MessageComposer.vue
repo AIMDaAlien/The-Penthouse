@@ -14,30 +14,32 @@
       @keydown.enter.exact.prevent="handleEnter"
     ></textarea>
     <div class="actions">
-      <input
-        ref="fileInputRef"
-        class="hidden-file-input"
-        type="file"
-        :disabled="disabled"
-        accept="image/*,video/*,.txt,.md,.json,.log,.csv,.yaml,.yml,.xml,text/plain,text/markdown,application/json,application/xml,text/csv,text/xml"
-        @change="handleFileSelection"
-      />
-      <button
-        type="button"
-        class="action-btn"
-        :disabled="disabled"
-        @click="openFilePicker"
-      >
-        +
-      </button>
-      <button
-        type="button"
-        class="action-btn"
-        :disabled="disabled"
-        @click="showGifPicker = true"
-      >
-        GIF
-      </button>
+      <div class="media-actions">
+        <input
+          ref="fileInputRef"
+          class="hidden-file-input"
+          type="file"
+          :disabled="disabled"
+          accept="image/*,video/*,.txt,.md,.json,.log,.csv,.yaml,.yml,.xml,text/plain,text/markdown,application/json,application/xml,text/csv,text/xml"
+          @change="handleFileSelection"
+        />
+        <button
+          type="button"
+          class="action-btn"
+          :disabled="disabled"
+          @click="openFilePicker"
+        >
+          +
+        </button>
+        <button
+          type="button"
+          class="action-btn"
+          :disabled="disabled"
+          @click="showGifPicker = true"
+        >
+          GIF
+        </button>
+      </div>
       <button type="button" class="send-btn" :disabled="disabled || !canSend" @click="send">
         Send
       </button>
@@ -57,6 +59,7 @@ import type { GifResult } from '@penthouse/contracts';
 import GifPicker from './GifPicker.vue';
 
 const props = defineProps<{
+  chatId?: string;
   disabled: boolean;
 }>();
 
@@ -75,7 +78,9 @@ const fileInputRef = ref<HTMLInputElement | null>(null);
 const typingActive = ref(false);
 const showGifPicker = ref(false);
 const TYPING_IDLE_MS = 5000;
+const TYPING_REFRESH_MS = 2000;
 let typingStopTimer: ReturnType<typeof setTimeout> | null = null;
+let lastTypingEmitAt = 0;
 const canSend = computed(() => draft.value.trim().length > 0);
 
 function clearTypingStopTimer() {
@@ -88,6 +93,7 @@ function stopTyping() {
   clearTypingStopTimer();
   if (!typingActive.value) return;
   typingActive.value = false;
+  lastTypingEmitAt = 0;
   emit('typing-stop');
 }
 
@@ -104,8 +110,10 @@ function noteTyping() {
     return;
   }
 
-  if (!typingActive.value) {
+  const now = Date.now();
+  if (!typingActive.value || now - lastTypingEmitAt >= TYPING_REFRESH_MS) {
     typingActive.value = true;
+    lastTypingEmitAt = now;
     emit('typing-start');
   }
 
@@ -114,6 +122,15 @@ function noteTyping() {
 
 function clearDraft() {
   draft.value = '';
+}
+
+function resetComposerState() {
+  clearTypingStopTimer();
+  typingActive.value = false;
+  lastTypingEmitAt = 0;
+  isComposing.value = false;
+  draft.value = '';
+  showGifPicker.value = false;
 }
 
 function send() {
@@ -184,6 +201,14 @@ watch(
   }
 );
 
+watch(
+  () => props.chatId,
+  (nextChatId, previousChatId) => {
+    if (nextChatId === previousChatId) return;
+    resetComposerState();
+  }
+);
+
 onBeforeUnmount(() => {
   stopTyping();
 });
@@ -207,7 +232,8 @@ onBeforeUnmount(() => {
 textarea {
   flex: 1;
   min-width: 0;
-  width: auto;
+  width: 100%;
+  max-width: 100%;
   resize: none;
   background: rgba(15, 18, 34, 0.6);
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -248,8 +274,17 @@ textarea:focus {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-shrink: 1;
+  flex-shrink: 0;
   min-width: 0;
+  max-width: 100%;
+}
+
+.media-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .action-btn {
@@ -270,28 +305,39 @@ textarea:focus {
 
 @media (max-width: 760px) {
   .composer-container {
-    display: flex;
-    align-items: flex-end;
-    gap: 8px;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 10px;
     padding: 10px;
   }
 
+  textarea {
+    flex: 1 1 100%;
+    width: 100%;
+    min-height: 84px;
+  }
+
   .actions {
-    width: auto;
-    display: flex;
+    width: 100%;
+    justify-content: space-between;
     gap: 6px;
+    min-width: 0;
+  }
+
+  .media-actions {
+    gap: 6px;
+    min-width: 0;
   }
 
   .action-btn {
     min-width: 40px;
     padding: 0 10px;
-    flex-shrink: 1;
   }
 
   .send-btn {
-    min-width: 72px;
+    min-width: auto;
     padding: 0 16px;
-    flex-shrink: 1;
+    margin-left: auto;
   }
 }
 
@@ -304,21 +350,25 @@ textarea:focus {
     gap: 6px;
     padding: 6px;
   }
+
   textarea {
     padding: 8px 10px;
+    min-height: 72px;
   }
+
   .actions {
     gap: 4px;
+    min-width: 0;
   }
   .action-btn {
     height: 40px;
-    min-width: 36px;
-    padding: 0 6px;
+    min-width: 32px;
+    padding: 0 4px;
   }
   .send-btn {
     height: 40px;
-    min-width: 64px;
-    padding: 0 12px;
+    min-width: auto;
+    padding: 0 8px;
   }
 }
 </style>

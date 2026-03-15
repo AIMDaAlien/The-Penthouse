@@ -80,3 +80,9 @@ This slice focused on:
 - Android WebView behavior is less forgiving than desktop web for keyboard composition and storage assumptions.
 - Media support becomes much easier to reason about once width/height are treated as first-class metadata.
 - A fake empty GIF state is worse than an explicit provider error because it sends debugging effort in the wrong direction.
+
+## Current residual issues (as of 2026-03-12)
+
+- Right-edge clipping is still unresolved on narrow Android layouts.
+- The restored baseline helped, but it did not fully solve narrow-width overflow.
+- Notification logic exists, but it still needs a UX hardening pass.

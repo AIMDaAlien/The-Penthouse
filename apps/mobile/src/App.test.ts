@@ -2,10 +2,16 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
 import App from './App.vue';
 import { installLocalStorageMock } from './test/localStorageMock';
+import * as cache from './services/cache';
 import * as http from './services/http';
 import * as notifications from './services/notifications';
 
 const mockAppListeners: Record<string, Function> = {};
+const mockAuthEventListeners = new Set<(event: unknown) => void>();
+
+function emitAuthEvent(event: unknown) {
+  mockAuthEventListeners.forEach((listener) => listener(event));
+}
 
 vi.mock('@capacitor/app', () => ({
   App: {
@@ -31,7 +37,10 @@ vi.mock('./services/http', () => ({
       displayName: 'Test User',
       avatarUrl: null,
       role: 'member',
-      mustChangePassword: false
+      mustChangePassword: false,
+      mustAcceptTestNotice: false,
+      requiredTestNoticeVersion: 'alpha-v1',
+      acceptedTestNoticeVersion: 'alpha-v1'
     },
     accessToken: 'mock-token',
     refreshToken: 'mock-refresh-token'
@@ -43,6 +52,9 @@ vi.mock('./services/http', () => ({
     avatarUrl: null,
     role: 'member',
     mustChangePassword: false,
+    mustAcceptTestNotice: false,
+    requiredTestNoticeVersion: 'alpha-v1',
+    acceptedTestNoticeVersion: 'alpha-v1',
     bio: null,
     avatarMediaId: null
   })),
@@ -51,6 +63,20 @@ vi.mock('./services/http', () => ({
   login: vi.fn(),
   register: vi.fn(),
   resetPassword: vi.fn(),
+  acknowledgeTestNotice: vi.fn(() => Promise.resolve({
+    user: {
+      id: 'user-1',
+      username: 'testuser',
+      displayName: 'Test User',
+      avatarUrl: null,
+      role: 'member',
+      mustChangePassword: false,
+      mustAcceptTestNotice: false,
+      requiredTestNoticeVersion: 'alpha-v1',
+      acceptedTestNoticeVersion: 'alpha-v1'
+    },
+    acceptedAt: new Date().toISOString()
+  })),
   changePassword: vi.fn(),
   updateProfile: vi.fn(),
   rotateRecoveryCode: vi.fn(),
@@ -58,6 +84,12 @@ vi.mock('./services/http', () => ({
   getTrendingGifs: vi.fn(() => Promise.resolve({ provider: 'giphy', results: [] })),
   searchGifs: vi.fn(() => Promise.resolve({ provider: 'giphy', results: [] })),
   resolveMediaUrl: vi.fn((url: string) => `http://localhost:3000${url}`),
+  subscribeAuthEvents: vi.fn((listener: (event: unknown) => void) => {
+    mockAuthEventListeners.add(listener);
+    return () => {
+      mockAuthEventListeners.delete(listener);
+    };
+  }),
   sendMessage: vi.fn((chatId: string, content: string, clientMessageId: string) =>
     Promise.resolve({
       message: {
@@ -109,7 +141,11 @@ const mockSocket = {
     mockSocketHandlers[event] = handler;
   }),
   off: vi.fn(),
-  emit: vi.fn(),
+  emit: vi.fn((event: string, payload?: Record<string, unknown>, ack?: (response: { ok: boolean; chatId: string }) => void) => {
+    if (event === 'chat.join' && typeof ack === 'function') {
+      ack({ ok: true, chatId: String(payload?.chatId || '') });
+    }
+  }),
   removeAllListeners: vi.fn(),
   connect: vi.fn(),
   disconnect: vi.fn(),
@@ -127,6 +163,14 @@ const mockSocket = {
   }
 };
 
+function installDefaultSocketEmitBehavior(): void {
+  vi.mocked(mockSocket.emit).mockImplementation((event: string, payload?: Record<string, unknown>, ack?: (response: { ok: boolean; chatId: string }) => void) => {
+    if (event === 'chat.join' && typeof ack === 'function') {
+      ack({ ok: true, chatId: String(payload?.chatId || '') });
+    }
+  });
+}
+
 vi.mock('./services/socket', () => ({
   connectSocket: vi.fn(() => mockSocket),
   disconnectSocket: vi.fn(),
@@ -141,16 +185,26 @@ vi.mock('./services/notifications', () => ({
   clearAllDeliveredNotifications: vi.fn(() => Promise.resolve())
 }));
 
+vi.mock('./services/retry', () => ({
+  withBackoff: vi.fn((action: () => Promise<unknown>) => action())
+}));
+
+beforeEach(() => {
+  globalThis.sessionStorage?.clear?.();
+});
+
 describe('App.vue Optimistic Flow', () => {
   beforeEach(() => {
     installLocalStorageMock();
     Object.keys(mockAppListeners).forEach((key) => delete mockAppListeners[key]);
+    mockAuthEventListeners.clear();
     Object.keys(mockSocketHandlers).forEach((key) => delete mockSocketHandlers[key]);
     Object.keys(mockManagerHandlers).forEach((key) => delete mockManagerHandlers[key]);
     Object.keys(mockEngineHandlers).forEach((key) => delete mockEngineHandlers[key]);
     mockSocket.connected = false;
     mockSocket.io.engine.transport.name = 'polling';
     vi.clearAllMocks();
+    installDefaultSocketEmitBehavior();
   });
 
   it('optimistically displays message, then replaces id on message.ack', async () => {
@@ -257,18 +311,84 @@ describe('App.vue Optimistic Flow', () => {
 
     expect(wrapper.text()).toContain('Ryan is typing...');
   });
+
+  it('queues typing.start until the chat join acknowledgement completes', async () => {
+    let joinAck: ((response: { ok: boolean; chatId: string }) => void) | null = null;
+    vi.mocked(mockSocket.emit).mockImplementation((event: string, payload?: Record<string, unknown>, ack?: (response: { ok: boolean; chatId: string }) => void) => {
+      if (event === 'chat.join' && typeof ack === 'function') {
+        joinAck = ack;
+      }
+    });
+
+    const wrapper = mount(App);
+    await flushPromises();
+
+    mockSocket.connected = true;
+
+    const chatList = wrapper.findComponent({ name: 'ChatListPanel' });
+    await chatList.vm.$emit('select', 'chat-1');
+    await flushPromises();
+
+    const composer = wrapper.findComponent({ name: 'MessageComposer' });
+    await composer.vm.$emit('typing-start');
+    await flushPromises();
+
+    expect(mockSocket.emit).toHaveBeenCalledWith('chat.join', { chatId: 'chat-1' }, expect.any(Function));
+    expect(vi.mocked(mockSocket.emit).mock.calls.some(([event]) => event === 'typing.start')).toBe(false);
+
+    const resolvedJoinAck = joinAck as ((response: { ok: boolean; chatId: string }) => void) | null;
+    expect(resolvedJoinAck).toBeTypeOf('function');
+    if (resolvedJoinAck) {
+      resolvedJoinAck({ ok: true, chatId: 'chat-1' });
+    }
+    await flushPromises();
+
+    expect(mockSocket.emit).toHaveBeenCalledWith('typing.start', { chatId: 'chat-1' });
+  });
+
+  it('sends typing.stop and chat.leave for the previous chat when switching chats', async () => {
+    vi.mocked(http.getChats).mockResolvedValueOnce([
+      { id: 'chat-1', name: 'General', type: 'channel', updatedAt: new Date().toISOString(), unreadCount: 0 },
+      { id: 'chat-2', name: 'Ops', type: 'channel', updatedAt: new Date().toISOString(), unreadCount: 0 }
+    ]);
+
+    const wrapper = mount(App);
+    await flushPromises();
+
+    const chatList = wrapper.findComponent({ name: 'ChatListPanel' });
+    await chatList.vm.$emit('select', 'chat-1');
+    await flushPromises();
+
+    mockSocket.connected = true;
+    mockSocketHandlers.connect?.();
+    await flushPromises();
+    vi.mocked(mockSocket.emit).mockClear();
+
+    const composer = wrapper.findComponent({ name: 'MessageComposer' });
+    await composer.vm.$emit('typing-start');
+    await flushPromises();
+
+    await chatList.vm.$emit('select', 'chat-2');
+    await flushPromises();
+
+    expect(mockSocket.emit).toHaveBeenCalledWith('typing.stop', { chatId: 'chat-1' });
+    expect(mockSocket.emit).toHaveBeenCalledWith('chat.leave', { chatId: 'chat-1' });
+    expect(mockSocket.emit).toHaveBeenCalledWith('chat.join', { chatId: 'chat-2' }, expect.any(Function));
+  });
 });
 
 describe('App.vue Connection State', () => {
   beforeEach(() => {
     installLocalStorageMock();
     Object.keys(mockAppListeners).forEach((key) => delete mockAppListeners[key]);
+    mockAuthEventListeners.clear();
     mockSocket.connected = false;
     mockSocket.io.engine.transport.name = 'polling';
     Object.keys(mockSocketHandlers).forEach((key) => delete mockSocketHandlers[key]);
     Object.keys(mockManagerHandlers).forEach((key) => delete mockManagerHandlers[key]);
     Object.keys(mockEngineHandlers).forEach((key) => delete mockEngineHandlers[key]);
     vi.clearAllMocks();
+    installDefaultSocketEmitBehavior();
   });
 
   function getStatus(wrapper: ReturnType<typeof mount>) {
@@ -390,7 +510,7 @@ describe('App.vue Connection State', () => {
     mockSocketHandlers['connect']();
     await flushPromises();
     expect(getStatus(wrapper).props('realtimeState')).toBe('connected');
-    expect(mockSocket.emit).toHaveBeenCalledWith('chat.join', { chatId: 'chat-1' });
+    expect(mockSocket.emit).toHaveBeenCalledWith('chat.join', { chatId: 'chat-1' }, expect.any(Function));
   });
 
   it('marks the socket as failed after reconnect exhaustion', async () => {
@@ -447,11 +567,13 @@ describe('App.vue read gating', () => {
     vi.useFakeTimers();
     installLocalStorageMock();
     Object.keys(mockAppListeners).forEach((key) => delete mockAppListeners[key]);
+    mockAuthEventListeners.clear();
     Object.keys(mockSocketHandlers).forEach((key) => delete mockSocketHandlers[key]);
     Object.keys(mockManagerHandlers).forEach((key) => delete mockManagerHandlers[key]);
     Object.keys(mockEngineHandlers).forEach((key) => delete mockEngineHandlers[key]);
     mockSocket.connected = true;
     vi.clearAllMocks();
+    installDefaultSocketEmitBehavior();
   });
 
   afterEach(() => {
@@ -498,11 +620,13 @@ describe('App.vue notification hardening', () => {
   beforeEach(() => {
     installLocalStorageMock();
     Object.keys(mockAppListeners).forEach((key) => delete mockAppListeners[key]);
+    mockAuthEventListeners.clear();
     Object.keys(mockSocketHandlers).forEach((key) => delete mockSocketHandlers[key]);
     Object.keys(mockManagerHandlers).forEach((key) => delete mockManagerHandlers[key]);
     Object.keys(mockEngineHandlers).forEach((key) => delete mockEngineHandlers[key]);
     mockSocket.connected = true;
     vi.clearAllMocks();
+    installDefaultSocketEmitBehavior();
   });
 
   it('does not schedule a local notification while app is foregrounded', async () => {
@@ -539,6 +663,77 @@ describe('App.vue notification hardening', () => {
     expect(vi.mocked(notifications.scheduleIncomingMessageNotification)).not.toHaveBeenCalled();
   });
 
+  it('shows an in-app toast for messages outside the current live chat', async () => {
+    vi.mocked(http.getChats).mockResolvedValueOnce([
+      { id: 'chat-1', name: 'General', type: 'channel', updatedAt: new Date().toISOString(), unreadCount: 0 },
+      { id: 'chat-2', name: 'Ops', type: 'channel', updatedAt: new Date().toISOString(), unreadCount: 0 }
+    ]);
+
+    const wrapper = mount(App);
+    await flushPromises();
+
+    const chatList = wrapper.findComponent({ name: 'ChatListPanel' });
+    await chatList.vm.$emit('select', 'chat-1');
+    await flushPromises();
+
+    mockSocketHandlers['message.new']({
+      type: 'message.new',
+      payload: {
+        id: 'msg-toast-1',
+        chatId: 'chat-2',
+        senderId: 'user-2',
+        senderUsername: 'other-user',
+        senderDisplayName: 'Other User',
+        senderAvatarUrl: null,
+        content: 'hello from Ops',
+        type: 'text',
+        metadata: null,
+        createdAt: new Date().toISOString(),
+        clientMessageId: 'client-toast-1'
+      }
+    });
+    await flushPromises();
+
+    expect(wrapper.find('.toast-card').exists()).toBe(true);
+    expect(wrapper.text()).toContain('Other User');
+    expect(wrapper.text()).toContain('hello from Ops');
+    expect(vi.mocked(notifications.scheduleIncomingMessageNotification)).not.toHaveBeenCalled();
+
+    await wrapper.find('.toast-action').trigger('click');
+    await flushPromises();
+
+    expect(mockSocket.emit).toHaveBeenCalledWith('chat.join', { chatId: 'chat-2' }, expect.any(Function));
+  });
+
+  it('does not show an in-app toast while already viewing that live chat', async () => {
+    const wrapper = mount(App);
+    await flushPromises();
+
+    const chatList = wrapper.findComponent({ name: 'ChatListPanel' });
+    await chatList.vm.$emit('select', 'chat-1');
+    await flushPromises();
+
+    mockSocketHandlers['message.new']({
+      type: 'message.new',
+      payload: {
+        id: 'msg-live-chat-1',
+        chatId: 'chat-1',
+        senderId: 'user-2',
+        senderUsername: 'other-user',
+        senderDisplayName: 'Other User',
+        senderAvatarUrl: null,
+        content: 'already here',
+        type: 'text',
+        metadata: null,
+        createdAt: new Date().toISOString(),
+        clientMessageId: 'client-live-chat-1'
+      }
+    });
+    await flushPromises();
+
+    expect(wrapper.find('.toast-card').exists()).toBe(false);
+  });
+
   it('schedules a local notification when app is backgrounded', async () => {
     const wrapper = mount(App);
     await flushPromises();
@@ -568,5 +763,460 @@ describe('App.vue notification hardening', () => {
     await flushPromises();
 
     expect(vi.mocked(notifications.scheduleIncomingMessageNotification)).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('App.vue session notice', () => {
+  beforeEach(() => {
+    installLocalStorageMock();
+    Object.keys(mockAppListeners).forEach((key) => delete mockAppListeners[key]);
+    mockAuthEventListeners.clear();
+    Object.keys(mockSocketHandlers).forEach((key) => delete mockSocketHandlers[key]);
+    Object.keys(mockManagerHandlers).forEach((key) => delete mockManagerHandlers[key]);
+    Object.keys(mockEngineHandlers).forEach((key) => delete mockEngineHandlers[key]);
+    mockSocket.connected = false;
+    vi.clearAllMocks();
+    installDefaultSocketEmitBehavior();
+  });
+
+  it('shows the lightweight internal-test notice on a fresh app session without blocking access', async () => {
+    const wrapper = mount(App);
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('Internal testing build');
+    expect(wrapper.text()).toContain('Bugs and downtime are expected');
+    expect(wrapper.text()).toContain('Please report issues');
+    expect(wrapper.findComponent({ name: 'ChatListPanel' }).exists()).toBe(true);
+  });
+
+  it('shows the lightweight notice again on a fresh app launch after being dismissed', async () => {
+    const firstWrapper = mount(App);
+    await flushPromises();
+
+    await firstWrapper.find('.session-notice-dismiss').trigger('click');
+    await flushPromises();
+    expect(firstWrapper.text()).not.toContain('Internal testing build');
+
+    firstWrapper.unmount();
+
+    const secondWrapper = mount(App);
+    await flushPromises();
+
+    expect(secondWrapper.text()).toContain('Internal testing build');
+  });
+
+  it('shows the lightweight notice again when the app returns to the foreground', async () => {
+    const wrapper = mount(App);
+    await flushPromises();
+
+    await wrapper.find('.session-notice-dismiss').trigger('click');
+    await flushPromises();
+    expect(wrapper.text()).not.toContain('Internal testing build');
+
+    mockAppListeners.pause?.();
+    await flushPromises();
+    mockAppListeners.resume?.();
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('Internal testing build');
+  });
+});
+
+describe('App.vue chat bootstrap', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    installLocalStorageMock();
+    Object.keys(mockAppListeners).forEach((key) => delete mockAppListeners[key]);
+    mockAuthEventListeners.clear();
+    Object.keys(mockSocketHandlers).forEach((key) => delete mockSocketHandlers[key]);
+    Object.keys(mockManagerHandlers).forEach((key) => delete mockManagerHandlers[key]);
+    Object.keys(mockEngineHandlers).forEach((key) => delete mockEngineHandlers[key]);
+    mockSocket.connected = false;
+    vi.clearAllMocks();
+    installDefaultSocketEmitBehavior();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('retries initial chat bootstrap instead of showing a false empty chat list', async () => {
+    vi.mocked(http.getChats)
+      .mockRejectedValueOnce(new Error('temporary bootstrap miss'))
+      .mockResolvedValueOnce([
+        { id: 'chat-1', name: 'General', type: 'channel', updatedAt: new Date().toISOString(), unreadCount: 0 }
+      ]);
+
+    const wrapper = mount(App);
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('Loading chats...');
+    expect(wrapper.text()).not.toContain('No chats available');
+
+    await vi.advanceTimersByTimeAsync(901);
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('General');
+    expect(wrapper.text()).not.toContain('No chats available');
+  });
+
+  it('does not leak cached chats or messages from another user into a new session', async () => {
+    cache.cacheChats('user-old', [
+      { id: 'chat-old', name: 'Legacy Lounge', type: 'channel', updatedAt: new Date().toISOString(), unreadCount: 0 }
+    ]);
+    cache.cacheMessages('user-old', 'chat-1', [
+      {
+        id: 'msg-old',
+        chatId: 'chat-1',
+        senderId: 'user-old',
+        content: 'stale cached message',
+        type: 'text',
+        createdAt: new Date().toISOString(),
+        clientMessageId: 'cm-old'
+      }
+    ]);
+
+    vi.mocked(http.hydrateStoredSession).mockResolvedValueOnce({
+      user: {
+        id: 'user-2',
+        username: 'freshuser',
+        displayName: 'Fresh User',
+        avatarUrl: null,
+        role: 'member',
+        mustChangePassword: false,
+        mustAcceptTestNotice: false,
+        requiredTestNoticeVersion: 'alpha-v1',
+        acceptedTestNoticeVersion: 'alpha-v1'
+      },
+      accessToken: 'mock-token-user-2',
+      refreshToken: 'mock-refresh-token-user-2'
+    });
+    vi.mocked(http.getMe).mockResolvedValueOnce({
+      id: 'user-2',
+      username: 'freshuser',
+      displayName: 'Fresh User',
+      avatarUrl: null,
+      role: 'member',
+      mustChangePassword: false,
+      mustAcceptTestNotice: false,
+      requiredTestNoticeVersion: 'alpha-v1',
+      acceptedTestNoticeVersion: 'alpha-v1',
+      bio: null,
+      avatarMediaId: null
+    });
+    vi.mocked(http.getChats).mockResolvedValueOnce([
+      { id: 'chat-1', name: 'General', type: 'channel', updatedAt: new Date().toISOString(), unreadCount: 0 }
+    ]);
+    vi.mocked(http.getMessages).mockRejectedValueOnce(new Error('temporary message miss'));
+
+    const wrapper = mount(App);
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('General');
+    expect(wrapper.text()).not.toContain('Legacy Lounge');
+
+    const chatList = wrapper.findComponent({ name: 'ChatListPanel' });
+    await chatList.vm.$emit('select', 'chat-1');
+    await flushPromises();
+
+    expect(wrapper.text()).not.toContain('stale cached message');
+  });
+});
+
+describe('App.vue inactivity presence', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    installLocalStorageMock();
+    Object.keys(mockAppListeners).forEach((key) => delete mockAppListeners[key]);
+    mockAuthEventListeners.clear();
+    Object.keys(mockSocketHandlers).forEach((key) => delete mockSocketHandlers[key]);
+    Object.keys(mockManagerHandlers).forEach((key) => delete mockManagerHandlers[key]);
+    Object.keys(mockEngineHandlers).forEach((key) => delete mockEngineHandlers[key]);
+    mockSocket.connected = false;
+    vi.clearAllMocks();
+    installDefaultSocketEmitBehavior();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('hands presence changes to the server instead of disconnecting locally on pause/resume', async () => {
+    const wrapper = mount(App);
+    await flushPromises();
+
+    mockSocket.connected = true;
+    mockSocketHandlers.connect?.();
+    await flushPromises();
+
+    mockAppListeners.pause?.();
+    await flushPromises();
+
+    expect(mockSocket.emit).toHaveBeenCalledWith('app.state', { active: false });
+    expect(mockSocket.disconnect).not.toHaveBeenCalled();
+
+    mockAppListeners.resume?.();
+    await flushPromises();
+
+    expect(mockSocket.emit).toHaveBeenCalledWith('app.state', { active: true });
+  });
+});
+
+describe('App.vue test notice gating', () => {
+  beforeEach(() => {
+    installLocalStorageMock();
+    Object.keys(mockAppListeners).forEach((key) => delete mockAppListeners[key]);
+    Object.keys(mockSocketHandlers).forEach((key) => delete mockSocketHandlers[key]);
+    Object.keys(mockManagerHandlers).forEach((key) => delete mockManagerHandlers[key]);
+    Object.keys(mockEngineHandlers).forEach((key) => delete mockEngineHandlers[key]);
+    mockSocket.connected = false;
+    mockSocket.io.engine.transport.name = 'polling';
+    vi.clearAllMocks();
+    installDefaultSocketEmitBehavior();
+  });
+
+  it('holds the user on the notice gate until the current version is acknowledged', async () => {
+    vi.mocked(http.hydrateStoredSession).mockResolvedValueOnce({
+      user: {
+        id: 'user-1',
+        username: 'testuser',
+        displayName: 'Test User',
+        avatarUrl: null,
+        role: 'member',
+        mustChangePassword: false,
+        mustAcceptTestNotice: true,
+        requiredTestNoticeVersion: 'alpha-v2',
+        acceptedTestNoticeVersion: 'alpha-v1'
+      },
+      accessToken: 'mock-token',
+      refreshToken: 'mock-refresh-token'
+    });
+    vi.mocked(http.getMe).mockResolvedValueOnce({
+      id: 'user-1',
+      username: 'testuser',
+      displayName: 'Test User',
+      avatarUrl: null,
+      role: 'member',
+      mustChangePassword: false,
+      mustAcceptTestNotice: true,
+      requiredTestNoticeVersion: 'alpha-v2',
+      acceptedTestNoticeVersion: 'alpha-v1',
+      bio: null,
+      avatarMediaId: null
+    });
+
+    const wrapper = mount(App);
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('Internal Test Notice');
+    expect(wrapper.text()).toContain('alpha-v2');
+    expect(wrapper.text()).not.toContain('Bugs and downtime are expected');
+    expect(wrapper.find('.chat-layout').exists()).toBe(false);
+    expect(vi.mocked(http.getChats)).not.toHaveBeenCalled();
+    expect(vi.mocked(notifications.initializeNotifications)).not.toHaveBeenCalled();
+    expect(mockSocket.connect).not.toHaveBeenCalled();
+  });
+
+  it('acknowledges the notice and then loads the chat workspace', async () => {
+    vi.mocked(http.hydrateStoredSession).mockResolvedValueOnce({
+      user: {
+        id: 'user-1',
+        username: 'testuser',
+        displayName: 'Test User',
+        avatarUrl: null,
+        role: 'member',
+        mustChangePassword: false,
+        mustAcceptTestNotice: true,
+        requiredTestNoticeVersion: 'alpha-v2',
+        acceptedTestNoticeVersion: 'alpha-v1'
+      },
+      accessToken: 'mock-token',
+      refreshToken: 'mock-refresh-token'
+    });
+    vi.mocked(http.getMe).mockResolvedValueOnce({
+      id: 'user-1',
+      username: 'testuser',
+      displayName: 'Test User',
+      avatarUrl: null,
+      role: 'member',
+      mustChangePassword: false,
+      mustAcceptTestNotice: true,
+      requiredTestNoticeVersion: 'alpha-v2',
+      acceptedTestNoticeVersion: 'alpha-v1',
+      bio: null,
+      avatarMediaId: null
+    });
+
+    vi.mocked(http.acknowledgeTestNotice).mockResolvedValueOnce({
+      user: {
+        id: 'user-1',
+        username: 'testuser',
+        displayName: 'Test User',
+        avatarUrl: null,
+        role: 'member',
+        mustChangePassword: false,
+        mustAcceptTestNotice: false,
+        requiredTestNoticeVersion: 'alpha-v2',
+        acceptedTestNoticeVersion: 'alpha-v2'
+      },
+      acceptedAt: new Date().toISOString()
+    });
+
+    const wrapper = mount(App);
+    await flushPromises();
+
+    const checkbox = wrapper.find('input[type="checkbox"]');
+    await checkbox.setValue(true);
+    await wrapper.find('button.form-btn').trigger('click');
+    await flushPromises();
+
+    expect(vi.mocked(http.acknowledgeTestNotice)).toHaveBeenCalledWith('alpha-v2');
+    expect(vi.mocked(http.getChats)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(notifications.initializeNotifications)).toHaveBeenCalledTimes(1);
+  });
+
+  it('blocks boot on fresh me sync before entering the notice gate', async () => {
+    vi.mocked(http.hydrateStoredSession).mockResolvedValueOnce({
+      user: {
+        id: 'user-1',
+        username: 'testuser',
+        displayName: 'Test User',
+        avatarUrl: null,
+        role: 'member',
+        mustChangePassword: false,
+        mustAcceptTestNotice: false,
+        requiredTestNoticeVersion: 'alpha-v1',
+        acceptedTestNoticeVersion: 'alpha-v1'
+      },
+      accessToken: 'mock-token',
+      refreshToken: 'mock-refresh-token'
+    });
+    vi.mocked(http.getMe).mockResolvedValueOnce({
+      id: 'user-1',
+      username: 'testuser',
+      displayName: 'Test User',
+      avatarUrl: null,
+      role: 'member',
+      mustChangePassword: false,
+      mustAcceptTestNotice: true,
+      requiredTestNoticeVersion: 'alpha-v2',
+      acceptedTestNoticeVersion: 'alpha-v1',
+      bio: null,
+      avatarMediaId: null
+    });
+
+    const wrapper = mount(App);
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('Internal Test Notice');
+    expect(wrapper.text()).toContain('alpha-v2');
+    expect(vi.mocked(http.getChats)).not.toHaveBeenCalled();
+    expect(vi.mocked(notifications.initializeNotifications)).not.toHaveBeenCalled();
+    expect(mockSocket.connect).not.toHaveBeenCalled();
+  });
+
+  it('shows the sync-required blocker and resets workspace when resume sync fails', async () => {
+    const wrapper = mount(App);
+    await flushPromises();
+
+    expect(vi.mocked(http.getChats)).toHaveBeenCalledTimes(1);
+
+    vi.mocked(http.getMe).mockRejectedValueOnce(new Error('Network Error'));
+
+    await mockAppListeners.resume?.();
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('Session Sync Required');
+    expect(wrapper.findComponent({ name: 'ChatListPanel' }).exists()).toBe(false);
+  });
+
+  it('forces the client into the notice gate when a notice_required auth event fires', async () => {
+    const wrapper = mount(App);
+    await flushPromises();
+
+    vi.mocked(http.getMe).mockResolvedValueOnce({
+      id: 'user-1',
+      username: 'testuser',
+      displayName: 'Test User',
+      avatarUrl: null,
+      role: 'member',
+      mustChangePassword: false,
+      mustAcceptTestNotice: true,
+      requiredTestNoticeVersion: 'alpha-v3',
+      acceptedTestNoticeVersion: 'alpha-v2',
+      bio: null,
+      avatarMediaId: null
+    });
+
+    const authListener = vi.mocked(http.subscribeAuthEvents).mock.calls.at(-1)?.[0];
+    expect(authListener).toBeTypeOf('function');
+
+    authListener?.({ type: 'notice_required' });
+    await flushPromises();
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('Internal Test Notice');
+    expect(wrapper.text()).toContain('alpha-v3');
+    expect(wrapper.findComponent({ name: 'ChatListPanel' }).exists()).toBe(false);
+  });
+
+  it('updates reactive session state when a refreshed user update event arrives', async () => {
+    vi.mocked(http.hydrateStoredSession)
+      .mockResolvedValueOnce({
+        user: {
+          id: 'user-1',
+          username: 'testuser',
+          displayName: 'Test User',
+          avatarUrl: null,
+          role: 'member',
+          mustChangePassword: false,
+          mustAcceptTestNotice: false,
+          requiredTestNoticeVersion: 'alpha-v1',
+          acceptedTestNoticeVersion: 'alpha-v1'
+        },
+        accessToken: 'mock-token',
+        refreshToken: 'mock-refresh-token'
+      })
+      .mockResolvedValueOnce({
+        user: {
+          id: 'user-1',
+          username: 'testuser',
+          displayName: 'Test User',
+          avatarUrl: null,
+          role: 'member',
+          mustChangePassword: false,
+          mustAcceptTestNotice: true,
+          requiredTestNoticeVersion: 'alpha-v4',
+          acceptedTestNoticeVersion: 'alpha-v2'
+        },
+        accessToken: 'refreshed-token',
+        refreshToken: 'rotated-refresh-token'
+      });
+
+    const wrapper = mount(App);
+    await flushPromises();
+
+    const authListener = vi.mocked(http.subscribeAuthEvents).mock.calls.at(-1)?.[0];
+    expect(authListener).toBeTypeOf('function');
+
+    authListener?.({
+      type: 'user_updated',
+      user: {
+        id: 'user-1',
+        username: 'testuser',
+        displayName: 'Test User',
+        avatarUrl: null,
+        role: 'member',
+        mustChangePassword: false,
+        mustAcceptTestNotice: true,
+        requiredTestNoticeVersion: 'alpha-v4',
+        acceptedTestNoticeVersion: 'alpha-v2'
+      }
+    });
+    await flushPromises();
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('Internal Test Notice');
+    expect(wrapper.text()).toContain('alpha-v4');
   });
 });

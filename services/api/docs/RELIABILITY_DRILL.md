@@ -180,12 +180,12 @@ the core scenarios programmatically.
 docker compose -f infra/compose/docker-compose.yml up -d postgres
 
 # 2. Run integration tests only
-DATABASE_URL=postgresql://localhost:5432/penthouse_test \
+DATABASE_URL=postgresql://penthouse:penthouse@localhost:5432/penthouse_test \
 JWT_SECRET=local-test-jwt-secret-long-enough \
   npm --workspace services/api run test:integration
 
 # Or run all tests (unit + integration)
-DATABASE_URL=postgresql://localhost:5432/penthouse_test \
+DATABASE_URL=postgresql://penthouse:penthouse@localhost:5432/penthouse_test \
 JWT_SECRET=local-test-jwt-secret-long-enough \
   npm --workspace services/api run test
 ```

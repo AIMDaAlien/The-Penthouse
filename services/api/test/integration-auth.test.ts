@@ -20,6 +20,17 @@ async function withBootstrapUsername(username: string, run: () => Promise<void>)
   }
 }
 
+async function withTestNoticeVersion(version: string, run: () => Promise<void>) {
+  const { env } = await import('../src/config/env.js');
+  const original = env.TEST_ACCOUNT_NOTICE_VERSION;
+  env.TEST_ACCOUNT_NOTICE_VERSION = version;
+  try {
+    await run();
+  } finally {
+    env.TEST_ACCOUNT_NOTICE_VERSION = original;
+  }
+}
+
 async function promoteAdmin(username: string) {
   const { pool } = await import('./helpers.js');
   await pool.query(`UPDATE users SET role = 'admin' WHERE username = $1`, [username]);
@@ -81,7 +92,9 @@ describe('[integration] refresh token rotation', { skip: SKIP, concurrency: fals
       payload: {
         username: '  Aim.Test  ',
         password: 'supersecurepassword',
-        inviteCode: ' penthouse-alpha '
+        inviteCode: ' penthouse-alpha ',
+        acceptTestNotice: true,
+        testNoticeVersion: 'alpha-v1'
       }
     });
 
@@ -385,7 +398,9 @@ describe('[integration] admin user management', { skip: SKIP, concurrency: false
         payload: {
           username: 'old_invite_user',
           password: 'supersecurepassword',
-          inviteCode: 'PENTHOUSE-ALPHA'
+          inviteCode: 'PENTHOUSE-ALPHA',
+          acceptTestNotice: true,
+          testNoticeVersion: 'alpha-v1'
         }
       });
       assert.equal(oldInviteRegister.statusCode, 400, 'old invite code must fail immediately');
@@ -396,7 +411,9 @@ describe('[integration] admin user management', { skip: SKIP, concurrency: false
         payload: {
           username: 'new_invite_user',
           password: 'supersecurepassword',
-          inviteCode: rotated.code
+          inviteCode: rotated.code,
+          acceptTestNotice: true,
+          testNoticeVersion: 'alpha-v1'
         }
       });
       assert.equal(newInviteRegister.statusCode, 201, 'rotated invite code must work');
@@ -566,7 +583,9 @@ describe('[integration] admin user management', { skip: SKIP, concurrency: false
         payload: {
           username: 'ban_target',
           password: 'supersecurepassword',
-          inviteCode: 'PENTHOUSE-ALPHA'
+          inviteCode: 'PENTHOUSE-ALPHA',
+          acceptTestNotice: true,
+          testNoticeVersion: 'alpha-v1'
         }
       });
       assert.equal(registerAgainRes.statusCode, 409, 'banned username should remain reserved');
@@ -579,5 +598,118 @@ describe('[integration] admin user management', { skip: SKIP, concurrency: false
       assert.equal(adminMembersRes.statusCode, 200);
       const adminMembers = JSON.parse(adminMembersRes.payload);
       assert.equal(adminMembers.find((row: any) => row.username === 'ban_target')?.status, 'banned');
+  });
+});
+
+describe('[integration] test notice acknowledgement', { skip: SKIP, concurrency: false }, () => {
+  let app: any;
+
+  beforeEach(async () => {
+    process.env.JWT_SECRET ??= 'integration-test-jwt-secret-long-enough';
+    const helpers = await import('./helpers.js');
+    await helpers.migrate();
+    await helpers.cleanup();
+    const result = await helpers.buildTestApp();
+    app = result.app;
+  });
+
+  afterEach(async () => {
+    await app?.close();
+    const helpers = await import('./helpers.js');
+    await helpers.cleanup();
+  });
+
+  test('register rejects stale acknowledgement version', async () => {
+    await withTestNoticeVersion('alpha-v2', async () => {
+      const registerRes = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/register',
+        payload: {
+          username: 'stale_notice_user',
+          password: 'supersecurepassword',
+          inviteCode: 'PENTHOUSE-ALPHA',
+          acceptTestNotice: true,
+          testNoticeVersion: 'alpha-v1'
+        }
+      });
+
+      assert.equal(registerRes.statusCode, 400);
+      assert.match(registerRes.payload, /current test notice/i);
+    });
+  });
+
+  test('version bump marks existing users as mustAcceptTestNotice until they acknowledge', async () => {
+    const { registerUser, authHeaders } = await import('./helpers.js');
+    const member = await registerUser(app, 'notice_gate_user');
+
+    await withTestNoticeVersion('alpha-v2', async () => {
+      const loginRes = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/login',
+        payload: {
+          username: 'notice_gate_user',
+          password: 'supersecurepassword'
+        }
+      });
+      assert.equal(loginRes.statusCode, 200);
+      const loggedIn = JSON.parse(loginRes.payload);
+      assert.equal(loggedIn.user.mustAcceptTestNotice, true);
+      assert.equal(loggedIn.user.requiredTestNoticeVersion, 'alpha-v2');
+      assert.equal(loggedIn.user.acceptedTestNoticeVersion, 'alpha-v1');
+
+      const chatsBlocked = await app.inject({
+        method: 'GET',
+        url: '/api/v1/chats',
+        headers: authHeaders(loggedIn.accessToken)
+      });
+      assert.equal(chatsBlocked.statusCode, 403);
+      assert.equal(JSON.parse(chatsBlocked.payload).error, 'Test account acknowledgement required');
+
+      const meAllowed = await app.inject({
+        method: 'GET',
+        url: '/api/v1/me',
+        headers: authHeaders(loggedIn.accessToken)
+      });
+      assert.equal(meAllowed.statusCode, 200);
+
+      const ackRes = await app.inject({
+        method: 'POST',
+        url: '/api/v1/me/test-notice/ack',
+        headers: authHeaders(loggedIn.accessToken),
+        payload: { version: 'alpha-v2' }
+      });
+      assert.equal(ackRes.statusCode, 200);
+      const ackBody = JSON.parse(ackRes.payload);
+      assert.equal(ackBody.user.mustAcceptTestNotice, false);
+      assert.equal(ackBody.user.requiredTestNoticeVersion, 'alpha-v2');
+      assert.equal(ackBody.user.acceptedTestNoticeVersion, 'alpha-v2');
+      assert.ok(ackBody.acceptedAt);
+
+      const ackAgainRes = await app.inject({
+        method: 'POST',
+        url: '/api/v1/me/test-notice/ack',
+        headers: authHeaders(loggedIn.accessToken),
+        payload: { version: 'alpha-v2' }
+      });
+      assert.equal(ackAgainRes.statusCode, 200);
+      assert.equal(JSON.parse(ackAgainRes.payload).user.acceptedTestNoticeVersion, 'alpha-v2');
+
+      const chatsAfterAck = await app.inject({
+        method: 'GET',
+        url: '/api/v1/chats',
+        headers: authHeaders(loggedIn.accessToken)
+      });
+      assert.equal(chatsAfterAck.statusCode, 200);
+    });
+
+    const refreshRes = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/refresh',
+      payload: { refreshToken: member.refreshToken }
+    });
+    assert.equal(refreshRes.statusCode, 200);
+    const refreshed = JSON.parse(refreshRes.payload);
+    assert.equal(refreshed.user.mustAcceptTestNotice, false);
+    assert.equal(refreshed.user.acceptedTestNoticeVersion, 'alpha-v2');
   });
 });

@@ -74,7 +74,27 @@ npm run release:gate
 Optional with DB for integration coverage:
 
 ```bash
-DATABASE_URL=postgresql://localhost:5432/penthouse_test \
+DATABASE_URL=postgresql://penthouse:penthouse@localhost:5432/penthouse_test \
 JWT_SECRET=local-test-jwt-secret-long-enough \
   npm --workspace services/api run test
 ```
+
+## Current project state (as of 2026-03-12)
+
+Functionally present:
+
+- [x] invite auth and refresh rotation
+- [x] shared chat
+- [x] media upload/rendering
+- [x] realtime hardening
+
+Still unstable or pending:
+
+- [ ] UI recovery complete across mobile screens
+- [ ] client-side test-notice acknowledgement UX wired
+- [ ] strict DB release gate rerun successfully in a working environment
+
+Current operating mode:
+
+- public rollout paused
+- internal-only candidate until UI signoff

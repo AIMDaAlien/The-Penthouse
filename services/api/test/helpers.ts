@@ -78,7 +78,9 @@ export async function registerUser(app: FastifyInstance, username: string) {
     payload: {
       username,
       password: 'supersecurepassword',
-      inviteCode: 'PENTHOUSE-ALPHA'
+      inviteCode: 'PENTHOUSE-ALPHA',
+      acceptTestNotice: true,
+      testNoticeVersion: 'alpha-v1'
     }
   });
   if (res.statusCode !== 201) {
@@ -92,6 +94,9 @@ export async function registerUser(app: FastifyInstance, username: string) {
       avatarUrl: string | null;
       role: 'admin' | 'member';
       mustChangePassword: boolean;
+      mustAcceptTestNotice: boolean;
+      requiredTestNoticeVersion: string;
+      acceptedTestNoticeVersion: string | null;
     };
     accessToken: string;
     refreshToken: string;
@@ -118,6 +123,9 @@ export async function loginUser(app: FastifyInstance, username: string, password
       avatarUrl: string | null;
       role: 'admin' | 'member';
       mustChangePassword: boolean;
+      mustAcceptTestNotice: boolean;
+      requiredTestNoticeVersion: string;
+      acceptedTestNoticeVersion: string | null;
     };
     accessToken: string;
     refreshToken: string;

@@ -16,6 +16,7 @@ import type {
   PasswordResetRequest,
   RotateRecoveryCodeResponse,
   SendMessageResponse,
+  TestNoticeAckResponse,
   UploadResponse,
   UpdateProfileRequest
 } from '@penthouse/contracts';
@@ -32,8 +33,19 @@ import {
   persistStoredUser
 } from './sessionStorage';
 import { resolveApiBase } from './runtime';
+import { TEST_NOTICE_VERSION } from '../testNotice';
 
 const API_BASE = resolveApiBase();
+const NOTICE_REQUIRED_ERROR = 'Test account acknowledgement required';
+
+export type AuthEvent =
+  | {
+      type: 'user_updated';
+      user: AuthUser;
+    }
+  | {
+      type: 'notice_required';
+    };
 
 const http = axios.create({
   baseURL: API_BASE,
@@ -45,6 +57,18 @@ let refreshToken = '';
 let cachedUser: AuthUser | null = null;
 let hydrated = false;
 let hydratingPromise: Promise<Session | null> | null = null;
+const authEventListeners = new Set<(event: AuthEvent) => void>();
+
+function emitAuthEvent(event: AuthEvent): void {
+  authEventListeners.forEach((listener) => listener(event));
+}
+
+export function subscribeAuthEvents(listener: (event: AuthEvent) => void): () => void {
+  authEventListeners.add(listener);
+  return () => {
+    authEventListeners.delete(listener);
+  };
+}
 
 function decodeJwtExp(token: string): number | null {
   const parts = token.split('.');
@@ -125,6 +149,7 @@ async function refreshAccessToken(): Promise<string | null> {
     });
     setTokens(response.data.accessToken, response.data.refreshToken);
     setStoredUser(response.data.user);
+    emitAuthEvent({ type: 'user_updated', user: response.data.user });
     queuedResolvers.forEach((resolve) => resolve(response.data.accessToken));
     queuedResolvers = [];
     return response.data.accessToken;
@@ -145,6 +170,12 @@ http.interceptors.response.use(
   (res) => res,
   async (error) => {
     const original = error.config as Record<string, any> | undefined;
+
+    if (error.response?.status === 403 && error.response?.data?.error === NOTICE_REQUIRED_ERROR) {
+      emitAuthEvent({ type: 'notice_required' });
+      throw error;
+    }
+
     if (!original || original._retry) throw error;
 
     if (error.response?.status === 401) {
@@ -223,7 +254,9 @@ export async function register(username: string, password: string, inviteCode: s
   const response = await http.post<AuthResponse>('/api/v1/auth/register', {
     username: normalizeUsername(username),
     password,
-    inviteCode: normalizeInviteCode(inviteCode)
+    inviteCode: normalizeInviteCode(inviteCode),
+    acceptTestNotice: true,
+    testNoticeVersion: TEST_NOTICE_VERSION
   });
   setTokens(response.data.accessToken, response.data.refreshToken);
   setStoredUser(response.data.user);
@@ -261,6 +294,14 @@ export async function logout(): Promise<void> {
     await http.post('/api/v1/auth/logout', { refreshToken }).catch(() => undefined);
   }
   await clearStoredAuthState();
+}
+
+export async function acknowledgeTestNotice(version: string): Promise<TestNoticeAckResponse> {
+  const response = await http.post<TestNoticeAckResponse>('/api/v1/me/test-notice/ack', {
+    version
+  });
+  setStoredUser(response.data.user);
+  return response.data;
 }
 
 export async function getChats(): Promise<ChatSummary[]> {

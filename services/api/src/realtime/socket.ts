@@ -4,7 +4,7 @@ import { pool } from '../db/pool.js';
 import { ClientMessageSendEventSchema, type MessageType } from '@penthouse/contracts';
 import { randomUUID } from 'node:crypto';
 import { env } from '../config/env.js';
-import { avatarUrlFromFileName, getUserById } from '../utils/users.js';
+import { avatarUrlFromFileName, getUserById, requiresTestNoticeAck } from '../utils/users.js';
 
 async function isMember(userId: string, chatId: string): Promise<boolean> {
   const res = await pool.query('SELECT 1 FROM chat_members WHERE user_id = $1 AND chat_id = $2', [userId, chatId]);
@@ -15,6 +15,13 @@ async function listChatIdsForUser(userId: string): Promise<string[]> {
   const res = await pool.query('SELECT chat_id FROM chat_members WHERE user_id = $1', [userId]);
   return res.rows.map((row) => String(row.chat_id));
 }
+
+function activeChatRoom(chatId: string): string {
+  return `active-chat:${chatId}`;
+}
+
+const PRESENCE_INACTIVE_TIMEOUT_MS = 10_000;
+const TYPING_TTL_MS = 6_000;
 
 function parseAllowedOrigins(): Set<string> {
   const allowed = new Set(
@@ -82,11 +89,131 @@ export function initRealtime(app: FastifyInstance): Server {
   });
 
   const onlineUsers = new Map<string, Set<string>>();
+  const inactivePresenceTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  const typingByChat = new Map<string, Map<string, { displayName: string; avatarUrl: string | null; timeout: ReturnType<typeof setTimeout> }>>();
 
   // Socket observability counters
   let socketConnections = 0;
   let socketDisconnections = 0;
   let socketAuthFailures = 0;
+
+  function emitPresenceStatus(userId: string, status: 'online' | 'offline'): void {
+    io.emit('presence.update', { type: 'presence.update', payload: { userId, status } });
+  }
+
+  function clearInactivePresenceTimer(socketId: string): void {
+    const timer = inactivePresenceTimers.get(socketId);
+    if (!timer) return;
+    clearTimeout(timer);
+    inactivePresenceTimers.delete(socketId);
+  }
+
+  function markSocketOnline(socket: { id: string; data: { userId?: string } }): void {
+    const userId = socket.data.userId;
+    if (!userId) return;
+    clearInactivePresenceTimer(socket.id);
+    const sockets = onlineUsers.get(userId) ?? new Set<string>();
+    const wasOffline = sockets.size === 0;
+    if (!sockets.has(socket.id)) {
+      sockets.add(socket.id);
+      onlineUsers.set(userId, sockets);
+    }
+    if (wasOffline) {
+      emitPresenceStatus(userId, 'online');
+    }
+  }
+
+  function clearTypingState(chatId: string, userId: string, emitStop = true): void {
+    const chatTyping = typingByChat.get(chatId);
+    if (!chatTyping) return;
+    const existing = chatTyping.get(userId);
+    if (!existing) return;
+
+    clearTimeout(existing.timeout);
+    chatTyping.delete(userId);
+    if (chatTyping.size === 0) {
+      typingByChat.delete(chatId);
+    }
+
+    if (emitStop) {
+      io.to(activeChatRoom(chatId)).emit('typing.update', {
+        type: 'typing.update',
+        payload: {
+          chatId,
+          userId,
+          status: 'stop',
+          displayName: existing.displayName,
+          avatarUrl: existing.avatarUrl
+        }
+      });
+    }
+  }
+
+  function clearTypingStateForUser(userId: string): void {
+    for (const chatId of typingByChat.keys()) {
+      clearTypingState(chatId, userId);
+    }
+  }
+
+  function markSocketOffline(socket: { id: string; data: { userId?: string } }): void {
+    const userId = socket.data.userId;
+    if (!userId) return;
+    clearInactivePresenceTimer(socket.id);
+    const sockets = onlineUsers.get(userId);
+    if (!sockets?.has(socket.id)) return;
+    sockets.delete(socket.id);
+    clearTypingStateForUser(userId);
+    if (sockets.size === 0) {
+      onlineUsers.delete(userId);
+      emitPresenceStatus(userId, 'offline');
+    }
+  }
+
+  function scheduleSocketOffline(socket: { id: string; data: { userId?: string } }): void {
+    clearInactivePresenceTimer(socket.id);
+    inactivePresenceTimers.set(socket.id, setTimeout(() => {
+      markSocketOffline(socket);
+    }, PRESENCE_INACTIVE_TIMEOUT_MS));
+  }
+
+  function setTypingActive(chatId: string, userId: string, displayName: string, avatarUrl: string | null): void {
+    clearTypingState(chatId, userId, false);
+    const timeout = setTimeout(() => {
+      clearTypingState(chatId, userId);
+    }, TYPING_TTL_MS);
+    const chatTyping = typingByChat.get(chatId) ?? new Map<string, { displayName: string; avatarUrl: string | null; timeout: ReturnType<typeof setTimeout> }>();
+    chatTyping.set(userId, { displayName, avatarUrl, timeout });
+    typingByChat.set(chatId, chatTyping);
+    io.to(activeChatRoom(chatId)).emit('typing.update', {
+      type: 'typing.update',
+      payload: {
+        chatId,
+        userId,
+        status: 'start',
+        displayName,
+        avatarUrl
+      }
+    });
+  }
+
+  function replayTypingState(socket: { emit: (event: string, payload: unknown) => void; data: { userId?: string } }, chatId: string): void {
+    const chatTyping = typingByChat.get(chatId);
+    if (!chatTyping) return;
+    const currentUserId = socket.data.userId;
+    for (const [userId, entry] of chatTyping.entries()) {
+      if (userId === currentUserId) continue;
+      socket.emit('typing.update', {
+        type: 'typing.update',
+        payload: {
+          chatId,
+          userId,
+          status: 'start',
+          displayName: entry.displayName,
+          avatarUrl: entry.avatarUrl
+        }
+      });
+    }
+  }
 
   io.engine.on('initial_headers', (_headers, req) => {
     app.log.info(
@@ -160,7 +287,7 @@ export function initRealtime(app: FastifyInstance): Server {
       }
       const payload = await app.jwt.verify<{ userId: string; username: string }>(token);
       const user = await getUserById(pool, payload.userId);
-      if (!user || user.status !== 'active' || user.must_change_password) {
+      if (!user || user.status !== 'active') {
         socketAuthFailures++;
         app.log.warn(
           {
@@ -172,6 +299,36 @@ export function initRealtime(app: FastifyInstance): Server {
           'socket auth failed: account unavailable'
         );
         return next(new Error('Account unavailable'));
+      }
+      if (user.must_change_password) {
+        socketAuthFailures++;
+        app.log.warn(
+          {
+            socketAuthFailures,
+            socketId: socket.id,
+            userId: user.id,
+            transport: socket.conn.transport.name,
+            origin: socket.handshake.headers.origin ?? null
+          },
+          'socket auth failed: password change required'
+        );
+        return next(new Error('Password change required'));
+      }
+      if (requiresTestNoticeAck(user)) {
+        socketAuthFailures++;
+        app.log.warn(
+          {
+            socketAuthFailures,
+            socketId: socket.id,
+            userId: user.id,
+            requiredVersion: env.TEST_ACCOUNT_NOTICE_VERSION,
+            acceptedVersion: user.test_notice_accepted_version,
+            transport: socket.conn.transport.name,
+            origin: socket.handshake.headers.origin ?? null
+          },
+          'socket auth failed: test notice acknowledgement required'
+        );
+        return next(new Error('Test account acknowledgement required'));
       }
       socket.data.userId = user.id;
       socket.data.username = user.username;
@@ -231,20 +388,34 @@ export function initRealtime(app: FastifyInstance): Server {
     }).catch((error) => {
       app.log.warn({ error, userId, socketId: socket.id }, 'failed to join member chats');
     });
-    const set = onlineUsers.get(userId) ?? new Set<string>();
-    set.add(socket.id);
-    onlineUsers.set(userId, set);
-    io.emit('presence.update', { type: 'presence.update', payload: { userId, status: 'online' } });
+    markSocketOnline(socket);
     socket.emit('presence.sync', {
       type: 'presence.sync',
       payload: { onlineUserIds: Array.from(onlineUsers.keys()) }
     });
 
-    socket.on('chat.join', async (payload: unknown) => {
+    socket.on('app.state', (payload: unknown) => {
+      const active = Boolean((payload as { active?: boolean } | null)?.active ?? false);
+      if (active) {
+        markSocketOnline(socket);
+        return;
+      }
+
+      clearTypingStateForUser(userId);
+      scheduleSocketOffline(socket);
+    });
+
+    socket.on('chat.join', async (payload: unknown, ack?: (response: { ok: boolean; chatId: string; error?: string }) => void) => {
       const chatId = String((payload as any)?.chatId || '');
-      if (!chatId) return;
-      if (!(await isMember(userId, chatId))) return;
-      socket.join(`chat:${chatId}`);
+      if (!chatId) {
+        ack?.({ ok: false, chatId, error: 'invalid_chat' });
+        return;
+      }
+      if (!(await isMember(userId, chatId))) {
+        ack?.({ ok: false, chatId, error: 'not_a_member' });
+        return;
+      }
+      socket.join(activeChatRoom(chatId));
       app.log.info(
         {
           userId,
@@ -253,12 +424,14 @@ export function initRealtime(app: FastifyInstance): Server {
         },
         'socket chat joined'
       );
+      replayTypingState(socket, chatId);
+      ack?.({ ok: true, chatId });
     });
 
     socket.on('chat.leave', (payload: unknown) => {
       const chatId = String((payload as any)?.chatId || '');
       if (!chatId) return;
-      socket.leave(`chat:${chatId}`);
+      socket.leave(activeChatRoom(chatId));
       app.log.info(
         {
           userId,
@@ -273,32 +446,14 @@ export function initRealtime(app: FastifyInstance): Server {
       const chatId = String((payload as any)?.chatId || '');
       if (!chatId) return;
       if (!(await isMember(userId, chatId))) return;
-      socket.to(`chat:${chatId}`).emit('typing.update', {
-        type: 'typing.update',
-        payload: {
-          chatId,
-          userId,
-          status: 'start',
-          displayName: socket.data.displayName as string,
-          avatarUrl: (socket.data.avatarUrl as string | null) ?? null
-        }
-      });
+      setTypingActive(chatId, userId, socket.data.displayName as string, (socket.data.avatarUrl as string | null) ?? null);
     });
 
     socket.on('typing.stop', async (payload: unknown) => {
       const chatId = String((payload as any)?.chatId || '');
       if (!chatId) return;
       if (!(await isMember(userId, chatId))) return;
-      socket.to(`chat:${chatId}`).emit('typing.update', {
-        type: 'typing.update',
-        payload: {
-          chatId,
-          userId,
-          status: 'stop',
-          displayName: socket.data.displayName as string,
-          avatarUrl: (socket.data.avatarUrl as string | null) ?? null
-        }
-      });
+      clearTypingState(chatId, userId);
     });
 
     socket.on('message.send', async (payload: unknown) => {
@@ -328,6 +483,8 @@ export function initRealtime(app: FastifyInstance): Server {
           ).rows[0];
 
       if (!row) return;
+
+      clearTypingState(event.chatId, userId);
 
       if (inserted.rowCount) {
         await pool.query('UPDATE chats SET updated_at = NOW() WHERE id = $1', [event.chatId]);
@@ -387,11 +544,13 @@ export function initRealtime(app: FastifyInstance): Server {
         'socket disconnected'
       );
       const userSockets = onlineUsers.get(userId);
+      clearInactivePresenceTimer(socket.id);
+      clearTypingStateForUser(userId);
       if (!userSockets) return;
       userSockets.delete(socket.id);
       if (userSockets.size === 0) {
         onlineUsers.delete(userId);
-        io.emit('presence.update', { type: 'presence.update', payload: { userId, status: 'offline' } });
+        emitPresenceStatus(userId, 'offline');
       }
     });
   });

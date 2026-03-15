@@ -23,6 +23,13 @@
       />
     </header>
 
+    <InAppToastHost
+      v-if="toastHostVisible"
+      :toasts="inAppToasts"
+      @dismiss="dismissInAppToast"
+      @action="handleInAppToastAction"
+    />
+
     <section v-if="isBooting" class="chat-shell loading-shell">
       <div class="card loading-card">
         <h2>Restoring session...</h2>
@@ -30,14 +37,44 @@
       </div>
     </section>
 
-    <AuthPanel 
-      v-else-if="!session"
-      :error="authError"
-      :loading="isAuthenticating"
-      @login="handleLogin"
-      @register="handleRegister"
-      @reset-password="handlePasswordReset"
-    />
+    <section v-else-if="!session" class="chat-shell auth-shell">
+      <div v-if="sessionNoticeVisible" class="session-notice card" role="status">
+        <div>
+          <p class="session-notice-eyebrow">Internal testing</p>
+          <strong>Internal testing build</strong>
+          <p class="small session-notice-copy">
+            Bugs and downtime are expected during this internal test phase. Please report issues when they happen.
+          </p>
+        </div>
+        <button type="button" class="secondary small-btn session-notice-dismiss" @click="dismissSessionNotice">
+          Got it
+        </button>
+      </div>
+
+      <AuthPanel
+        :error="authError"
+        :loading="isAuthenticating"
+        @login="handleLogin"
+        @register="handleRegister"
+        @reset-password="handlePasswordReset"
+      />
+    </section>
+
+    <section v-else-if="sessionSyncRequired" class="chat-shell session-sync-gate">
+      <div class="card session-sync-card">
+        <h2>Session Sync Required</h2>
+        <p class="small" style="margin-bottom: 24px;">
+          We could not verify your current account state with the server. Retry before continuing.
+        </p>
+        <div class="row gate-actions">
+          <button type="button" class="form-btn" :disabled="syncingSessionState" @click="handleSessionSyncRetry">
+            {{ syncingSessionState ? 'Retrying...' : 'Retry session sync' }}
+          </button>
+          <button type="button" class="secondary small-btn" @click="doLogout">Logout</button>
+        </div>
+        <p v-if="sessionSyncError" class="status-danger small">{{ sessionSyncError }}</p>
+      </div>
+    </section>
 
     <section v-else-if="session.user.mustChangePassword" class="chat-shell forced-password-gate">
       <div class="card forced-password-card">
@@ -54,7 +91,53 @@
       </div>
     </section>
 
-    <section v-else class="chat-shell">
+    <section v-else-if="noticeGateForced || session.user.mustAcceptTestNotice" class="chat-shell test-notice-gate">
+      <div class="card test-notice-card">
+        <p class="notice-eyebrow">Internal-only build</p>
+        <h2>{{ TEST_NOTICE_TITLE }}</h2>
+        <p class="small notice-summary">{{ TEST_NOTICE_SUMMARY }}</p>
+        <div class="test-notice-version-pill">
+          Required version: {{ requiredTestNoticeVersion }}
+        </div>
+        <p v-if="session.user.acceptedTestNoticeVersion" class="small notice-summary">
+          Previously accepted: {{ session.user.acceptedTestNoticeVersion }}
+        </p>
+        <label class="test-notice-check">
+          <input v-model="testNoticeConfirmed" type="checkbox" />
+          <span>
+            I understand this build is still in internal testing and I want to continue under notice version
+            <strong>{{ requiredTestNoticeVersion }}</strong>.
+          </span>
+        </label>
+        <div class="row gate-actions">
+          <button
+            type="button"
+            class="form-btn"
+            :disabled="acknowledgingTestNotice || !testNoticeConfirmed"
+            @click="handleTestNoticeAck"
+          >
+            {{ acknowledgingTestNotice ? 'Confirming...' : 'Continue to the app' }}
+          </button>
+          <button type="button" class="secondary small-btn" @click="doLogout">Logout</button>
+        </div>
+        <p v-if="testNoticeError" class="status-danger small">{{ testNoticeError }}</p>
+      </div>
+    </section>
+
+    <section v-else class="chat-shell" :class="{'content-active': currentView === 'chats' && selectedChatId}">
+      <div v-if="sessionNoticeVisible" class="session-notice card" role="status">
+        <div>
+          <p class="session-notice-eyebrow">Internal testing</p>
+          <strong>Internal testing build</strong>
+          <p class="small session-notice-copy">
+            Bugs and downtime are expected during this internal test phase. Please report issues when they happen.
+          </p>
+        </div>
+        <button type="button" class="secondary small-btn session-notice-dismiss" @click="dismissSessionNotice">
+          Dismiss
+        </button>
+      </div>
+
       <div v-if="recoveryCodeNotice" class="recovery-banner">
         <div>
           <strong>Save your recovery code</strong>
@@ -85,8 +168,11 @@
           :currentUsername="session.user.username"
           :chats="chats"
           :activeChatId="selectedChatId"
+          :loadState="chatListState"
+          :loadError="chatListError"
           :onlineCount="onlineCount"
           @select="openChat"
+          @retry-load="handleChatListRetry"
           @logout="doLogout"
         />
       </div>
@@ -107,6 +193,7 @@
             />
             <p v-if="chatActionError" class="small status-danger chat-action-error">{{ chatActionError }}</p>
             <MessageComposer 
+              :chat-id="selectedChatId"
               :disabled="!selectedChatId || uploadingAttachment"
               @send="sendCurrent"
               @send-media="handleMediaSelected"
@@ -141,7 +228,7 @@
 </template>
 
 <script setup lang="ts">
-import { App as CapacitorApp, type PluginListenerHandle } from '@capacitor/app';
+import { App as CapacitorApp } from '@capacitor/app';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import {
   formatRecoveryCode,
@@ -169,6 +256,8 @@ import type {
   TypingParticipant
 } from './types';
 import {
+  type AuthEvent,
+  getMe,
   changePassword,
   getChats,
   getMessages,
@@ -179,6 +268,8 @@ import {
   resetPassword,
   sendMessage,
   sendStructuredMessage,
+  acknowledgeTestNotice,
+  subscribeAuthEvents,
   setStoredUser,
   uploadMedia,
   logout
@@ -205,6 +296,24 @@ import MessageComposer from './components/MessageComposer.vue';
 import ProfileSettings from './components/ProfileSettings.vue';
 import MemberDirectory from './components/MemberDirectory.vue';
 import MemberProfileSheet from './components/MemberProfileSheet.vue';
+import InAppToastHost from './components/InAppToastHost.vue';
+import { TEST_NOTICE_SUMMARY, TEST_NOTICE_TITLE, TEST_NOTICE_VERSION } from './testNotice';
+
+type InAppToast = {
+  id: string;
+  chatId: string;
+  title: string;
+  message?: string;
+  eyebrow?: string;
+  actionLabel?: string;
+  tone?: 'neutral' | 'accent';
+};
+
+type ChatListState = 'loading' | 'ready' | 'error';
+
+const CHAT_BOOTSTRAP_MAX_ATTEMPTS = 3;
+const CHAT_BOOTSTRAP_RETRY_DELAY_MS = 900;
+const IN_APP_TOAST_DURATION_MS = 5_000;
 
 // State
 const authError = ref('');
@@ -212,6 +321,7 @@ const isAuthenticating = ref(false);
 const chatActionError = ref('');
 const uploadingAttachment = ref(false);
 const isBooting = ref(true);
+const sessionNoticeVisible = ref(false);
 
 const session = ref<Session | null>(null);
 const chats = ref<Chat[]>([]);
@@ -238,18 +348,38 @@ const selectedMemberId = ref<string | null>(null);
 const debugRealtimeEnabled = import.meta.env.DEV;
 let fallbackRefreshTimer: ReturnType<typeof setInterval> | null = null;
 let lastFallbackSignature = '';
-let appStateListener: PluginListenerHandle | null = null;
-let appPauseListener: PluginListenerHandle | null = null;
-let appResumeListener: PluginListenerHandle | null = null;
+let appStateListener: any = null;
+let appPauseListener: any = null;
+let appResumeListener: any = null;
 let suppressNextDisconnectTransition = false;
 let markReadTimer: ReturnType<typeof setTimeout> | null = null;
 const appIsActive = ref(typeof document === 'undefined' ? true : !document.hidden);
 const isViewingLatest = ref(true);
+const inAppToasts = ref<InAppToast[]>([]);
+const chatListState = ref<ChatListState>('loading');
+const chatListError = ref('');
 
 const forcedPwForm = ref({ currentPassword: '', newPassword: '' });
 const forcedPwConfirm = ref('');
 const savingForcedPw = ref(false);
 const forcedPwError = ref('');
+const sessionSyncRequired = ref(false);
+const syncingSessionState = ref(false);
+const sessionSyncError = ref('');
+const noticeGateForced = ref(false);
+const testNoticeConfirmed = ref(false);
+const acknowledgingTestNotice = ref(false);
+const testNoticeError = ref('');
+const joinedChatId = ref('');
+const pendingTypingChatId = ref<string | null>(null);
+let removeAuthEventListener: (() => void) | null = null;
+let workspaceInitialized = false;
+let initializingWorkspacePromise: Promise<void> | null = null;
+let chatBootstrapRetryTimer: ReturnType<typeof setTimeout> | null = null;
+let joiningChatId = '';
+let joiningChatRequestId = 0;
+let joiningChatPromise: Promise<boolean> | null = null;
+const inAppToastTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 const formattedRecoveryCodeNotice = computed(() =>
   recoveryCodeNotice.value ? formatRecoveryCode(recoveryCodeNotice.value) : ''
@@ -264,6 +394,16 @@ const typingMembers = computed(() =>
   selectedChatId.value ? Object.values(typingByChat.value[selectedChatId.value] ?? {}) : []
 );
 const isOnline = computed(() => realtimeState.value === 'connected');
+const requiredTestNoticeVersion = computed(() =>
+  session.value?.user.requiredTestNoticeVersion?.trim() || TEST_NOTICE_VERSION
+);
+const toastHostVisible = computed(() =>
+  !isBooting.value &&
+  !sessionSyncRequired.value &&
+  !noticeGateForced.value &&
+  !session.value?.user.mustChangePassword &&
+  !session.value?.user.mustAcceptTestNotice
+);
 
 const isContentActive = computed(() => {
   if (currentView.value === 'chats') return !!selectedChatId.value;
@@ -307,11 +447,269 @@ function markRealtimeFailed(errorMessage: string | null = null): void {
 
 function handleMobileBack() {
   if (currentView.value === 'chats') {
-    handleTypingStop();
     selectedChatId.value = '';
   } else {
     currentView.value = 'chats';
     selectedMemberId.value = null;
+  }
+}
+
+function showSessionNoticeForForeground(): void {
+  sessionNoticeVisible.value = true;
+}
+
+function dismissSessionNotice(): void {
+  sessionNoticeVisible.value = false;
+}
+
+function clearChatBootstrapRetryTimer(): void {
+  if (!chatBootstrapRetryTimer) return;
+  clearTimeout(chatBootstrapRetryTimer);
+  chatBootstrapRetryTimer = null;
+}
+
+function resetChatListState(): void {
+  clearChatBootstrapRetryTimer();
+  chatListState.value = 'loading';
+  chatListError.value = '';
+}
+
+function clearInAppToastTimer(id: string): void {
+  const timer = inAppToastTimers.get(id);
+  if (!timer) return;
+  clearTimeout(timer);
+  inAppToastTimers.delete(id);
+}
+
+function clearAllInAppToastTimers(): void {
+  inAppToastTimers.forEach((timer) => clearTimeout(timer));
+  inAppToastTimers.clear();
+}
+
+function clearInAppToasts(): void {
+  clearAllInAppToastTimers();
+  inAppToasts.value = [];
+}
+
+function resetJoinedChatState(): void {
+  joinedChatId.value = '';
+  joiningChatId = '';
+  joiningChatPromise = null;
+  joiningChatRequestId += 1;
+}
+
+function resetActiveChatRoomState(): void {
+  pendingTypingChatId.value = null;
+  resetJoinedChatState();
+}
+
+function dismissInAppToast(id: string): void {
+  clearInAppToastTimer(id);
+  inAppToasts.value = inAppToasts.value.filter((toast) => toast.id !== id);
+}
+
+function handleInAppToastAction(id: string): void {
+  const toast = inAppToasts.value.find((entry) => entry.id === id);
+  dismissInAppToast(id);
+  if (!toast?.chatId) return;
+  currentView.value = 'chats';
+  void openChat(toast.chatId);
+}
+
+function describeIncomingActivity(message: ChatMessage): string {
+  if (message.type === 'image') return 'Sent an image';
+  if (message.type === 'video') return 'Sent a video';
+  if (message.type === 'gif') return 'Sent a GIF';
+  if (message.type === 'file') return 'Sent an attachment';
+
+  const normalized = (message.content || '').replace(/\s+/g, ' ').trim();
+  return normalized || 'New message';
+}
+
+function queueInAppToast(message: ChatMessage, chatName: string | null): void {
+  const id = `chat:${message.chatId}`;
+  const title = message.senderDisplayName || message.senderUsername || 'New message';
+
+  clearInAppToastTimer(id);
+  inAppToasts.value = [
+    {
+      id,
+      chatId: message.chatId,
+      eyebrow: chatName ?? 'Incoming message',
+      title,
+      message: describeIncomingActivity(message),
+      actionLabel: 'Open',
+      tone: 'accent' as const
+    },
+    ...inAppToasts.value.filter((toast) => toast.id !== id)
+  ].slice(0, 3);
+
+  inAppToastTimers.set(id, setTimeout(() => {
+    dismissInAppToast(id);
+  }, IN_APP_TOAST_DURATION_MS));
+}
+
+function activeCacheUserId(): string | null {
+  return session.value?.user.id ?? null;
+}
+
+function readScopedCachedChats(): Chat[] {
+  const userId = activeCacheUserId();
+  return userId ? readCachedChats(userId) : [];
+}
+
+function cacheChatsForActiveUser(nextChats: Chat[]): void {
+  const userId = activeCacheUserId();
+  if (!userId) return;
+  cacheChats(userId, nextChats);
+}
+
+function readScopedCachedMessages(chatId: string): ChatMessage[] {
+  const userId = activeCacheUserId();
+  return userId ? readCachedMessages(userId, chatId) : [];
+}
+
+function cacheMessagesForActiveUser(chatId: string, nextMessages: ChatMessage[]): void {
+  const userId = activeCacheUserId();
+  if (!userId) return;
+  cacheMessages(userId, chatId, nextMessages);
+}
+
+function userHasFullAccess(nextSession: Session | null): boolean {
+  if (!nextSession) return false;
+  return !nextSession.user.mustChangePassword && !nextSession.user.mustAcceptTestNotice;
+}
+
+function setSessionState(nextSession: Session): void {
+  session.value = nextSession;
+  presenceByUserId.value = {
+    ...presenceByUserId.value,
+    [nextSession.user.id]: presenceByUserId.value[nextSession.user.id] ?? 'offline'
+  };
+  setStoredUser(nextSession.user);
+  if ('recoveryCode' in nextSession) {
+    recoveryCodeNotice.value = nextSession.recoveryCode ?? '';
+  }
+}
+
+function clearSessionSyncBlocker(): void {
+  sessionSyncRequired.value = false;
+  sessionSyncError.value = '';
+}
+
+function enterSessionSyncRequiredState(nextSession: Session | null, message = 'Session sync required before continuing.'): void {
+  if (nextSession) {
+    setSessionState(nextSession);
+  }
+
+  clearSessionSyncBlocker();
+  sessionSyncRequired.value = true;
+  sessionSyncError.value = message;
+  noticeGateForced.value = false;
+  resetWorkspaceState();
+}
+
+function forceNoticeGate(): void {
+  clearSessionSyncBlocker();
+  noticeGateForced.value = true;
+  resetWorkspaceState();
+}
+
+function resetWorkspaceState(): void {
+  disconnectSocket();
+  clearMarkReadTimer();
+  clearFallbackRefreshTimer();
+  resetChatListState();
+  clearInAppToasts();
+  resetActiveChatRoomState();
+  workspaceInitialized = false;
+  initializingWorkspacePromise = null;
+  chats.value = [];
+  messages.value = [];
+  selectedChatId.value = '';
+  selectedMemberId.value = null;
+  currentView.value = 'chats';
+  chatActionError.value = '';
+  uploadingAttachment.value = false;
+  clearTypingState();
+  presenceByUserId.value = session.value?.user ? { [session.value.user.id]: 'offline' } : {};
+  realtimeDiagnostics.value = {
+    transport: 'unknown',
+    lastError: null,
+    lastDisconnectReason: null,
+    lastConnectedAt: null,
+    fallbackActive: false
+  };
+  realtimeState.value = 'idle';
+}
+
+async function fetchFreshSession(baseSession: Session): Promise<Session> {
+  const me = await getMe();
+  return {
+    ...baseSession,
+    user: {
+      ...baseSession.user,
+      ...me
+    }
+  };
+}
+
+async function syncSessionUser(): Promise<Session> {
+  if (!session.value) {
+    throw new Error('No active session available for sync');
+  }
+
+  const nextSession = await fetchFreshSession(session.value);
+  setSessionState(nextSession);
+  return nextSession;
+}
+
+async function initializeWorkspace(): Promise<void> {
+  if (workspaceInitialized) return;
+  if (initializingWorkspacePromise) {
+    await initializingWorkspacePromise;
+    return;
+  }
+
+  initializingWorkspacePromise = (async () => {
+    await ensureNotificationPermission();
+    await initializeNotifications((chatId) => {
+      currentView.value = 'chats';
+      void openChat(chatId);
+    });
+    wireSocketHandlers();
+    resetChatListState();
+    await loadChats({ bootstrap: true });
+    workspaceInitialized = true;
+  })();
+
+  try {
+    await initializingWorkspacePromise;
+  } finally {
+    initializingWorkspacePromise = null;
+  }
+}
+
+async function handleAuthEvent(event: AuthEvent): Promise<void> {
+  if (event.type === 'user_updated') {
+    if (!session.value) return;
+    const nextSession = await hydrateStoredSession();
+    if (!nextSession) return;
+    await completeAuth(nextSession);
+    return;
+  }
+
+  if (event.type === 'notice_required') {
+    if (!session.value || noticeGateForced.value || sessionSyncRequired.value) return;
+
+    forceNoticeGate();
+
+    try {
+      const nextSession = await syncSessionUser();
+      await completeAuth(nextSession);
+    } catch {
+      enterSessionSyncRequiredState(session.value);
+    }
   }
 }
 
@@ -351,7 +749,7 @@ function addOptimisticMessage(item: PendingMessage): void {
     createdAt: item.enqueuedAt,
     clientMessageId: item.clientMessageId
   });
-  cacheMessages(item.chatId, messages.value);
+  cacheMessagesForActiveUser(item.chatId, messages.value);
 }
 
 async function dispatchPendingMessage(item: PendingMessage) {
@@ -472,13 +870,67 @@ async function deriveUploadDimensions(file: File, upload: UploadResponse): Promi
   return { width: null, height: null };
 }
 
-async function loadChats(): Promise<void> {
-  try {
-    chats.value = sortChats(await withBackoff(() => getChats()));
-    cacheChats(chats.value);
-  } catch {
-    chats.value = sortChats(readCachedChats());
+async function loadChats(options: { bootstrap?: boolean; attempt?: number } = {}): Promise<void> {
+  const { bootstrap = false, attempt = 1 } = options;
+  const cachedChats = sortChats(readScopedCachedChats());
+
+  if (bootstrap) {
+    chatListState.value = 'loading';
+    if (attempt === 1) {
+      chatListError.value = '';
+    }
   }
+
+  try {
+    const freshChats = sortChats(await withBackoff(() => getChats()));
+    const shouldRetryEmptyBootstrap = bootstrap && freshChats.length === 0;
+    if (shouldRetryEmptyBootstrap) {
+      if (cachedChats.length > 0) {
+        chats.value = cachedChats;
+      }
+
+      if (attempt < CHAT_BOOTSTRAP_MAX_ATTEMPTS && session.value && userHasFullAccess(session.value)) {
+        clearChatBootstrapRetryTimer();
+        chatBootstrapRetryTimer = setTimeout(() => {
+          void loadChats({ bootstrap: true, attempt: attempt + 1 });
+        }, CHAT_BOOTSTRAP_RETRY_DELAY_MS);
+        return;
+      }
+
+      throw new Error('initial chat bootstrap returned no chats');
+    }
+
+    chats.value = freshChats;
+    cacheChatsForActiveUser(chats.value);
+    clearChatBootstrapRetryTimer();
+    chatListState.value = 'ready';
+    chatListError.value = '';
+  } catch {
+    if (cachedChats.length > 0) {
+      chats.value = cachedChats;
+      chatListState.value = 'ready';
+      chatListError.value = '';
+      return;
+    }
+
+    chats.value = [];
+
+    if (bootstrap && attempt < CHAT_BOOTSTRAP_MAX_ATTEMPTS && session.value && userHasFullAccess(session.value)) {
+      clearChatBootstrapRetryTimer();
+      chatBootstrapRetryTimer = setTimeout(() => {
+        void loadChats({ bootstrap: true, attempt: attempt + 1 });
+      }, CHAT_BOOTSTRAP_RETRY_DELAY_MS);
+      return;
+    }
+
+    chatListState.value = 'error';
+    chatListError.value = 'We are still syncing your chats. Retry in a moment.';
+  }
+}
+
+async function handleChatListRetry(): Promise<void> {
+  resetChatListState();
+  await loadChats({ bootstrap: true });
 }
 
 function sortChats(nextChats: Chat[]): Chat[] {
@@ -491,7 +943,7 @@ function setChatUnreadCount(chatId: string, unreadCount: number): void {
       chat.id === chatId ? { ...chat, unreadCount: Math.max(0, unreadCount) } : chat
     )
   );
-  cacheChats(chats.value);
+  cacheChatsForActiveUser(chats.value);
 }
 
 function bumpChatUnreadCount(chatId: string): void {
@@ -505,7 +957,7 @@ function bumpChatUnreadCount(chatId: string): void {
         : chat
     )
   );
-  cacheChats(chats.value);
+  cacheChatsForActiveUser(chats.value);
 }
 
 function touchChat(chatId: string, updatedAt: string): void {
@@ -519,7 +971,7 @@ function touchChat(chatId: string, updatedAt: string): void {
         : chat
     )
   );
-  cacheChats(chats.value);
+  cacheChatsForActiveUser(chats.value);
 }
 
 function clearMarkReadTimer(): void {
@@ -587,7 +1039,7 @@ function applySeenReceipt(chatId: string, readerUserId: string, seenAt: string):
   });
 
   if (changed && selectedChatId.value) {
-    cacheMessages(selectedChatId.value, messages.value);
+    cacheMessagesForActiveUser(selectedChatId.value, messages.value);
   }
 }
 
@@ -597,17 +1049,14 @@ async function openChat(chatId: string): Promise<void> {
   isViewingLatest.value = false;
   try {
     messages.value = await withBackoff(() => getMessages(chatId));
-    cacheMessages(chatId, messages.value);
+    cacheMessagesForActiveUser(chatId, messages.value);
   } catch {
-    messages.value = readCachedMessages(chatId);
+    messages.value = readScopedCachedMessages(chatId);
   }
   const socket = getSocket();
   if (socket && !socket.connected && hasNetwork.value) {
     setRealtimeState('connecting');
     socket.connect();
-  }
-  if (socket?.connected) {
-    socket.emit('chat.join', { chatId });
   }
 }
 
@@ -629,7 +1078,7 @@ function mergeServerMessages(chatId: string, fetched: ChatMessage[]): void {
   );
 
   messages.value = [...unresolvedLocal, ...fetched];
-  cacheMessages(chatId, messages.value);
+  cacheMessagesForActiveUser(chatId, messages.value);
 }
 
 async function refreshSelectedChatFromApi(): Promise<void> {
@@ -737,18 +1186,125 @@ function clearTypingState(): void {
   typingByChat.value = {};
 }
 
-function handleTypingStart(): void {
-  if (!selectedChatId.value) return;
+function emitTypingStartForChat(chatId: string): void {
+  if (!chatId) return;
   const socket = getSocket();
   if (!socket?.connected) return;
-  socket.emit('typing.start', { chatId: selectedChatId.value });
+  socket.emit('typing.start', { chatId });
+}
+
+function emitTypingStopForChat(chatId: string): void {
+  if (!chatId) return;
+  const socket = getSocket();
+  if (!socket?.connected) return;
+  socket.emit('typing.stop', { chatId });
+}
+
+function emitChatLeaveForChat(chatId: string): void {
+  if (!chatId) return;
+
+  if (pendingTypingChatId.value === chatId) {
+    pendingTypingChatId.value = null;
+  }
+
+  if (joinedChatId.value === chatId) {
+    joinedChatId.value = '';
+  }
+
+  if (joiningChatId === chatId) {
+    joiningChatId = '';
+    joiningChatPromise = null;
+    joiningChatRequestId += 1;
+  }
+
+  const socket = getSocket();
+  if (!socket?.connected) return;
+  socket.emit('chat.leave', { chatId });
+}
+
+async function ensureChatJoined(chatId: string): Promise<boolean> {
+  if (!chatId || currentView.value !== 'chats' || selectedChatId.value !== chatId) {
+    return false;
+  }
+
+  if (joinedChatId.value === chatId) {
+    return true;
+  }
+
+  if (joiningChatPromise && joiningChatId === chatId) {
+    return joiningChatPromise;
+  }
+
+  const socket = getSocket();
+  if (!socket?.connected) {
+    return false;
+  }
+
+  const requestId = ++joiningChatRequestId;
+  joiningChatId = chatId;
+
+  joiningChatPromise = new Promise<boolean>((resolve) => {
+    let settled = false;
+    const finish = (joined: boolean) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutId);
+      if (requestId === joiningChatRequestId) {
+        joiningChatPromise = null;
+        joiningChatId = '';
+        if (joined && currentView.value === 'chats' && selectedChatId.value === chatId) {
+          joinedChatId.value = chatId;
+          if (pendingTypingChatId.value === chatId) {
+            emitTypingStartForChat(chatId);
+          }
+        } else {
+          joinedChatId.value = '';
+        }
+      } else if (joined) {
+        const socket = getSocket();
+        if (socket?.connected) {
+          socket.emit('chat.leave', { chatId });
+        }
+      }
+      resolve(joined);
+    };
+
+    const timeoutId = setTimeout(() => {
+      finish(false);
+    }, 1500);
+
+    socket.emit('chat.join', { chatId }, (response?: { ok?: boolean; chatId?: string }) => {
+      const joined = Boolean(response?.ok) && response?.chatId === chatId;
+      if (!joined && pendingTypingChatId.value === chatId) {
+        pendingTypingChatId.value = null;
+      }
+      finish(joined);
+    });
+  });
+
+  return joiningChatPromise;
+}
+
+function handleTypingStart(): void {
+  const chatId = selectedChatId.value;
+  if (!chatId || currentView.value !== 'chats') return;
+  pendingTypingChatId.value = chatId;
+  if (joinedChatId.value === chatId) {
+    emitTypingStartForChat(chatId);
+    return;
+  }
+  void ensureChatJoined(chatId);
 }
 
 function handleTypingStop(): void {
-  if (!selectedChatId.value) return;
-  const socket = getSocket();
-  if (!socket?.connected) return;
-  socket.emit('typing.stop', { chatId: selectedChatId.value });
+  const chatId = selectedChatId.value;
+  if (!chatId) return;
+  if (pendingTypingChatId.value === chatId) {
+    pendingTypingChatId.value = null;
+  }
+  if (joinedChatId.value === chatId) {
+    emitTypingStopForChat(chatId);
+  }
 }
 
 function handleViewportBottomChange(isAtBottom: boolean): void {
@@ -774,7 +1330,7 @@ function markMessageDelivered(chatId: string, clientMessageId: string, messageId
   const existingMsg = messages.value.find((m) => m.clientMessageId === clientMessageId && m.chatId === chatId);
   if (existingMsg) {
     existingMsg.id = messageId;
-    cacheMessages(chatId, messages.value);
+    cacheMessagesForActiveUser(chatId, messages.value);
   }
 
   if (typeof latencyMs === 'number' && Number.isFinite(latencyMs) && latencyMs >= 0) {
@@ -869,7 +1425,7 @@ async function handleLogin(username: string, pass: string) {
   authError.value = '';
   try {
     const res = await login(username, pass);
-    completeAuth(res);
+    await completeAuth(res);
   } catch (error: unknown) {
     authError.value = describeAuthError(error);
   } finally {
@@ -882,7 +1438,7 @@ async function handleRegister(username: string, pass: string, invite: string) {
   authError.value = '';
   try {
     const res = await register(username, pass, invite);
-    completeAuth(res);
+    await completeAuth(res);
   } catch (error: unknown) {
     authError.value = describeAuthError(error);
   } finally {
@@ -895,11 +1451,34 @@ async function handlePasswordReset(username: string, recoveryCode: string, nextP
   authError.value = '';
   try {
     const res = await resetPassword(username, recoveryCode, nextPassword);
-    completeAuth(res);
+    await completeAuth(res);
   } catch (error: unknown) {
     authError.value = describeAuthError(error);
   } finally {
     isAuthenticating.value = false;
+  }
+}
+
+async function handleTestNoticeAck(): Promise<void> {
+  if (!session.value) return;
+  if (!testNoticeConfirmed.value) {
+    testNoticeError.value = 'Please confirm the current test notice before continuing';
+    return;
+  }
+
+  acknowledgingTestNotice.value = true;
+  testNoticeError.value = '';
+
+  try {
+    const result = await acknowledgeTestNotice(requiredTestNoticeVersion.value);
+    await completeAuth({
+      ...session.value,
+      user: result.user
+    });
+  } catch (error: any) {
+    testNoticeError.value = error?.response?.data?.error || 'Failed to confirm the current test notice';
+  } finally {
+    acknowledgingTestNotice.value = false;
   }
 }
 
@@ -923,16 +1502,24 @@ async function handleForcedPasswordChange() {
 }
 
 async function completeAuth(res: Session) {
-  session.value = res;
-  setStoredUser(res.user);
-  recoveryCodeNotice.value = res.recoveryCode ?? '';
-  await ensureNotificationPermission();
-  await initializeNotifications((chatId) => {
-    currentView.value = 'chats';
-    void openChat(chatId);
-  });
-  wireSocketHandlers();
-  await loadChats();
+  const previousUserId = session.value?.user.id ?? null;
+  if (previousUserId && previousUserId !== res.user.id) {
+    resetWorkspaceState();
+  }
+
+  setSessionState(res);
+  clearSessionSyncBlocker();
+  noticeGateForced.value = false;
+  syncingSessionState.value = false;
+  testNoticeConfirmed.value = false;
+  testNoticeError.value = '';
+
+  if (!userHasFullAccess(res)) {
+    resetWorkspaceState();
+    return;
+  }
+
+  await initializeWorkspace();
 }
 
 function handleProfileUpdated(profile: { displayName: string; avatarUrl: string | null }): void {
@@ -987,6 +1574,7 @@ function wireSocketHandlers(): void {
     const parsed = ServerMessageNewEventSchema.safeParse(event);
     if (!parsed.success) return;
     const payload = parsed.data.payload;
+    const chatName = chats.value.find((chat) => chat.id === payload.chatId)?.name ?? null;
     touchChat(payload.chatId, payload.createdAt);
 
     const isSelectedChat = currentView.value === 'chats' && payload.chatId === selectedChatId.value;
@@ -1008,7 +1596,9 @@ function wireSocketHandlers(): void {
       if (!canTreatIncomingAsRead) {
         bumpChatUnreadCount(payload.chatId);
         if (!appIsActive.value) {
-          void scheduleIncomingMessageNotification(payload, chats.value.find((chat) => chat.id === payload.chatId)?.name ?? null);
+          void scheduleIncomingMessageNotification(payload, chatName);
+        } else if (!isSelectedChat) {
+          queueInAppToast(payload, chatName);
         }
       } else {
         setChatUnreadCount(payload.chatId, 0);
@@ -1017,11 +1607,11 @@ function wireSocketHandlers(): void {
     }
 
     if (!isSelectedChat) {
-      cacheChats(chats.value);
+      cacheChatsForActiveUser(chats.value);
       return;
     }
 
-    cacheMessages(payload.chatId, messages.value);
+    cacheMessagesForActiveUser(payload.chatId, messages.value);
   });
 
   socket.on('message.ack', (event: any) => {
@@ -1033,7 +1623,7 @@ function wireSocketHandlers(): void {
     if (existingMsg) {
       // Replace optimistic/local id with server id to reflect final delivery state.
       existingMsg.id = payload.messageId;
-      cacheMessages(payload.chatId, messages.value);
+      cacheMessagesForActiveUser(payload.chatId, messages.value);
     }
 
     // We can also ensure it is removed from failed set
@@ -1057,14 +1647,16 @@ function wireSocketHandlers(): void {
   });
 
   socket.on('connect', () => {
+    resetJoinedChatState();
     syncTransport();
     bindEngineUpgradeListener();
     markRealtimeConnected(socket.io.engine?.transport?.name ?? 'unknown');
+    socket.emit('app.state', { active: appIsActive.value });
     if (session.value?.user.id) {
       setPresenceStatus(session.value.user.id, 'online');
     }
-    if (selectedChatId.value) {
-      socket.emit('chat.join', { chatId: selectedChatId.value });
+    if (selectedChatId.value && currentView.value === 'chats') {
+      void ensureChatJoined(selectedChatId.value);
     }
     flushPending().catch(() => undefined);
   });
@@ -1111,6 +1703,7 @@ function wireSocketHandlers(): void {
     }
 
     clearTypingState();
+    resetJoinedChatState();
     markAllPresenceOffline();
     patchRealtimeDiagnostics({
       lastError: error?.message ?? 'connect_error',
@@ -1126,6 +1719,7 @@ function wireSocketHandlers(): void {
     }
 
     clearTypingState();
+    resetJoinedChatState();
     markAllPresenceOffline();
     patchRealtimeDiagnostics({
       lastDisconnectReason: reason,
@@ -1150,6 +1744,7 @@ function wireSocketHandlers(): void {
 
   socket.io.on('reconnect_failed', () => {
     clearTypingState();
+    resetJoinedChatState();
     markAllPresenceOffline();
     markRealtimeFailed(realtimeDiagnostics.value.lastError ?? 'reconnect_failed');
   });
@@ -1157,11 +1752,12 @@ function wireSocketHandlers(): void {
   socket.io.on('reconnect', syncTransport);
 
   if (socket.connected) {
+    resetJoinedChatState();
     syncTransport();
     bindEngineUpgradeListener();
     markRealtimeConnected(socket.io.engine?.transport?.name ?? 'unknown');
-    if (selectedChatId.value) {
-      socket.emit('chat.join', { chatId: selectedChatId.value });
+    if (selectedChatId.value && currentView.value === 'chats') {
+      void ensureChatJoined(selectedChatId.value);
     }
   } else if (hasNetwork.value) {
     setRealtimeState('connecting');
@@ -1176,6 +1772,7 @@ function restartSocketConnection(reason: string): void {
   if (!socket || !hasNetwork.value) return;
 
   clearTypingState();
+  resetJoinedChatState();
   markAllPresenceOffline();
   patchRealtimeDiagnostics({
     lastError: null,
@@ -1200,6 +1797,11 @@ async function doLogout(): Promise<void> {
   await clearAllDeliveredNotifications();
   disconnectSocket();
   clearMarkReadTimer();
+  resetChatListState();
+  clearInAppToasts();
+  resetActiveChatRoomState();
+  workspaceInitialized = false;
+  initializingWorkspacePromise = null;
   session.value = null;
   chats.value = [];
   messages.value = [];
@@ -1210,6 +1812,12 @@ async function doLogout(): Promise<void> {
   latencyByClientMessageId.value = {};
   chatActionError.value = '';
   uploadingAttachment.value = false;
+  clearSessionSyncBlocker();
+  syncingSessionState.value = false;
+  noticeGateForced.value = false;
+  testNoticeConfirmed.value = false;
+  testNoticeError.value = '';
+  acknowledgingTestNotice.value = false;
   realtimeDiagnostics.value = {
     transport: 'unknown',
     lastError: null,
@@ -1224,15 +1832,18 @@ async function doLogout(): Promise<void> {
 function onOnline(): void {
   hasNetwork.value = true;
   const socket = getSocket();
-  if (socket) {
+  if (socket && appIsActive.value) {
     restartSocketConnection('network restored');
   }
-  flushPending().catch(() => undefined);
+  if (appIsActive.value) {
+    flushPending().catch(() => undefined);
+  }
 }
 
 function onOffline(): void {
   hasNetwork.value = false;
   getSocket()?.disconnect();
+  resetJoinedChatState();
   setRealtimeState('idle');
   patchRealtimeDiagnostics({
     lastError: null,
@@ -1246,7 +1857,18 @@ function onOffline(): void {
 async function handleAppResume(): Promise<void> {
   if (!session.value) return;
 
-  await loadChats();
+  try {
+    const nextSession = await syncSessionUser();
+    if (!userHasFullAccess(nextSession)) {
+      resetWorkspaceState();
+      return;
+    }
+  } catch {
+    enterSessionSyncRequiredState(session.value);
+    return;
+  }
+
+  await loadChats({ bootstrap: chats.value.length === 0 || chatListState.value !== 'ready' });
   if (selectedChatId.value) {
     await refreshSelectedChatFromApi();
     if (currentView.value === 'chats' && isViewingLatest.value) {
@@ -1256,15 +1878,47 @@ async function handleAppResume(): Promise<void> {
 
   if (hasNetwork.value && getSocket()) {
     restartSocketConnection('app resume');
+  } else if (selectedChatId.value && currentView.value === 'chats') {
+    void ensureChatJoined(selectedChatId.value);
+  }
+}
+
+async function handleSessionSyncRetry(): Promise<void> {
+  if (!session.value) return;
+
+  syncingSessionState.value = true;
+  sessionSyncError.value = '';
+
+  try {
+    const nextSession = await syncSessionUser();
+    await completeAuth(nextSession);
+  } catch {
+    enterSessionSyncRequiredState(session.value);
+  } finally {
+    syncingSessionState.value = false;
   }
 }
 
 function setAppActive(nextValue: boolean): void {
+  const wasActive = appIsActive.value;
   appIsActive.value = nextValue;
   if (!nextValue) {
+    if (pendingTypingChatId.value === selectedChatId.value) {
+      pendingTypingChatId.value = null;
+    }
+    if (joinedChatId.value === selectedChatId.value) {
+      emitTypingStopForChat(selectedChatId.value);
+    }
+    getSocket()?.emit('app.state', { active: false });
     clearMarkReadTimer();
     return;
   }
+
+  if (!wasActive) {
+    showSessionNoticeForForeground();
+  }
+
+  getSocket()?.emit('app.state', { active: true });
 
   if (selectedChatId.value && currentView.value === 'chats') {
     scheduleMarkSelectedChatRead();
@@ -1272,10 +1926,18 @@ function setAppActive(nextValue: boolean): void {
 }
 
 function handleDocumentVisibilityChange(): void {
-  setAppActive(!document.hidden);
+  const nextActive = !document.hidden;
+  setAppActive(nextActive);
+  if (nextActive) {
+    void handleAppResume();
+  }
 }
 
 onMounted(() => {
+  showSessionNoticeForForeground();
+  removeAuthEventListener = subscribeAuthEvents((event) => {
+    void handleAuthEvent(event);
+  });
   window.addEventListener('online', onOnline);
   window.addEventListener('offline', onOffline);
   document.addEventListener('visibilitychange', handleDocumentVisibilityChange);
@@ -1303,15 +1965,12 @@ onMounted(() => {
     try {
       const restoredSession = await hydrateStoredSession();
       if (!restoredSession) return;
-      presenceByUserId.value = { [restoredSession.user.id]: 'offline' };
-      session.value = restoredSession;
-      await ensureNotificationPermission();
-      await initializeNotifications((chatId) => {
-        currentView.value = 'chats';
-        void openChat(chatId);
-      });
-      wireSocketHandlers();
-      await loadChats();
+      try {
+        const freshSession = await fetchFreshSession(restoredSession);
+        await completeAuth(freshSession);
+      } catch {
+        enterSessionSyncRequiredState(restoredSession);
+      }
     } finally {
       isBooting.value = false;
     }
@@ -1322,11 +1981,37 @@ watch([selectedChatId, currentView, realtimeState, hasNetwork], () => {
   syncFallbackRefreshState();
 });
 
-watch([selectedChatId, currentView], () => {
-  if (selectedChatId.value && currentView.value === 'chats') {
+watch(selectedChatId, (nextChatId, previousChatId) => {
+  if (previousChatId && previousChatId !== nextChatId) {
+    if (joinedChatId.value === previousChatId) {
+      emitTypingStopForChat(previousChatId);
+    }
+    emitChatLeaveForChat(previousChatId);
+  }
+
+  if (nextChatId && currentView.value === 'chats') {
+    void ensureChatJoined(nextChatId);
     scheduleMarkSelectedChatRead();
     return;
   }
+
+  isViewingLatest.value = false;
+});
+
+watch(currentView, (nextView, previousView) => {
+  if (previousView === 'chats' && nextView !== 'chats' && selectedChatId.value) {
+    if (joinedChatId.value === selectedChatId.value) {
+      emitTypingStopForChat(selectedChatId.value);
+    }
+    emitChatLeaveForChat(selectedChatId.value);
+  }
+
+  if (selectedChatId.value && nextView === 'chats') {
+    void ensureChatJoined(selectedChatId.value);
+    scheduleMarkSelectedChatRead();
+    return;
+  }
+
   isViewingLatest.value = false;
 });
 
@@ -1335,10 +2020,13 @@ onUnmounted(() => {
   window.removeEventListener('offline', onOffline);
   document.removeEventListener('visibilitychange', handleDocumentVisibilityChange);
   clearMarkReadTimer();
+  clearChatBootstrapRetryTimer();
   clearFallbackRefreshTimer();
+  clearInAppToasts();
   void appStateListener?.remove();
   void appPauseListener?.remove();
   void appResumeListener?.remove();
+  removeAuthEventListener?.();
   disconnectSocket();
 });
 </script>
@@ -1352,6 +2040,7 @@ onUnmounted(() => {
   margin-bottom: 20px;
   flex-shrink: 0;
   min-width: 0;
+  width: 100%;
 }
 
 .header-title {
@@ -1389,12 +2078,43 @@ onUnmounted(() => {
 
 .chat-layout {
   display: grid;
-  grid-template-columns: 260px 1fr;
+  grid-template-columns: minmax(0, 280px) minmax(0, 1fr);
   gap: 16px;
   flex: 1;
   min-height: 0;
   min-width: 0;
   overflow: hidden;
+}
+
+.auth-shell {
+  justify-content: center;
+}
+
+.session-notice {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  flex-shrink: 0;
+}
+
+.session-notice-eyebrow {
+  margin: 0 0 6px;
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.session-notice-copy {
+  margin: 6px 0 0;
+  line-height: 1.45;
+}
+
+.session-notice-dismiss {
+  flex: 0 0 auto;
 }
 
 .forced-password-gate {
@@ -1404,10 +2124,97 @@ onUnmounted(() => {
   margin-top: 40px;
 }
 
+.session-sync-gate {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 40px;
+}
+
+.test-notice-gate {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 40px;
+}
+
+.session-sync-card {
+  width: 100%;
+  max-width: 420px;
+  padding: 24px;
+}
+
 .forced-password-card {
   width: 100%;
   max-width: 400px;
   padding: 24px;
+}
+
+.test-notice-card {
+  width: 100%;
+  max-width: 480px;
+  padding: 24px;
+}
+
+.notice-eyebrow {
+  margin: 0 0 8px;
+  color: var(--accent);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.notice-summary {
+  line-height: 1.5;
+}
+
+.test-notice-version-pill {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(140, 216, 255, 0.12);
+  border: 1px solid rgba(140, 216, 255, 0.24);
+  color: var(--accent);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.test-notice-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(140, 216, 255, 0.16);
+  background: rgba(15, 18, 34, 0.72);
+  line-height: 1.45;
+}
+
+.test-notice-check input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  padding: 0;
+  border-radius: 6px;
+  accent-color: var(--accent);
+  flex: 0 0 auto;
+}
+
+.gate-actions {
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.gate-actions .form-btn {
+  width: auto;
+  flex: 1 1 220px;
+}
+
+.gate-actions .small-btn {
+  flex: 0 0 auto;
 }
 
 .chat-shell {
@@ -1511,24 +2318,31 @@ onUnmounted(() => {
   font-size: 1.1rem;
 }
 
-/* Mobile Responsive Adjustments */
-@media (max-width: 760px) {
+@media (max-width: 980px), (orientation: portrait) and (max-width: 1100px) {
   .app-header {
-    gap: 10px;
-    align-items: center;
+    align-items: flex-start;
+    flex-wrap: wrap;
   }
 
   .app-header :deep(.conn-status) {
-    width: auto;
-    max-width: min(52%, 220px);
-    flex: 0 1 auto;
+    width: 100%;
+    max-width: 100%;
+    flex: 1 1 100%;
   }
 
   .chat-layout {
     grid-template-columns: 1fr;
     min-height: 0;
   }
-  
+}
+
+/* Mobile Responsive Adjustments */
+@media (max-width: 960px) {
+  .app-header {
+    gap: 10px;
+    align-items: center;
+  }
+
   .chat-main {
     padding: 8px;
   }
@@ -1549,6 +2363,24 @@ onUnmounted(() => {
   .recovery-banner {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .session-notice {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .test-notice-card {
+    padding: 20px;
+  }
+
+  .session-sync-card {
+    padding: 20px;
+  }
+
+  .gate-actions .form-btn,
+  .gate-actions .small-btn {
+    width: 100%;
   }
 
   /* When content is active, hide sidebar on mobile */

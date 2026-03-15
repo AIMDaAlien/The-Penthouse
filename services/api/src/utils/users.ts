@@ -26,6 +26,8 @@ export type UserRow = {
   role: UserRole;
   status: UserStatus;
   must_change_password: boolean;
+  test_notice_accepted_version: string | null;
+  test_notice_accepted_at: string | null;
   created_at: string;
   password_hash?: string;
   recovery_code_hash?: string | null;
@@ -41,6 +43,8 @@ const USER_BASE_SELECT = `
     u.role,
     u.status,
     u.must_change_password,
+    u.test_notice_accepted_version,
+    u.test_notice_accepted_at,
     u.created_at,
     u.password_hash,
     u.recovery_code_hash,
@@ -50,6 +54,37 @@ const USER_BASE_SELECT = `
   FROM users u
   LEFT JOIN media_uploads m ON m.id = u.avatar_media_id
 `;
+
+const TEST_NOTICE_VERSION_PATTERN = /^(.*?)-v(\d+)$/i;
+
+export function hasSatisfiedTestNoticeVersion(
+  acceptedVersion: string | null,
+  requiredVersion: string
+): boolean {
+  if (!acceptedVersion) return false;
+  if (acceptedVersion === requiredVersion) return true;
+
+  const acceptedMatch = acceptedVersion.match(TEST_NOTICE_VERSION_PATTERN);
+  const requiredMatch = requiredVersion.match(TEST_NOTICE_VERSION_PATTERN);
+  if (!acceptedMatch || !requiredMatch) {
+    return false;
+  }
+
+  const acceptedPrefix = acceptedMatch[1];
+  const acceptedRevision = Number(acceptedMatch[2]);
+  const requiredPrefix = requiredMatch[1];
+  const requiredRevision = Number(requiredMatch[2]);
+
+  if (acceptedPrefix !== requiredPrefix) {
+    return false;
+  }
+
+  return acceptedRevision >= requiredRevision;
+}
+
+export function requiresTestNoticeAck(row: Pick<UserRow, 'test_notice_accepted_version'>): boolean {
+  return !hasSatisfiedTestNoticeVersion(row.test_notice_accepted_version, env.TEST_ACCOUNT_NOTICE_VERSION);
+}
 
 export function avatarUrlFromFileName(storageKey: string | null): string | null {
   return storageKey ? `/uploads/${encodeURIComponent(storageKey)}` : null;
@@ -62,7 +97,10 @@ export function mapAuthUser(row: UserRow): AuthUser {
     displayName: row.display_name,
     avatarUrl: avatarUrlFromFileName(row.avatar_storage_key),
     role: row.role,
-    mustChangePassword: row.must_change_password
+    mustChangePassword: row.must_change_password,
+    mustAcceptTestNotice: requiresTestNoticeAck(row),
+    requiredTestNoticeVersion: env.TEST_ACCOUNT_NOTICE_VERSION,
+    acceptedTestNoticeVersion: row.test_notice_accepted_version
   };
 }
 

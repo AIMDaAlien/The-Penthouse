@@ -18,32 +18,52 @@ This vault is the "what we built and why" map for people joining the project lat
 7. [[07 - User Management Basics]]
 8. [[08 - Live Chat Essentials]]
 9. [[09 - Realtime Hardening]]
+10. [[10 - Media Integration]]
+11. [[11 - Stability Fixes v1]]
+12. [[12 - Native Notifications and Strict Read Receipts]]
+13. [[13 - MVP Stability Plan v2]]
+14. [[14 - Opencode Handoff]]
 
 ## Source docs in repo
 
 - [[../START_HERE|Start Here (non-engineer guide)]]
 - [[../adr/ADR-0001-rebuild-baseline|ADR-0001 Rebuild Baseline]]
+- [[../BACKEND_READINESS_MVP_V2|Backend Readiness Report: MVP Stability Plan v2]]
 - [[../../services/api/docs/RELIABILITY_DRILL|Reliability Drill Runbook]]
 - [[../../antigravity/customizations|Antigravity customizations]]
 
-## Current status (as of 2026-03-09)
+## Current status (as of 2026-03-12)
 
-- Rebuild baseline is in place (Vue + Capacitor, Fastify + PostgreSQL, contract-first).
-- Stage B/C hardening is implemented (auth, chat, tests, OpenAPI, mobile split/test harness).
-- Concurrency race fixes for token rotation and message idempotency are implemented in working tree.
-- User management backend foundation is locked:
+- Rebuild baseline is in place:
+  - Vue + Capacitor
+  - Fastify + PostgreSQL
+  - contract-first shared schemas
+- User management is implemented:
   - profiles
-  - member directory APIs
+  - member directory
   - admin invite/member controls
   - moderation-aware visibility
-- Member-facing user-management UI is in place.
-- Live chat essentials are implemented:
-  - typing indicators
-  - presence badges/counts
-  - per-message latency for sent messages
 - Realtime hardening is implemented:
   - explicit client state machine
   - bounded degraded polling
   - socket diagnostics panel
   - API-side socket observability logs
-- Remaining major unknown is Android true socket connectivity under local emulator testing. If it still refuses to connect, the next escalation is a local Caddy/TLS path instead of plain `localhost`.
+- Media integration is implemented:
+  - uploads
+  - inline rendering
+  - fullscreen media viewer
+  - Giphy/Klipy
+- Strict local notifications + strict read receipts are implemented in the current internal build.
+- Backend-only versioned test-account acknowledgement is implemented:
+  - contracts updated
+  - migration `007` added
+  - API/realtime gating active
+- Public rollout is paused.
+- All non-backend implementation for the current cycle is delegated to Opus.
+
+## Current blockers
+
+- Mobile UI regression and right-edge clipping are still unresolved.
+- Notification/read UX still needs a hardening pass.
+- Client-side test-notice acknowledgement flow is still pending.
+- Strict DB release gate still needs a rerun in a working Docker/Postgres environment.

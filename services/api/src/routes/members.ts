@@ -5,12 +5,15 @@ import {
   MemberDetailSchema,
   MemberSummarySchema,
   RotateRecoveryCodeResponseSchema,
+  TestNoticeAckRequestSchema,
+  TestNoticeAckResponseSchema,
   UpdateProfileRequestSchema
 } from '@penthouse/contracts';
 import { pool } from '../db/pool.js';
 import { hashPassword, verifyPassword, createRecoveryCode } from '../utils/security.js';
 import { createAuthResponse, issueRecoveryCode } from '../utils/sessions.js';
-import { getUserById, listMembers, mapMeResponse, mapMemberDetail, mapMemberSummary } from '../utils/users.js';
+import { getUserById, listMembers, mapAuthUser, mapMeResponse, mapMemberDetail, mapMemberSummary } from '../utils/users.js';
+import { env } from '../config/env.js';
 
 async function validateAvatarOwnership(userId: string, avatarUploadId: string | null) {
   if (avatarUploadId === null) return null;
@@ -132,6 +135,43 @@ export async function registerMemberRoutes(app: FastifyInstance): Promise<void> 
     const recoveryCode = createRecoveryCode();
     await issueRecoveryCode(pool, request.user.userId, recoveryCode);
     return RotateRecoveryCodeResponseSchema.parse({ recoveryCode });
+  });
+
+  app.post('/api/v1/me/test-notice/ack', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const parsed = TestNoticeAckRequestSchema.safeParse(request.body);
+    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() });
+
+    if (parsed.data.version !== env.TEST_ACCOUNT_NOTICE_VERSION) {
+      return reply.status(400).send({
+        error: `Unsupported test notice version. Required: ${env.TEST_ACCOUNT_NOTICE_VERSION}`
+      });
+    }
+
+    const update = await pool.query(
+      `UPDATE users
+       SET test_notice_accepted_version = $1,
+           test_notice_accepted_at = NOW()
+       WHERE id = $2
+       RETURNING test_notice_accepted_at`,
+      [env.TEST_ACCOUNT_NOTICE_VERSION, request.user.userId]
+    );
+    if (!update.rowCount) return reply.status(401).send({ error: 'Invalid user session' });
+
+    const user = await getUserById(pool, request.user.userId);
+    if (!user) return reply.status(401).send({ error: 'Invalid user session' });
+
+    request.log.info(
+      {
+        userId: user.id,
+        version: env.TEST_ACCOUNT_NOTICE_VERSION
+      },
+      'test notice acknowledged'
+    );
+
+    return TestNoticeAckResponseSchema.parse({
+      user: mapAuthUser(user),
+      acceptedAt: new Date(update.rows[0].test_notice_accepted_at as string).toISOString()
+    });
   });
 
   app.get('/api/v1/members', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request) => {

@@ -17,7 +17,7 @@ What it runs:
 For production-impact releases, force integration tests:
 
 ```bash
-DATABASE_URL=postgresql://localhost:5432/penthouse_test \
+DATABASE_URL=postgresql://penthouse:penthouse@localhost:5432/penthouse_test \
 JWT_SECRET=local-test-jwt-secret-long-enough \
   npm run release:gate -- --require-db
 ```

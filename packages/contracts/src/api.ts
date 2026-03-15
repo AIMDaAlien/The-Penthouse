@@ -12,7 +12,9 @@ export const AUTH_CONSTRAINTS = {
   passwordMax: 128,
   inviteCodeMin: 6,
   inviteCodeMax: 64,
-  recoveryCodeLength: 16
+  recoveryCodeLength: 16,
+  testNoticeVersionMin: 1,
+  testNoticeVersionMax: 64
 } as const;
 
 const USERNAME_PATTERN = /^[a-z0-9._-]+$/;
@@ -58,6 +60,12 @@ const InviteCodeSchema = z
   .max(AUTH_CONSTRAINTS.inviteCodeMax)
   .transform(normalizeInviteCode);
 
+const TestNoticeVersionSchema = z
+  .string()
+  .trim()
+  .min(AUTH_CONSTRAINTS.testNoticeVersionMin)
+  .max(AUTH_CONSTRAINTS.testNoticeVersionMax);
+
 const DisplayNameSchema = z
   .string()
   .trim()
@@ -85,7 +93,9 @@ const RecoveryCodeSchema = z
 export const RegisterRequestSchema = z.object({
   username: UsernameSchema,
   password: PasswordCreationSchema,
-  inviteCode: InviteCodeSchema
+  inviteCode: InviteCodeSchema,
+  acceptTestNotice: z.literal(true),
+  testNoticeVersion: TestNoticeVersionSchema
 });
 
 export const LoginRequestSchema = z.object({
@@ -116,7 +126,10 @@ export const AuthUserSchema = z.object({
   displayName: z.string(),
   avatarUrl: z.string().nullable(),
   role: UserRoleSchema,
-  mustChangePassword: z.boolean()
+  mustChangePassword: z.boolean(),
+  mustAcceptTestNotice: z.boolean(),
+  requiredTestNoticeVersion: z.string(),
+  acceptedTestNoticeVersion: z.string().nullable()
 });
 
 export const AuthResponseSchema = z.object({
@@ -144,6 +157,15 @@ export const UpdateProfileRequestSchema = z
 export const ChangePasswordRequestSchema = z.object({
   currentPassword: PasswordEntrySchema,
   newPassword: PasswordCreationSchema
+});
+
+export const TestNoticeAckRequestSchema = z.object({
+  version: TestNoticeVersionSchema
+});
+
+export const TestNoticeAckResponseSchema = z.object({
+  user: AuthUserSchema,
+  acceptedAt: z.string()
 });
 
 export const RotateRecoveryCodeResponseSchema = z.object({
@@ -269,6 +291,8 @@ export type AuthResponse = z.infer<typeof AuthResponseSchema>;
 export type MeResponse = z.infer<typeof MeResponseSchema>;
 export type UpdateProfileRequest = z.infer<typeof UpdateProfileRequestSchema>;
 export type ChangePasswordRequest = z.infer<typeof ChangePasswordRequestSchema>;
+export type TestNoticeAckRequest = z.infer<typeof TestNoticeAckRequestSchema>;
+export type TestNoticeAckResponse = z.infer<typeof TestNoticeAckResponseSchema>;
 export type RotateRecoveryCodeResponse = z.infer<typeof RotateRecoveryCodeResponseSchema>;
 export type ChatSummary = z.infer<typeof ChatSummarySchema>;
 export type MemberSummary = z.infer<typeof MemberSummarySchema>;

@@ -12,7 +12,8 @@ const migrations = [
   '003_auth_recovery.sql',
   '004_user_management.sql',
   '005_media_messages.sql',
-  '006_read_state.sql'
+  '006_read_state.sql',
+  '007_test_account_notice.sql'
 ];
 
 export async function runMigrations(): Promise<void> {

@@ -5,7 +5,6 @@ import type { Message } from '@penthouse/contracts';
 const MESSAGES_CHANNEL_ID = 'messages';
 const MESSAGE_NOTIFICATION_GROUP = 'chat-messages';
 const RECENT_SEED_WINDOW_MS = 60_000;
-const CHAT_NOTIFICATION_COOLDOWN_MS = 700;
 const MAX_NOTIFICATION_BODY_LENGTH = 180;
 
 let initialized = false;
@@ -13,7 +12,6 @@ let initializePromise: Promise<void> | null = null;
 let notificationPermissionGranted = false;
 let openChatHandler: ((chatId: string) => void) | null = null;
 const recentlyScheduledSeeds = new Map<string, number>();
-const lastChatNotificationAt = new Map<string, number>();
 
 function isNativeRuntime(): boolean {
   return Capacitor.isNativePlatform();
@@ -62,20 +60,12 @@ function shouldSkipNotification(message: Message): boolean {
     return true;
   }
 
-  const lastChatAt = lastChatNotificationAt.get(message.chatId);
-  if (typeof lastChatAt === 'number' && nowMs - lastChatAt < CHAT_NOTIFICATION_COOLDOWN_MS) {
-    recentlyScheduledSeeds.set(seed, nowMs);
-    return true;
-  }
-
   recentlyScheduledSeeds.set(seed, nowMs);
-  lastChatNotificationAt.set(message.chatId, nowMs);
   return false;
 }
 
 function messageNotificationId(message: Message): number {
-  // Use one delivered notification per chat so rapid bursts collapse instead of stacking.
-  return hashNotificationId(`chat:${message.chatId}`);
+  return hashNotificationId(notificationSeed(message));
 }
 
 export async function ensureNotificationPermission(): Promise<boolean> {
@@ -108,7 +98,7 @@ export async function initializeNotifications(onOpenChat: (chatId: string) => vo
       id: MESSAGES_CHANNEL_ID,
       name: 'Messages',
       description: 'Message alerts from The Penthouse',
-      importance: 4,
+      importance: 5,
       visibility: 1
     });
 
@@ -154,7 +144,7 @@ export async function scheduleIncomingMessageNotification(message: Message, chat
       messageId: message.id
     },
     schedule: {
-      at: new Date(Date.now() + 50)
+      at: new Date(Date.now() + 1)
     }
   };
 
@@ -174,12 +164,10 @@ export async function clearDeliveredNotificationsForChat(chatId: string): Promis
   if (notifications.length === 0) return;
 
   await LocalNotifications.removeDeliveredNotifications({ notifications });
-  lastChatNotificationAt.delete(chatId);
 }
 
 export async function clearAllDeliveredNotifications(): Promise<void> {
   if (!isNativeRuntime()) return;
   await LocalNotifications.removeAllDeliveredNotifications();
   recentlyScheduledSeeds.clear();
-  lastChatNotificationAt.clear();
 }

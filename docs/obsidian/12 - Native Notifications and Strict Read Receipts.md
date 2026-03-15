@@ -32,6 +32,14 @@ That means:
 
 True always-on background delivery needs a later FCM/APNs push slice.
 
+## Current status (as of 2026-03-12)
+
+- The Android permission prompt works.
+- Local notifications are firing in current internal testing.
+- Read logic is stricter now and no longer advances just because a chat is selected in app state.
+- Hardening is still required around active-chat visibility and notification clear conditions.
+- This remains local-only, not push.
+
 ## Files touched
 
 - `apps/mobile/src/App.vue`

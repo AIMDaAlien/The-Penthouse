@@ -3,12 +3,20 @@ import type { Chat, ChatMessage } from '../types';
 const CHATS_KEY = 'penthouse.cache.chats';
 const MSG_PREFIX = 'penthouse.cache.messages.';
 
-export function cacheChats(chats: Chat[]): void {
-  localStorage.setItem(CHATS_KEY, JSON.stringify(chats));
+function scopedChatsKey(userId: string): string {
+  return `${CHATS_KEY}.${userId}`;
 }
 
-export function readCachedChats(): Chat[] {
-  const raw = localStorage.getItem(CHATS_KEY);
+function scopedMessagesKey(userId: string, chatId: string): string {
+  return `${MSG_PREFIX}${userId}.${chatId}`;
+}
+
+export function cacheChats(userId: string, chats: Chat[]): void {
+  localStorage.setItem(scopedChatsKey(userId), JSON.stringify(chats));
+}
+
+export function readCachedChats(userId: string): Chat[] {
+  const raw = localStorage.getItem(scopedChatsKey(userId));
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw) as Chat[];
@@ -18,12 +26,12 @@ export function readCachedChats(): Chat[] {
   }
 }
 
-export function cacheMessages(chatId: string, messages: ChatMessage[]): void {
-  localStorage.setItem(`${MSG_PREFIX}${chatId}`, JSON.stringify(messages));
+export function cacheMessages(userId: string, chatId: string, messages: ChatMessage[]): void {
+  localStorage.setItem(scopedMessagesKey(userId, chatId), JSON.stringify(messages));
 }
 
-export function readCachedMessages(chatId: string): ChatMessage[] {
-  const raw = localStorage.getItem(`${MSG_PREFIX}${chatId}`);
+export function readCachedMessages(userId: string, chatId: string): ChatMessage[] {
+  const raw = localStorage.getItem(scopedMessagesKey(userId, chatId));
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw) as ChatMessage[];

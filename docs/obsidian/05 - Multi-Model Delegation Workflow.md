@@ -57,3 +57,21 @@ Templates live in:
 - Forces evidence before high-risk changes.
 - Makes rollback and ownership clear before execution starts.
 - Keeps stability priority above feature speed.
+
+## Current execution override (2026-03-12)
+
+This is a temporary operating override for the current stabilization cycle. It does not replace the base Antigravity policy.
+
+- Codex:
+  - backend
+  - contracts
+  - tests
+  - release-gate work
+  - final arbiter
+- Opus:
+  - all non-backend implementation for the current cycle
+  - UI recovery
+  - notification UX hardening
+  - screenshot-guided restoration
+- Gemini:
+  - paused unless explicitly re-enabled by the user

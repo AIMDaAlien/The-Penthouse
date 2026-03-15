@@ -14,7 +14,7 @@ import { registerMemberRoutes } from './routes/members.js';
 import { registerAdminRoutes } from './routes/admin.js';
 import { registerObservability } from './observability.js';
 import { pool } from './db/pool.js';
-import { avatarUrlFromFileName, getUserById } from './utils/users.js';
+import { getUserById, mapAuthUser } from './utils/users.js';
 import { ensureUploadsDirReady } from './utils/uploads.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -62,20 +62,29 @@ export async function createApp() {
       return reply.status(403).send({ error: 'Account unavailable' });
     }
 
+    const authUser = mapAuthUser(user);
     request.user = {
+      ...authUser,
       userId: user.id,
-      username: user.username,
-      displayName: user.display_name,
-      avatarUrl: avatarUrlFromFileName(user.avatar_storage_key),
-      role: user.role,
-      status: user.status,
-      mustChangePassword: user.must_change_password
+      status: user.status
     } as any;
   });
 
   app.decorate('requireFullAccess', async (request, reply) => {
     if (request.user.mustChangePassword) {
+      request.log.info({ userId: request.user.userId }, 'full access blocked: password change required');
       return reply.status(403).send({ error: 'Password change required' });
+    }
+    if (request.user.mustAcceptTestNotice) {
+      request.log.info(
+        {
+          userId: request.user.userId,
+          requiredVersion: request.user.requiredTestNoticeVersion,
+          acceptedVersion: request.user.acceptedTestNoticeVersion
+        },
+        'full access blocked: test notice acknowledgement required'
+      );
+      return reply.status(403).send({ error: 'Test account acknowledgement required' });
     }
   });
 

@@ -1,6 +1,6 @@
 <template>
   <section class="card auth-panel">
-    <div class="row" style="margin-bottom: 15px;">
+    <div class="auth-mode-switcher" style="margin-bottom: 15px;">
       <button :class="mode === 'login' ? '' : 'secondary'" @click="mode = 'login'">Login</button>
       <button :class="mode === 'register' ? '' : 'secondary'" @click="mode = 'register'">Register</button>
       <button :class="mode === 'reset' ? '' : 'secondary'" @click="mode = 'reset'">Reset</button>
@@ -50,6 +50,13 @@
         spellcheck="false"
         @blur="inviteCode = normalizeInviteCode(inviteCode)"
       />
+      <label v-if="mode === 'register'" class="test-notice-check">
+        <input v-model="acceptTestNotice" type="checkbox" />
+        <span>
+          I understand this is an internal-only test build and I am acknowledging notice version
+          <strong>{{ TEST_NOTICE_VERSION }}</strong>.
+        </span>
+      </label>
       <input
         v-if="mode === 'reset'"
         v-model="recoveryCode"
@@ -79,6 +86,7 @@ import {
   normalizeRecoveryCode,
   normalizeUsername
 } from '@penthouse/contracts';
+import { TEST_NOTICE_VERSION } from '../testNotice';
 
 const props = defineProps<{
   error: string;
@@ -97,6 +105,7 @@ const password = ref('');
 const confirmPassword = ref('');
 const inviteCode = ref('PENTHOUSE-ALPHA');
 const recoveryCode = ref('');
+const acceptTestNotice = ref(false);
 const localError = ref('');
 
 const helperText = computed(() => {
@@ -121,6 +130,7 @@ watch(mode, () => {
   localError.value = '';
   password.value = '';
   confirmPassword.value = '';
+  acceptTestNotice.value = false;
   if (mode.value !== 'reset') {
     recoveryCode.value = '';
   }
@@ -140,6 +150,10 @@ function handleSubmit() {
   }
 
   if (mode.value === 'register') {
+    if (!acceptTestNotice.value) {
+      localError.value = 'You need to acknowledge the current test notice to create an account';
+      return;
+    }
     emit('register', normalizeUsername(username.value), password.value, normalizeInviteCode(inviteCode.value));
     return;
   }
@@ -157,10 +171,58 @@ function handleSubmit() {
 .auth-panel {
   max-width: 400px;
   margin: 40px auto;
+  width: min(100%, 400px);
+}
+
+.auth-mode-switcher {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.auth-mode-switcher button {
+  min-width: 0;
 }
 
 .auth-help {
   opacity: 0.72;
   line-height: 1.4;
+}
+
+.test-notice-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(140, 216, 255, 0.16);
+  background: rgba(15, 18, 34, 0.72);
+  color: var(--text);
+  line-height: 1.4;
+}
+
+.test-notice-check input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  padding: 0;
+  border-radius: 6px;
+  accent-color: var(--accent);
+  flex: 0 0 auto;
+}
+
+@media (max-width: 420px) {
+  .auth-panel {
+    margin: 24px auto 0;
+  }
+
+  .auth-mode-switcher {
+    gap: 8px;
+  }
+
+  .auth-mode-switcher button {
+    padding: 10px 8px;
+    font-size: 0.85rem;
+  }
 }
 </style>

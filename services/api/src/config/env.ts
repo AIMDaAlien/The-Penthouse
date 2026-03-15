@@ -13,6 +13,7 @@ const EnvSchema = z.object({
   CORS_ORIGIN: z.string().default('http://localhost:5173'),
   UPLOAD_MAX_MB: z.coerce.number().int().positive().default(20),
   ADMIN_BOOTSTRAP_USERNAME: z.string().default(''),
+  TEST_ACCOUNT_NOTICE_VERSION: z.string().default('alpha-v1'),
   GIPHY_API_KEY: z.string().default(''),
   KLIPY_API_KEY: z.string().default('')
 });

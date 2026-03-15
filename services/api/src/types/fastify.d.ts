@@ -15,6 +15,9 @@ declare module '@fastify/jwt' {
       role: UserRole;
       status: UserStatus;
       mustChangePassword: boolean;
+      mustAcceptTestNotice: boolean;
+      requiredTestNoticeVersion: string;
+      acceptedTestNoticeVersion: string | null;
     };
   }
 }

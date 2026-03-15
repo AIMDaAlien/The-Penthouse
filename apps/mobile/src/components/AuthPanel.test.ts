@@ -18,10 +18,33 @@ describe('AuthPanel.vue', () => {
     await inputs[1].setValue('supersecurepassword');
     await inputs[2].setValue('supersecurepassword');
     await inputs[3].setValue(' penthouse-alpha ');
+    await inputs[4].setValue(true);
 
     await wrapper.find('form').trigger('submit.prevent');
 
     expect(wrapper.emitted('register')).toEqual([['aim.test', 'supersecurepassword', 'PENTHOUSE-ALPHA']]);
+  });
+
+  it('blocks register until the test notice is acknowledged', async () => {
+    const wrapper = mount(AuthPanel, {
+      props: {
+        error: '',
+        loading: false
+      }
+    });
+
+    await wrapper.findAll('button')[1].trigger('click');
+    const inputs = wrapper.findAll('input');
+
+    await inputs[0].setValue('aim.test');
+    await inputs[1].setValue('supersecurepassword');
+    await inputs[2].setValue('supersecurepassword');
+    await inputs[3].setValue('PENTHOUSE-ALPHA');
+
+    await wrapper.find('form').trigger('submit.prevent');
+
+    expect(wrapper.emitted('register')).toBeFalsy();
+    expect(wrapper.text()).toContain('acknowledge the current test notice');
   });
 
   it('blocks mismatched password confirmation in reset mode', async () => {

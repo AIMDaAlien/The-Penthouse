@@ -38,7 +38,7 @@
         </div>
 
         <button
-          v-if="getMessageType(m) === 'image' || getMessageType(m) === 'gif'"
+          v-if="rendersInlineImage(m)"
           type="button"
           class="media-tile"
           :style="getMediaStyle(m)"
@@ -46,19 +46,24 @@
         >
           <img
             class="media-image"
-            :src="getPreviewUrl(m)"
+            :class="{ 'gif-image': getMessageType(m) === 'gif' }"
+            :src="getInlineMediaUrl(m)"
             :alt="getAttachmentLabel(m)"
-            loading="lazy"
+            :loading="getInlineLoading(m)"
           />
         </button>
 
-        <div v-else-if="getMessageType(m) === 'video'" class="media-block">
+        <div v-else-if="rendersInlineVideo(m)" class="media-block">
           <video
             class="media-video"
             :style="getMediaStyle(m)"
-            controls
+            :controls="getMessageType(m) === 'video'"
+            :autoplay="getMessageType(m) === 'gif'"
+            :loop="getMessageType(m) === 'gif'"
+            :muted="getMessageType(m) === 'gif'"
+            :playsinline="getMessageType(m) === 'gif'"
             preload="metadata"
-            :src="getAttachmentUrl(m)"
+            :src="getInlineMediaUrl(m)"
           ></video>
         </div>
 
@@ -95,11 +100,23 @@
       </div>
       <div class="viewer-stage">
         <img
+          v-if="viewer.kind === 'image'"
           :src="viewer.url"
           :alt="viewer.label"
           class="viewer-image"
           :style="{ transform: `scale(${viewer.scale})` }"
         />
+        <video
+          v-else
+          :src="viewer.url"
+          :aria-label="viewer.label"
+          class="viewer-image viewer-video"
+          controls
+          autoplay
+          loop
+          muted
+          playsinline
+        ></video>
       </div>
     </div>
   </div>
@@ -126,7 +143,7 @@ const emit = defineEmits<{
 }>();
 
 const scrollRef = ref<HTMLElement | null>(null);
-const viewer = ref<{ url: string; label: string; scale: number } | null>(null);
+const viewer = ref<{ url: string; label: string; scale: number; kind: 'image' | 'video' } | null>(null);
 
 const sortedMessages = computed(() => [...props.messages].reverse());
 const typingMembers = computed(() => props.typingMembers ?? []);
@@ -195,6 +212,42 @@ function getPreviewUrl(m: Message): string {
   return resolveMediaUrl(previewUrl);
 }
 
+function getGifProvider(m: Message): string | null {
+  const metadata = getMetadataRecord(m);
+  return typeof metadata?.provider === 'string' ? metadata.provider : null;
+}
+
+function isVideoAsset(url: string): boolean {
+  return /\.(mp4|webm)(?:$|[?#])/i.test(url);
+}
+
+function rendersInlineImage(m: Message): boolean {
+  if (getMessageType(m) === 'image') return true;
+  if (getMessageType(m) !== 'gif') return false;
+  return !isVideoAsset(getInlineMediaUrl(m));
+}
+
+function rendersInlineVideo(m: Message): boolean {
+  if (getMessageType(m) === 'video') return true;
+  return getMessageType(m) === 'gif' && isVideoAsset(getInlineMediaUrl(m));
+}
+
+function getInlineMediaUrl(m: Message): string {
+  if (getMessageType(m) === 'gif' && getGifProvider(m) === 'klipy') {
+    return getAttachmentUrl(m) || getPreviewUrl(m);
+  }
+
+  if (getMessageType(m) === 'video') {
+    return getAttachmentUrl(m);
+  }
+
+  return getPreviewUrl(m);
+}
+
+function getInlineLoading(m: Message): 'eager' | 'lazy' {
+  return getMessageType(m) === 'gif' && getGifProvider(m) === 'klipy' ? 'eager' : 'lazy';
+}
+
 function getAttachmentLabel(m: Message): string {
   const metadata = getMetadataRecord(m);
   if (typeof metadata?.originalFileName === 'string' && metadata.originalFileName.trim()) {
@@ -251,13 +304,13 @@ function getLatencyLabel(m: Message): string {
   return `${Math.max(0, Math.round(ms))}ms`;
 }
 
-function getMediaDimensions(m: Message): { width: number; height: number } {
+function getMediaDimensions(m: Message): { width: number; height: number; aspectRatio: number } {
   const metadata = getMetadataRecord(m);
   const rawWidth = typeof metadata?.width === 'number' ? metadata.width : null;
   const rawHeight = typeof metadata?.height === 'number' ? metadata.height : null;
   const viewportWidth = Math.max(320, globalThis.innerWidth || 360);
-  const maxWidth = Math.min(Math.round(viewportWidth * 0.62), 260);
-  const maxHeight = 320;
+  const maxWidth = Math.min(Math.round(viewportWidth * 0.72), viewportWidth < 760 ? 280 : 360);
+  const maxHeight = viewportWidth < 760 ? 280 : 360;
 
   if (rawWidth && rawHeight && rawWidth > 0 && rawHeight > 0) {
     const aspectRatio = rawWidth / rawHeight;
@@ -270,18 +323,20 @@ function getMediaDimensions(m: Message): { width: number; height: number } {
     }
 
     width = Math.max(140, width);
-    height = Math.max(120, height);
-    return { width, height };
+    height = Math.max(110, height);
+    return { width, height, aspectRatio };
   }
 
-  return { width: maxWidth, height: Math.min(Math.round(maxWidth * 0.75), 220) };
+  return { width: maxWidth, height: Math.min(Math.round(maxWidth * 0.75), 240), aspectRatio: 4/3 };
 }
 
 function getMediaStyle(m: Message): Record<string, string> {
-  const { width, height } = getMediaDimensions(m);
+  const { width, aspectRatio } = getMediaDimensions(m);
   return {
-    width: `${width}px`,
-    height: `${height}px`
+    width: '100%',
+    maxWidth: `${width}px`,
+    aspectRatio: `${aspectRatio}`,
+    height: 'auto'
   };
 }
 
@@ -296,7 +351,8 @@ function openViewer(m: Message): void {
   viewer.value = {
     url,
     label: getAttachmentLabel(m),
-    scale: 1
+    scale: 1,
+    kind: isVideoAsset(url) ? 'video' : 'image'
   };
 }
 
@@ -374,8 +430,18 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 4px 2px;
-  opacity: 0.75;
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  width: fit-content;
+  margin-top: auto;
+  margin-left: 4px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(15, 18, 34, 0.5);
+  backdrop-filter: blur(10px);
+  opacity: 0.5;
+  pointer-events: none;
 }
 
 .typing-dots {
@@ -423,6 +489,7 @@ onUnmounted(() => {
 
 .msg-bubble.media-bubble {
   padding: 4px;
+  max-width: min(85%, 372px);
 }
 
 .msg-bubble.sent {
@@ -474,6 +541,7 @@ onUnmounted(() => {
 .media-tile {
   padding: 0;
   width: auto;
+  max-width: 100%;
   border: none;
   background: rgba(255, 255, 255, 0.05);
   border-radius: 14px;
@@ -488,6 +556,10 @@ onUnmounted(() => {
   display: block;
   background: rgba(0, 0, 0, 0.25);
   object-fit: cover;
+}
+
+.media-image.gif-image {
+  object-fit: contain;
 }
 
 .file-card {
@@ -592,6 +664,11 @@ onUnmounted(() => {
   max-height: 100%;
   transform-origin: center center;
   transition: transform 0.12s ease-out;
+}
+
+.viewer-video {
+  width: min(100%, 960px);
+  height: auto;
 }
 
 .messages-container::-webkit-scrollbar {

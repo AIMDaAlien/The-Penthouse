@@ -10,7 +10,9 @@ test('register schema validates invite fields', () => {
   const ok = RegisterRequestSchema.safeParse({
     username: 'aim',
     password: 'supersecurepassword',
-    inviteCode: 'PENTHOUSE-ALPHA'
+    inviteCode: 'PENTHOUSE-ALPHA',
+    acceptTestNotice: true,
+    testNoticeVersion: 'alpha-v1'
   });
 
   assert.equal(ok.success, true);

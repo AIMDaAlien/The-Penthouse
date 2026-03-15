@@ -27,7 +27,7 @@ components:
 
     RegisterRequest:
       type: object
-      required: [username, password, inviteCode]
+      required: [username, password, inviteCode, acceptTestNotice, testNoticeVersion]
       properties:
         username:
           type: string
@@ -45,6 +45,15 @@ components:
           minLength: 6
           maxLength: 64
           description: Trimmed and uppercased by the server
+        acceptTestNotice:
+          type: boolean
+          enum: [true]
+          description: Must be true to acknowledge test account terms
+        testNoticeVersion:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: Version of the notice acknowledged by the client
 
     LoginRequest:
       type: object
@@ -101,7 +110,7 @@ components:
 
     AuthUser:
       type: object
-      required: [id, username, displayName, avatarUrl, role, mustChangePassword]
+      required: [id, username, displayName, avatarUrl, role, mustChangePassword, mustAcceptTestNotice, requiredTestNoticeVersion, acceptedTestNoticeVersion]
       properties:
         id:
           type: string
@@ -117,6 +126,13 @@ components:
           $ref: '#/components/schemas/UserRole'
         mustChangePassword:
           type: boolean
+        mustAcceptTestNotice:
+          type: boolean
+        requiredTestNoticeVersion:
+          type: string
+        acceptedTestNoticeVersion:
+          type: string
+          nullable: true
 
     AuthResponse:
       type: object
@@ -185,6 +201,25 @@ components:
       properties:
         recoveryCode:
           type: string
+
+    TestNoticeAckRequest:
+      type: object
+      required: [version]
+      properties:
+        version:
+          type: string
+          minLength: 1
+          maxLength: 64
+
+    TestNoticeAckResponse:
+      type: object
+      required: [user, acceptedAt]
+      properties:
+        user:
+          $ref: '#/components/schemas/AuthUser'
+        acceptedAt:
+          type: string
+          format: date-time
 
     ChatSummary:
       type: object
@@ -715,6 +750,44 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Password change or test-account acknowledgement required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/me/test-notice/ack:
+    post:
+      summary: Acknowledge the current test-account notice version
+      operationId: acknowledgeTestNotice
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestNoticeAckRequest'
+      responses:
+        '200':
+          description: Test notice acknowledged for current user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestNoticeAckResponse'
+        '400':
+          description: Validation error or wrong notice version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/members:
     get:
@@ -745,7 +818,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: Password change required or account unavailable
+          description: Password change, test notice acknowledgement required, or account unavailable
           content:
             application/json:
               schema:
@@ -778,7 +851,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: Password change required or account unavailable
+          description: Password change, test notice acknowledgement required, or account unavailable
           content:
             application/json:
               schema:
