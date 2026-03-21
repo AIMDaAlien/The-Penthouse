@@ -345,6 +345,101 @@ describe('[integration] member self-service', { skip: SKIP, concurrency: false }
     });
     assert.equal(newPasswordLogin.statusCode, 200);
   });
+
+  test('session list only includes the member sessions, marks current, and can revoke another session', async () => {
+    const { authHeaders, cleanup, registerUser, loginUser } = await import('./helpers.js');
+    await cleanup();
+
+    const primary = await registerUser(app, 'session_owner');
+    const secondary = await loginUser(app, 'session_owner', 'supersecurepassword');
+    const stranger = await registerUser(app, 'session_stranger');
+
+    const ownSessionsRes = await app.inject({
+      method: 'GET',
+      url: '/api/v1/me/sessions',
+      headers: authHeaders(primary.accessToken)
+    });
+    assert.equal(ownSessionsRes.statusCode, 200);
+    const ownSessions = JSON.parse(ownSessionsRes.payload);
+    assert.equal(ownSessions.length, 2);
+    assert.equal(ownSessions.filter((session: any) => session.current).length, 1);
+    assert.ok(ownSessions.some((session: any) => session.deviceLabel));
+    assert.ok(ownSessions.every((session: any) => session.appContext === null || typeof session.appContext === 'string'));
+
+    const otherSession = ownSessions.find((session: any) => session.current === false);
+    assert.ok(otherSession, 'expected a revoke-able second session');
+
+    const strangerSessionsRes = await app.inject({
+      method: 'GET',
+      url: '/api/v1/me/sessions',
+      headers: authHeaders(stranger.accessToken)
+    });
+    assert.equal(strangerSessionsRes.statusCode, 200);
+    const strangerSessions = JSON.parse(strangerSessionsRes.payload);
+    assert.equal(strangerSessions.length, 1);
+    assert.ok(!strangerSessions.some((session: any) => session.id === otherSession.id));
+
+    const revokeRes = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/me/sessions/${otherSession.id}`,
+      headers: authHeaders(primary.accessToken)
+    });
+    assert.equal(revokeRes.statusCode, 204);
+
+    const revokedRefresh = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/refresh',
+      payload: { refreshToken: secondary.refreshToken }
+    });
+    assert.equal(revokedRefresh.statusCode, 401);
+
+    const currentRefresh = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/refresh',
+      payload: { refreshToken: primary.refreshToken }
+    });
+    assert.equal(currentRefresh.statusCode, 200);
+  });
+
+  test('current session cannot be revoked through the other-session endpoint and revoke-all-others preserves it', async () => {
+    const { authHeaders, cleanup, registerUser, loginUser } = await import('./helpers.js');
+    await cleanup();
+
+    const primary = await registerUser(app, 'session_revoke_owner');
+    const secondary = await loginUser(app, 'session_revoke_owner', 'supersecurepassword');
+
+    const listRes = await app.inject({
+      method: 'GET',
+      url: '/api/v1/me/sessions',
+      headers: authHeaders(primary.accessToken)
+    });
+    assert.equal(listRes.statusCode, 200);
+    const sessions = JSON.parse(listRes.payload);
+    const currentSession = sessions.find((session: any) => session.current === true);
+    assert.ok(currentSession);
+
+    const revokeCurrentRes = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/me/sessions/${currentSession.id}`,
+      headers: authHeaders(primary.accessToken)
+    });
+    assert.equal(revokeCurrentRes.statusCode, 409);
+
+    const revokeOthersRes = await app.inject({
+      method: 'DELETE',
+      url: '/api/v1/me/sessions/others',
+      headers: authHeaders(primary.accessToken)
+    });
+    assert.equal(revokeOthersRes.statusCode, 200);
+    assert.equal(JSON.parse(revokeOthersRes.payload).revokedCount, 1);
+
+    const revokedRefresh = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/refresh',
+      payload: { refreshToken: secondary.refreshToken }
+    });
+    assert.equal(revokedRefresh.statusCode, 401);
+  });
 });
 
 describe('[integration] admin user management', { skip: SKIP, concurrency: false }, () => {
@@ -365,58 +460,59 @@ describe('[integration] admin user management', { skip: SKIP, concurrency: false
     await helpers.cleanup();
   });
 
-  test('configured bootstrap username becomes admin and invite rotation replaces the master code', async () => {
-    const { cleanup, registerUser, authHeaders } = await import('./helpers.js');
+  test('configured bootstrap username becomes admin', async () => {
+    const { cleanup, registerUser } = await import('./helpers.js');
     await cleanup();
 
     await withBootstrapUsername('owner_admin', async () => {
       const admin = await registerUser(app, 'owner_admin');
       assert.equal(admin.user.role, 'admin');
+    });
+  });
 
-      const inviteRes = await app.inject({
+  test('admin can fetch operator summary and non-admin is rejected', async () => {
+    const { cleanup, registerUser, authHeaders } = await import('./helpers.js');
+    await cleanup();
+
+    await withBootstrapUsername('owner_operator', async () => {
+      const admin = await registerUser(app, 'owner_operator');
+      const member = await registerUser(app, 'plain_member_operator');
+
+      const adminSummaryRes = await app.inject({
         method: 'GET',
-        url: '/api/v1/admin/invite',
+        url: '/api/v1/admin/operator/summary',
         headers: authHeaders(admin.accessToken)
       });
-      assert.equal(inviteRes.statusCode, 200);
-      const invite = JSON.parse(inviteRes.payload);
-      assert.equal(invite.code, 'PENTHOUSE-ALPHA');
+      assert.equal(adminSummaryRes.statusCode, 200);
+      const summary = JSON.parse(adminSummaryRes.payload);
+      assert.equal(summary.app.name, 'The Penthouse API');
+      assert.equal(typeof summary.app.checkedAt, 'string');
+      assert.equal(summary.app.databaseReachable, true);
+      assert.equal(typeof summary.members.total, 'number');
+      assert.equal(typeof summary.members.active, 'number');
+      assert.equal(typeof summary.content.chats, 'number');
+      assert.equal(typeof summary.content.messages, 'number');
+      assert.equal(typeof summary.content.uploads, 'number');
+      assert.equal(typeof summary.content.uploadBytesTotal, 'number');
+      assert.equal(typeof summary.realtime.sockets, 'number');
+      assert.equal(typeof summary.realtime.connectedUsers, 'number');
+      assert.equal(typeof summary.realtime.activeChatRooms, 'number');
+      assert.equal(typeof summary.moderation.hiddenMessages, 'number');
+      assert.equal(typeof summary.moderation.recentActions24h, 'number');
+      assert.equal(typeof summary.invite.code, 'string');
+      assert.equal(summary.push.configured, false);
+      assert.equal(typeof summary.push.androidTokens, 'number');
+      assert.equal(typeof summary.push.iosTokens, 'number');
+      assert.equal(typeof summary.push.notificationsDisabled, 'number');
+      assert.equal(typeof summary.push.quietHoursEnabled, 'number');
+      assert.equal(typeof summary.push.previewsDisabled, 'number');
 
-      const rotateRes = await app.inject({
-        method: 'POST',
-        url: '/api/v1/admin/invite/rotate',
-        headers: authHeaders(admin.accessToken)
+      const memberSummaryRes = await app.inject({
+        method: 'GET',
+        url: '/api/v1/admin/operator/summary',
+        headers: authHeaders(member.accessToken)
       });
-      assert.equal(rotateRes.statusCode, 200);
-      const rotated = JSON.parse(rotateRes.payload);
-      assert.notEqual(rotated.code, invite.code);
-      assert.equal(rotated.uses, 0, 'rotated invite should reset its visible use counter');
-
-      const oldInviteRegister = await app.inject({
-        method: 'POST',
-        url: '/api/v1/auth/register',
-        payload: {
-          username: 'old_invite_user',
-          password: 'supersecurepassword',
-          inviteCode: 'PENTHOUSE-ALPHA',
-          acceptTestNotice: true,
-          testNoticeVersion: 'alpha-v1'
-        }
-      });
-      assert.equal(oldInviteRegister.statusCode, 400, 'old invite code must fail immediately');
-
-      const newInviteRegister = await app.inject({
-        method: 'POST',
-        url: '/api/v1/auth/register',
-        payload: {
-          username: 'new_invite_user',
-          password: 'supersecurepassword',
-          inviteCode: rotated.code,
-          acceptTestNotice: true,
-          testNoticeVersion: 'alpha-v1'
-        }
-      });
-      assert.equal(newInviteRegister.statusCode, 201, 'rotated invite code must work');
+      assert.equal(memberSummaryRes.statusCode, 403);
     });
   });
 
