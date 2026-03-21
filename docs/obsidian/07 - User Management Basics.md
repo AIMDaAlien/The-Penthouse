@@ -61,8 +61,11 @@ Implemented:
 
 Implemented:
 
-- `GET /api/v1/admin/invite`
-- `POST /api/v1/admin/invite/rotate`
+- `GET /api/v1/admin/invites`
+- `POST /api/v1/admin/invites`
+- `POST /api/v1/admin/invites/:inviteId/revoke`
+- `GET /api/v1/admin/registration-mode`
+- `PUT /api/v1/admin/registration-mode`
 - `GET /api/v1/admin/members`
 - `POST /api/v1/admin/members/:memberId/remove`
 - `POST /api/v1/admin/members/:memberId/ban`
@@ -75,19 +78,29 @@ Important boundary:
 
 ### Moderation visibility rule
 
-Messages from removed/banned users are:
+The rebuild now has two moderation layers:
 
-- hidden in normal member chat history
-- still visible in the admin audit endpoint
+- account-level moderation:
+  - removed/banned users lose access immediately
+  - their old messages are hidden behind generic tombstones in normal member chat history
+- message-level moderation:
+  - admins can hide and later restore individual messages
+  - both actions require a moderator reason
+  - normal members see a generic tombstone
+  - admin audit still shows the original content plus the latest moderation metadata
 
-That gives you moderation without destructive deletion.
+Important rule:
+- moderation is reversible in v1
+- there is still no hard delete in this slice
+- moderator reasons stay admin-only
 
 ## What was verified
 
 Live PostgreSQL integration tests now cover:
 
 - admin bootstrap
-- invite rotation
+- multi-invite CRUD and revocation
+- registration mode toggle (invite_only / closed)
 - profile update
 - recovery code rotation
 - password change
@@ -105,3 +118,29 @@ This slice makes the next frontend work worth doing:
 - later admin site work
 
 It also gives Gemini a stable contract surface for the member-facing UI pass.
+
+## What Phase 2 added
+
+Balanced Admin Suite v1 added:
+
+- `POST /api/v1/admin/messages/:messageId/hide`
+- `POST /api/v1/admin/messages/:messageId/unhide`
+- append-only moderation event logging
+- realtime member updates that flip moderated messages into tombstones without reload
+- a dedicated admin moderation panel in Settings
+- richer read-only operator diagnostics for:
+  - realtime socket state
+  - moderation counts
+  - push/device preference counts
+
+## What Phase 3 added
+
+Invite and Onboarding Controls v1 replaced the single master invite code with multi-invite management:
+
+- `signup_invites` restructured: UUID primary key, label column, optional max_uses and expires_at
+- `server_settings` table stores registration mode (invite_only or closed)
+- admin can create, list, and revoke invite codes
+- registration checks mode first (closed rejects with 403), then validates any active invite by code
+- public `GET /api/v1/auth/config` exposes registration mode to unauthenticated clients
+- dedicated Invites tab in admin settings with registration mode toggle
+- AuthPanel reflects closed mode by replacing the registration form with a notice

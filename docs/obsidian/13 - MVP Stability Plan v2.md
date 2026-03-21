@@ -7,7 +7,7 @@ created: 2026-03-12
 
 ## Summary
 
-Public rollout is paused. The current strategy is backend-first completion, then UI recovery, then an internal-only alpha-readiness freeze.
+The rebuild is now live publicly. The strategy has shifted from "make the rebuild viable" to "expand the admin/operator surface carefully without reopening core reliability risk."
 
 This phase also carries a temporary delegation override:
 
@@ -44,7 +44,7 @@ Primary source of truth:
 
 ## Phase 3 - UI recovery + notification UX hardening
 
-Status: next active phase
+Status: largely complete
 
 Owner: Opus
 
@@ -54,8 +54,12 @@ Owner: Opus
   - directory
   - settings/profile
   - forced-password gate
-- Fix remaining width clipping and composer fit issues.
+- Current recovery pass restored runtime typing, presence, and Klipy inline playback after Android emulator confirmation.
 - Harden local-notification UX around strict read visibility.
+- Admin/operator UI now has a read-only server summary panel for app health, member counts, content counts, invite state, and push configuration counts.
+- Member-facing notification controls now exist in Settings for this-device push, previews, quiet hours, and local toast suppression.
+- Member-facing media controls now exist in Settings for GIF animation and reduced data mode, and the Klipy picker follows those local preferences.
+- Member-facing session/device management now exists in Settings for reviewing active sessions and revoking other devices cleanly.
 - Use screenshot-guided restoration toward the main-branch feel.
 - Do not change backend contracts in this phase unless a real blocker appears.
 
@@ -63,17 +67,33 @@ Working prompt:
 
 - `antigravity/handoffs/OPUS_PHASE3_UI_RECOVERY_PROMPT.md`
 
-## Phase 4 - Alpha-readiness freeze
+## Phase 4 - Admin/operator depth
 
-Status: not started
+Status: in progress
 
-- Re-run full validation + scenario + integration gates.
-- Execute two-emulator Android manual testing end-to-end.
-- Keep rollout internal/closed until UI acceptance is signed off.
+- Balanced Admin Suite v1 is now complete in code:
+  - reversible message hide / restore
+  - required moderation reasons
+  - member tombstones
+  - admin audit visibility of original content plus moderation metadata
+  - expanded read-only operator diagnostics
+- The next work is expanding moderation and server-management depth without adding remote-control operations too early.
 
 ## Current status
 
 - Backend notice-gating is implemented.
-- Mobile/client notice UX is not implemented yet.
-- Rollout remains internal-only.
-- UI recovery is the next major product task.
+- Mobile/client notice UX is implemented.
+- Android push is now proven on Google Play-backed runtime paths.
+- The rebuild is live publicly on `penthouse.blog` / `api.penthouse.blog`.
+- Admin/operator slices now in place:
+  - user management
+  - read-only server/operator summary
+  - message moderation with realtime tombstones
+- Invite and onboarding controls v1 now in place:
+  - multi-invite management (create, list, revoke with labels and limits)
+  - registration mode toggle (invite_only / closed)
+  - dedicated admin Invites tab
+  - AuthPanel reflects closed mode
+- The main remaining operational hardening work is now:
+  - strict DB release gate rerun
+  - deeper moderation/operator follow-up slices

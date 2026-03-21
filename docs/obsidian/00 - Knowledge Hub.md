@@ -32,7 +32,7 @@ This vault is the "what we built and why" map for people joining the project lat
 - [[../../services/api/docs/RELIABILITY_DRILL|Reliability Drill Runbook]]
 - [[../../antigravity/customizations|Antigravity customizations]]
 
-## Current status (as of 2026-03-12)
+## Current status (as of 2026-03-20)
 
 - Rebuild baseline is in place:
   - Vue + Capacitor
@@ -42,7 +42,10 @@ This vault is the "what we built and why" map for people joining the project lat
   - profiles
   - member directory
   - admin invite/member controls
-  - moderation-aware visibility
+  - admin operator summary panel
+  - admin message hide / restore moderation with required reasons
+  - admin chat audit visibility of original content plus latest moderation metadata
+  - moderation-aware member tombstones
 - Realtime hardening is implemented:
   - explicit client state machine
   - bounded degraded polling
@@ -53,17 +56,57 @@ This vault is the "what we built and why" map for people joining the project lat
   - inline rendering
   - fullscreen media viewer
   - Giphy/Klipy
+  - local GIF/data controls in Settings
+- Recent runtime recovery wins are confirmed in emulator testing:
+  - auth/layout clipping resolved by the global box-sizing fix
+  - typing indicator visible in real chats again
+  - presence indicators readable again
+  - Klipy inline playback restored
+  - Klipy picker polish now respects animation/data preferences locally
 - Strict local notifications + strict read receipts are implemented in the current internal build.
-- Backend-only versioned test-account acknowledgement is implemented:
+- Balanced Admin Suite v1 is now implemented:
+  - reversible message moderation
+  - required moderation reasons
+  - member tombstones instead of silent disappearance
+  - expanded read-only operator diagnostics for realtime, moderation, and push settings counts
+- Android push is now proven on Google Play-backed Android:
+  - background push works
+  - killed-app push works
+  - push tap-through returns to the correct chat
+  - logout cleanup holds
+- Device-level notification controls now exist in Settings:
+  - push on this device
+  - message previews on/off
+  - quiet hours
+  - local in-app toast toggle
+- Session and device management now exists in Settings:
+  - active session list backed by refresh-token sessions
+  - current session labeling
+  - revoke one other session
+  - revoke all other sessions
+  - lightweight device labels plus push-active state per session
+- Invite and onboarding controls v1 are now implemented:
+  - multi-invite management replaces the single master invite code
+  - admin can create, list, and revoke invite codes with labels and optional limits
+  - registration mode toggle (invite_only / closed) controls whether new accounts can be created
+  - AuthPanel reflects closed mode with a clear notice instead of the registration form
+  - dedicated Invites tab in admin settings
+- AOSP-only emulator images are not a valid push-proof target for this Firebase path.
+- Public rollout is now live:
+  - `penthouse.blog` serves the rebuild landing page
+  - the rebuild APK and legacy APK are both downloadable
+  - `api.penthouse.blog` serves the rebuild backend
+- Android release signing is now in place for the rebuild:
+  - fresh signing key created outside the repo
+  - release baseline set to `versionCode 100`
+  - signed rebuild APK produced and staged in the rebuild downloads directory
+- Versioned test-account acknowledgement is implemented across backend and mobile client flow:
   - contracts updated
   - migration `007` added
   - API/realtime gating active
-- Public rollout is paused.
-- All non-backend implementation for the current cycle is delegated to Opus.
+  - mobile register/ack flow active
+- Real-device smoke proof now exists on a normal Android phone against the public domains.
 
 ## Current blockers
 
-- Mobile UI regression and right-edge clipping are still unresolved.
-- Notification/read UX still needs a hardening pass.
-- Client-side test-notice acknowledgement flow is still pending.
 - Strict DB release gate still needs a rerun in a working Docker/Postgres environment.
