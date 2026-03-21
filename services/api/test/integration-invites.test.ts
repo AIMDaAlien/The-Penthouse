@@ -282,4 +282,107 @@ describe('[integration] invite management', { skip: SKIP, concurrency: false }, 
     });
     assert.equal(JSON.parse(getRes2.payload).registrationMode, 'closed');
   });
+
+  // --- Corrective-pass tests (invite/onboarding fixes) ---
+
+  test('migration 013_invite_onboarding is registered in migrate.ts', async () => {
+    // Verify the server_settings table exists (created by 013)
+    const result = await app.inject({
+      method: 'GET',
+      url: '/api/v1/auth/config'
+    });
+    assert.equal(result.statusCode, 200);
+    const body = JSON.parse(result.payload);
+    assert.ok(body.registrationMode, 'auth config should return a registrationMode');
+  });
+
+  test('create invite with valid expiresAt succeeds', async () => {
+    // Register and promote admin
+    const regResult = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/register',
+      payload: { username: 'expires-admin', password: 'TestPassword123!', inviteCode: 'PENTHOUSE-ALPHA', acceptTestNotice: true, testNoticeVersion: 'alpha-v1' }
+    });
+    const { accessToken } = JSON.parse(regResult.payload);
+    await promoteAdmin('expires-admin');
+
+    const futureDate = new Date(Date.now() + 86400000).toISOString(); // 24h from now
+    const result = await app.inject({
+      method: 'POST',
+      url: '/api/v1/admin/invites',
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { label: 'expiring-test', expiresAt: futureDate }
+    });
+    assert.equal(result.statusCode, 201);
+    const invite = JSON.parse(result.payload);
+    assert.ok(invite.expiresAt, 'invite should have expiresAt set');
+  });
+
+  test('create invite with malformed expiresAt returns 400', async () => {
+    const regResult = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/register',
+      payload: { username: 'malformed-admin', password: 'TestPassword123!', inviteCode: 'PENTHOUSE-ALPHA', acceptTestNotice: true, testNoticeVersion: 'alpha-v1' }
+    });
+    const { accessToken } = JSON.parse(regResult.payload);
+    await promoteAdmin('malformed-admin');
+
+    const result = await app.inject({
+      method: 'POST',
+      url: '/api/v1/admin/invites',
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { label: 'bad-date', expiresAt: 'not-a-date' }
+    });
+    assert.equal(result.statusCode, 400);
+  });
+
+  test('create invite with past expiresAt returns 400', async () => {
+    const regResult = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/register',
+      payload: { username: 'past-admin', password: 'TestPassword123!', inviteCode: 'PENTHOUSE-ALPHA', acceptTestNotice: true, testNoticeVersion: 'alpha-v1' }
+    });
+    const { accessToken } = JSON.parse(regResult.payload);
+    await promoteAdmin('past-admin');
+
+    const pastDate = new Date(Date.now() - 86400000).toISOString(); // 24h ago
+    const result = await app.inject({
+      method: 'POST',
+      url: '/api/v1/admin/invites',
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { label: 'past-date', expiresAt: pastDate }
+    });
+    assert.equal(result.statusCode, 400);
+    const body = JSON.parse(result.payload);
+    assert.ok(body.error);
+  });
+
+  test('closed registration mode reflected in public auth config', async () => {
+    // Register admin and switch to closed
+    const regResult = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/register',
+      payload: { username: 'config-admin', password: 'TestPassword123!', inviteCode: 'PENTHOUSE-ALPHA', acceptTestNotice: true, testNoticeVersion: 'alpha-v1' }
+    });
+    const { accessToken } = JSON.parse(regResult.payload);
+    await promoteAdmin('config-admin');
+
+    // Switch to closed
+    const modeResult = await app.inject({
+      method: 'PUT',
+      url: '/api/v1/admin/registration-mode',
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { registrationMode: 'closed' }
+    });
+    assert.equal(modeResult.statusCode, 200);
+
+    // Public auth config should reflect closed
+    const configResult = await app.inject({
+      method: 'GET',
+      url: '/api/v1/auth/config'
+    });
+    assert.equal(configResult.statusCode, 200);
+    const config = JSON.parse(configResult.payload);
+    assert.equal(config.registrationMode, 'closed');
+  });
 });

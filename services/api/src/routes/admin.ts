@@ -246,6 +246,10 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     const code = createInviteCode();
     const { label, maxUses, expiresAt } = parsed.data;
 
+    if (expiresAt && new Date(expiresAt) <= new Date()) {
+      return reply.status(400).send({ error: 'expiresAt must be in the future' });
+    }
+
     const result = await pool.query(
       `INSERT INTO signup_invites (id, code, label, max_uses, expires_at)
        VALUES (gen_random_uuid(), $1, $2, $3, $4)

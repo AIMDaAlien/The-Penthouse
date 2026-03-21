@@ -13,7 +13,13 @@ const migrations = [
   '004_user_management.sql',
   '005_media_messages.sql',
   '006_read_state.sql',
-  '007_test_account_notice.sql'
+  '007_test_account_notice.sql',
+  '008_device_tokens.sql',
+  '009_device_notification_settings.sql',
+  '010_message_moderation.sql',
+  '011_direct_messages.sql',
+  '012_session_devices.sql',
+  '013_invite_onboarding.sql'
 ];
 
 export async function runMigrations(): Promise<void> {

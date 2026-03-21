@@ -50,6 +50,12 @@
             min="1"
             max="999999"
           />
+          <input
+            v-model="newExpiresAt"
+            type="datetime-local"
+            :min="minExpiresAt"
+            class="expires-input"
+          />
         </div>
         <button
           type="submit"
@@ -120,6 +126,10 @@ import {
   updateRegistrationMode
 } from '../services/http';
 
+const emit = defineEmits<{
+  (e: 'mode-changed', mode: RegistrationModeResponse['registrationMode']): void;
+}>();
+
 const invites = ref<AdminInviteDetail[]>([]);
 const loadingInvites = ref(true);
 const invitesError = ref('');
@@ -132,11 +142,18 @@ const modeSuccess = ref('');
 
 const newLabel = ref('');
 const newMaxUses = ref<number | null>(null);
+const newExpiresAt = ref('');
 const creatingInvite = ref(false);
 const createError = ref('');
 const createSuccess = ref('');
 
 const revokingId = ref<string | null>(null);
+
+const minExpiresAt = computed(() => {
+  const now = new Date();
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  return now.toISOString().slice(0, 16);
+});
 
 const toggleLabel = computed(() => {
   if (!registrationMode.value) return 'Toggle';
@@ -209,6 +226,7 @@ async function handleToggleMode(): Promise<void> {
   try {
     const result = await updateRegistrationMode({ registrationMode: nextMode });
     registrationMode.value = result.registrationMode;
+    emit('mode-changed', result.registrationMode);
     modeSuccess.value = `Registration mode updated to ${modeLabel(result.registrationMode)}.`;
   } catch (error: any) {
     modeError.value = error?.response?.data?.error || 'Failed to update registration mode';
@@ -225,14 +243,18 @@ async function handleCreateInvite(): Promise<void> {
   createError.value = '';
   createSuccess.value = '';
   try {
-    const data: { label: string; maxUses?: number } = { label };
+    const data: { label: string; maxUses?: number; expiresAt?: string } = { label };
     if (newMaxUses.value && newMaxUses.value > 0) {
       data.maxUses = newMaxUses.value;
+    }
+    if (newExpiresAt.value) {
+      data.expiresAt = new Date(newExpiresAt.value).toISOString();
     }
     await createAdminInvite(data);
     createSuccess.value = 'Invite created.';
     newLabel.value = '';
     newMaxUses.value = null;
+    newExpiresAt.value = '';
     await loadInvites();
   } catch (error: any) {
     createError.value = error?.response?.data?.error || 'Failed to create invite';
@@ -327,8 +349,12 @@ onMounted(() => {
 
 .create-invite-fields {
   display: grid;
-  grid-template-columns: 2fr 1fr;
+  grid-template-columns: 2fr 1fr 1fr;
   gap: 10px;
+}
+
+.expires-input {
+  color-scheme: dark;
 }
 
 .invites-toolbar {
@@ -442,7 +468,11 @@ onMounted(() => {
   }
 
   .create-invite-fields {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .create-invite-fields input[type="text"] {
+    grid-column: 1 / -1;
   }
 
   .invite-actions .small-btn {

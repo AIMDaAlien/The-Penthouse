@@ -256,6 +256,7 @@
           />
           <AdminInviteManagement
             v-else-if="settingsPanel === 'invites' && session.user.role === 'admin'"
+            @mode-changed="registrationMode = $event"
           />
           <AdminServerManagement v-else-if="settingsPanel === 'server' && session.user.role === 'admin'" />
           <AdminModerationManagement
@@ -2303,6 +2304,10 @@ async function doLogout(): Promise<void> {
   realtimeState.value = 'idle';
   dmAvailabilityByChatId.value = {};
   setStoredUser(null);
+  // Re-fetch auth config so the login screen reflects the current registration mode
+  void getAuthConfig().then(config => {
+    registrationMode.value = config.registrationMode;
+  }).catch(() => {});
 }
 
 function onOnline(): void {

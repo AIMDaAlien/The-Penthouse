@@ -389,7 +389,7 @@ export const AdminInviteDetailSchema = z.object({
 export const CreateInviteRequestSchema = z.object({
   label: z.string().trim().min(1).max(100),
   maxUses: z.number().int().min(1).max(999999).default(999999),
-  expiresAt: z.string().nullable().optional()
+  expiresAt: z.string().datetime({ message: 'expiresAt must be a valid ISO 8601 datetime' }).nullable().optional()
 });
 
 export const RegistrationModeResponseSchema = z.object({

@@ -1888,3 +1888,18 @@ describe('App.vue test notice gating', () => {
     expect(wrapper.text()).toContain('alpha-v4');
   });
 });
+
+describe('App.vue auth config on boot', () => {
+  installLocalStorageMock();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('fetches auth config on mount to seed registrationMode', async () => {
+    mount(App);
+    await flushPromises();
+
+    expect(vi.mocked(http.getAuthConfig)).toHaveBeenCalled();
+  });
+});

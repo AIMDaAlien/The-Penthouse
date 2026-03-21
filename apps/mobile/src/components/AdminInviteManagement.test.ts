@@ -183,6 +183,67 @@ describe('AdminInviteManagement.vue', () => {
     expect(vi.mocked(http.revokeAdminInvite)).not.toHaveBeenCalled();
   });
 
+  it('emits mode-changed when admin toggles registration mode', async () => {
+    const wrapper = mount(AdminInviteManagement);
+    await flushPromises();
+
+    const toggleButton = wrapper.findAll('button').find((button) => button.text().includes('Switch to closed'));
+    expect(toggleButton).toBeTruthy();
+    await toggleButton!.trigger('click');
+    await flushPromises();
+
+    expect(window.confirm).toHaveBeenCalled();
+    expect(vi.mocked(http.updateRegistrationMode)).toHaveBeenCalledWith({
+      registrationMode: 'closed'
+    });
+
+    const emitted = wrapper.emitted('mode-changed');
+    expect(emitted).toBeTruthy();
+    expect(emitted!).toHaveLength(1);
+    expect(emitted![0]).toEqual(['closed']);
+  });
+
+  it('create invite form sends expiresAt when set', async () => {
+    const wrapper = mount(AdminInviteManagement);
+    await flushPromises();
+
+    const labelInput = wrapper.find('input[placeholder*="Invite label"]');
+    const maxUsesInput = wrapper.find('input[type="number"]');
+    const expiresInput = wrapper.find('input[type="datetime-local"]');
+    const form = wrapper.find('.create-invite-form');
+
+    await labelInput.setValue('expiring-batch');
+    await maxUsesInput.setValue(10);
+    await expiresInput.setValue('2026-12-31T23:59');
+    await form.trigger('submit');
+    await flushPromises();
+
+    expect(vi.mocked(http.createAdminInvite)).toHaveBeenCalledTimes(1);
+    const callArg = vi.mocked(http.createAdminInvite).mock.calls[0][0];
+    expect(callArg.label).toBe('expiring-batch');
+    expect(callArg.expiresAt).toBeDefined();
+    expect(typeof callArg.expiresAt).toBe('string');
+    // Should be an ISO string derived from the datetime-local value
+    expect(callArg.expiresAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  it('create invite form omits expiresAt when empty', async () => {
+    const wrapper = mount(AdminInviteManagement);
+    await flushPromises();
+
+    const labelInput = wrapper.find('input[placeholder*="Invite label"]');
+    const form = wrapper.find('.create-invite-form');
+
+    await labelInput.setValue('no-expiry-batch');
+    await form.trigger('submit');
+    await flushPromises();
+
+    expect(vi.mocked(http.createAdminInvite)).toHaveBeenCalledTimes(1);
+    const callArg = vi.mocked(http.createAdminInvite).mock.calls[0][0];
+    expect(callArg.label).toBe('no-expiry-batch');
+    expect(callArg.expiresAt).toBeUndefined();
+  });
+
   it('does not toggle mode when confirmation is cancelled', async () => {
     Object.defineProperty(window, 'confirm', {
       configurable: true,
