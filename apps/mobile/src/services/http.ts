@@ -1,11 +1,25 @@
 import axios from 'axios';
+import { Capacitor } from '@capacitor/core';
 import type {
+  AdminInviteDetail,
+  AuthConfigResponse,
+  ChatPreferencesRequest,
+  ChatPreferencesResponse,
+  CreateInviteRequest,
+  AdminMessage,
+  AdminMemberSummary,
+  AdminModerateMessageRequest,
+  AdminOperatorSummary,
+  AdminTempPasswordResponse,
   AuthResponse,
   AuthUser,
   ChangePasswordRequest,
   ChatSummary,
+  CreateDirectChatRequest,
+  DeviceNotificationSettings,
   GifProvider,
   GifSearchResponse,
+  GetDeviceNotificationSettingsQuery,
   MeResponse,
   MarkChatReadResponse,
   MemberDetail,
@@ -14,9 +28,16 @@ import type {
   MessageMetadata,
   MessageType,
   PasswordResetRequest,
+  RegistrationModeResponse,
+  RevokeOtherSessionsResponse,
+  RegisterDeviceTokenResponse,
   RotateRecoveryCodeResponse,
   SendMessageResponse,
+  SessionSummary,
   TestNoticeAckResponse,
+  UnregisterDeviceTokenRequest,
+  UpdateDeviceNotificationSettingsRequest,
+  UpdateRegistrationModeRequest,
   UploadResponse,
   UpdateProfileRequest
 } from '@penthouse/contracts';
@@ -34,9 +55,42 @@ import {
 } from './sessionStorage';
 import { resolveApiBase } from './runtime';
 import { TEST_NOTICE_VERSION } from '../testNotice';
+import { getCachedPushToken } from './notifications';
 
 const API_BASE = resolveApiBase();
 const NOTICE_REQUIRED_ERROR = 'Test account acknowledgement required';
+
+function sessionClientContext(): { appContext: string; deviceLabel: string; hasPushToken: boolean } {
+  const appContext = Capacitor.getPlatform();
+  const hasPushToken = Boolean(getCachedPushToken());
+
+  if (appContext === 'android') {
+    return { appContext, deviceLabel: 'Android app', hasPushToken };
+  }
+
+  if (appContext === 'ios') {
+    return { appContext, deviceLabel: 'iOS app', hasPushToken };
+  }
+
+  return {
+    appContext: 'web',
+    deviceLabel: typeof navigator !== 'undefined' && navigator.userAgent.toLowerCase().includes('mobile')
+      ? 'Mobile web browser'
+      : 'Web browser',
+    hasPushToken
+  };
+}
+
+function sessionContextHeaders(): { headers: Record<string, string> } {
+  const context = sessionClientContext();
+  return {
+    headers: {
+      'x-penthouse-app-context': context.appContext,
+      'x-penthouse-device-label': context.deviceLabel,
+      'x-penthouse-push-present': context.hasPushToken ? '1' : '0'
+    }
+  };
+}
 
 export type AuthEvent =
   | {
@@ -144,9 +198,11 @@ async function refreshAccessToken(): Promise<string | null> {
 
   refreshing = true;
   try {
-    const response = await axios.post<AuthResponse>(`${API_BASE}/api/v1/auth/refresh`, {
-      refreshToken
-    });
+    const response = await axios.post<AuthResponse>(
+      `${API_BASE}/api/v1/auth/refresh`,
+      { refreshToken },
+      sessionContextHeaders()
+    );
     setTokens(response.data.accessToken, response.data.refreshToken);
     setStoredUser(response.data.user);
     emitAuthEvent({ type: 'user_updated', user: response.data.user });
@@ -251,23 +307,31 @@ export async function hydrateStoredSession(): Promise<Session | null> {
 }
 
 export async function register(username: string, password: string, inviteCode: string): Promise<AuthResponse> {
-  const response = await http.post<AuthResponse>('/api/v1/auth/register', {
-    username: normalizeUsername(username),
-    password,
-    inviteCode: normalizeInviteCode(inviteCode),
-    acceptTestNotice: true,
-    testNoticeVersion: TEST_NOTICE_VERSION
-  });
+  const response = await http.post<AuthResponse>(
+    '/api/v1/auth/register',
+    {
+      username: normalizeUsername(username),
+      password,
+      inviteCode: normalizeInviteCode(inviteCode),
+      acceptTestNotice: true,
+      testNoticeVersion: TEST_NOTICE_VERSION
+    },
+    sessionContextHeaders()
+  );
   setTokens(response.data.accessToken, response.data.refreshToken);
   setStoredUser(response.data.user);
   return response.data;
 }
 
 export async function login(username: string, password: string): Promise<AuthResponse> {
-  const response = await http.post<AuthResponse>('/api/v1/auth/login', {
-    username: normalizeUsername(username),
-    password
-  });
+  const response = await http.post<AuthResponse>(
+    '/api/v1/auth/login',
+    {
+      username: normalizeUsername(username),
+      password
+    },
+    sessionContextHeaders()
+  );
   setTokens(response.data.accessToken, response.data.refreshToken);
   setStoredUser(response.data.user);
   return response.data;
@@ -283,7 +347,7 @@ export async function resetPassword(
     recoveryCode: normalizeRecoveryCode(recoveryCode),
     newPassword
   };
-  const response = await http.post<AuthResponse>('/api/v1/auth/password-reset', payload);
+  const response = await http.post<AuthResponse>('/api/v1/auth/password-reset', payload, sessionContextHeaders());
   setTokens(response.data.accessToken, response.data.refreshToken);
   setStoredUser(response.data.user);
   return response.data;
@@ -304,8 +368,28 @@ export async function acknowledgeTestNotice(version: string): Promise<TestNotice
   return response.data;
 }
 
+export async function registerDeviceToken(platform: 'android' | 'ios', token: string, previousToken?: string | null): Promise<RegisterDeviceTokenResponse> {
+  const response = await http.put<RegisterDeviceTokenResponse>('/api/v1/me/device-tokens', {
+    platform,
+    token,
+    previousToken: previousToken ?? undefined
+  });
+  return response.data;
+}
+
+export async function unregisterDeviceToken(token: string): Promise<void> {
+  const payload: UnregisterDeviceTokenRequest = { token };
+  await http.delete('/api/v1/me/device-tokens', { data: payload });
+}
+
 export async function getChats(): Promise<ChatSummary[]> {
   const response = await http.get<ChatSummary[]>('/api/v1/chats');
+  return response.data;
+}
+
+export async function createDirectChat(memberId: string): Promise<ChatSummary> {
+  const payload: CreateDirectChatRequest = { memberId };
+  const response = await http.post<ChatSummary>('/api/v1/chats/dm', payload);
   return response.data;
 }
 
@@ -321,32 +405,25 @@ export async function markChatRead(chatId: string): Promise<MarkChatReadResponse
   return response.data;
 }
 
-export async function sendMessage(chatId: string, content: string, clientMessageId: string): Promise<SendMessageResponse> {
-  const response = await http.post<SendMessageResponse>(`/api/v1/chats/${chatId}/messages`, {
-    chatId,
-    content,
-    type: 'text',
-    metadata: null,
-    clientMessageId
-  });
+export async function updateChatPreferences(chatId: string, notificationsMuted: boolean): Promise<ChatPreferencesResponse> {
+  const payload: ChatPreferencesRequest = { notificationsMuted };
+  const response = await http.patch<ChatPreferencesResponse>(`/api/v1/chats/${chatId}/preferences`, payload);
   return response.data;
 }
 
-export async function sendStructuredMessage(
+export async function sendMessage(
   chatId: string,
-  payload: {
-    content: string;
-    type: MessageType;
-    metadata?: MessageMetadata | null;
-    clientMessageId: string;
-  }
+  content: string,
+  clientMessageId: string,
+  type: MessageType = 'text',
+  metadata: MessageMetadata | null = null
 ): Promise<SendMessageResponse> {
   const response = await http.post<SendMessageResponse>(`/api/v1/chats/${chatId}/messages`, {
     chatId,
-    content: payload.content,
-    type: payload.type,
-    metadata: payload.metadata ?? null,
-    clientMessageId: payload.clientMessageId
+    content,
+    type,
+    metadata,
+    clientMessageId
   });
   return response.data;
 }
@@ -361,8 +438,22 @@ export async function updateProfile(data: UpdateProfileRequest): Promise<MeRespo
   return response.data;
 }
 
+export async function getMySessions(): Promise<SessionSummary[]> {
+  const response = await http.get<SessionSummary[]>('/api/v1/me/sessions');
+  return response.data;
+}
+
+export async function revokeSession(sessionId: string): Promise<void> {
+  await http.delete(`/api/v1/me/sessions/${sessionId}`);
+}
+
+export async function revokeOtherSessions(): Promise<RevokeOtherSessionsResponse> {
+  const response = await http.delete<RevokeOtherSessionsResponse>('/api/v1/me/sessions/others');
+  return response.data;
+}
+
 export async function changePassword(data: ChangePasswordRequest): Promise<AuthResponse> {
-  const response = await http.post<AuthResponse>('/api/v1/me/password', data);
+  const response = await http.post<AuthResponse>('/api/v1/me/password', data, sessionContextHeaders());
   setTokens(response.data.accessToken, response.data.refreshToken);
   setStoredUser(response.data.user);
   return response.data;
@@ -373,10 +464,99 @@ export async function rotateRecoveryCode(): Promise<RotateRecoveryCodeResponse> 
   return response.data;
 }
 
+export async function getDeviceNotificationSettings(token: string): Promise<DeviceNotificationSettings> {
+  const params: GetDeviceNotificationSettingsQuery = { token };
+  const response = await http.get<DeviceNotificationSettings>('/api/v1/me/device-notification-settings', { params });
+  return response.data;
+}
+
+export async function updateDeviceNotificationSettings(data: UpdateDeviceNotificationSettingsRequest): Promise<DeviceNotificationSettings> {
+  const response = await http.put<DeviceNotificationSettings>('/api/v1/me/device-notification-settings', data);
+  return response.data;
+}
+
 export async function getMembers(q = ''): Promise<MemberSummary[]> {
   const response = await http.get<MemberSummary[]>('/api/v1/members', {
     params: q.trim() ? { q: q.trim() } : undefined
   });
+  return response.data;
+}
+
+export async function getAuthConfig(): Promise<AuthConfigResponse> {
+  const response = await http.get<AuthConfigResponse>('/api/v1/auth/config');
+  return response.data;
+}
+
+export async function getAdminInvites(): Promise<AdminInviteDetail[]> {
+  const response = await http.get<AdminInviteDetail[]>('/api/v1/admin/invites');
+  return response.data;
+}
+
+export async function createAdminInvite(data: CreateInviteRequest): Promise<AdminInviteDetail> {
+  const response = await http.post<AdminInviteDetail>('/api/v1/admin/invites', data);
+  return response.data;
+}
+
+export async function revokeAdminInvite(inviteId: string): Promise<void> {
+  await http.post(`/api/v1/admin/invites/${inviteId}/revoke`);
+}
+
+export async function getRegistrationMode(): Promise<RegistrationModeResponse> {
+  const response = await http.get<RegistrationModeResponse>('/api/v1/admin/registration-mode');
+  return response.data;
+}
+
+export async function updateRegistrationMode(data: UpdateRegistrationModeRequest): Promise<RegistrationModeResponse> {
+  const response = await http.put<RegistrationModeResponse>('/api/v1/admin/registration-mode', data);
+  return response.data;
+}
+
+export async function getAdminOperatorSummary(): Promise<AdminOperatorSummary> {
+  const response = await http.get<AdminOperatorSummary>('/api/v1/admin/operator/summary');
+  return response.data;
+}
+
+export async function getAdminMembers(q = ''): Promise<AdminMemberSummary[]> {
+  const response = await http.get<AdminMemberSummary[]>('/api/v1/admin/members', {
+    params: q.trim() ? { q: q.trim() } : undefined
+  });
+  return response.data;
+}
+
+export async function getAdminChats(): Promise<ChatSummary[]> {
+  const response = await http.get<ChatSummary[]>('/api/v1/admin/chats');
+  return response.data;
+}
+
+export async function getAdminChatMessages(chatId: string, cursor?: string): Promise<AdminMessage[]> {
+  const response = await http.get<AdminMessage[]>(`/api/v1/admin/chats/${chatId}/messages`, {
+    params: cursor ? { cursor } : undefined
+  });
+  return response.data;
+}
+
+export async function hideAdminMessage(messageId: string, reason: string): Promise<AdminMessage> {
+  const payload: AdminModerateMessageRequest = { reason };
+  const response = await http.post<AdminMessage>(`/api/v1/admin/messages/${messageId}/hide`, payload);
+  return response.data;
+}
+
+export async function unhideAdminMessage(messageId: string, reason: string): Promise<AdminMessage> {
+  const payload: AdminModerateMessageRequest = { reason };
+  const response = await http.post<AdminMessage>(`/api/v1/admin/messages/${messageId}/unhide`, payload);
+  return response.data;
+}
+
+export async function removeAdminMember(memberId: string): Promise<void> {
+  await http.post(`/api/v1/admin/members/${memberId}/remove`);
+}
+
+export async function banAdminMember(memberId: string): Promise<void> {
+  await http.post(`/api/v1/admin/members/${memberId}/ban`);
+}
+
+export async function issueAdminTempPassword(memberId: string): Promise<AdminTempPasswordResponse> {
+  const response = await http.post<AdminTempPasswordResponse>(`/api/v1/admin/members/${memberId}/temp-password`);
   return response.data;
 }
 
