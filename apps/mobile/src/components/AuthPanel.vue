@@ -6,7 +6,12 @@
       <button :class="mode === 'reset' ? '' : 'secondary'" @click="mode = 'reset'">Reset</button>
     </div>
 
-    <form class="list" @submit.prevent="handleSubmit">
+    <div v-if="mode === 'register' && props.registrationMode === 'closed'" class="registration-closed-notice">
+      <p>Registration is currently closed.</p>
+      <p class="small">Check back later or contact an admin for access.</p>
+    </div>
+
+    <form v-else class="list" @submit.prevent="handleSubmit">
       <input
         v-model="username"
         type="text"
@@ -38,25 +43,26 @@
         :maxlength="AUTH_CONSTRAINTS.passwordMax"
         autocomplete="new-password"
       />
-      <input
-        v-if="mode === 'register'"
-        v-model="inviteCode"
-        type="text"
-        placeholder="invite code"
-        required
-        :minlength="AUTH_CONSTRAINTS.inviteCodeMin"
-        :maxlength="AUTH_CONSTRAINTS.inviteCodeMax"
-        autocapitalize="characters"
-        spellcheck="false"
-        @blur="inviteCode = normalizeInviteCode(inviteCode)"
-      />
-      <label v-if="mode === 'register'" class="test-notice-check">
-        <input v-model="acceptTestNotice" type="checkbox" />
-        <span>
-          I understand this is an internal-only test build and I am acknowledging notice version
-          <strong>{{ TEST_NOTICE_VERSION }}</strong>.
-        </span>
-      </label>
+      <template v-if="mode === 'register'">
+        <input
+          v-model="inviteCode"
+          type="text"
+          placeholder="invite code"
+          required
+          :minlength="AUTH_CONSTRAINTS.inviteCodeMin"
+          :maxlength="AUTH_CONSTRAINTS.inviteCodeMax"
+          autocapitalize="characters"
+          spellcheck="false"
+          @blur="inviteCode = normalizeInviteCode(inviteCode)"
+        />
+        <label class="test-notice-check">
+          <input v-model="acceptTestNotice" type="checkbox" />
+          <span>
+            I understand this is an internal-only test build and I am acknowledging notice version
+            <strong>{{ TEST_NOTICE_VERSION }}</strong>.
+          </span>
+        </label>
+      </template>
       <input
         v-if="mode === 'reset'"
         v-model="recoveryCode"
@@ -91,6 +97,7 @@ import { TEST_NOTICE_VERSION } from '../testNotice';
 const props = defineProps<{
   error: string;
   loading: boolean;
+  registrationMode?: 'invite_only' | 'closed';
 }>();
 
 const emit = defineEmits<{
@@ -209,6 +216,24 @@ function handleSubmit() {
   border-radius: 6px;
   accent-color: var(--accent);
   flex: 0 0 auto;
+}
+
+.registration-closed-notice {
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 204, 128, 0.22);
+  background: rgba(255, 204, 128, 0.08);
+  text-align: center;
+  line-height: 1.4;
+}
+
+.registration-closed-notice p {
+  margin: 0;
+}
+
+.registration-closed-notice p + p {
+  margin-top: 6px;
+  opacity: 0.72;
 }
 
 @media (max-width: 420px) {

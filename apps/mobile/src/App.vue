@@ -38,22 +38,10 @@
     </section>
 
     <section v-else-if="!session" class="chat-shell auth-shell">
-      <div v-if="sessionNoticeVisible" class="session-notice card" role="status">
-        <div>
-          <p class="session-notice-eyebrow">Internal testing</p>
-          <strong>Internal testing build</strong>
-          <p class="small session-notice-copy">
-            Bugs and downtime are expected during this internal test phase. Please report issues when they happen.
-          </p>
-        </div>
-        <button type="button" class="secondary small-btn session-notice-dismiss" @click="dismissSessionNotice">
-          Got it
-        </button>
-      </div>
-
       <AuthPanel
         :error="authError"
         :loading="isAuthenticating"
+        :registrationMode="registrationMode"
         @login="handleLogin"
         @register="handleRegister"
         @reset-password="handlePasswordReset"
@@ -124,18 +112,10 @@
       </div>
     </section>
 
-    <section v-else class="chat-shell" :class="{'content-active': currentView === 'chats' && selectedChatId}">
-      <div v-if="sessionNoticeVisible" class="session-notice card" role="status">
-        <div>
-          <p class="session-notice-eyebrow">Internal testing</p>
-          <strong>Internal testing build</strong>
-          <p class="small session-notice-copy">
-            Bugs and downtime are expected during this internal test phase. Please report issues when they happen.
-          </p>
-        </div>
-        <button type="button" class="secondary small-btn session-notice-dismiss" @click="dismissSessionNotice">
-          Dismiss
-        </button>
+    <section v-else class="chat-shell" :class="{'content-active': currentView === 'chats' && isContentActive}">
+      <div v-if="sessionNoticeVisible" class="session-notice-banner">
+        <span class="small">Internal testing build</span>
+        <button type="button" class="secondary small-btn" @click="sessionNoticeVisible = false">Dismiss</button>
       </div>
 
       <div v-if="recoveryCodeNotice" class="recovery-banner">
@@ -170,31 +150,59 @@
           :activeChatId="selectedChatId"
           :loadState="chatListState"
           :loadError="chatListError"
-          :onlineCount="onlineCount"
           @select="openChat"
           @retry-load="handleChatListRetry"
           @logout="doLogout"
         />
       </div>
 
-      <!-- Main Chat Area -->
+        <!-- Main Chat Area -->
       <div class="chat-main">
         <template v-if="currentView === 'chats'">
-        <template v-if="selectedChatId">
-            <MessageList 
+        <template v-if="selectedChatId || provisionalDirectChat">
+            <div v-if="activeDirectChat" class="dm-thread-strip">
+              <div class="dm-thread-identity">
+                <img
+                  v-if="activeDirectChat.avatarUrl"
+                  class="dm-thread-avatar"
+                  :src="activeDirectChat.avatarUrl"
+                  :alt="`${activeDirectChat.name} avatar`"
+                />
+                <div v-else class="dm-thread-avatar dm-thread-avatar-fallback">{{ activeDirectChatInitial }}</div>
+                <div class="dm-thread-copy">
+                  <strong>{{ activeDirectChat.name }}</strong>
+                  <p class="small">Admins can review messages for safety</p>
+                  <p v-if="activeDirectChat.unavailable" class="small status-danger">{{ activeDirectChat.unavailableReason }}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                class="secondary small-btn dm-mute-btn"
+                :disabled="!selectedChatId || activeDirectChat.provisional || directChatMuteBusy"
+                @click="toggleActiveDirectChatMute"
+              >
+                {{ directChatMuteBusy ? 'Saving...' : activeDirectChat.notificationsMuted ? 'Muted' : 'Mute' }}
+              </button>
+            </div>
+            <MessageList
               :messages="messages"
               :currentUserId="session.user.id"
               :queuedIds="queued.map(q => q.clientMessageId)"
               :failedIds="Array.from(failedMessageIds)"
               :latencyByClientMessageId="latencyByClientMessageId"
-              :typingMembers="typingMembers"
+              :typingMembers="activeTypingMembers"
+              :animate-gifs-automatically="animateGifsAutomatically"
+              :reduced-data-mode="reducedDataMode"
               @viewport-bottom-change="handleViewportBottomChange"
               @retry="retrySpecificMessage"
             />
             <p v-if="chatActionError" class="small status-danger chat-action-error">{{ chatActionError }}</p>
             <MessageComposer 
-              :chat-id="selectedChatId"
-              :disabled="!selectedChatId || uploadingAttachment"
+              :chat-id="activeConversationComposerKey"
+              :disabled="composerDisabled"
+              :placeholder="composerPlaceholder"
+              :animate-gifs-automatically="animateGifsAutomatically"
+              :reduced-data-mode="reducedDataMode"
               @send="sendCurrent"
               @send-media="handleMediaSelected"
               @send-gif="handleGifSelected"
@@ -207,18 +215,51 @@
           </div>
         </template>
         <template v-else-if="currentView === 'directory'">
-          <MemberDirectory :presenceByUserId="presenceByUserId" @select-member="selectedMemberId = $event" />
-          <MemberProfileSheet 
-            v-if="selectedMemberId" 
-            :memberId="selectedMemberId" 
-            :presenceByUserId="presenceByUserId"
-            @close="selectedMemberId = null" 
+          <MemberDirectory :presenceMap="presenceByUserId" @select-member="selectedMemberId = $event" />
+          <MemberProfileSheet
+            v-if="selectedMemberId"
+            :memberId="selectedMemberId"
+            :currentUserId="session.user.id"
+            :presenceStatus="presenceByUserId[selectedMemberId] ?? 'offline'"
+            @close="selectedMemberId = null"
+            @message="handleStartDirectMessage"
           />
         </template>
         <template v-else-if="currentView === 'settings'">
+          <div v-if="session.user.role === 'admin'" class="settings-panel-tabs row">
+            <button class="small-btn" :class="{ secondary: settingsPanel !== 'profile' }" @click="settingsPanel = 'profile'">
+              Profile
+            </button>
+            <button class="small-btn" :class="{ secondary: settingsPanel !== 'admin' }" @click="settingsPanel = 'admin'">
+              User Management
+            </button>
+            <button class="small-btn" :class="{ secondary: settingsPanel !== 'invites' }" @click="settingsPanel = 'invites'">
+              Invites
+            </button>
+            <button class="small-btn" :class="{ secondary: settingsPanel !== 'server' }" @click="settingsPanel = 'server'">
+              Server Management
+            </button>
+            <button class="small-btn" :class="{ secondary: settingsPanel !== 'moderation' }" @click="settingsPanel = 'moderation'">
+              Moderation
+            </button>
+          </div>
           <ProfileSettings
+            v-if="settingsPanel === 'profile' || session.user.role !== 'admin'"
             @profile-updated="handleProfileUpdated"
             @auth-updated="completeAuth"
+            @notification-preferences-updated="handleNotificationPreferencesUpdated"
+            @media-preferences-updated="handleMediaPreferencesUpdated"
+          />
+          <AdminMemberManagement
+            v-else-if="settingsPanel === 'admin' && session.user.role === 'admin'"
+            :currentUserId="session.user.id"
+          />
+          <AdminInviteManagement
+            v-else-if="settingsPanel === 'invites' && session.user.role === 'admin'"
+          />
+          <AdminServerManagement v-else-if="settingsPanel === 'server' && session.user.role === 'admin'" />
+          <AdminModerationManagement
+            v-else-if="settingsPanel === 'moderation' && session.user.role === 'admin'"
           />
         </template>
       </div>
@@ -233,12 +274,14 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import {
   formatRecoveryCode,
   type GifResult,
+  type MemberDetail,
   type MessageMetadata,
   type MessageType,
   type UploadResponse
 } from '@penthouse/contracts';
 import {
   ServerMessageAckEventSchema,
+  ServerMessageModeratedEventSchema,
   ServerMessageNewEventSchema,
   ServerMessageReadEventSchema,
   ServerPresenceSyncEventSchema,
@@ -258,7 +301,9 @@ import type {
 import {
   type AuthEvent,
   getMe,
+  getMember,
   changePassword,
+  createDirectChat,
   getChats,
   getMessages,
   hydrateStoredSession,
@@ -267,12 +312,15 @@ import {
   register,
   resetPassword,
   sendMessage,
-  sendStructuredMessage,
   acknowledgeTestNotice,
+  registerDeviceToken,
   subscribeAuthEvents,
   setStoredUser,
+  unregisterDeviceToken,
+  updateChatPreferences,
   uploadMedia,
-  logout
+  logout,
+  getAuthConfig
 } from './services/http';
 import { describeAuthError } from './services/errors';
 import { connectSocket, disconnectSocket, getSocket } from './services/socket';
@@ -280,10 +328,20 @@ import { enqueueMessage, flushQueue, getQueued, removeQueued } from './services/
 import { withBackoff } from './services/retry';
 import { cacheChats, cacheMessages, readCachedChats, readCachedMessages } from './services/cache';
 import {
+  loadStoredAnimateGifsAutomatically,
+  loadStoredReducedDataMode,
+  loadStoredShowInAppToasts
+} from './services/sessionStorage';
+import {
   clearAllDeliveredNotifications,
   clearDeliveredNotificationsForChat,
   ensureNotificationPermission,
+  ensurePushPermission,
+  getCachedPushToken,
+  getPushToken,
   initializeNotifications,
+  type ForegroundPushNotification,
+  deletePushToken,
   scheduleIncomingMessageNotification
 } from './services/notifications';
 
@@ -294,6 +352,10 @@ import ChatListPanel from './components/ChatListPanel.vue';
 import MessageList from './components/MessageList.vue';
 import MessageComposer from './components/MessageComposer.vue';
 import ProfileSettings from './components/ProfileSettings.vue';
+import AdminMemberManagement from './components/AdminMemberManagement.vue';
+import AdminServerManagement from './components/AdminServerManagement.vue';
+import AdminModerationManagement from './components/AdminModerationManagement.vue';
+import AdminInviteManagement from './components/AdminInviteManagement.vue';
 import MemberDirectory from './components/MemberDirectory.vue';
 import MemberProfileSheet from './components/MemberProfileSheet.vue';
 import InAppToastHost from './components/InAppToastHost.vue';
@@ -311,9 +373,28 @@ type InAppToast = {
 
 type ChatListState = 'loading' | 'ready' | 'error';
 
+type ProvisionalDirectChat = {
+  memberId: string;
+  name: string;
+  username: string;
+  avatarUrl: string | null;
+  draftKey: string;
+};
+
+type ActiveDirectChat = {
+  memberId: string;
+  name: string;
+  avatarUrl: string | null;
+  notificationsMuted: boolean;
+  provisional: boolean;
+  unavailable: boolean;
+  unavailableReason: string;
+};
+
 const CHAT_BOOTSTRAP_MAX_ATTEMPTS = 3;
 const CHAT_BOOTSTRAP_RETRY_DELAY_MS = 900;
 const IN_APP_TOAST_DURATION_MS = 5_000;
+const MOBILE_DIAGNOSTICS_ENABLED = import.meta.env.DEV;
 
 // State
 const authError = ref('');
@@ -321,12 +402,12 @@ const isAuthenticating = ref(false);
 const chatActionError = ref('');
 const uploadingAttachment = ref(false);
 const isBooting = ref(true);
-const sessionNoticeVisible = ref(false);
 
 const session = ref<Session | null>(null);
 const chats = ref<Chat[]>([]);
 const messages = ref<ChatMessage[]>([]);
 const selectedChatId = ref<string>('');
+const provisionalDirectChat = ref<ProvisionalDirectChat | null>(null);
 const queued = ref<PendingMessage[]>(getQueued());
 const failedMessageIds = ref<Set<string>>(new Set(getQueued().map(q => q.clientMessageId)));
 const latencyByClientMessageId = ref<Record<string, number>>({});
@@ -344,7 +425,11 @@ const presenceByUserId = ref<Record<string, PresenceStatus>>({});
 const typingByChat = ref<Record<string, Record<string, TypingParticipant>>>({});
 
 const currentView = ref<'chats' | 'directory' | 'settings'>('chats');
+const settingsPanel = ref<'profile' | 'admin' | 'invites' | 'server' | 'moderation'>('profile');
+const registrationMode = ref<'invite_only' | 'closed'>('invite_only');
 const selectedMemberId = ref<string | null>(null);
+const animateGifsAutomatically = ref(true);
+const reducedDataMode = ref(false);
 const debugRealtimeEnabled = import.meta.env.DEV;
 let fallbackRefreshTimer: ReturnType<typeof setInterval> | null = null;
 let lastFallbackSignature = '';
@@ -354,10 +439,14 @@ let appResumeListener: any = null;
 let suppressNextDisconnectTransition = false;
 let markReadTimer: ReturnType<typeof setTimeout> | null = null;
 const appIsActive = ref(typeof document === 'undefined' ? true : !document.hidden);
+const sessionNoticeVisible = ref(true);
 const isViewingLatest = ref(true);
 const inAppToasts = ref<InAppToast[]>([]);
 const chatListState = ref<ChatListState>('loading');
 const chatListError = ref('');
+const showInAppToasts = ref(true);
+const dmAvailabilityByChatId = ref<Record<string, { unavailable: boolean; reason: string }>>({});
+const directChatMuteBusy = ref(false);
 
 const forcedPwForm = ref({ currentPassword: '', newPassword: '' });
 const forcedPwConfirm = ref('');
@@ -384,14 +473,8 @@ const inAppToastTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const formattedRecoveryCodeNotice = computed(() =>
   recoveryCodeNotice.value ? formatRecoveryCode(recoveryCodeNotice.value) : ''
 );
-const onlineCount = computed(() =>
-  Object.values(presenceByUserId.value).filter((status) => status === 'online').length
-);
 const totalUnreadCount = computed(() =>
   chats.value.reduce((sum, chat) => sum + Math.max(0, chat.unreadCount ?? 0), 0)
-);
-const typingMembers = computed(() =>
-  selectedChatId.value ? Object.values(typingByChat.value[selectedChatId.value] ?? {}) : []
 );
 const isOnline = computed(() => realtimeState.value === 'connected');
 const requiredTestNoticeVersion = computed(() =>
@@ -405,9 +488,76 @@ const toastHostVisible = computed(() =>
   !session.value?.user.mustAcceptTestNotice
 );
 
+const selectedChatSummary = computed(() => chats.value.find((chat) => chat.id === selectedChatId.value) ?? null);
+
+const activeConversationComposerKey = computed(() =>
+  selectedChatId.value || provisionalDirectChat.value?.draftKey || ''
+);
+
 const isContentActive = computed(() => {
-  if (currentView.value === 'chats') return !!selectedChatId.value;
+  if (currentView.value === 'chats') return !!selectedChatId.value || !!provisionalDirectChat.value;
   return true; // Directory and Settings always show content area
+});
+
+const activeDirectChat = computed<ActiveDirectChat | null>(() => {
+  if (provisionalDirectChat.value) {
+    return {
+      memberId: provisionalDirectChat.value.memberId,
+      name: provisionalDirectChat.value.name,
+      avatarUrl: provisionalDirectChat.value.avatarUrl,
+      notificationsMuted: false,
+      provisional: true,
+      unavailable: false,
+      unavailableReason: ''
+    };
+  }
+
+  if (selectedChatSummary.value?.type !== 'dm' || !selectedChatSummary.value.counterpartMemberId) {
+    return null;
+  }
+
+  const availability = dmAvailabilityByChatId.value[selectedChatSummary.value.id] ?? {
+    unavailable: false,
+    reason: ''
+  };
+
+  return {
+    memberId: selectedChatSummary.value.counterpartMemberId,
+    name: selectedChatSummary.value.name,
+    avatarUrl: selectedChatSummary.value.counterpartAvatarUrl ?? null,
+    notificationsMuted: Boolean(selectedChatSummary.value.notificationsMuted),
+    provisional: false,
+    unavailable: availability.unavailable,
+    unavailableReason: availability.reason
+  };
+});
+
+const activeDirectChatInitial = computed(() => {
+  const label = activeDirectChat.value?.name?.trim();
+  return label ? label[0].toUpperCase() : '?';
+});
+
+const composerDisabled = computed(() => {
+  if (uploadingAttachment.value) return true;
+  if (activeDirectChat.value?.unavailable) return true;
+  return !selectedChatId.value && !provisionalDirectChat.value;
+});
+
+const composerPlaceholder = computed(() => {
+  if (activeDirectChat.value?.unavailable) {
+    return 'This direct message is unavailable.';
+  }
+  if (provisionalDirectChat.value) {
+    return `Message ${provisionalDirectChat.value.name}...`;
+  }
+  return 'Type a message...';
+});
+
+const activeTypingMembers = computed((): TypingParticipant[] => {
+  if (!selectedChatId.value) return [];
+  const chatTyping = typingByChat.value[selectedChatId.value];
+  if (!chatTyping) return [];
+  return Object.values(chatTyping).filter(p => p.userId !== session.value?.user.id);
 });
 
 function setRealtimeState(nextState: RealtimeState): void {
@@ -448,18 +598,18 @@ function markRealtimeFailed(errorMessage: string | null = null): void {
 function handleMobileBack() {
   if (currentView.value === 'chats') {
     selectedChatId.value = '';
+    provisionalDirectChat.value = null;
+    messages.value = [];
   } else {
     currentView.value = 'chats';
+    settingsPanel.value = 'profile';
     selectedMemberId.value = null;
   }
 }
 
-function showSessionNoticeForForeground(): void {
-  sessionNoticeVisible.value = true;
-}
-
-function dismissSessionNotice(): void {
-  sessionNoticeVisible.value = false;
+function logMobileDiagnostic(topic: string, details?: Record<string, unknown>): void {
+  if (!MOBILE_DIAGNOSTICS_ENABLED) return;
+  console.debug(`[mobile] ${topic}`, details ?? {});
 }
 
 function clearChatBootstrapRetryTimer(): void {
@@ -527,8 +677,15 @@ function describeIncomingActivity(message: ChatMessage): string {
 }
 
 function queueInAppToast(message: ChatMessage, chatName: string | null): void {
+  if (!showInAppToasts.value) return;
   const id = `chat:${message.chatId}`;
   const title = message.senderDisplayName || message.senderUsername || 'New message';
+  logMobileDiagnostic('toast.queue', {
+    chatId: message.chatId,
+    messageId: message.id,
+    type: message.type,
+    chatName: chatName ?? null
+  });
 
   clearInAppToastTimer(id);
   inAppToasts.value = [
@@ -547,6 +704,67 @@ function queueInAppToast(message: ChatMessage, chatName: string | null): void {
   inAppToastTimers.set(id, setTimeout(() => {
     dismissInAppToast(id);
   }, IN_APP_TOAST_DURATION_MS));
+}
+
+function queuePushInAppToast(notification: ForegroundPushNotification): void {
+  if (!notification.chatId || !appIsActive.value) return;
+  if (isChatMuted(notification.chatId)) return;
+  if (currentView.value === 'chats' && selectedChatId.value === notification.chatId) {
+    return;
+  }
+
+  const fallbackMessage: ChatMessage = {
+    id: notification.messageId ?? `push_${Date.now()}`,
+    chatId: notification.chatId,
+    senderId: notification.senderId ?? 'push',
+    senderDisplayName: notification.title ?? 'New message',
+    senderUsername: notification.title ?? 'push',
+    senderAvatarUrl: null,
+    content: notification.body ?? 'New message',
+    type: 'text',
+    metadata: null,
+    createdAt: new Date().toISOString()
+  };
+
+  const chatName = chats.value.find((chat) => chat.id === notification.chatId)?.name ?? null;
+  queueInAppToast(fallbackMessage, chatName);
+}
+
+function handleNotificationPreferencesUpdated(preferences: { showInAppToasts: boolean }): void {
+  showInAppToasts.value = preferences.showInAppToasts;
+}
+
+function handleMediaPreferencesUpdated(preferences: { animateGifsAutomatically: boolean; reducedDataMode: boolean }): void {
+  animateGifsAutomatically.value = preferences.animateGifsAutomatically;
+  reducedDataMode.value = preferences.reducedDataMode;
+}
+
+async function handlePushTokenSync(token: string, previousToken: string | null = null): Promise<void> {
+  if (!session.value || !userHasFullAccess(session.value)) return;
+
+  try {
+    await registerDeviceToken('android', token, previousToken);
+    logMobileDiagnostic('push.token.registered', { tokenLength: token.length });
+    if (previousToken && previousToken !== token) {
+      await unregisterDeviceToken(previousToken).catch(() => undefined);
+      logMobileDiagnostic('push.token.replaced', {
+        previousTokenLength: previousToken.length,
+        tokenLength: token.length
+      });
+    }
+  } catch (error) {
+    logMobileDiagnostic('push.token.register.failed', {
+      message: error instanceof Error ? error.message : 'unknown-error'
+    });
+  }
+}
+
+async function syncCurrentPushToken(): Promise<void> {
+  if (!session.value || !userHasFullAccess(session.value)) return;
+  const previousToken = getCachedPushToken();
+  const token = await getPushToken();
+  if (!token) return;
+  await handlePushTokenSync(token, previousToken);
 }
 
 function activeCacheUserId(): string | null {
@@ -573,6 +791,123 @@ function cacheMessagesForActiveUser(chatId: string, nextMessages: ChatMessage[])
   const userId = activeCacheUserId();
   if (!userId) return;
   cacheMessages(userId, chatId, nextMessages);
+}
+
+function isChatMuted(chatId: string): boolean {
+  return Boolean(chats.value.find((chat) => chat.id === chatId)?.notificationsMuted);
+}
+
+function upsertChat(nextChat: Chat): void {
+  chats.value = sortChats([nextChat, ...chats.value.filter((chat) => chat.id !== nextChat.id)]);
+  cacheChatsForActiveUser(chats.value);
+}
+
+function setChatNotificationsMuted(chatId: string, notificationsMuted: boolean): void {
+  chats.value = sortChats(
+    chats.value.map((chat) =>
+      chat.id === chatId
+        ? {
+            ...chat,
+            notificationsMuted
+          }
+        : chat
+    )
+  );
+  cacheChatsForActiveUser(chats.value);
+}
+
+async function refreshDirectChatAvailability(chat: Chat | null): Promise<void> {
+  if (!chat || chat.type !== 'dm' || !chat.counterpartMemberId) return;
+
+  try {
+    await getMember(chat.counterpartMemberId);
+    dmAvailabilityByChatId.value = {
+      ...dmAvailabilityByChatId.value,
+      [chat.id]: {
+        unavailable: false,
+        reason: ''
+      }
+    };
+  } catch (error: any) {
+    const status = typeof error?.response?.status === 'number' ? error.response.status : 0;
+    if (status !== 404) return;
+
+    dmAvailabilityByChatId.value = {
+      ...dmAvailabilityByChatId.value,
+      [chat.id]: {
+        unavailable: true,
+        reason: 'This member is no longer active. You can still read the thread, but you cannot send new messages.'
+      }
+    };
+  }
+}
+
+function beginProvisionalDirectChat(member: MemberDetail): void {
+  provisionalDirectChat.value = {
+    memberId: member.id,
+    name: member.displayName || member.username,
+    username: member.username,
+    avatarUrl: member.avatarUrl,
+    draftKey: `draft-dm:${member.id}`
+  };
+  messages.value = [];
+  selectedChatId.value = '';
+  currentView.value = 'chats';
+  chatActionError.value = '';
+  selectedMemberId.value = null;
+}
+
+async function handleStartDirectMessage(member: MemberDetail): Promise<void> {
+  const existingChat = chats.value.find(
+    (chat) => chat.type === 'dm' && chat.counterpartMemberId === member.id
+  );
+
+  if (existingChat) {
+    provisionalDirectChat.value = null;
+    selectedMemberId.value = null;
+    currentView.value = 'chats';
+    await openChat(existingChat.id);
+    return;
+  }
+
+  beginProvisionalDirectChat(member);
+}
+
+async function ensureDirectChatResolved(memberId: string): Promise<Chat | null> {
+  const existingChat = chats.value.find(
+    (chat) => chat.type === 'dm' && chat.counterpartMemberId === memberId
+  );
+  if (existingChat) {
+    provisionalDirectChat.value = null;
+    await openChat(existingChat.id);
+    return existingChat;
+  }
+
+  try {
+    const createdChat = await withBackoff(() => createDirectChat(memberId));
+    upsertChat(createdChat);
+    provisionalDirectChat.value = null;
+    await openChat(createdChat.id);
+    return createdChat;
+  } catch (error: any) {
+    chatActionError.value = error?.response?.data?.error || 'Failed to start direct message';
+    return null;
+  }
+}
+
+async function toggleActiveDirectChatMute(): Promise<void> {
+  if (!selectedChatId.value || !activeDirectChat.value || activeDirectChat.value.provisional) return;
+
+  directChatMuteBusy.value = true;
+  chatActionError.value = '';
+  try {
+    const response = await updateChatPreferences(selectedChatId.value, !activeDirectChat.value.notificationsMuted);
+    setChatNotificationsMuted(response.chatId, response.notificationsMuted);
+  } catch (error: any) {
+    chatActionError.value = error?.response?.data?.error || 'Failed to update conversation preferences';
+  } finally {
+    directChatMuteBusy.value = false;
+  }
 }
 
 function userHasFullAccess(nextSession: Session | null): boolean {
@@ -627,6 +962,7 @@ function resetWorkspaceState(): void {
   chats.value = [];
   messages.value = [];
   selectedChatId.value = '';
+  provisionalDirectChat.value = null;
   selectedMemberId.value = null;
   currentView.value = 'chats';
   chatActionError.value = '';
@@ -641,6 +977,7 @@ function resetWorkspaceState(): void {
     fallbackActive: false
   };
   realtimeState.value = 'idle';
+  dmAvailabilityByChatId.value = {};
 }
 
 async function fetchFreshSession(baseSession: Session): Promise<Session> {
@@ -673,10 +1010,20 @@ async function initializeWorkspace(): Promise<void> {
 
   initializingWorkspacePromise = (async () => {
     await ensureNotificationPermission();
-    await initializeNotifications((chatId) => {
-      currentView.value = 'chats';
-      void openChat(chatId);
-    });
+    await ensurePushPermission();
+    await initializeNotifications(
+      (chatId) => {
+        currentView.value = 'chats';
+        void openChat(chatId);
+      },
+      (notification) => {
+        queuePushInAppToast(notification);
+      },
+      (token, previousToken) => {
+        void handlePushTokenSync(token, previousToken);
+      }
+    );
+    await syncCurrentPushToken();
     wireSocketHandlers();
     resetChatListState();
     await loadChats({ bootstrap: true });
@@ -752,17 +1099,29 @@ function addOptimisticMessage(item: PendingMessage): void {
   cacheMessagesForActiveUser(item.chatId, messages.value);
 }
 
-async function dispatchPendingMessage(item: PendingMessage) {
-  if (item.type === 'text' && !item.metadata) {
-    return sendMessage(item.chatId, item.content, item.clientMessageId);
-  }
+function removeOptimisticMessage(chatId: string, clientMessageId: string): void {
+  messages.value = messages.value.filter(
+    (message) => !(message.chatId === chatId && message.clientMessageId === clientMessageId)
+  );
+  cacheMessagesForActiveUser(chatId, messages.value);
+}
 
-  return sendStructuredMessage(item.chatId, {
-    content: item.content,
-    type: item.type,
-    metadata: item.metadata ?? null,
-    clientMessageId: item.clientMessageId
-  });
+function markDirectChatUnavailable(chatId: string): void {
+  dmAvailabilityByChatId.value = {
+    ...dmAvailabilityByChatId.value,
+    [chatId]: {
+      unavailable: true,
+      reason: 'This member is no longer active. You can still read the thread, but you cannot send new messages.'
+    }
+  };
+}
+
+function isUnavailableDirectMessageError(error: any): boolean {
+  return error?.response?.status === 409 && error?.response?.data?.error === 'Direct message is unavailable';
+}
+
+async function dispatchPendingMessage(item: PendingMessage) {
+  return sendMessage(item.chatId, item.content, item.clientMessageId, item.type, item.metadata ?? null);
 }
 
 function mediaTypeFromUpload(upload: UploadResponse): MessageType {
@@ -795,6 +1154,7 @@ function metadataFromGif(gif: GifResult): MessageMetadata {
     provider: gif.provider,
     url: gif.url,
     previewUrl: gif.previewUrl,
+    renderMode: gif.renderMode,
     title: gif.title ?? `${gif.provider.toUpperCase()} GIF`,
     width: gif.width ?? null,
     height: gif.height ?? null
@@ -905,6 +1265,7 @@ async function loadChats(options: { bootstrap?: boolean; attempt?: number } = {}
     clearChatBootstrapRetryTimer();
     chatListState.value = 'ready';
     chatListError.value = '';
+    void refreshDirectChatAvailability(chats.value.find((chat) => chat.id === selectedChatId.value) ?? null);
   } catch {
     if (cachedChats.length > 0) {
       chats.value = cachedChats;
@@ -1045,8 +1406,11 @@ function applySeenReceipt(chatId: string, readerUserId: string, seenAt: string):
 
 async function openChat(chatId: string): Promise<void> {
   chatActionError.value = '';
+  provisionalDirectChat.value = null;
   selectedChatId.value = chatId;
   isViewingLatest.value = false;
+  dismissInAppToast(`chat:${chatId}`);
+  void clearDeliveredNotificationsForChat(chatId);
   try {
     messages.value = await withBackoff(() => getMessages(chatId));
     cacheMessagesForActiveUser(chatId, messages.value);
@@ -1058,6 +1422,8 @@ async function openChat(chatId: string): Promise<void> {
     setRealtimeState('connecting');
     socket.connect();
   }
+
+  await refreshDirectChatAvailability(chats.value.find((chat) => chat.id === chatId) ?? null);
 }
 
 function clearFallbackRefreshTimer(): void {
@@ -1190,6 +1556,7 @@ function emitTypingStartForChat(chatId: string): void {
   if (!chatId) return;
   const socket = getSocket();
   if (!socket?.connected) return;
+  logMobileDiagnostic('typing.start.emit', { chatId, joinedChatId: joinedChatId.value || null });
   socket.emit('typing.start', { chatId });
 }
 
@@ -1197,6 +1564,7 @@ function emitTypingStopForChat(chatId: string): void {
   if (!chatId) return;
   const socket = getSocket();
   if (!socket?.connected) return;
+  logMobileDiagnostic('typing.stop.emit', { chatId, joinedChatId: joinedChatId.value || null });
   socket.emit('typing.stop', { chatId });
 }
 
@@ -1242,6 +1610,12 @@ async function ensureChatJoined(chatId: string): Promise<boolean> {
 
   const requestId = ++joiningChatRequestId;
   joiningChatId = chatId;
+  logMobileDiagnostic('chat.join.requested', {
+    chatId,
+    requestId,
+    selectedChatId: selectedChatId.value || null,
+    currentView: currentView.value
+  });
 
   joiningChatPromise = new Promise<boolean>((resolve) => {
     let settled = false;
@@ -1275,6 +1649,12 @@ async function ensureChatJoined(chatId: string): Promise<boolean> {
 
     socket.emit('chat.join', { chatId }, (response?: { ok?: boolean; chatId?: string }) => {
       const joined = Boolean(response?.ok) && response?.chatId === chatId;
+      logMobileDiagnostic('chat.join.ack', {
+        chatId,
+        requestId,
+        joined,
+        responseChatId: response?.chatId ?? null
+      });
       if (!joined && pendingTypingChatId.value === chatId) {
         pendingTypingChatId.value = null;
       }
@@ -1289,6 +1669,10 @@ function handleTypingStart(): void {
   const chatId = selectedChatId.value;
   if (!chatId || currentView.value !== 'chats') return;
   pendingTypingChatId.value = chatId;
+  logMobileDiagnostic('typing.start.requested', {
+    chatId,
+    joinedChatId: joinedChatId.value || null
+  });
   if (joinedChatId.value === chatId) {
     emitTypingStartForChat(chatId);
     return;
@@ -1299,6 +1683,10 @@ function handleTypingStart(): void {
 function handleTypingStop(): void {
   const chatId = selectedChatId.value;
   if (!chatId) return;
+  logMobileDiagnostic('typing.stop.requested', {
+    chatId,
+    joinedChatId: joinedChatId.value || null
+  });
   if (pendingTypingChatId.value === chatId) {
     pendingTypingChatId.value = null;
   }
@@ -1308,6 +1696,7 @@ function handleTypingStop(): void {
 }
 
 function handleViewportBottomChange(isAtBottom: boolean): void {
+  if (!appIsActive.value) return;
   isViewingLatest.value = isAtBottom;
   if (isAtBottom) {
     scheduleMarkSelectedChatRead();
@@ -1319,7 +1708,17 @@ async function sendOrQueue(pendingItem: PendingMessage): Promise<void> {
     const startedAt = Date.now();
     const response = await withBackoff(() => dispatchPendingMessage(pendingItem));
     markMessageDelivered(response.message.chatId, pendingItem.clientMessageId, response.message.id, Date.now() - startedAt);
-  } catch {
+  } catch (error: any) {
+    if (isUnavailableDirectMessageError(error)) {
+      removeOptimisticMessage(pendingItem.chatId, pendingItem.clientMessageId);
+      markDirectChatUnavailable(pendingItem.chatId);
+      chatActionError.value = error?.response?.data?.error || 'Direct message is unavailable';
+      removeQueued(pendingItem.clientMessageId);
+      queued.value = getQueued();
+      failedMessageIds.value.delete(pendingItem.clientMessageId);
+      return;
+    }
+
     enqueueMessage(pendingItem);
     queued.value = getQueued();
     failedMessageIds.value.add(pendingItem.clientMessageId);
@@ -1354,12 +1753,26 @@ async function retrySpecificMessage(clientMessageId: string): Promise<void> {
     const startedAt = Date.now();
     const response = await withBackoff(() => dispatchPendingMessage(queuedItem));
     markMessageDelivered(response.message.chatId, clientMessageId, response.message.id, Date.now() - startedAt);
-  } catch {
+  } catch (error: any) {
+    if (isUnavailableDirectMessageError(error)) {
+      removeOptimisticMessage(queuedItem.chatId, clientMessageId);
+      markDirectChatUnavailable(queuedItem.chatId);
+      chatActionError.value = error?.response?.data?.error || 'Direct message is unavailable';
+      removeQueued(clientMessageId);
+      queued.value = getQueued();
+      return;
+    }
+
     failedMessageIds.value.add(clientMessageId);
   }
 }
 
 async function sendCurrent(content: string): Promise<void> {
+  if (!selectedChatId.value && provisionalDirectChat.value) {
+    const resolvedChat = await ensureDirectChatResolved(provisionalDirectChat.value.memberId);
+    if (!resolvedChat) return;
+  }
+
   if (!selectedChatId.value) return;
   chatActionError.value = '';
 
@@ -1369,13 +1782,20 @@ async function sendCurrent(content: string): Promise<void> {
 }
 
 async function handleMediaSelected(file: File): Promise<void> {
-  if (!selectedChatId.value) return;
   chatActionError.value = '';
   uploadingAttachment.value = true;
 
   try {
     const upload = await withBackoff(() => uploadMedia(file));
     const dimensions = await deriveUploadDimensions(file, upload);
+
+    if (!selectedChatId.value && provisionalDirectChat.value) {
+      const resolvedChat = await ensureDirectChatResolved(provisionalDirectChat.value.memberId);
+      if (!resolvedChat) return;
+    }
+
+    if (!selectedChatId.value) return;
+
     const pendingItem = buildPendingMessage(
       selectedChatId.value,
       upload.originalFileName,
@@ -1392,6 +1812,11 @@ async function handleMediaSelected(file: File): Promise<void> {
 }
 
 async function handleGifSelected(gif: GifResult): Promise<void> {
+  if (!selectedChatId.value && provisionalDirectChat.value) {
+    const resolvedChat = await ensureDirectChatResolved(provisionalDirectChat.value.memberId);
+    if (!resolvedChat) return;
+  }
+
   if (!selectedChatId.value) return;
   chatActionError.value = '';
 
@@ -1412,9 +1837,20 @@ async function flushPending(): Promise<void> {
       const startedAt = Date.now();
       const response = await withBackoff(() => dispatchPendingMessage(item));
       markMessageDelivered(response.message.chatId, item.clientMessageId, response.message.id, Date.now() - startedAt);
-    } catch (e) {
+    } catch (error: any) {
+      if (isUnavailableDirectMessageError(error)) {
+        removeOptimisticMessage(item.chatId, item.clientMessageId);
+        markDirectChatUnavailable(item.chatId);
+        removeQueued(item.clientMessageId);
+        queued.value = getQueued();
+        if (selectedChatId.value === item.chatId) {
+          chatActionError.value = error?.response?.data?.error || 'Direct message is unavailable';
+        }
+        return;
+      }
+
       failedMessageIds.value.add(item.clientMessageId);
-      throw e;
+      throw error;
     }
   });
   queued.value = getQueued();
@@ -1539,6 +1975,7 @@ function handleProfileUpdated(profile: { displayName: string; avatarUrl: string 
 function wireSocketHandlers(): void {
   const socket = connectSocket();
   socket.removeAllListeners('message.new');
+  socket.removeAllListeners('message.moderated');
   socket.removeAllListeners('message.ack');
   socket.removeAllListeners('message.read');
   socket.removeAllListeners('typing.update');
@@ -1574,7 +2011,11 @@ function wireSocketHandlers(): void {
     const parsed = ServerMessageNewEventSchema.safeParse(event);
     if (!parsed.success) return;
     const payload = parsed.data.payload;
-    const chatName = chats.value.find((chat) => chat.id === payload.chatId)?.name ?? null;
+    const knownChat = chats.value.find((chat) => chat.id === payload.chatId) ?? null;
+    const chatName = knownChat?.name ?? null;
+    if (!knownChat) {
+      void loadChats().catch(() => undefined);
+    }
     touchChat(payload.chatId, payload.createdAt);
 
     const isSelectedChat = currentView.value === 'chats' && payload.chatId === selectedChatId.value;
@@ -1596,8 +2037,10 @@ function wireSocketHandlers(): void {
       if (!canTreatIncomingAsRead) {
         bumpChatUnreadCount(payload.chatId);
         if (!appIsActive.value) {
-          void scheduleIncomingMessageNotification(payload, chatName);
-        } else if (!isSelectedChat) {
+          if (!getCachedPushToken() && !isChatMuted(payload.chatId)) {
+            void scheduleIncomingMessageNotification(payload, chatName);
+          }
+        } else if (!isSelectedChat && !isChatMuted(payload.chatId)) {
           queueInAppToast(payload, chatName);
         }
       } else {
@@ -1612,6 +2055,32 @@ function wireSocketHandlers(): void {
     }
 
     cacheMessagesForActiveUser(payload.chatId, messages.value);
+  });
+
+  socket.on('message.moderated', (event: unknown) => {
+    const parsed = ServerMessageModeratedEventSchema.safeParse(event);
+    if (!parsed.success) return;
+
+    const { chatId, message } = parsed.data.payload;
+    const isTrackedChat = chatId === selectedChatId.value;
+
+    if (isTrackedChat) {
+      const existingIdx = messages.value.findIndex((entry) => entry.id === message.id);
+      if (existingIdx >= 0) {
+        messages.value[existingIdx] = {
+          ...messages.value[existingIdx],
+          ...message
+        };
+        cacheMessagesForActiveUser(chatId, messages.value);
+      } else {
+        void refreshSelectedChatFromApi();
+      }
+      if (currentView.value === 'chats' && !message.hidden && appIsActive.value && isViewingLatest.value) {
+        scheduleMarkSelectedChatRead();
+      }
+    }
+
+    void loadChats().catch(() => undefined);
   });
 
   socket.on('message.ack', (event: any) => {
@@ -1793,6 +2262,11 @@ function forceSocketReconnect() {
 }
 
 async function doLogout(): Promise<void> {
+  const pushToken = getCachedPushToken();
+  if (pushToken) {
+    await unregisterDeviceToken(pushToken).catch(() => undefined);
+  }
+  await deletePushToken();
   await logout();
   await clearAllDeliveredNotifications();
   disconnectSocket();
@@ -1806,6 +2280,7 @@ async function doLogout(): Promise<void> {
   chats.value = [];
   messages.value = [];
   selectedChatId.value = '';
+  provisionalDirectChat.value = null;
   recoveryCodeNotice.value = '';
   presenceByUserId.value = {};
   typingByChat.value = {};
@@ -1826,6 +2301,7 @@ async function doLogout(): Promise<void> {
     fallbackActive: false
   };
   realtimeState.value = 'idle';
+  dmAvailabilityByChatId.value = {};
   setStoredUser(null);
 }
 
@@ -1902,6 +2378,12 @@ async function handleSessionSyncRetry(): Promise<void> {
 function setAppActive(nextValue: boolean): void {
   const wasActive = appIsActive.value;
   appIsActive.value = nextValue;
+  logMobileDiagnostic('app.active', {
+    nextValue,
+    wasActive,
+    selectedChatId: selectedChatId.value || null,
+    currentView: currentView.value
+  });
   if (!nextValue) {
     if (pendingTypingChatId.value === selectedChatId.value) {
       pendingTypingChatId.value = null;
@@ -1911,11 +2393,12 @@ function setAppActive(nextValue: boolean): void {
     }
     getSocket()?.emit('app.state', { active: false });
     clearMarkReadTimer();
+    isViewingLatest.value = false;
     return;
   }
 
   if (!wasActive) {
-    showSessionNoticeForForeground();
+    sessionNoticeVisible.value = true;
   }
 
   getSocket()?.emit('app.state', { active: true });
@@ -1934,7 +2417,20 @@ function handleDocumentVisibilityChange(): void {
 }
 
 onMounted(() => {
-  showSessionNoticeForForeground();
+  void getAuthConfig().then(config => {
+    registrationMode.value = config.registrationMode;
+  }).catch(() => {
+    // Fallback to invite_only if config fetch fails
+  });
+  void loadStoredShowInAppToasts().then((value) => {
+    showInAppToasts.value = value;
+  });
+  void loadStoredAnimateGifsAutomatically().then((value) => {
+    animateGifsAutomatically.value = value;
+  });
+  void loadStoredReducedDataMode().then((value) => {
+    reducedDataMode.value = value;
+  });
   removeAuthEventListener = subscribeAuthEvents((event) => {
     void handleAuthEvent(event);
   });
@@ -2012,6 +2508,10 @@ watch(currentView, (nextView, previousView) => {
     return;
   }
 
+  if (nextView !== 'settings') {
+    settingsPanel.value = 'profile';
+  }
+
   isViewingLatest.value = false;
 });
 
@@ -2078,8 +2578,8 @@ onUnmounted(() => {
 
 .chat-layout {
   display: grid;
-  grid-template-columns: minmax(0, 280px) minmax(0, 1fr);
-  gap: 16px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
   flex: 1;
   min-height: 0;
   min-width: 0;
@@ -2088,33 +2588,6 @@ onUnmounted(() => {
 
 .auth-shell {
   justify-content: center;
-}
-
-.session-notice {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 14px 16px;
-  flex-shrink: 0;
-}
-
-.session-notice-eyebrow {
-  margin: 0 0 6px;
-  color: var(--accent);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.session-notice-copy {
-  margin: 6px 0 0;
-  line-height: 1.45;
-}
-
-.session-notice-dismiss {
-  flex: 0 0 auto;
 }
 
 .forced-password-gate {
@@ -2237,6 +2710,18 @@ onUnmounted(() => {
   max-width: 420px;
 }
 
+.session-notice-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  background: rgba(140, 216, 255, 0.08);
+  border: 1px solid rgba(140, 216, 255, 0.15);
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
 .recovery-banner {
   display: flex;
   justify-content: space-between;
@@ -2279,6 +2764,62 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
+.dm-thread-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  border-radius: 14px;
+  background: rgba(140, 216, 255, 0.08);
+  border: 1px solid rgba(140, 216, 255, 0.16);
+}
+
+.dm-thread-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+}
+
+.dm-thread-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex: 0 0 auto;
+}
+
+.dm-thread-avatar-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(140, 216, 255, 0.18);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.dm-thread-copy {
+  min-width: 0;
+}
+
+.dm-thread-copy strong,
+.dm-thread-copy p {
+  margin: 0;
+}
+
+.dm-thread-copy p {
+  opacity: 0.8;
+  line-height: 1.4;
+}
+
+.dm-mute-btn {
+  width: auto;
+  flex: 0 0 auto;
+}
+
 .nav-unread-badge {
   display: inline-flex;
   align-items: center;
@@ -2304,6 +2845,18 @@ onUnmounted(() => {
   padding: 8px 14px;
 }
 
+.settings-panel-tabs {
+  margin-bottom: 12px;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.settings-panel-tabs .small-btn {
+  width: auto;
+  min-width: 0;
+  padding: 8px 14px;
+}
+
 .chat-action-error {
   margin: 0 0 10px;
 }
@@ -2316,6 +2869,15 @@ onUnmounted(() => {
 .prompt-text {
   opacity: 0.7;
   font-size: 1.1rem;
+}
+
+/* Single-column app contract until desktop widths. */
+.chat-layout.content-active .sidebar {
+  display: none;
+}
+
+.chat-layout:not(.content-active) .chat-main {
+  display: none;
 }
 
 @media (max-width: 980px), (orientation: portrait) and (max-width: 1100px) {
@@ -2336,7 +2898,6 @@ onUnmounted(() => {
   }
 }
 
-/* Mobile Responsive Adjustments */
 @media (max-width: 960px) {
   .app-header {
     gap: 10px;
@@ -2345,6 +2906,15 @@ onUnmounted(() => {
 
   .chat-main {
     padding: 8px;
+  }
+
+  .dm-thread-strip {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .dm-mute-btn {
+    width: 100%;
   }
 
   .header-title {
@@ -2365,11 +2935,6 @@ onUnmounted(() => {
     align-items: stretch;
   }
 
-  .session-notice {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
   .test-notice-card {
     padding: 20px;
   }
@@ -2382,16 +2947,17 @@ onUnmounted(() => {
   .gate-actions .small-btn {
     width: 100%;
   }
+}
 
-  /* When content is active, hide sidebar on mobile */
-  .chat-layout.content-active .sidebar {
-    display: none;
+@media (min-width: 1180px) and (orientation: landscape) {
+  .chat-layout {
+    grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
+    gap: 16px;
   }
 
-  /* When NO content is active, hide main area on mobile */
+  .chat-layout.content-active .sidebar,
   .chat-layout:not(.content-active) .chat-main {
-    display: none;
+    display: flex;
   }
-
 }
 </style>
