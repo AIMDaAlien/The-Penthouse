@@ -20,6 +20,7 @@ export async function buildTestApp() {
   const app = await createApp();
 
   const emitted: Array<{ room: string | null; event: string; data: unknown }> = [];
+  const roomJoins: Array<{ sourceRoom: string; targetRoom: string }> = [];
 
   // Stub Socket.IO so route handlers that call app.io.to(...).emit(...) don't crash
   app.decorate('io', {
@@ -30,12 +31,28 @@ export async function buildTestApp() {
         }
       };
     },
+    in(sourceRoom: string) {
+      return {
+        async fetchSockets() {
+          return [];
+        },
+        socketsJoin(targetRoom: string) {
+          roomJoins.push({ sourceRoom, targetRoom });
+        }
+      };
+    },
     emit(event: string, data: unknown) {
       emitted.push({ room: null, event, data });
+    },
+    sockets: {
+      adapter: {
+        rooms: new Map<string, Set<string>>()
+      },
+      sockets: new Map<string, { data: { userId?: string } }>()
     }
   } as any);
 
-  return { app, emitted };
+  return { app, emitted, roomJoins };
 }
 
 export async function migrate() {
@@ -51,20 +68,21 @@ export async function cleanup() {
   const client = await pool.connect();
   try {
     await client.query('DELETE FROM messages');
+    await client.query('DELETE FROM device_tokens');
     await client.query('DELETE FROM chat_members');
     await client.query('DELETE FROM chats');
     await client.query('DELETE FROM refresh_tokens');
     await client.query('DELETE FROM media_uploads');
     await client.query('DELETE FROM users');
-    await client.query(`DELETE FROM signup_invites WHERE system_key IS DISTINCT FROM 'master'`);
+    await client.query(`DELETE FROM signup_invites`);
     await client.query(
-      `INSERT INTO signup_invites(code, max_uses, uses, system_key)
-       VALUES ('PENTHOUSE-ALPHA', 999999, 0, 'master')
-       ON CONFLICT (system_key) DO UPDATE
-       SET code = EXCLUDED.code,
-           max_uses = EXCLUDED.max_uses,
-           uses = EXCLUDED.uses,
-           revoked_at = NULL`
+      `INSERT INTO signup_invites(id, code, label, max_uses, uses)
+       VALUES (gen_random_uuid(), 'PENTHOUSE-ALPHA', 'Test invite', 999999, 0)`
+    );
+    await client.query(
+      `INSERT INTO server_settings (key, value, updated_at)
+       VALUES ('registration_mode', 'invite_only', NOW())
+       ON CONFLICT (key) DO UPDATE SET value = 'invite_only', updated_at = NOW()`
     );
   } finally {
     client.release();
