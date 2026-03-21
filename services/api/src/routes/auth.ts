@@ -32,7 +32,6 @@ import { getRegistrationMode } from '../utils/settings.js';
 
 const SHARED_GENERAL_CHAT_ID = '00000000-0000-0000-0000-000000000001';
 const SHARED_GENERAL_SYSTEM_KEY = 'general';
-const MASTER_INVITE_SYSTEM_KEY = 'master';
 
 async function ensureSharedGeneralChannel(client: PoolClient): Promise<string> {
   await client.query(
@@ -77,18 +76,23 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       });
     }
 
+    // Check registration mode first
+    const registrationMode = await getRegistrationMode(pool);
+    if (registrationMode === 'closed') {
+      return reply.status(403).send({ error: 'Registration is currently closed' });
+    }
+
     const client = await pool.connect();
 
     try {
       await client.query('BEGIN');
 
       const invite = await client.query(
-        `SELECT code, max_uses, uses, expires_at, revoked_at
+        `SELECT id, code, max_uses, uses, expires_at, revoked_at
          FROM signup_invites
          WHERE code = $1
-           AND system_key = $2
          FOR UPDATE`,
-        [inviteCode, MASTER_INVITE_SYSTEM_KEY]
+        [inviteCode]
       );
 
       if (!invite.rowCount) {
