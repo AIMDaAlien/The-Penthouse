@@ -27,7 +27,8 @@ import {
   maybeBootstrapAdmin,
   type UserRow
 } from '../utils/users.js';
-import { createAuthResponse, issueRecoveryCode } from '../utils/sessions.js';
+import { createAuthResponse, getSessionMetadataFromRequest, issueRecoveryCode, mergeSessionMetadata } from '../utils/sessions.js';
+import { getRegistrationMode } from '../utils/settings.js';
 
 const SHARED_GENERAL_CHAT_ID = '00000000-0000-0000-0000-000000000001';
 const SHARED_GENERAL_SYSTEM_KEY = 'general';
@@ -141,7 +142,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       );
 
       await maybeBootstrapAdmin(client, username);
-      const response = await createAuthResponse(app, client, id, recoveryCode);
+      const response = await createAuthResponse(app, client, id, recoveryCode, getSessionMetadataFromRequest(request));
 
       await client.query('COMMIT');
       return reply.status(201).send(response);
@@ -180,7 +181,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       await issueRecoveryCode(pool, user.id, recoveryCode);
     }
 
-    const response = await createAuthResponse(app, pool, user.id, recoveryCode);
+    const response = await createAuthResponse(app, pool, user.id, recoveryCode, getSessionMetadataFromRequest(request));
     return reply.send(response);
   });
 
@@ -212,7 +213,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       );
       await client.query('DELETE FROM refresh_tokens WHERE user_id = $1', [user.id]);
 
-      const response = await createAuthResponse(app, client, user.id, nextRecoveryCode);
+      const response = await createAuthResponse(app, client, user.id, nextRecoveryCode, getSessionMetadataFromRequest(request));
 
       await client.query('COMMIT');
       return reply.send(response);
@@ -232,16 +233,18 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     const oldHash = hashToken(parsed.data.refreshToken);
     const client = await pool.connect();
     let userId = '';
+    let sessionId = '';
     let newRefreshToken = '';
 
     try {
       await client.query('BEGIN');
 
       const tokenRes = await client.query(
-        `DELETE FROM refresh_tokens
+        `SELECT id, user_id, device_label, app_context, has_push_token
+         FROM refresh_tokens
          WHERE token_hash = $1
            AND expires_at > NOW()
-         RETURNING user_id`,
+         FOR UPDATE`,
         [oldHash]
       );
       if (!tokenRes.rowCount) {
@@ -249,7 +252,16 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         return reply.status(401).send({ error: 'Invalid or expired refresh token' });
       }
 
-      userId = tokenRes.rows[0].user_id as string;
+      const tokenRow = tokenRes.rows[0] as {
+        id: string;
+        user_id: string;
+        device_label: string;
+        app_context: string | null;
+        has_push_token: boolean;
+      };
+
+      userId = tokenRow.user_id;
+      sessionId = tokenRow.id;
       const user = await getUserById(client, userId);
       if (!user) {
         await client.query('ROLLBACK');
@@ -264,12 +276,30 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       newRefreshToken = createOpaqueToken();
       const newHash = hashToken(newRefreshToken);
       const expiresAt = refreshExpiryDate();
-      await client.query('INSERT INTO refresh_tokens(id, user_id, token_hash, expires_at) VALUES($1, $2, $3, $4)', [
-        randomUUID(),
-        user.id,
-        newHash,
-        expiresAt.toISOString()
-      ]);
+      const metadata = mergeSessionMetadata(getSessionMetadataFromRequest(request), {
+        deviceLabel: tokenRow.device_label,
+        appContext: tokenRow.app_context,
+        hasPushToken: tokenRow.has_push_token
+      });
+
+      await client.query(
+        `UPDATE refresh_tokens
+         SET token_hash = $1,
+             expires_at = $2,
+             last_used_at = NOW(),
+             device_label = $3,
+             app_context = $4,
+             has_push_token = $5
+         WHERE id = $6`,
+        [
+          newHash,
+          expiresAt.toISOString(),
+          metadata.deviceLabel,
+          metadata.appContext,
+          metadata.hasPushToken,
+          tokenRow.id
+        ]
+      );
       await client.query('COMMIT');
     } catch (error) {
       await client.query('ROLLBACK');
@@ -281,7 +311,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     const user = await getUserById(pool, userId);
     if (!user) return reply.status(401).send({ error: 'Invalid user session' });
 
-    const accessToken = await signAccessToken(app, user.id, user.username);
+    const accessToken = await signAccessToken(app, user.id, user.username, sessionId);
 
     const response = AuthResponseSchema.parse({
       user: mapAuthUser(user),
@@ -298,5 +328,10 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
 
     await pool.query('DELETE FROM refresh_tokens WHERE token_hash = $1', [hashToken(parsed.data.refreshToken)]);
     return reply.status(204).send();
+  });
+
+  app.get('/api/v1/auth/config', async () => {
+    const registrationMode = await getRegistrationMode(pool);
+    return { registrationMode };
   });
 }
