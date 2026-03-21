@@ -116,8 +116,11 @@ export const PasswordResetRequestSchema = z.object({
 export const UserRoleSchema = z.enum(['admin', 'member']);
 export const UserStatusSchema = z.enum(['active', 'removed', 'banned']);
 export const MessageTypeSchema = z.enum(['text', 'image', 'video', 'gif', 'file']);
+export const ModerationActionSchema = z.enum(['hide', 'unhide']);
+export const RegistrationModeSchema = z.enum(['invite_only', 'closed']);
 export const MediaKindSchema = z.enum(['image', 'video', 'file']);
 export const GifProviderSchema = z.enum(['giphy', 'klipy']);
+export const GifRenderModeSchema = z.enum(['image', 'video']);
 export const MessageMetadataSchema = z.record(z.string(), z.unknown());
 
 export const AuthUserSchema = z.object({
@@ -168,8 +171,78 @@ export const TestNoticeAckResponseSchema = z.object({
   acceptedAt: z.string()
 });
 
+export const RegisterDeviceTokenRequestSchema = z.object({
+  platform: z.enum(['android', 'ios']),
+  token: z.string().min(1).max(4096),
+  previousToken: z.string().min(1).max(4096).optional()
+});
+
+export const RegisterDeviceTokenResponseSchema = z.object({
+  id: z.string().uuid()
+});
+
+export const UnregisterDeviceTokenRequestSchema = z.object({
+  token: z.string().min(1).max(4096)
+});
+
+const QuietHoursMinuteSchema = z.number().int().min(0).max(1439);
+
+export const DeviceNotificationSettingsSchema = z.object({
+  token: z.string().min(1).max(4096),
+  notificationsEnabled: z.boolean(),
+  previewsEnabled: z.boolean(),
+  quietHoursEnabled: z.boolean(),
+  quietHoursStartMinute: QuietHoursMinuteSchema.nullable(),
+  quietHoursEndMinute: QuietHoursMinuteSchema.nullable(),
+  timezone: z.string().trim().min(1).max(128).nullable()
+});
+
+export const UpdateDeviceNotificationSettingsRequestSchema = DeviceNotificationSettingsSchema.superRefine((value, ctx) => {
+  if (!value.quietHoursEnabled) return;
+
+  if (value.quietHoursStartMinute === null || value.quietHoursEndMinute === null) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Quiet hours start and end are required when quiet hours are enabled'
+    });
+    return;
+  }
+
+  if (value.quietHoursStartMinute === value.quietHoursEndMinute) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Quiet hours start and end must not be equal'
+    });
+  }
+
+  if (!value.timezone) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Timezone is required when quiet hours are enabled'
+    });
+  }
+});
+
+export const GetDeviceNotificationSettingsQuerySchema = z.object({
+  token: z.string().min(1).max(4096)
+});
+
 export const RotateRecoveryCodeResponseSchema = z.object({
   recoveryCode: z.string()
+});
+
+export const SessionSummarySchema = z.object({
+  id: z.string().uuid(),
+  createdAt: z.string(),
+  lastUsedAt: z.string(),
+  deviceLabel: z.string(),
+  appContext: z.string().nullable(),
+  hasPushToken: z.boolean(),
+  current: z.boolean()
+});
+
+export const RevokeOtherSessionsResponseSchema = z.object({
+  revokedCount: z.number().int().nonnegative()
 });
 
 export const ChatSummarySchema = z.object({
@@ -177,7 +250,23 @@ export const ChatSummarySchema = z.object({
   type: z.enum(['dm', 'channel']),
   name: z.string(),
   updatedAt: z.string(),
-  unreadCount: z.number().int().nonnegative().default(0)
+  unreadCount: z.number().int().nonnegative().default(0),
+  counterpartMemberId: z.string().optional(),
+  counterpartAvatarUrl: z.string().nullable().optional(),
+  notificationsMuted: z.boolean().optional()
+});
+
+export const CreateDirectChatRequestSchema = z.object({
+  memberId: z.string().uuid()
+});
+
+export const ChatPreferencesRequestSchema = z.object({
+  notificationsMuted: z.boolean()
+});
+
+export const ChatPreferencesResponseSchema = z.object({
+  chatId: z.string(),
+  notificationsMuted: z.boolean()
 });
 
 export const MemberSummarySchema = z.object({
@@ -210,12 +299,27 @@ export const MessageSchema = z.object({
   metadata: MessageMetadataSchema.nullable().optional(),
   createdAt: z.string(),
   clientMessageId: z.string().optional(),
-  seenAt: z.string().nullable().optional()
+  seenAt: z.string().nullable().optional(),
+  hidden: z.boolean().optional()
+});
+
+export const AdminMessageModerationSchema = z.object({
+  hiddenByModeration: z.boolean(),
+  latestAction: ModerationActionSchema.nullable(),
+  latestReason: z.string().nullable(),
+  latestCreatedAt: z.string().nullable(),
+  latestActorUserId: z.string().nullable(),
+  latestActorUsername: z.string().nullable().optional(),
+  latestActorDisplayName: z.string().nullable().optional()
 });
 
 export const AdminMessageSchema = MessageSchema.extend({
   senderStatus: UserStatusSchema,
-  hidden: z.boolean()
+  moderation: AdminMessageModerationSchema
+});
+
+export const AdminModerateMessageRequestSchema = z.object({
+  reason: z.string().trim().min(1).max(500)
 });
 
 export const SendMessageRequestSchema = z.object({
@@ -252,6 +356,7 @@ export const GifResultSchema = z.object({
   id: z.string(),
   url: z.string(),
   previewUrl: z.string(),
+  renderMode: GifRenderModeSchema,
   title: z.string().nullable().optional(),
   width: z.number().int().positive().nullable().optional(),
   height: z.number().int().positive().nullable().optional(),
@@ -270,6 +375,74 @@ export const AdminInviteResponseSchema = z.object({
   createdAt: z.string()
 });
 
+export const AdminInviteDetailSchema = z.object({
+  id: z.string().uuid(),
+  code: z.string(),
+  label: z.string(),
+  uses: z.number().int().nonnegative(),
+  maxUses: z.number().int().positive(),
+  expiresAt: z.string().nullable(),
+  revokedAt: z.string().nullable(),
+  createdAt: z.string()
+});
+
+export const CreateInviteRequestSchema = z.object({
+  label: z.string().trim().min(1).max(100),
+  maxUses: z.number().int().min(1).max(999999).default(999999),
+  expiresAt: z.string().nullable().optional()
+});
+
+export const RegistrationModeResponseSchema = z.object({
+  registrationMode: RegistrationModeSchema
+});
+
+export const UpdateRegistrationModeRequestSchema = z.object({
+  registrationMode: RegistrationModeSchema
+});
+
+export const AuthConfigResponseSchema = z.object({
+  registrationMode: RegistrationModeSchema
+});
+
+export const AdminOperatorSummarySchema = z.object({
+  app: z.object({
+    name: z.string(),
+    checkedAt: z.string(),
+    databaseReachable: z.boolean()
+  }),
+  members: z.object({
+    total: z.number().int().nonnegative(),
+    active: z.number().int().nonnegative(),
+    banned: z.number().int().nonnegative(),
+    removed: z.number().int().nonnegative(),
+    admins: z.number().int().nonnegative()
+  }),
+  content: z.object({
+    chats: z.number().int().nonnegative(),
+    messages: z.number().int().nonnegative(),
+    uploads: z.number().int().nonnegative(),
+    uploadBytesTotal: z.number().int().nonnegative()
+  }),
+  realtime: z.object({
+    sockets: z.number().int().nonnegative(),
+    connectedUsers: z.number().int().nonnegative(),
+    activeChatRooms: z.number().int().nonnegative()
+  }),
+  moderation: z.object({
+    hiddenMessages: z.number().int().nonnegative(),
+    recentActions24h: z.number().int().nonnegative()
+  }),
+  invite: AdminInviteResponseSchema,
+  push: z.object({
+    configured: z.boolean(),
+    androidTokens: z.number().int().nonnegative(),
+    iosTokens: z.number().int().nonnegative(),
+    notificationsDisabled: z.number().int().nonnegative(),
+    quietHoursEnabled: z.number().int().nonnegative(),
+    previewsDisabled: z.number().int().nonnegative()
+  })
+});
+
 export const AdminTempPasswordResponseSchema = z.object({
   userId: z.string(),
   username: z.string(),
@@ -283,8 +456,10 @@ export type PasswordResetRequest = z.infer<typeof PasswordResetRequestSchema>;
 export type UserRole = z.infer<typeof UserRoleSchema>;
 export type UserStatus = z.infer<typeof UserStatusSchema>;
 export type MessageType = z.infer<typeof MessageTypeSchema>;
+export type ModerationAction = z.infer<typeof ModerationActionSchema>;
 export type MediaKind = z.infer<typeof MediaKindSchema>;
 export type GifProvider = z.infer<typeof GifProviderSchema>;
+export type GifRenderMode = z.infer<typeof GifRenderModeSchema>;
 export type MessageMetadata = z.infer<typeof MessageMetadataSchema>;
 export type AuthUser = z.infer<typeof AuthUserSchema>;
 export type AuthResponse = z.infer<typeof AuthResponseSchema>;
@@ -293,13 +468,26 @@ export type UpdateProfileRequest = z.infer<typeof UpdateProfileRequestSchema>;
 export type ChangePasswordRequest = z.infer<typeof ChangePasswordRequestSchema>;
 export type TestNoticeAckRequest = z.infer<typeof TestNoticeAckRequestSchema>;
 export type TestNoticeAckResponse = z.infer<typeof TestNoticeAckResponseSchema>;
+export type RegisterDeviceTokenRequest = z.infer<typeof RegisterDeviceTokenRequestSchema>;
+export type RegisterDeviceTokenResponse = z.infer<typeof RegisterDeviceTokenResponseSchema>;
+export type UnregisterDeviceTokenRequest = z.infer<typeof UnregisterDeviceTokenRequestSchema>;
+export type DeviceNotificationSettings = z.infer<typeof DeviceNotificationSettingsSchema>;
+export type UpdateDeviceNotificationSettingsRequest = z.infer<typeof UpdateDeviceNotificationSettingsRequestSchema>;
+export type GetDeviceNotificationSettingsQuery = z.infer<typeof GetDeviceNotificationSettingsQuerySchema>;
 export type RotateRecoveryCodeResponse = z.infer<typeof RotateRecoveryCodeResponseSchema>;
+export type SessionSummary = z.infer<typeof SessionSummarySchema>;
+export type RevokeOtherSessionsResponse = z.infer<typeof RevokeOtherSessionsResponseSchema>;
 export type ChatSummary = z.infer<typeof ChatSummarySchema>;
+export type CreateDirectChatRequest = z.infer<typeof CreateDirectChatRequestSchema>;
+export type ChatPreferencesRequest = z.infer<typeof ChatPreferencesRequestSchema>;
+export type ChatPreferencesResponse = z.infer<typeof ChatPreferencesResponseSchema>;
 export type MemberSummary = z.infer<typeof MemberSummarySchema>;
 export type MemberDetail = z.infer<typeof MemberDetailSchema>;
 export type AdminMemberSummary = z.infer<typeof AdminMemberSummarySchema>;
 export type Message = z.infer<typeof MessageSchema>;
+export type AdminMessageModeration = z.infer<typeof AdminMessageModerationSchema>;
 export type AdminMessage = z.infer<typeof AdminMessageSchema>;
+export type AdminModerateMessageRequest = z.infer<typeof AdminModerateMessageRequestSchema>;
 export type SendMessageRequest = z.infer<typeof SendMessageRequestSchema>;
 export type SendMessageResponse = z.infer<typeof SendMessageResponseSchema>;
 export type MarkChatReadResponse = z.infer<typeof MarkChatReadResponseSchema>;
@@ -307,4 +495,11 @@ export type UploadResponse = z.infer<typeof UploadResponseSchema>;
 export type GifResult = z.infer<typeof GifResultSchema>;
 export type GifSearchResponse = z.infer<typeof GifSearchResponseSchema>;
 export type AdminInviteResponse = z.infer<typeof AdminInviteResponseSchema>;
+export type AdminOperatorSummary = z.infer<typeof AdminOperatorSummarySchema>;
 export type AdminTempPasswordResponse = z.infer<typeof AdminTempPasswordResponseSchema>;
+export type RegistrationMode = z.infer<typeof RegistrationModeSchema>;
+export type AdminInviteDetail = z.infer<typeof AdminInviteDetailSchema>;
+export type CreateInviteRequest = z.infer<typeof CreateInviteRequestSchema>;
+export type RegistrationModeResponse = z.infer<typeof RegistrationModeResponseSchema>;
+export type UpdateRegistrationModeRequest = z.infer<typeof UpdateRegistrationModeRequestSchema>;
+export type AuthConfigResponse = z.infer<typeof AuthConfigResponseSchema>;
