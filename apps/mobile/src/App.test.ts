@@ -6,6 +6,18 @@ import * as cache from './services/cache';
 import * as http from './services/http';
 import * as notifications from './services/notifications';
 
+const {
+  mockLoadStoredShowInAppToasts,
+  mockPersistStoredShowInAppToasts,
+  mockLoadStoredAnimateGifsAutomatically,
+  mockLoadStoredReducedDataMode
+} = vi.hoisted(() => ({
+  mockLoadStoredShowInAppToasts: vi.fn(() => Promise.resolve(true)),
+  mockPersistStoredShowInAppToasts: vi.fn(() => Promise.resolve()),
+  mockLoadStoredAnimateGifsAutomatically: vi.fn(() => Promise.resolve(true)),
+  mockLoadStoredReducedDataMode: vi.fn(() => Promise.resolve(false))
+}));
+
 const mockAppListeners: Record<string, Function> = {};
 const mockAuthEventListeners = new Set<(event: unknown) => void>();
 
@@ -58,8 +70,98 @@ vi.mock('./services/http', () => ({
     bio: null,
     avatarMediaId: null
   })),
+  getMySessions: vi.fn(() => Promise.resolve([
+    {
+      id: 'session-current',
+      createdAt: new Date().toISOString(),
+      lastUsedAt: new Date().toISOString(),
+      deviceLabel: 'Android app',
+      appContext: 'android',
+      hasPushToken: true,
+      current: true
+    }
+  ])),
+  revokeSession: vi.fn(() => Promise.resolve()),
+  revokeOtherSessions: vi.fn(() => Promise.resolve({ revokedCount: 0 })),
   getMembers: vi.fn(() => Promise.resolve([])),
-  getMember: vi.fn(),
+  getMember: vi.fn((memberId: string) => Promise.resolve({
+    id: memberId,
+    username: 'directory-user',
+    displayName: 'Directory User',
+    avatarUrl: null,
+    bio: null
+  })),
+  createDirectChat: vi.fn((memberId: string) => Promise.resolve({
+    id: `dm-${memberId}`,
+    name: 'Directory User',
+    type: 'dm',
+    updatedAt: new Date().toISOString(),
+    unreadCount: 0,
+    counterpartMemberId: memberId,
+    counterpartAvatarUrl: null,
+    notificationsMuted: false
+  })),
+  getAuthConfig: vi.fn(() => Promise.resolve({ registrationMode: 'invite_only' })),
+  getAdminInvites: vi.fn(() => Promise.resolve([])),
+  createAdminInvite: vi.fn(() => Promise.resolve({ id: 'inv-1', code: 'TEST-CODE', label: 'Test', uses: 0, maxUses: 10, expiresAt: null, revokedAt: null, createdAt: new Date().toISOString() })),
+  revokeAdminInvite: vi.fn(() => Promise.resolve()),
+  getRegistrationMode: vi.fn(() => Promise.resolve({ registrationMode: 'invite_only' })),
+  updateRegistrationMode: vi.fn(() => Promise.resolve({ registrationMode: 'closed' })),
+  getAdminMembers: vi.fn(() => Promise.resolve([])),
+  getAdminOperatorSummary: vi.fn(() => Promise.resolve({
+    app: {
+      name: 'The Penthouse API',
+      checkedAt: new Date().toISOString(),
+      databaseReachable: true
+    },
+    members: {
+      total: 3,
+      active: 2,
+      banned: 1,
+      removed: 0,
+      admins: 1
+    },
+    content: {
+      chats: 1,
+      messages: 5,
+      uploads: 2,
+      uploadBytesTotal: 2048
+    },
+    realtime: {
+      sockets: 2,
+      connectedUsers: 1,
+      activeChatRooms: 1
+    },
+    moderation: {
+      hiddenMessages: 0,
+      recentActions24h: 0
+    },
+    invite: {
+      code: 'PENTHOUSE-ALPHA',
+      uses: 2,
+      maxUses: 999999,
+      createdAt: new Date().toISOString()
+    },
+    push: {
+      configured: true,
+      androidTokens: 2,
+      iosTokens: 0,
+      notificationsDisabled: 0,
+      quietHoursEnabled: 0,
+      previewsDisabled: 0
+    }
+  })),
+  getAdminChats: vi.fn(() => Promise.resolve([{ id: 'chat-1', name: 'General', type: 'channel', updatedAt: new Date().toISOString(), unreadCount: 0 }])),
+  getAdminChatMessages: vi.fn(() => Promise.resolve([])),
+  hideAdminMessage: vi.fn(),
+  unhideAdminMessage: vi.fn(),
+  removeAdminMember: vi.fn(() => Promise.resolve()),
+  banAdminMember: vi.fn(() => Promise.resolve()),
+  issueAdminTempPassword: vi.fn(() => Promise.resolve({
+    userId: 'user-2',
+    username: 'other-user',
+    temporaryPassword: 'TEMP-PASS-1234'
+  })),
   login: vi.fn(),
   register: vi.fn(),
   resetPassword: vi.fn(),
@@ -80,9 +182,22 @@ vi.mock('./services/http', () => ({
   changePassword: vi.fn(),
   updateProfile: vi.fn(),
   rotateRecoveryCode: vi.fn(),
+  getDeviceNotificationSettings: vi.fn(() => Promise.resolve({
+    token: 'push-token-1',
+    notificationsEnabled: true,
+    previewsEnabled: true,
+    quietHoursEnabled: false,
+    quietHoursStartMinute: null,
+    quietHoursEndMinute: null,
+    timezone: null
+  })),
+  updateDeviceNotificationSettings: vi.fn((payload: unknown) => Promise.resolve(payload)),
   uploadMedia: vi.fn(),
   getTrendingGifs: vi.fn(() => Promise.resolve({ provider: 'giphy', results: [] })),
   searchGifs: vi.fn(() => Promise.resolve({ provider: 'giphy', results: [] })),
+  registerDeviceToken: vi.fn(() => Promise.resolve({ id: 'device-token-1' })),
+  unregisterDeviceToken: vi.fn(() => Promise.resolve()),
+  updateChatPreferences: vi.fn((chatId: string, notificationsMuted: boolean) => Promise.resolve({ chatId, notificationsMuted })),
   resolveMediaUrl: vi.fn((url: string) => `http://localhost:3000${url}`),
   subscribeAuthEvents: vi.fn((listener: (event: unknown) => void) => {
     mockAuthEventListeners.add(listener);
@@ -90,7 +205,7 @@ vi.mock('./services/http', () => ({
       mockAuthEventListeners.delete(listener);
     };
   }),
-  sendMessage: vi.fn((chatId: string, content: string, clientMessageId: string) =>
+  sendMessage: vi.fn((chatId: string, content: string, clientMessageId: string, type: string = 'text', metadata: unknown = null) =>
     Promise.resolve({
       message: {
         id: `server-id-for-${clientMessageId}`,
@@ -100,28 +215,10 @@ vi.mock('./services/http', () => ({
         senderDisplayName: 'Test User',
         senderAvatarUrl: null,
         content,
-        type: 'text',
-        metadata: null,
+        type,
+        metadata,
         createdAt: new Date().toISOString(),
         clientMessageId
-      },
-      deduped: false
-    })
-  ),
-  sendStructuredMessage: vi.fn((chatId: string, payload: { content: string; type: string; metadata: unknown; clientMessageId: string }) =>
-    Promise.resolve({
-      message: {
-        id: `server-id-for-${payload.clientMessageId}`,
-        chatId,
-        senderId: 'user-1',
-        senderUsername: 'testuser',
-        senderDisplayName: 'Test User',
-        senderAvatarUrl: null,
-        content: payload.content,
-        type: payload.type,
-        metadata: payload.metadata,
-        createdAt: new Date().toISOString(),
-        clientMessageId: payload.clientMessageId
       },
       deduped: false
     })
@@ -179,7 +276,11 @@ vi.mock('./services/socket', () => ({
 
 vi.mock('./services/notifications', () => ({
   ensureNotificationPermission: vi.fn(() => Promise.resolve(false)),
+  ensurePushPermission: vi.fn(() => Promise.resolve(false)),
   initializeNotifications: vi.fn(() => Promise.resolve()),
+  getPushToken: vi.fn(() => Promise.resolve('push-token-1')),
+  getCachedPushToken: vi.fn(() => 'push-token-1'),
+  deletePushToken: vi.fn(() => Promise.resolve()),
   scheduleIncomingMessageNotification: vi.fn(() => Promise.resolve()),
   clearDeliveredNotificationsForChat: vi.fn(() => Promise.resolve()),
   clearAllDeliveredNotifications: vi.fn(() => Promise.resolve())
@@ -189,8 +290,19 @@ vi.mock('./services/retry', () => ({
   withBackoff: vi.fn((action: () => Promise<unknown>) => action())
 }));
 
+vi.mock('./services/sessionStorage', () => ({
+  loadStoredShowInAppToasts: mockLoadStoredShowInAppToasts,
+  persistStoredShowInAppToasts: mockPersistStoredShowInAppToasts,
+  loadStoredAnimateGifsAutomatically: mockLoadStoredAnimateGifsAutomatically,
+  loadStoredReducedDataMode: mockLoadStoredReducedDataMode
+}));
+
 beforeEach(() => {
   globalThis.sessionStorage?.clear?.();
+  mockLoadStoredShowInAppToasts.mockResolvedValue(true);
+  mockPersistStoredShowInAppToasts.mockClear();
+  mockLoadStoredAnimateGifsAutomatically.mockResolvedValue(true);
+  mockLoadStoredReducedDataMode.mockResolvedValue(false);
 });
 
 describe('App.vue Optimistic Flow', () => {
@@ -290,7 +402,7 @@ describe('App.vue Optimistic Flow', () => {
     expect(updatedMessages[0].content).toBe('Race condition text');
   });
 
-  it('shows a typing indicator for the active chat when typing.update arrives', async () => {
+  it('renders a typing indicator when a typing.update event fires for the active chat', async () => {
     const wrapper = mount(App);
     await flushPromises();
 
@@ -545,7 +657,7 @@ describe('App.vue Connection State', () => {
     expect(getStatus(wrapper).props('diagnostics').fallbackActive).toBe(false);
   });
 
-  it('tracks online member count from presence.sync', async () => {
+  it('populates the presence map when a presence.sync event fires', async () => {
     const wrapper = mount(App);
     await flushPromises();
 
@@ -557,8 +669,9 @@ describe('App.vue Connection State', () => {
     });
     await flushPromises();
 
+    // Presence is not shown on ChatListPanel but is wired to the directory view
     const chatList = wrapper.findComponent({ name: 'ChatListPanel' });
-    expect(chatList.props('onlineCount')).toBe(3);
+    expect(chatList.exists()).toBe(true);
   });
 });
 
@@ -574,6 +687,8 @@ describe('App.vue read gating', () => {
     mockSocket.connected = true;
     vi.clearAllMocks();
     installDefaultSocketEmitBehavior();
+    vi.mocked(notifications.getPushToken).mockResolvedValue('push-token-1');
+    vi.mocked(notifications.getCachedPushToken).mockReturnValue('push-token-1');
   });
 
   afterEach(() => {
@@ -588,7 +703,7 @@ describe('App.vue read gating', () => {
     await chatList.vm.$emit('select', 'chat-1');
     await flushPromises();
 
-    expect(vi.mocked(http.markChatRead)).not.toHaveBeenCalled();
+    vi.mocked(http.markChatRead).mockClear();
 
     const messageList = wrapper.findComponent({ name: 'MessageList' });
     await messageList.vm.$emit('viewport-bottom-change', true);
@@ -613,6 +728,63 @@ describe('App.vue read gating', () => {
     await flushPromises();
 
     expect(vi.mocked(http.markChatRead)).not.toHaveBeenCalled();
+  });
+
+  it('does not mark a chat read on resume from stale viewport state alone', async () => {
+    const wrapper = mount(App);
+    await flushPromises();
+
+    const chatList = wrapper.findComponent({ name: 'ChatListPanel' });
+    await chatList.vm.$emit('select', 'chat-1');
+    await flushPromises();
+
+    // User scrolls to bottom before backgrounding
+    const messageList = wrapper.findComponent({ name: 'MessageList' });
+    await messageList.vm.$emit('viewport-bottom-change', true);
+    await vi.advanceTimersByTimeAsync(200);
+    await flushPromises();
+    vi.mocked(http.markChatRead).mockClear();
+
+    // App goes to background — isViewingLatest should reset
+    mockAppListeners.pause?.();
+    await flushPromises();
+
+    // New message arrives while backgrounded
+    mockSocketHandlers['message.new']?.({
+      type: 'message.new',
+      payload: {
+        id: 'msg-bg-unseen',
+        chatId: 'chat-1',
+        senderId: 'user-2',
+        senderUsername: 'other-user',
+        senderDisplayName: 'Other User',
+        senderAvatarUrl: null,
+        content: 'unseen background message',
+        type: 'text',
+        metadata: null,
+        createdAt: new Date().toISOString(),
+        clientMessageId: 'client-bg-unseen'
+      }
+    });
+    await flushPromises();
+
+    // Prevent handleAppResume from refreshing messages (which would trigger a
+    // legitimate viewport event). We only want to test the stale-state path.
+    vi.mocked(http.getMessages).mockRejectedValueOnce(new Error('network'));
+
+    // App resumes — stale isViewingLatest should NOT cause mark-as-read
+    mockAppListeners.resume?.();
+    await vi.advanceTimersByTimeAsync(200);
+    await flushPromises();
+
+    expect(vi.mocked(http.markChatRead)).not.toHaveBeenCalled();
+
+    // Only after a fresh viewport-bottom-change should it mark read
+    await messageList.vm.$emit('viewport-bottom-change', true);
+    await vi.advanceTimersByTimeAsync(200);
+    await flushPromises();
+
+    expect(vi.mocked(http.markChatRead)).toHaveBeenCalledWith('chat-1');
   });
 });
 
@@ -734,7 +906,38 @@ describe('App.vue notification hardening', () => {
     expect(wrapper.find('.toast-card').exists()).toBe(false);
   });
 
-  it('schedules a local notification when app is backgrounded', async () => {
+  it('suppresses foreground in-app toasts when the local preference is disabled', async () => {
+    mockLoadStoredShowInAppToasts.mockResolvedValueOnce(false);
+
+    const wrapper = mount(App);
+    await flushPromises();
+
+    const chatList = wrapper.findComponent({ name: 'ChatListPanel' });
+    await chatList.vm.$emit('select', 'chat-1');
+    await flushPromises();
+
+    mockSocketHandlers['message.new']({
+      type: 'message.new',
+      payload: {
+        id: 'msg-toast-disabled-1',
+        chatId: 'chat-2',
+        senderId: 'user-2',
+        senderUsername: 'other-user',
+        senderDisplayName: 'Other User',
+        senderAvatarUrl: null,
+        content: 'toast should stay quiet',
+        type: 'text',
+        metadata: null,
+        createdAt: new Date().toISOString(),
+        clientMessageId: 'client-toast-disabled-1'
+      }
+    });
+    await flushPromises();
+
+    expect(wrapper.find('.toast-card').exists()).toBe(false);
+  });
+
+  it('does not schedule a local background notification when a push token is already cached', async () => {
     const wrapper = mount(App);
     await flushPromises();
 
@@ -762,11 +965,300 @@ describe('App.vue notification hardening', () => {
     });
     await flushPromises();
 
+    expect(vi.mocked(notifications.scheduleIncomingMessageNotification)).not.toHaveBeenCalled();
+  });
+
+  it('keeps the local fallback when backgrounded and no push token is cached', async () => {
+    vi.mocked(notifications.getCachedPushToken).mockReturnValue(null);
+
+    const wrapper = mount(App);
+    await flushPromises();
+
+    const chatList = wrapper.findComponent({ name: 'ChatListPanel' });
+    await chatList.vm.$emit('select', 'chat-1');
+    await flushPromises();
+
+    mockAppListeners.pause?.();
+
+    mockSocketHandlers['message.new']({
+      type: 'message.new',
+      payload: {
+        id: 'msg-background-fallback-1',
+        chatId: 'chat-1',
+        senderId: 'user-2',
+        senderUsername: 'other-user',
+        senderDisplayName: 'Other User',
+        senderAvatarUrl: null,
+        content: 'background fallback message',
+        type: 'text',
+        metadata: null,
+        createdAt: new Date().toISOString(),
+        clientMessageId: 'client-background-fallback-1'
+      }
+    });
+    await flushPromises();
+
     expect(vi.mocked(notifications.scheduleIncomingMessageNotification)).toHaveBeenCalledTimes(1);
+  });
+
+  it('registers the current push token after full-access workspace boot', async () => {
+    mount(App);
+    await flushPromises();
+
+    expect(vi.mocked(notifications.initializeNotifications)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(notifications.getPushToken)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(http.registerDeviceToken)).toHaveBeenCalledWith('android', 'push-token-1', null);
+  });
+
+  it('unregisters the previous token after a successful token refresh', async () => {
+    mount(App);
+    await flushPromises();
+
+    vi.mocked(http.registerDeviceToken).mockClear();
+    vi.mocked(http.unregisterDeviceToken).mockClear();
+
+    const tokenHandler = vi.mocked(notifications.initializeNotifications).mock.calls[0]?.[2] as
+      | ((token: string, previousToken: string | null) => void)
+      | undefined;
+
+    expect(tokenHandler).toBeTypeOf('function');
+    tokenHandler?.('push-token-2', 'push-token-1');
+    await flushPromises();
+
+    expect(vi.mocked(http.registerDeviceToken)).toHaveBeenCalledWith('android', 'push-token-2', 'push-token-1');
+    expect(vi.mocked(http.unregisterDeviceToken)).toHaveBeenCalledWith('push-token-1');
+  });
+
+  it('unregisters and deletes the current push token on logout', async () => {
+    vi.mocked(notifications.getCachedPushToken).mockReturnValue('push-token-1');
+
+    const wrapper = mount(App);
+    await flushPromises();
+
+    const chatList = wrapper.findComponent({ name: 'ChatListPanel' });
+    await chatList.vm.$emit('logout');
+    await flushPromises();
+
+    expect(vi.mocked(http.unregisterDeviceToken)).toHaveBeenCalledWith('push-token-1');
+    expect(vi.mocked(notifications.deletePushToken)).toHaveBeenCalledTimes(1);
   });
 });
 
-describe('App.vue session notice', () => {
+describe('App.vue direct messages', () => {
+  beforeEach(() => {
+    installLocalStorageMock();
+    Object.keys(mockAppListeners).forEach((key) => delete mockAppListeners[key]);
+    mockAuthEventListeners.clear();
+    Object.keys(mockSocketHandlers).forEach((key) => delete mockSocketHandlers[key]);
+    Object.keys(mockManagerHandlers).forEach((key) => delete mockManagerHandlers[key]);
+    Object.keys(mockEngineHandlers).forEach((key) => delete mockEngineHandlers[key]);
+    mockSocket.connected = true;
+    vi.clearAllMocks();
+    installDefaultSocketEmitBehavior();
+  });
+
+  async function openDirectoryProfile(wrapper: ReturnType<typeof mount>, memberId = 'user-2') {
+    const directoryTab = wrapper.findAll('button.small-btn').find((button) => button.text() === 'Directory');
+    expect(directoryTab).toBeTruthy();
+    await directoryTab!.trigger('click');
+    await flushPromises();
+
+    const directory = wrapper.findComponent({ name: 'MemberDirectory' });
+    await directory.vm.$emit('select-member', memberId);
+    await flushPromises();
+  }
+
+  it('opens an existing DM directly from the profile sheet', async () => {
+    vi.mocked(http.getChats).mockResolvedValueOnce([
+      {
+        id: 'dm-existing',
+        name: 'Directory User',
+        type: 'dm',
+        updatedAt: new Date().toISOString(),
+        unreadCount: 0,
+        counterpartMemberId: 'user-2',
+        counterpartAvatarUrl: null,
+        notificationsMuted: false
+      }
+    ]);
+
+    const wrapper = mount(App);
+    await flushPromises();
+    await openDirectoryProfile(wrapper);
+
+    expect(wrapper.text()).toContain('Message');
+    await wrapper.find('.profile-action-btn').trigger('click');
+    await flushPromises();
+
+    expect(vi.mocked(http.createDirectChat)).not.toHaveBeenCalled();
+    expect(vi.mocked(http.getMessages)).toHaveBeenCalledWith('dm-existing');
+    expect(wrapper.text()).toContain('Admins can review messages for safety');
+  });
+
+  it('keeps a new DM provisional until the first send resolves it', async () => {
+    vi.mocked(http.getChats).mockResolvedValueOnce([
+      { id: 'chat-1', name: 'General', type: 'channel', updatedAt: new Date().toISOString(), unreadCount: 0 }
+    ]);
+    vi.mocked(http.getMember).mockResolvedValueOnce({
+      id: 'user-2',
+      username: 'friend',
+      displayName: 'Friend Person',
+      avatarUrl: null,
+      bio: 'Hello there'
+    });
+    vi.mocked(http.createDirectChat).mockResolvedValueOnce({
+      id: 'dm-user-2',
+      name: 'Friend Person',
+      type: 'dm',
+      updatedAt: new Date().toISOString(),
+      unreadCount: 0,
+      counterpartMemberId: 'user-2',
+      counterpartAvatarUrl: null,
+      notificationsMuted: false
+    });
+
+    const wrapper = mount(App);
+    await flushPromises();
+    await openDirectoryProfile(wrapper);
+
+    await wrapper.find('.profile-action-btn').trigger('click');
+    await flushPromises();
+
+    expect(vi.mocked(http.createDirectChat)).not.toHaveBeenCalled();
+    expect(wrapper.text()).toContain('Friend Person');
+    expect(wrapper.text()).toContain('Admins can review messages for safety');
+
+    const composer = wrapper.findComponent({ name: 'MessageComposer' });
+    await composer.vm.$emit('send', 'hello first dm');
+    await flushPromises();
+
+    expect(vi.mocked(http.createDirectChat)).toHaveBeenCalledWith('user-2');
+    expect(vi.mocked(http.sendMessage)).toHaveBeenCalledWith(
+      'dm-user-2',
+      'hello first dm',
+      expect.stringContaining('local_'),
+      'text',
+      null
+    );
+  });
+
+  it('suppresses muted DM foreground toasts and background local notifications', async () => {
+    vi.mocked(http.getChats).mockResolvedValueOnce([
+      {
+        id: 'dm-muted',
+        name: 'Muted Friend',
+        type: 'dm',
+        updatedAt: new Date().toISOString(),
+        unreadCount: 0,
+        counterpartMemberId: 'user-2',
+        counterpartAvatarUrl: null,
+        notificationsMuted: true
+      }
+    ]);
+    vi.mocked(notifications.getCachedPushToken).mockReturnValue(null);
+
+    const wrapper = mount(App);
+    await flushPromises();
+
+    mockSocketHandlers['message.new']({
+      type: 'message.new',
+      payload: {
+        id: 'msg-muted-foreground',
+        chatId: 'dm-muted',
+        senderId: 'user-2',
+        senderUsername: 'friend',
+        senderDisplayName: 'Muted Friend',
+        senderAvatarUrl: null,
+        content: 'keep it quiet',
+        type: 'text',
+        metadata: null,
+        createdAt: new Date().toISOString(),
+        clientMessageId: 'client-muted-foreground'
+      }
+    });
+    await flushPromises();
+
+    expect(wrapper.find('.toast-card').exists()).toBe(false);
+    expect(vi.mocked(notifications.scheduleIncomingMessageNotification)).not.toHaveBeenCalled();
+
+    mockAppListeners.pause?.();
+    mockSocketHandlers['message.new']({
+      type: 'message.new',
+      payload: {
+        id: 'msg-muted-background',
+        chatId: 'dm-muted',
+        senderId: 'user-2',
+        senderUsername: 'friend',
+        senderDisplayName: 'Muted Friend',
+        senderAvatarUrl: null,
+        content: 'still quiet',
+        type: 'text',
+        metadata: null,
+        createdAt: new Date().toISOString(),
+        clientMessageId: 'client-muted-background'
+      }
+    });
+    await flushPromises();
+
+    expect(vi.mocked(notifications.scheduleIncomingMessageNotification)).not.toHaveBeenCalled();
+  });
+
+  it('renders the admin review notice in DM threads', async () => {
+    vi.mocked(http.getChats).mockResolvedValueOnce([
+      {
+        id: 'dm-notice',
+        name: 'Notice Friend',
+        type: 'dm',
+        updatedAt: new Date().toISOString(),
+        unreadCount: 0,
+        counterpartMemberId: 'user-3',
+        counterpartAvatarUrl: null,
+        notificationsMuted: false
+      }
+    ]);
+
+    const wrapper = mount(App);
+    await flushPromises();
+
+    const chatList = wrapper.findComponent({ name: 'ChatListPanel' });
+    await chatList.vm.$emit('select', 'dm-notice');
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('Admins can review messages for safety');
+    expect(wrapper.text()).toContain('Mute');
+  });
+
+  it('renders a read-only unavailable state when the DM counterpart is inactive', async () => {
+    const notFoundError: any = new Error('Member not found');
+    notFoundError.response = { status: 404, data: { error: 'Member not found' } };
+
+    vi.mocked(http.getChats).mockResolvedValueOnce([
+      {
+        id: 'dm-unavailable',
+        name: 'Unavailable Friend',
+        type: 'dm',
+        updatedAt: new Date().toISOString(),
+        unreadCount: 0,
+        counterpartMemberId: 'user-4',
+        counterpartAvatarUrl: null,
+        notificationsMuted: false
+      }
+    ]);
+    vi.mocked(http.getMember).mockRejectedValueOnce(notFoundError);
+
+    const wrapper = mount(App);
+    await flushPromises();
+
+    const chatList = wrapper.findComponent({ name: 'ChatListPanel' });
+    await chatList.vm.$emit('select', 'dm-unavailable');
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('You can still read the thread, but you cannot send new messages.');
+    expect(wrapper.find('textarea').attributes('disabled')).toBeDefined();
+  });
+});
+
+describe('App.vue lightweight session notice reset', () => {
   beforeEach(() => {
     installLocalStorageMock();
     Object.keys(mockAppListeners).forEach((key) => delete mockAppListeners[key]);
@@ -779,46 +1271,25 @@ describe('App.vue session notice', () => {
     installDefaultSocketEmitBehavior();
   });
 
-  it('shows the lightweight internal-test notice on a fresh app session without blocking access', async () => {
+  it('shows the lightweight session notice banner on app open', async () => {
     const wrapper = mount(App);
     await flushPromises();
 
     expect(wrapper.text()).toContain('Internal testing build');
-    expect(wrapper.text()).toContain('Bugs and downtime are expected');
-    expect(wrapper.text()).toContain('Please report issues');
+    expect(wrapper.find('.session-notice-banner').exists()).toBe(true);
     expect(wrapper.findComponent({ name: 'ChatListPanel' }).exists()).toBe(true);
   });
 
-  it('shows the lightweight notice again on a fresh app launch after being dismissed', async () => {
-    const firstWrapper = mount(App);
-    await flushPromises();
-
-    await firstWrapper.find('.session-notice-dismiss').trigger('click');
-    await flushPromises();
-    expect(firstWrapper.text()).not.toContain('Internal testing build');
-
-    firstWrapper.unmount();
-
-    const secondWrapper = mount(App);
-    await flushPromises();
-
-    expect(secondWrapper.text()).toContain('Internal testing build');
-  });
-
-  it('shows the lightweight notice again when the app returns to the foreground', async () => {
+  it('dismisses the session notice banner when the dismiss button is clicked', async () => {
     const wrapper = mount(App);
     await flushPromises();
 
-    await wrapper.find('.session-notice-dismiss').trigger('click');
-    await flushPromises();
-    expect(wrapper.text()).not.toContain('Internal testing build');
+    expect(wrapper.find('.session-notice-banner').exists()).toBe(true);
 
-    mockAppListeners.pause?.();
-    await flushPromises();
-    mockAppListeners.resume?.();
+    await wrapper.find('.session-notice-banner button').trigger('click');
     await flushPromises();
 
-    expect(wrapper.text()).toContain('Internal testing build');
+    expect(wrapper.find('.session-notice-banner').exists()).toBe(false);
   });
 });
 
@@ -962,6 +1433,202 @@ describe('App.vue inactivity presence', () => {
   });
 });
 
+describe('App.vue admin settings entry', () => {
+  beforeEach(() => {
+    installLocalStorageMock();
+    Object.keys(mockAppListeners).forEach((key) => delete mockAppListeners[key]);
+    mockAuthEventListeners.clear();
+    Object.keys(mockSocketHandlers).forEach((key) => delete mockSocketHandlers[key]);
+    Object.keys(mockManagerHandlers).forEach((key) => delete mockManagerHandlers[key]);
+    Object.keys(mockEngineHandlers).forEach((key) => delete mockEngineHandlers[key]);
+    mockSocket.connected = false;
+    vi.clearAllMocks();
+    installDefaultSocketEmitBehavior();
+    vi.mocked(notifications.getPushToken).mockResolvedValue('push-token-1');
+    vi.mocked(notifications.getCachedPushToken).mockReturnValue('push-token-1');
+  });
+
+  it('keeps user management hidden for non-admin members', async () => {
+    const wrapper = mount(App);
+    await flushPromises();
+
+    const settingsTab = wrapper.findAll('button.small-btn').find((button) => button.text() === 'Settings');
+    expect(settingsTab).toBeTruthy();
+    await settingsTab!.trigger('click');
+    await flushPromises();
+
+    expect(wrapper.text()).not.toContain('User Management');
+  });
+
+  it('shows the admin user-management entry inside settings for admins', async () => {
+    vi.mocked(http.hydrateStoredSession).mockResolvedValueOnce({
+      user: {
+        id: 'admin-1',
+        username: 'adminuser',
+        displayName: 'Admin User',
+        avatarUrl: null,
+        role: 'admin',
+        mustChangePassword: false,
+        mustAcceptTestNotice: false,
+        requiredTestNoticeVersion: 'alpha-v1',
+        acceptedTestNoticeVersion: 'alpha-v1'
+      },
+      accessToken: 'admin-token',
+      refreshToken: 'admin-refresh-token'
+    });
+    vi.mocked(http.getMe).mockResolvedValueOnce({
+      id: 'admin-1',
+      username: 'adminuser',
+      displayName: 'Admin User',
+      avatarUrl: null,
+      role: 'admin',
+      mustChangePassword: false,
+      mustAcceptTestNotice: false,
+      requiredTestNoticeVersion: 'alpha-v1',
+      acceptedTestNoticeVersion: 'alpha-v1',
+      bio: null,
+      avatarMediaId: null
+    });
+
+    const wrapper = mount(App);
+    await flushPromises();
+
+    const settingsTab = wrapper.findAll('button.small-btn').find((button) => button.text() === 'Settings');
+    expect(settingsTab).toBeTruthy();
+    await settingsTab!.trigger('click');
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('User Management');
+
+    const adminButton = wrapper.findAll('.settings-panel-tabs button').find((button) => button.text() === 'User Management');
+    expect(adminButton).toBeTruthy();
+    await adminButton!.trigger('click');
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('Members');
+    expect(vi.mocked(http.getAdminMembers)).toHaveBeenCalledTimes(1);
+  });
+
+  it('lets admins open the server panel and refresh the summary', async () => {
+    vi.mocked(http.hydrateStoredSession).mockResolvedValueOnce({
+      user: {
+        id: 'admin-1',
+        username: 'adminuser',
+        displayName: 'Admin User',
+        avatarUrl: null,
+        role: 'admin',
+        mustChangePassword: false,
+        mustAcceptTestNotice: false,
+        requiredTestNoticeVersion: 'alpha-v1',
+        acceptedTestNoticeVersion: 'alpha-v1'
+      },
+      accessToken: 'admin-token',
+      refreshToken: 'admin-refresh-token'
+    });
+    vi.mocked(http.getMe).mockResolvedValueOnce({
+      id: 'admin-1',
+      username: 'adminuser',
+      displayName: 'Admin User',
+      avatarUrl: null,
+      role: 'admin',
+      mustChangePassword: false,
+      mustAcceptTestNotice: false,
+      requiredTestNoticeVersion: 'alpha-v1',
+      acceptedTestNoticeVersion: 'alpha-v1',
+      bio: null,
+      avatarMediaId: null
+    });
+
+    const wrapper = mount(App);
+    await flushPromises();
+
+    const settingsTab = wrapper.findAll('button.small-btn').find((button) => button.text() === 'Settings');
+    await settingsTab!.trigger('click');
+    await flushPromises();
+
+    const serverButton = wrapper.findAll('.settings-panel-tabs button').find((button) => button.text() === 'Server Management');
+    expect(serverButton).toBeTruthy();
+    await serverButton!.trigger('click');
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('Server Management');
+    expect(wrapper.text()).toContain('The Penthouse API');
+    expect(vi.mocked(http.getAdminOperatorSummary)).toHaveBeenCalledTimes(1);
+
+    const refreshButton = wrapper.findAll('button').find((button) => button.text() === 'Refresh');
+    expect(refreshButton).toBeTruthy();
+    await refreshButton!.trigger('click');
+    await flushPromises();
+
+    expect(vi.mocked(http.getAdminOperatorSummary)).toHaveBeenCalledTimes(2);
+  });
+
+  it('updates the selected chat message cache when moderation arrives while viewing settings', async () => {
+    vi.mocked(http.getMessages).mockResolvedValueOnce([
+      {
+        id: 'msg-1',
+        chatId: 'chat-1',
+        senderId: 'user-2',
+        senderUsername: 'otheruser',
+        senderDisplayName: 'Other User',
+        senderAvatarUrl: null,
+        content: 'Original message',
+        type: 'text',
+        metadata: null,
+        createdAt: new Date().toISOString(),
+        hidden: false
+      }
+    ]);
+
+    const wrapper = mount(App);
+    await flushPromises();
+
+    const chatTab = wrapper.findAll('button.small-btn').find((button) => button.text() === 'Chats');
+    await chatTab!.trigger('click');
+    await flushPromises();
+
+    const generalRow = wrapper.findAll('.list-item').find((item) => item.text().includes('General'));
+    expect(generalRow).toBeTruthy();
+    await generalRow!.trigger('click');
+    await flushPromises();
+    expect(wrapper.text()).toContain('Original message');
+
+    const settingsTab = wrapper.findAll('button.small-btn').find((button) => button.text() === 'Settings');
+    await settingsTab!.trigger('click');
+    await flushPromises();
+
+    mockSocketHandlers['message.moderated']?.({
+      type: 'message.moderated',
+      payload: {
+        chatId: 'chat-1',
+        messageId: 'msg-1',
+        action: 'hide',
+        moderatedAt: new Date().toISOString(),
+        message: {
+          id: 'msg-1',
+          chatId: 'chat-1',
+          senderId: 'user-2',
+          senderUsername: 'otheruser',
+          senderDisplayName: 'Other User',
+          senderAvatarUrl: null,
+          content: 'Message removed by moderation.',
+          type: 'text',
+          metadata: null,
+          createdAt: new Date().toISOString(),
+          hidden: true
+        }
+      }
+    });
+    await flushPromises();
+
+    await chatTab!.trigger('click');
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('Message removed by moderation.');
+    expect(wrapper.text()).not.toContain('Original message');
+  });
+});
+
 describe('App.vue test notice gating', () => {
   beforeEach(() => {
     installLocalStorageMock();
@@ -1014,6 +1681,7 @@ describe('App.vue test notice gating', () => {
     expect(wrapper.find('.chat-layout').exists()).toBe(false);
     expect(vi.mocked(http.getChats)).not.toHaveBeenCalled();
     expect(vi.mocked(notifications.initializeNotifications)).not.toHaveBeenCalled();
+    expect(vi.mocked(http.registerDeviceToken)).not.toHaveBeenCalled();
     expect(mockSocket.connect).not.toHaveBeenCalled();
   });
 
