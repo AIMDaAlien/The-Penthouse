@@ -5,6 +5,9 @@ import type { AuthUser } from '@penthouse/contracts';
 const ACCESS_TOKEN_KEY = 'accessToken';
 const REFRESH_TOKEN_KEY = 'refreshToken';
 const USER_KEY = 'user';
+const SHOW_IN_APP_TOASTS_KEY = 'showInAppToasts';
+const ANIMATE_GIFS_KEY = 'animateGifsAutomatically';
+const REDUCED_DATA_MODE_KEY = 'reducedDataMode';
 
 type StoredSessionState = {
   accessToken: string;
@@ -149,4 +152,34 @@ export async function clearStoredSessionState(): Promise<void> {
     removeValue(REFRESH_TOKEN_KEY),
     removeValue(USER_KEY)
   ]);
+}
+
+export async function loadStoredShowInAppToasts(): Promise<boolean> {
+  const raw = await readValue(SHOW_IN_APP_TOASTS_KEY);
+  if (raw === null) return true;
+  return raw === 'true';
+}
+
+export async function persistStoredShowInAppToasts(value: boolean): Promise<void> {
+  await writeValue(SHOW_IN_APP_TOASTS_KEY, value ? 'true' : 'false');
+}
+
+export async function loadStoredAnimateGifsAutomatically(): Promise<boolean> {
+  const raw = await readValue(ANIMATE_GIFS_KEY);
+  if (raw === null) return true;
+  return raw === 'true';
+}
+
+export async function persistStoredAnimateGifsAutomatically(value: boolean): Promise<void> {
+  await writeValue(ANIMATE_GIFS_KEY, value ? 'true' : 'false');
+}
+
+export async function loadStoredReducedDataMode(): Promise<boolean> {
+  const raw = await readValue(REDUCED_DATA_MODE_KEY);
+  if (raw === null) return false;
+  return raw === 'true';
+}
+
+export async function persistStoredReducedDataMode(value: boolean): Promise<void> {
+  await writeValue(REDUCED_DATA_MODE_KEY, value ? 'true' : 'false');
 }

@@ -7,7 +7,9 @@ const mockHttp = {
   },
   get: vi.fn(),
   post: vi.fn(),
-  patch: vi.fn()
+  patch: vi.fn(),
+  put: vi.fn(),
+  delete: vi.fn()
 };
 
 const mockAxiosPost = vi.fn();
@@ -17,6 +19,16 @@ vi.mock('axios', () => ({
     create: vi.fn(() => mockHttp),
     post: mockAxiosPost
   }
+}));
+
+vi.mock('@capacitor/core', () => ({
+  Capacitor: {
+    getPlatform: () => 'android'
+  }
+}));
+
+vi.mock('./notifications', () => ({
+  getCachedPushToken: vi.fn(() => 'push-token-1')
 }));
 
 const mockLoadStoredSessionState = vi.fn();
@@ -48,6 +60,8 @@ describe('http session hydration', () => {
     mockHttp.get.mockReset();
     mockHttp.post.mockReset();
     mockHttp.patch.mockReset();
+    mockHttp.put.mockReset();
+    mockHttp.delete.mockReset();
   });
 
   afterEach(() => {
@@ -96,9 +110,19 @@ describe('http session hydration', () => {
       accessToken: 'refreshed-access-token',
       refreshToken: 'rotated-refresh-token'
     });
-    expect(mockAxiosPost).toHaveBeenCalledWith('http://localhost:3000/api/v1/auth/refresh', {
-      refreshToken: 'stored-refresh-token'
-    });
+    expect(mockAxiosPost).toHaveBeenCalledWith(
+      'http://localhost:3000/api/v1/auth/refresh',
+      {
+        refreshToken: 'stored-refresh-token'
+      },
+      {
+        headers: {
+          'x-penthouse-app-context': 'android',
+          'x-penthouse-device-label': 'Android app',
+          'x-penthouse-push-present': '1'
+        }
+      }
+    );
     expect(mockPersistStoredTokens).toHaveBeenCalledWith('refreshed-access-token', 'rotated-refresh-token');
     expect(mockPersistStoredUser).toHaveBeenCalled();
   });
@@ -181,13 +205,23 @@ describe('http session hydration', () => {
     const mod = await import('./http');
     await mod.register('  AIMTEST ', 'supersecurepassword', ' penthouse-alpha ');
 
-    expect(mockHttp.post).toHaveBeenCalledWith('/api/v1/auth/register', {
-      username: 'aimtest',
-      password: 'supersecurepassword',
-      inviteCode: 'PENTHOUSE-ALPHA',
-      acceptTestNotice: true,
-      testNoticeVersion: 'alpha-v1'
-    });
+    expect(mockHttp.post).toHaveBeenCalledWith(
+      '/api/v1/auth/register',
+      {
+        username: 'aimtest',
+        password: 'supersecurepassword',
+        inviteCode: 'PENTHOUSE-ALPHA',
+        acceptTestNotice: true,
+        testNoticeVersion: 'alpha-v1'
+      },
+      {
+        headers: {
+          'x-penthouse-app-context': 'android',
+          'x-penthouse-device-label': 'Android app',
+          'x-penthouse-push-present': '1'
+        }
+      }
+    );
   });
 
   it('persists the updated user after acknowledging the test notice', async () => {

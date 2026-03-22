@@ -38,6 +38,7 @@ test('[media] extractKlipyResults supports current file-based response shape', (
   assert.equal(results[0].provider, 'klipy');
   assert.equal(results[0].url, 'https://cdn.klipy.test/gif-1.gif');
   assert.equal(results[0].previewUrl, 'https://cdn.klipy.test/gif-1-preview.gif');
+  assert.equal(results[0].renderMode, 'image');
   assert.equal(results[0].width, 200);
   assert.equal(results[0].height, 112);
 });
@@ -65,6 +66,7 @@ test('[media] extractKlipyResults supports Klipy v2 media_formats payloads', () 
   assert.equal(results.length, 1);
   assert.equal(results[0].url, 'https://cdn.klipy.test/v2-medium.gif');
   assert.equal(results[0].previewUrl, 'https://cdn.klipy.test/v2-preview.jpg');
+  assert.equal(results[0].renderMode, 'image');
   assert.equal(results[0].width, 320);
   assert.equal(results[0].height, 180);
 });

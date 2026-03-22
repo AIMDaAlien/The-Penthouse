@@ -18,7 +18,9 @@ import {
   LoginRequestSchema,
   RefreshRequestSchema,
   PasswordResetRequestSchema,
-  AuthResponseSchema
+  AuthResponseSchema,
+  RevokeOtherSessionsResponseSchema,
+  SessionSummarySchema
 } from '@penthouse/contracts';
 
 function validRegisterPayload() {
@@ -239,4 +241,22 @@ test('[schema] error shape: flatten() returns fieldErrors structure', () => {
   assert.ok('username' in flat.fieldErrors, 'username error present');
   assert.ok('password' in flat.fieldErrors, 'password error present');
   assert.ok('inviteCode' in flat.fieldErrors, 'inviteCode error present');
+});
+
+test('[schema] session summary accepts current-session device metadata', () => {
+  const result = SessionSummarySchema.safeParse({
+    id: '11111111-1111-1111-1111-111111111111',
+    createdAt: new Date().toISOString(),
+    lastUsedAt: new Date().toISOString(),
+    deviceLabel: 'Android app',
+    appContext: 'android',
+    hasPushToken: true,
+    current: true
+  });
+  assert.equal(result.success, true);
+});
+
+test('[schema] revoke other sessions response requires nonnegative count', () => {
+  const result = RevokeOtherSessionsResponseSchema.safeParse({ revokedCount: 2 });
+  assert.equal(result.success, true);
 });

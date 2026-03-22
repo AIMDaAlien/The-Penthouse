@@ -15,7 +15,11 @@ const EnvSchema = z.object({
   ADMIN_BOOTSTRAP_USERNAME: z.string().default(''),
   TEST_ACCOUNT_NOTICE_VERSION: z.string().default('alpha-v1'),
   GIPHY_API_KEY: z.string().default(''),
-  KLIPY_API_KEY: z.string().default('')
+  KLIPY_API_KEY: z.string().default(''),
+  FCM_SERVICE_ACCOUNT_PATH: z.string().default(''),
+  OPS_BUILD_ID: z.string().default(''),
+  OPS_DEPLOYED_AT: z.string().default(''),
+  BACKUP_STATUS_PATH: z.string().default('')
 });
 
 export const env = EnvSchema.parse(process.env);

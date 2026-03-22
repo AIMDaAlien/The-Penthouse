@@ -55,6 +55,11 @@ export function refreshExpiryDate(): Date {
   return expires;
 }
 
-export async function signAccessToken(app: FastifyInstance, userId: string, username: string): Promise<string> {
-  return app.jwt.sign({ userId, username }, { expiresIn: env.ACCESS_TOKEN_TTL });
+export async function signAccessToken(
+  app: FastifyInstance,
+  userId: string,
+  username: string,
+  sessionId: string
+): Promise<string> {
+  return app.jwt.sign({ userId, username, sessionId }, { expiresIn: env.ACCESS_TOKEN_TTL });
 }

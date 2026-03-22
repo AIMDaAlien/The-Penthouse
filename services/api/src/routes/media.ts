@@ -103,6 +103,7 @@ function extractGiphyResults(json: any): ReturnType<typeof GifSearchResponseSche
     id: String(gif.id),
     url: String(gif?.images?.original?.url || gif?.images?.downsized?.url || ''),
     previewUrl: String(gif?.images?.fixed_height_small?.url || gif?.images?.preview_gif?.url || gif?.images?.original?.url || ''),
+    renderMode: 'image' as const,
     title: typeof gif?.title === 'string' && gif.title.trim() ? gif.title : null,
     width: Number.parseInt(gif?.images?.original?.width ?? '', 10) || null,
     height: Number.parseInt(gif?.images?.original?.height ?? '', 10) || null,
@@ -165,11 +166,22 @@ function extractKlipyResults(json: any): ReturnType<typeof GifSearchResponseSche
       url;
     const dims = Array.isArray(selectedFormat?.dims) ? selectedFormat.dims : null;
     const previewDims = Array.isArray(previewFormat?.dims) ? previewFormat.dims : null;
+    const mimeType = String(
+      selectedFormat?.mime_type ||
+      selectedFormat?.mimeType ||
+      file?.mime_type ||
+      file?.mimeType ||
+      ''
+    ).toLowerCase();
+    const renderMode: 'image' | 'video' = mimeType.includes('video') || /\.(mp4|webm)(?:$|[?#])/i.test(String(url))
+      ? 'video'
+      : 'image';
 
     return {
       id: String(gif?.id || gif?.slug || randomUUID()),
       url: String(url),
       previewUrl: String(previewUrl),
+      renderMode,
       title: typeof gif?.title === 'string' && gif.title.trim() ? gif.title : null,
       width: Number.parseInt(String(
         gif?.width ||

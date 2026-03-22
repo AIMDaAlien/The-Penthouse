@@ -40,7 +40,16 @@
           class="gif-tile"
           @click="$emit('select', gif)"
         >
-          <img :src="gif.previewUrl" :alt="gif.title || `${gif.provider} gif`" loading="lazy" />
+          <video
+            v-if="rendersAnimatedVideoTile(gif)"
+            :src="gif.url"
+            :aria-label="gif.title || `${gif.provider} gif`"
+            autoplay
+            loop
+            muted
+            playsinline
+          ></video>
+          <img v-else :src="getTileImageUrl(gif)" :alt="gif.title || `${gif.provider} gif`" loading="lazy" />
         </button>
       </div>
     </div>
@@ -48,13 +57,18 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, ref, watch } from 'vue';
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type { GifProvider, GifResult } from '@penthouse/contracts';
 import { getTrendingGifs, searchGifs } from '../services/http';
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   visible: boolean;
-}>();
+  animateGifsAutomatically?: boolean;
+  reducedDataMode?: boolean;
+}>(), {
+  animateGifsAutomatically: true,
+  reducedDataMode: false
+});
 
 defineEmits<{
   (e: 'close'): void;
@@ -68,6 +82,21 @@ const results = ref<GifResult[]>([]);
 const loading = ref(false);
 const error = ref('');
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
+
+function allowsAnimatedTiles(): boolean {
+  return props.animateGifsAutomatically && !props.reducedDataMode;
+}
+
+function rendersAnimatedVideoTile(gif: GifResult): boolean {
+  return gif.renderMode === 'video' && allowsAnimatedTiles();
+}
+
+function getTileImageUrl(gif: GifResult): string {
+  if (allowsAnimatedTiles() && gif.renderMode !== 'video') {
+    return gif.url;
+  }
+  return gif.previewUrl;
+}
 
 async function loadTrending(): Promise<void> {
   loading.value = true;
@@ -117,6 +146,12 @@ watch(
 watch(activeProvider, () => {
   if (!props.visible) return;
   void runSearch();
+});
+
+onMounted(() => {
+  if (props.visible) {
+    void loadTrending();
+  }
 });
 
 watch(query, () => {
@@ -211,7 +246,8 @@ onBeforeUnmount(() => {
   min-height: 120px;
 }
 
-.gif-tile img {
+.gif-tile img,
+.gif-tile video {
   width: 100%;
   height: 100%;
   min-height: 120px;

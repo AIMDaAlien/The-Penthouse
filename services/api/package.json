@@ -7,8 +7,8 @@
     "start": "node dist/index.js",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test --test-concurrency=1 ./test/auth.test.ts ./test/chats.test.ts ./test/contracts-smoke.test.ts ./test/media.test.ts",
-    "test:integration": "tsx --test --test-concurrency=1 ./test/integration-auth.test.ts && tsx --test --test-concurrency=1 ./test/integration-chats.test.ts && tsx --test --test-concurrency=1 ./test/integration-realtime.test.ts",
+    "test": "tsx --test --test-concurrency=1 ./test/auth.test.ts ./test/chats.test.ts ./test/contracts-smoke.test.ts ./test/media.test.ts ./test/operator-diagnostics.test.ts ./test/push-contracts.test.ts",
+    "test:integration": "tsx --test --test-concurrency=1 ./test/integration-auth.test.ts && tsx --test --test-concurrency=1 ./test/integration-chats.test.ts && tsx --test --test-concurrency=1 ./test/integration-push.test.ts && tsx --test --test-concurrency=1 ./test/integration-realtime.test.ts",
     "migrate": "tsx src/db/migrate.ts"
   },
   "dependencies": {
@@ -20,6 +20,7 @@
     "bcryptjs": "^2.4.3",
     "dotenv": "^16.4.7",
     "fastify": "^5.2.1",
+    "firebase-admin": "^13.7.0",
     "pg": "^8.13.1",
     "socket.io": "^4.8.1",
     "zod": "^3.24.1"

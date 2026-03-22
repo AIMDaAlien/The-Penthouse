@@ -488,6 +488,9 @@ describe('[integration] admin user management', { skip: SKIP, concurrency: false
       assert.equal(summary.app.name, 'The Penthouse API');
       assert.equal(typeof summary.app.checkedAt, 'string');
       assert.equal(summary.app.databaseReachable, true);
+      assert.equal(typeof summary.app.startedAt, 'string');
+      assert.equal(typeof summary.app.uptimeSeconds, 'number');
+      assert.equal(typeof summary.app.version === 'string' || summary.app.version === null, true);
       assert.equal(typeof summary.members.total, 'number');
       assert.equal(typeof summary.members.active, 'number');
       assert.equal(typeof summary.content.chats, 'number');
@@ -506,6 +509,12 @@ describe('[integration] admin user management', { skip: SKIP, concurrency: false
       assert.equal(typeof summary.push.notificationsDisabled, 'number');
       assert.equal(typeof summary.push.quietHoursEnabled, 'number');
       assert.equal(typeof summary.push.previewsDisabled, 'number');
+      assert.equal(typeof summary.push.sinceStart.successfulSends, 'number');
+      assert.equal(typeof summary.push.sinceStart.failedSends, 'number');
+      assert.equal(typeof summary.push.sinceStart.staleTokensRemoved, 'number');
+      assert.equal(typeof summary.uploads.status, 'string');
+      assert.equal(Array.isArray(summary.errors.sinceStart.routeGroups), true);
+      assert.equal(typeof summary.backup.status, 'string');
 
       const memberSummaryRes = await app.inject({
         method: 'GET',

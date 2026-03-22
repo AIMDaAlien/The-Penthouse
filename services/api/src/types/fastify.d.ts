@@ -6,9 +6,11 @@ declare module '@fastify/jwt' {
     payload: {
       userId: string;
       username: string;
+      sessionId: string;
     };
     user: {
       userId: string;
+      sessionId: string | null;
       username: string;
       displayName: string;
       avatarUrl: string | null;

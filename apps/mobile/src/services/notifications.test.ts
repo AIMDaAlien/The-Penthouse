@@ -2,13 +2,25 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const scheduleMock = vi.fn(async () => undefined);
 const createChannelMock = vi.fn(async () => undefined);
-const removeAllListenersMock = vi.fn(async () => undefined);
-const addListenerMock = vi.fn(async () => ({ remove: vi.fn() }));
-const checkPermissionsMock = vi.fn(async () => ({ display: 'granted' as const }));
-const requestPermissionsMock = vi.fn(async () => ({ display: 'granted' as const }));
-const getDeliveredNotificationsMock = vi.fn(async () => ({ notifications: [] }));
-const removeDeliveredNotificationsMock = vi.fn(async () => undefined);
-const removeAllDeliveredNotificationsMock = vi.fn(async () => undefined);
+const removeAllLocalListenersMock = vi.fn(async () => undefined);
+const addLocalListenerMock = vi.fn(async () => ({ remove: vi.fn() }));
+const checkLocalPermissionsMock = vi.fn(async () => ({ display: 'granted' as const }));
+const requestLocalPermissionsMock = vi.fn(async () => ({ display: 'granted' as const }));
+const getLocalDeliveredNotificationsMock = vi.fn(async () => ({ notifications: [] }));
+const removeLocalDeliveredNotificationsMock = vi.fn(async () => undefined);
+const removeAllLocalDeliveredNotificationsMock = vi.fn(async () => undefined);
+
+const removeAllPushListenersMock = vi.fn(async () => undefined);
+const addPushListenerMock = vi.fn(async () => ({ remove: vi.fn() }));
+const checkPushPermissionsMock = vi.fn(async () => ({ receive: 'granted' as const }));
+const requestPushPermissionsMock = vi.fn(async () => ({ receive: 'granted' as const }));
+const getPushTokenMock = vi.fn(async () => ({ token: 'push-token-1' }));
+const deletePushTokenMock = vi.fn(async () => undefined);
+const getPushDeliveredNotificationsMock = vi.fn(async () => ({ notifications: [] }));
+const removePushDeliveredNotificationsMock = vi.fn(async () => undefined);
+const removeAllPushDeliveredNotificationsMock = vi.fn(async () => undefined);
+const localListeners: Record<string, Function> = {};
+const pushListeners: Record<string, Function> = {};
 
 vi.mock('@capacitor/core', () => ({
   Capacitor: {
@@ -20,48 +32,82 @@ vi.mock('@capacitor/local-notifications', () => ({
   LocalNotifications: {
     schedule: scheduleMock,
     createChannel: createChannelMock,
-    removeAllListeners: removeAllListenersMock,
-    addListener: addListenerMock,
-    checkPermissions: checkPermissionsMock,
-    requestPermissions: requestPermissionsMock,
-    getDeliveredNotifications: getDeliveredNotificationsMock,
-    removeDeliveredNotifications: removeDeliveredNotificationsMock,
-    removeAllDeliveredNotifications: removeAllDeliveredNotificationsMock
+    removeAllListeners: removeAllLocalListenersMock,
+    addListener: vi.fn(async (eventName: string, handler: Function) => {
+      localListeners[eventName] = handler;
+      return addLocalListenerMock();
+    }),
+    checkPermissions: checkLocalPermissionsMock,
+    requestPermissions: requestLocalPermissionsMock,
+    getDeliveredNotifications: getLocalDeliveredNotificationsMock,
+    removeDeliveredNotifications: removeLocalDeliveredNotificationsMock,
+    removeAllDeliveredNotifications: removeAllLocalDeliveredNotificationsMock
+  }
+}));
+
+vi.mock('@capacitor-firebase/messaging', () => ({
+  FirebaseMessaging: {
+    removeAllListeners: removeAllPushListenersMock,
+    addListener: vi.fn(async (eventName: string, handler: Function) => {
+      pushListeners[eventName] = handler;
+      return addPushListenerMock();
+    }),
+    checkPermissions: checkPushPermissionsMock,
+    requestPermissions: requestPushPermissionsMock,
+    getToken: getPushTokenMock,
+    deleteToken: deletePushTokenMock,
+    getDeliveredNotifications: getPushDeliveredNotificationsMock,
+    removeDeliveredNotifications: removePushDeliveredNotificationsMock,
+    removeAllDeliveredNotifications: removeAllPushDeliveredNotificationsMock
   }
 }));
 
 describe('notifications service', () => {
-  function scheduledBodyAt(index: number): string {
+  function scheduledNotificationAt(index: number): Record<string, unknown> {
     const call = scheduleMock.mock.calls[index] as any[] | undefined;
-    return (call?.[0] as { notifications: Array<{ body: string }> } | undefined)?.notifications[0]?.body ?? '';
+    return (call?.[0] as { notifications: Array<Record<string, unknown>> } | undefined)?.notifications[0] ?? {};
+  }
+
+  function scheduledBodyAt(index: number): string {
+    return String(scheduledNotificationAt(index).body ?? '');
   }
 
   function scheduledIdAt(index: number): number {
-    const call = scheduleMock.mock.calls[index] as any[] | undefined;
-    return (call?.[0] as { notifications: Array<{ id: number }> } | undefined)?.notifications[0]?.id ?? 0;
+    return Number(scheduledNotificationAt(index).id ?? 0);
   }
 
   beforeEach(() => {
     vi.resetModules();
     scheduleMock.mockClear();
     createChannelMock.mockClear();
-    removeAllListenersMock.mockClear();
-    addListenerMock.mockClear();
-    checkPermissionsMock.mockClear();
-    requestPermissionsMock.mockClear();
-    getDeliveredNotificationsMock.mockClear();
-    removeDeliveredNotificationsMock.mockClear();
-    removeAllDeliveredNotificationsMock.mockClear();
+    removeAllLocalListenersMock.mockClear();
+    addLocalListenerMock.mockClear();
+    checkLocalPermissionsMock.mockClear();
+    requestLocalPermissionsMock.mockClear();
+    getLocalDeliveredNotificationsMock.mockClear();
+    removeLocalDeliveredNotificationsMock.mockClear();
+    removeAllLocalDeliveredNotificationsMock.mockClear();
+    removeAllPushListenersMock.mockClear();
+    addPushListenerMock.mockClear();
+    checkPushPermissionsMock.mockClear();
+    requestPushPermissionsMock.mockClear();
+    getPushTokenMock.mockClear();
+    deletePushTokenMock.mockClear();
+    getPushDeliveredNotificationsMock.mockClear();
+    removePushDeliveredNotificationsMock.mockClear();
+    removeAllPushDeliveredNotificationsMock.mockClear();
+    Object.keys(localListeners).forEach((key) => delete localListeners[key]);
+    Object.keys(pushListeners).forEach((key) => delete pushListeners[key]);
   });
 
-  it('schedules notifications for text, image, gif, and file messages', async () => {
+  it('fires immediate local notifications for text, image, gif, and file messages', async () => {
     const notifications = await import('./notifications');
 
     const cases = [
-      { type: 'text', content: 'hello there', expectedBody: 'hello there' },
-      { type: 'image', content: 'photo.png', expectedBody: 'Sent an image' },
-      { type: 'gif', content: 'party gif', expectedBody: 'Sent a GIF' },
-      { type: 'file', content: 'notes.txt', expectedBody: 'Sent an attachment' }
+      { type: 'text', content: 'hello there' },
+      { type: 'image', content: 'photo.png' },
+      { type: 'gif', content: 'party gif' },
+      { type: 'file', content: 'notes.txt' }
     ] as const;
 
     for (const [index, entry] of cases.entries()) {
@@ -85,6 +131,7 @@ describe('notifications service', () => {
     expect(scheduledBodyAt(1)).toBe('Sent an image');
     expect(scheduledBodyAt(2)).toBe('Sent a GIF');
     expect(scheduledBodyAt(3)).toBe('Sent an attachment');
+    expect(scheduledNotificationAt(0)).not.toHaveProperty('schedule');
   });
 
   it('does not drop rapid same-chat notifications for different messages', async () => {
@@ -143,5 +190,62 @@ describe('notifications service', () => {
     await notifications.scheduleIncomingMessageNotification(message, 'Repeat');
 
     expect(scheduleMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('wires push token, push tap, and foreground push callbacks', async () => {
+    const notifications = await import('./notifications');
+    const onOpenChat = vi.fn();
+    const onForegroundPush = vi.fn();
+    const onTokenReceived = vi.fn();
+
+    await notifications.initializeNotifications(onOpenChat, onForegroundPush, onTokenReceived);
+
+    expect(pushListeners.notificationActionPerformed).toBeTypeOf('function');
+    expect(pushListeners.notificationReceived).toBeTypeOf('function');
+    expect(pushListeners.tokenReceived).toBeTypeOf('function');
+
+    pushListeners.notificationActionPerformed({
+      notification: {
+        data: { chatId: 'chat-9', messageId: 'msg-9', senderId: 'user-9' }
+      }
+    });
+
+    expect(onOpenChat).toHaveBeenCalledWith('chat-9');
+
+    pushListeners.notificationReceived({
+      notification: {
+        title: 'Other User',
+        body: 'hello from push',
+        data: { chatId: 'chat-9', messageId: 'msg-9', senderId: 'user-9', type: 'message.new' }
+      }
+    });
+
+    expect(onForegroundPush).toHaveBeenCalledWith(expect.objectContaining({
+      chatId: 'chat-9',
+      messageId: 'msg-9',
+      senderId: 'user-9',
+      title: 'Other User',
+      body: 'hello from push',
+      type: 'message.new'
+    }));
+
+    const initialToken = await notifications.getPushToken();
+    expect(initialToken).toBe('push-token-1');
+
+    pushListeners.tokenReceived({ token: 'push-token-refresh' });
+    expect(onTokenReceived).toHaveBeenCalledWith('push-token-refresh', 'push-token-1');
+  });
+
+  it('gets and deletes the current push token', async () => {
+    const notifications = await import('./notifications');
+
+    await notifications.ensurePushPermission();
+    const token = await notifications.getPushToken();
+    expect(token).toBe('push-token-1');
+    expect(notifications.getCachedPushToken()).toBe('push-token-1');
+
+    await notifications.deletePushToken();
+    expect(deletePushTokenMock).toHaveBeenCalledTimes(1);
+    expect(notifications.getCachedPushToken()).toBeNull();
   });
 });

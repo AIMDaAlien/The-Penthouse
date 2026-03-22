@@ -16,6 +16,7 @@ import { registerObservability } from './observability.js';
 import { pool } from './db/pool.js';
 import { getUserById, mapAuthUser } from './utils/users.js';
 import { ensureUploadsDirReady } from './utils/uploads.js';
+import { recordServerError } from './utils/operatorDiagnostics.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -37,6 +38,13 @@ export async function createApp() {
     return reply.status(500).send({ error: 'Internal server error' });
   });
 
+  app.addHook('onResponse', async (request, reply) => {
+    if (reply.statusCode >= 500) {
+      const routeUrl = request.routeOptions.url || request.raw.url;
+      recordServerError(typeof routeUrl === 'string' ? routeUrl : undefined);
+    }
+  });
+
   await app.register(cors, {
     origin: env.CORS_ORIGIN.split(',').map((s) => s.trim()),
     credentials: true
@@ -53,7 +61,7 @@ export async function createApp() {
       return reply.status(401).send({ error: 'Unauthorized' });
     }
 
-    const tokenUser = request.user as { userId: string; username: string };
+    const tokenUser = request.user as { userId: string; username: string; sessionId?: string };
     const user = await getUserById(pool, tokenUser.userId);
     if (!user) {
       return reply.status(401).send({ error: 'Invalid user session' });
@@ -66,6 +74,7 @@ export async function createApp() {
     request.user = {
       ...authUser,
       userId: user.id,
+      sessionId: typeof tokenUser.sessionId === 'string' && tokenUser.sessionId ? tokenUser.sessionId : null,
       status: user.status
     } as any;
   });
