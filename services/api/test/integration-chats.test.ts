@@ -260,6 +260,281 @@ describe('[integration] shared General channel', { skip: SKIP }, () => {
   });
 });
 
+describe('[integration] direct messages', { skip: SKIP }, () => {
+  let app: any;
+  let roomJoins: Array<{ sourceRoom: string; targetRoom: string }>;
+
+  before(async () => {
+    process.env.JWT_SECRET ??= 'integration-test-jwt-secret-long-enough';
+    const helpers = await import('./helpers.js');
+    await helpers.migrate();
+    await helpers.cleanup();
+    const result = await helpers.buildTestApp();
+    app = result.app;
+    roomJoins = result.roomJoins;
+  });
+
+  after(async () => {
+    await app?.close();
+    const helpers = await import('./helpers.js');
+    await helpers.cleanup();
+  });
+
+  test('creates one DM per pair and resolves counterpart summary fields per viewer', async () => {
+    const { registerUser, authHeaders } = await import('./helpers.js');
+    const alice = await registerUser(app, 'dm_alice');
+    const bob = await registerUser(app, 'dm_bob');
+
+    const first = await app.inject({
+      method: 'POST',
+      url: '/api/v1/chats/dm',
+      headers: authHeaders(alice.accessToken),
+      payload: { memberId: bob.user.id }
+    });
+    assert.equal(first.statusCode, 200);
+    const firstBody = JSON.parse(first.payload);
+    assert.equal(firstBody.type, 'dm');
+    assert.equal(firstBody.name, 'dm_bob');
+    assert.equal(firstBody.counterpartMemberId, bob.user.id);
+    assert.equal(firstBody.counterpartAvatarUrl, null);
+    assert.equal(firstBody.notificationsMuted, false);
+
+    const second = await app.inject({
+      method: 'POST',
+      url: '/api/v1/chats/dm',
+      headers: authHeaders(alice.accessToken),
+      payload: { memberId: bob.user.id }
+    });
+    assert.equal(second.statusCode, 200);
+    const secondBody = JSON.parse(second.payload);
+    assert.equal(secondBody.id, firstBody.id);
+
+    const bobChats = await app.inject({
+      method: 'GET',
+      url: '/api/v1/chats',
+      headers: authHeaders(bob.accessToken)
+    });
+    assert.equal(bobChats.statusCode, 200);
+    const bobDm = JSON.parse(bobChats.payload).find((chat: any) => chat.id === firstBody.id);
+    assert.ok(bobDm);
+    assert.equal(bobDm.name, 'dm_alice');
+    assert.equal(bobDm.counterpartMemberId, alice.user.id);
+    assert.equal(bobDm.notificationsMuted, false);
+  });
+
+  test('joins both participants current sockets to the DM room when a new thread is created', async () => {
+    const { registerUser, authHeaders } = await import('./helpers.js');
+    const alice = await registerUser(app, 'dm_join_alice');
+    const bob = await registerUser(app, 'dm_join_bob');
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/v1/chats/dm',
+      headers: authHeaders(alice.accessToken),
+      payload: { memberId: bob.user.id }
+    });
+    assert.equal(created.statusCode, 200);
+
+    const chatId = JSON.parse(created.payload).id as string;
+    const targetRoom = `chat:${chatId}`;
+
+    assert.ok(
+      roomJoins.some((join) => join.sourceRoom === `user:${alice.user.id}` && join.targetRoom === targetRoom),
+      'creator sockets should join the new DM room immediately'
+    );
+    assert.ok(
+      roomJoins.some((join) => join.sourceRoom === `user:${bob.user.id}` && join.targetRoom === targetRoom),
+      'counterpart sockets should join the new DM room immediately'
+    );
+  });
+
+  test('rejects self DMs and inactive targets', async () => {
+    const { registerUser, authHeaders, pool } = await import('./helpers.js');
+    const alice = await registerUser(app, 'dm_self_alice');
+    const removed = await registerUser(app, 'dm_removed_target');
+    const banned = await registerUser(app, 'dm_banned_target');
+
+    await pool.query(`UPDATE users SET status = 'removed' WHERE id = $1`, [removed.user.id]);
+    await pool.query(`UPDATE users SET status = 'banned' WHERE id = $1`, [banned.user.id]);
+
+    const selfRes = await app.inject({
+      method: 'POST',
+      url: '/api/v1/chats/dm',
+      headers: authHeaders(alice.accessToken),
+      payload: { memberId: alice.user.id }
+    });
+    assert.equal(selfRes.statusCode, 409);
+
+    const removedRes = await app.inject({
+      method: 'POST',
+      url: '/api/v1/chats/dm',
+      headers: authHeaders(alice.accessToken),
+      payload: { memberId: removed.user.id }
+    });
+    assert.equal(removedRes.statusCode, 409);
+
+    const bannedRes = await app.inject({
+      method: 'POST',
+      url: '/api/v1/chats/dm',
+      headers: authHeaders(alice.accessToken),
+      payload: { memberId: banned.user.id }
+    });
+    assert.equal(bannedRes.statusCode, 409);
+
+    const malformedRes = await app.inject({
+      method: 'POST',
+      url: '/api/v1/chats/dm',
+      headers: authHeaders(alice.accessToken),
+      payload: { memberId: 'not-a-uuid' }
+    });
+    assert.equal(malformedRes.statusCode, 400);
+  });
+
+  test('patching DM preferences only updates the caller membership row', async () => {
+    const { registerUser, authHeaders, pool } = await import('./helpers.js');
+    const alice = await registerUser(app, 'dm_pref_alice');
+    const bob = await registerUser(app, 'dm_pref_bob');
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/v1/chats/dm',
+      headers: authHeaders(alice.accessToken),
+      payload: { memberId: bob.user.id }
+    });
+    const chatId = JSON.parse(created.payload).id as string;
+
+    const patched = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/chats/${chatId}/preferences`,
+      headers: authHeaders(alice.accessToken),
+      payload: { notificationsMuted: true }
+    });
+    assert.equal(patched.statusCode, 200);
+    assert.deepEqual(JSON.parse(patched.payload), {
+      chatId,
+      notificationsMuted: true
+    });
+
+    const rows = await pool.query(
+      `SELECT user_id, notifications_muted
+       FROM chat_members
+       WHERE chat_id = $1
+       ORDER BY user_id`,
+      [chatId]
+    );
+    assert.equal(rows.rowCount, 2);
+    const membershipByUser = Object.fromEntries(rows.rows.map((row) => [row.user_id, row.notifications_muted]));
+    assert.equal(membershipByUser[alice.user.id], true);
+    assert.equal(membershipByUser[bob.user.id], false);
+
+    const [aliceChats, bobChats] = await Promise.all([
+      app.inject({ method: 'GET', url: '/api/v1/chats', headers: authHeaders(alice.accessToken) }),
+      app.inject({ method: 'GET', url: '/api/v1/chats', headers: authHeaders(bob.accessToken) })
+    ]);
+    const aliceDm = JSON.parse(aliceChats.payload).find((chat: any) => chat.id === chatId);
+    const bobDm = JSON.parse(bobChats.payload).find((chat: any) => chat.id === chatId);
+    assert.equal(aliceDm.notificationsMuted, true);
+    assert.equal(bobDm.notificationsMuted, false);
+  });
+
+  test('muted DMs still update unread counts for the muted recipient', async () => {
+    const { registerUser, authHeaders } = await import('./helpers.js');
+    const alice = await registerUser(app, 'dm_unread_alice');
+    const bob = await registerUser(app, 'dm_unread_bob');
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/v1/chats/dm',
+      headers: authHeaders(alice.accessToken),
+      payload: { memberId: bob.user.id }
+    });
+    const chatId = JSON.parse(created.payload).id as string;
+
+    const muted = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/chats/${chatId}/preferences`,
+      headers: authHeaders(bob.accessToken),
+      payload: { notificationsMuted: true }
+    });
+    assert.equal(muted.statusCode, 200);
+
+    const send = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${chatId}/messages`,
+      headers: authHeaders(alice.accessToken),
+      payload: {
+        content: 'muted but unread',
+        clientMessageId: 'dm-muted-unread-001'
+      }
+    });
+    assert.equal(send.statusCode, 200);
+
+    const bobChats = await app.inject({
+      method: 'GET',
+      url: '/api/v1/chats',
+      headers: authHeaders(bob.accessToken)
+    });
+    const bobDm = JSON.parse(bobChats.payload).find((chat: any) => chat.id === chatId);
+    assert.ok(bobDm);
+    assert.equal(bobDm.unreadCount, 1);
+    assert.equal(bobDm.notificationsMuted, true);
+  });
+
+  test('DMs become read-only after the counterpart is removed', async () => {
+    const { registerUser, authHeaders, pool } = await import('./helpers.js');
+    const admin = await registerUser(app, 'dm_admin_remove');
+    await pool.query(`UPDATE users SET role = 'admin' WHERE id = $1`, [admin.user.id]);
+    const alice = await registerUser(app, 'dm_readonly_alice');
+    const bob = await registerUser(app, 'dm_readonly_bob');
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/v1/chats/dm',
+      headers: authHeaders(alice.accessToken),
+      payload: { memberId: bob.user.id }
+    });
+    const chatId = JSON.parse(created.payload).id as string;
+
+    const initialSend = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${chatId}/messages`,
+      headers: authHeaders(alice.accessToken),
+      payload: {
+        content: 'before removal',
+        clientMessageId: 'dm-readonly-initial-001'
+      }
+    });
+    assert.equal(initialSend.statusCode, 200);
+
+    const removed = await app.inject({
+      method: 'POST',
+      url: `/api/v1/admin/members/${bob.user.id}/remove`,
+      headers: authHeaders(admin.accessToken)
+    });
+    assert.equal(removed.statusCode, 204);
+
+    const readMessages = await app.inject({
+      method: 'GET',
+      url: `/api/v1/chats/${chatId}/messages`,
+      headers: authHeaders(alice.accessToken)
+    });
+    assert.equal(readMessages.statusCode, 200);
+    const messageRows = JSON.parse(readMessages.payload);
+    assert.ok(messageRows.find((message: any) => message.content === 'before removal'));
+
+    const blockedSend = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${chatId}/messages`,
+      headers: authHeaders(alice.accessToken),
+      payload: {
+        content: 'after removal',
+        clientMessageId: 'dm-readonly-blocked-001'
+      }
+    });
+    assert.equal(blockedSend.statusCode, 409);
+  });
+});
+
 describe('[integration] message idempotency', { skip: SKIP }, () => {
   let app: any;
   let emitted: any[];

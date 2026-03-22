@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { MessageMetadataSchema, MessageTypeSchema } from './api.js';
+import { MessageMetadataSchema, MessageSchema, MessageTypeSchema, ModerationActionSchema } from './api.js';
 
 export const ClientJoinChatEventSchema = z.object({
   type: z.literal('chat.join'),
@@ -32,19 +32,17 @@ export const ClientMessageSendEventSchema = z.object({
 
 export const ServerMessageNewEventSchema = z.object({
   type: z.literal('message.new'),
+  payload: MessageSchema
+});
+
+export const ServerMessageModeratedEventSchema = z.object({
+  type: z.literal('message.moderated'),
   payload: z.object({
-    id: z.string(),
     chatId: z.string(),
-    senderId: z.string(),
-    senderUsername: z.string().optional(),
-    senderDisplayName: z.string().optional(),
-    senderAvatarUrl: z.string().nullable().optional(),
-    content: z.string(),
-    type: MessageTypeSchema.default('text'),
-    metadata: MessageMetadataSchema.nullable().optional(),
-    createdAt: z.string(),
-    clientMessageId: z.string().optional(),
-    seenAt: z.string().nullable().optional()
+    messageId: z.string(),
+    action: ModerationActionSchema,
+    moderatedAt: z.string(),
+    message: MessageSchema
   })
 });
 
@@ -74,7 +72,7 @@ export const ServerTypingUpdateEventSchema = z.object({
     chatId: z.string(),
     userId: z.string(),
     status: z.enum(['start', 'stop']),
-    displayName: z.string().optional(),
+    displayName: z.string().nullable().optional(),
     avatarUrl: z.string().nullable().optional()
   })
 });

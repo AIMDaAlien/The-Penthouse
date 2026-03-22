@@ -13,11 +13,19 @@
         </div>
         <h2 class="display-name">{{ member.displayName || member.username }}</h2>
         <div class="username small">@{{ member.username }}</div>
-        <div class="presence-pill" :class="presenceStatus">{{ presenceText }}</div>
+        <div class="presence-badge" :class="presenceStatus ?? 'offline'">
+          {{ presenceStatus === 'online' ? 'Online' : 'Offline' }}
+        </div>
         
         <div class="bio-section" v-if="member.bio">
           <h4>Bio</h4>
           <p>{{ member.bio }}</p>
+        </div>
+
+        <div v-if="member.id !== currentUserId" class="profile-actions">
+          <button type="button" class="form-btn profile-action-btn" @click="$emit('message', member)">
+            Message
+          </button>
         </div>
       </div>
     </div>
@@ -25,18 +33,19 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch, onMounted } from 'vue';
+import { ref, watch, onMounted } from 'vue';
 import { getMember } from '../services/http';
 import type { MemberDetail } from '@penthouse/contracts';
-import type { PresenceStatus } from '../types';
 
 const props = defineProps<{
   memberId: string;
-  presenceByUserId?: Record<string, PresenceStatus>;
+  currentUserId?: string;
+  presenceStatus?: import('../types').PresenceStatus;
 }>();
 
 defineEmits<{
   (e: 'close'): void;
+  (e: 'message', member: MemberDetail): void;
 }>();
 
 const member = ref<MemberDetail | null>(null);
@@ -57,9 +66,6 @@ async function loadProfile() {
 
 onMounted(loadProfile);
 watch(() => props.memberId, loadProfile);
-
-const presenceStatus = computed<PresenceStatus>(() => props.presenceByUserId?.[props.memberId] ?? 'offline');
-const presenceText = computed(() => (presenceStatus.value === 'online' ? 'Online now' : 'Offline'));
 </script>
 
 <style scoped>
@@ -143,24 +149,6 @@ const presenceText = computed(() => (presenceStatus.value === 'online' ? 'Online
   margin-bottom: 12px;
 }
 
-.presence-pill {
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 0.78rem;
-  font-weight: 600;
-  margin-bottom: 24px;
-}
-
-.presence-pill.online {
-  background: rgba(126, 241, 168, 0.14);
-  color: var(--ok);
-}
-
-.presence-pill.offline {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.65);
-}
-
 .bio-section {
   width: 100%;
   text-align: left;
@@ -177,5 +165,47 @@ const presenceText = computed(() => (presenceStatus.value === 'online' ? 'Online
 .bio-section p {
   margin: 0;
   line-height: 1.5;
+}
+
+.profile-actions {
+  width: 100%;
+  margin-top: 20px;
+}
+
+.profile-action-btn {
+  width: 100%;
+}
+
+.presence-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-top: 8px;
+}
+
+.presence-badge::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.presence-badge.online {
+  background: rgba(154, 240, 185, 0.12);
+  color: var(--ok);
+}
+
+.presence-badge.online::before {
+  background: var(--ok);
+}
+
+.presence-badge.offline {
+  background: rgba(164, 171, 201, 0.12);
+  color: var(--muted);
 }
 </style>

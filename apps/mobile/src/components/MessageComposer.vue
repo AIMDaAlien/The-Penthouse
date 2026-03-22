@@ -4,7 +4,7 @@
       ref="textareaRef"
       :value="draft"
       rows="2"
-      placeholder="Type a message..."
+      :placeholder="placeholderText"
       :disabled="disabled"
       enterkeyhint="send"
       @input="handleInput"
@@ -48,6 +48,8 @@
 
   <GifPicker
     :visible="showGifPicker"
+    :animate-gifs-automatically="props.animateGifsAutomatically"
+    :reduced-data-mode="props.reducedDataMode"
     @close="showGifPicker = false"
     @select="handleGifSelect"
   />
@@ -58,10 +60,17 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import type { GifResult } from '@penthouse/contracts';
 import GifPicker from './GifPicker.vue';
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   chatId?: string;
   disabled: boolean;
-}>();
+  placeholder?: string;
+  animateGifsAutomatically?: boolean;
+  reducedDataMode?: boolean;
+}>(), {
+  placeholder: 'Type a message...',
+  animateGifsAutomatically: true,
+  reducedDataMode: false
+});
 
 const emit = defineEmits<{
   (e: 'send', content: string): void;
@@ -82,6 +91,7 @@ const TYPING_REFRESH_MS = 2000;
 let typingStopTimer: ReturnType<typeof setTimeout> | null = null;
 let lastTypingEmitAt = 0;
 const canSend = computed(() => draft.value.trim().length > 0);
+const placeholderText = computed(() => props.placeholder || 'Type a message...');
 
 function clearTypingStopTimer() {
   if (!typingStopTimer) return;

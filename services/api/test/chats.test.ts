@@ -8,6 +8,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  ChatPreferencesRequestSchema,
+  ChatPreferencesResponseSchema,
+  CreateDirectChatRequestSchema,
   SendMessageRequestSchema,
   SendMessageResponseSchema,
   ChatSummarySchema,
@@ -128,7 +131,11 @@ test('[schema] ChatSummary: accepts valid dm type', () => {
     id: 'chat-uuid',
     type: 'dm',
     name: 'Alice & Bob',
-    updatedAt: new Date().toISOString()
+    updatedAt: new Date().toISOString(),
+    unreadCount: 0,
+    counterpartMemberId: 'user-uuid-2',
+    counterpartAvatarUrl: null,
+    notificationsMuted: false
   });
   assert.equal(result.success, true, 'dm type is valid');
 });
@@ -138,7 +145,8 @@ test('[schema] ChatSummary: accepts valid channel type', () => {
     id: 'chat-uuid',
     type: 'channel',
     name: 'General',
-    updatedAt: new Date().toISOString()
+    updatedAt: new Date().toISOString(),
+    unreadCount: 0
   });
   assert.equal(result.success, true, 'channel type is valid');
 });
@@ -153,6 +161,27 @@ test('[schema] ChatSummary: rejects invalid type (unauthorized cross-type access
     updatedAt: new Date().toISOString()
   });
   assert.equal(result.success, false, 'only dm and channel types are permitted');
+});
+
+test('[schema] create direct chat request accepts memberId', () => {
+  const result = CreateDirectChatRequestSchema.safeParse({ memberId: '11111111-1111-1111-1111-111111111111' });
+  assert.equal(result.success, true);
+});
+
+test('[schema] create direct chat request rejects malformed memberId', () => {
+  const result = CreateDirectChatRequestSchema.safeParse({ memberId: 'not-a-uuid' });
+  assert.equal(result.success, false);
+});
+
+test('[schema] chat preferences request requires notificationsMuted', () => {
+  const bad = ChatPreferencesRequestSchema.safeParse({});
+  assert.equal(bad.success, false);
+
+  const good = ChatPreferencesResponseSchema.safeParse({
+    chatId: 'chat-uuid-1234',
+    notificationsMuted: true
+  });
+  assert.equal(good.success, true);
 });
 
 // ─── realtime socket message send contract ─────────────────────────────────

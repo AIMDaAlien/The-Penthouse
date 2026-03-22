@@ -37,8 +37,10 @@
           </template>
         </div>
 
+        <div v-if="m.hidden" class="msg-content tombstone">{{ m.content }}</div>
+
         <button
-          v-if="rendersInlineImage(m)"
+          v-else-if="rendersInlineImage(m)"
           type="button"
           class="media-tile"
           :style="getMediaStyle(m)"
@@ -49,7 +51,7 @@
             :class="{ 'gif-image': getMessageType(m) === 'gif' }"
             :src="getInlineMediaUrl(m)"
             :alt="getAttachmentLabel(m)"
-            :loading="getInlineLoading(m)"
+            :loading="getInlineLoading()"
           />
         </button>
 
@@ -83,15 +85,6 @@
       </div>
     </div>
 
-    <div v-if="typingMembers.length > 0" class="typing-indicator">
-      <div class="typing-dots" aria-hidden="true">
-        <span></span>
-        <span></span>
-        <span></span>
-      </div>
-      <span class="small">{{ typingText }}</span>
-    </div>
-
     <div v-if="viewer" class="media-viewer" @click.self="closeViewer">
       <div class="viewer-chrome">
         <button type="button" class="viewer-btn" @click="zoomOut">-</button>
@@ -120,6 +113,9 @@
       </div>
     </div>
   </div>
+  <div v-if="typingLabel" class="typing-indicator">
+    {{ typingLabel }}
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -128,14 +124,19 @@ import type { Message, MessageType } from '@penthouse/contracts';
 import type { TypingParticipant } from '../types';
 import { resolveMediaUrl } from '../services/http';
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   messages: Message[];
   currentUserId: string;
   queuedIds?: string[];
   failedIds?: string[];
   latencyByClientMessageId?: Record<string, number>;
   typingMembers?: TypingParticipant[];
-}>();
+  animateGifsAutomatically?: boolean;
+  reducedDataMode?: boolean;
+}>(), {
+  animateGifsAutomatically: true,
+  reducedDataMode: false
+});
 
 const emit = defineEmits<{
   (e: 'retry', clientMessageId: string): void;
@@ -146,13 +147,16 @@ const scrollRef = ref<HTMLElement | null>(null);
 const viewer = ref<{ url: string; label: string; scale: number; kind: 'image' | 'video' } | null>(null);
 
 const sortedMessages = computed(() => [...props.messages].reverse());
-const typingMembers = computed(() => props.typingMembers ?? []);
+const MOBILE_DIAGNOSTICS_ENABLED = import.meta.env.DEV;
 
-const typingText = computed(() => {
-  const labels = typingMembers.value.map((member) => member.displayName || 'Someone');
-  if (labels.length === 1) return `${labels[0]} is typing...`;
-  if (labels.length === 2) return `${labels[0]} and ${labels[1]} are typing...`;
-  return `${labels.length} people are typing...`;
+const typingLabel = computed(() => {
+  const names = (props.typingMembers ?? [])
+    .filter(m => m.userId !== props.currentUserId)
+    .map(m => m.displayName || 'Someone');
+  if (names.length === 0) return '';
+  if (names.length === 1) return `${names[0]} is typing...`;
+  if (names.length === 2) return `${names[0]} and ${names[1]} are typing...`;
+  return `${names[0]} and ${names.length - 1} others are typing...`;
 });
 
 watch(
@@ -217,6 +221,24 @@ function getGifProvider(m: Message): string | null {
   return typeof metadata?.provider === 'string' ? metadata.provider : null;
 }
 
+function getGifRenderMode(m: Message): 'image' | 'video' {
+  const metadata = getMetadataRecord(m);
+  if (metadata?.renderMode === 'video') {
+    return 'video';
+  }
+
+  if (metadata?.renderMode === 'image') {
+    return 'image';
+  }
+
+  const attachmentUrl = getAttachmentUrl(m);
+  return isVideoAsset(attachmentUrl) ? 'video' : 'image';
+}
+
+function shouldAnimateInlineGif(m: Message): boolean {
+  return getMessageType(m) === 'gif' && props.animateGifsAutomatically && !props.reducedDataMode;
+}
+
 function isVideoAsset(url: string): boolean {
   return /\.(mp4|webm)(?:$|[?#])/i.test(url);
 }
@@ -224,28 +246,35 @@ function isVideoAsset(url: string): boolean {
 function rendersInlineImage(m: Message): boolean {
   if (getMessageType(m) === 'image') return true;
   if (getMessageType(m) !== 'gif') return false;
-  return !isVideoAsset(getInlineMediaUrl(m));
+  if (!shouldAnimateInlineGif(m)) return true;
+  return getGifRenderMode(m) !== 'video';
 }
 
 function rendersInlineVideo(m: Message): boolean {
   if (getMessageType(m) === 'video') return true;
-  return getMessageType(m) === 'gif' && isVideoAsset(getInlineMediaUrl(m));
+  if (getMessageType(m) !== 'gif') return false;
+  if (!shouldAnimateInlineGif(m)) return false;
+  return getGifRenderMode(m) === 'video';
 }
 
 function getInlineMediaUrl(m: Message): string {
-  if (getMessageType(m) === 'gif' && getGifProvider(m) === 'klipy') {
-    return getAttachmentUrl(m) || getPreviewUrl(m);
-  }
-
   if (getMessageType(m) === 'video') {
     return getAttachmentUrl(m);
+  }
+
+  if (getMessageType(m) === 'gif') {
+    if (shouldAnimateInlineGif(m)) {
+      return getAttachmentUrl(m) || getPreviewUrl(m);
+    }
+
+    return getPreviewUrl(m) || getAttachmentUrl(m);
   }
 
   return getPreviewUrl(m);
 }
 
-function getInlineLoading(m: Message): 'eager' | 'lazy' {
-  return getMessageType(m) === 'gif' && getGifProvider(m) === 'klipy' ? 'eager' : 'lazy';
+function getInlineLoading(): 'eager' | 'lazy' {
+  return 'lazy';
 }
 
 function getAttachmentLabel(m: Message): string {
@@ -352,7 +381,7 @@ function openViewer(m: Message): void {
     url,
     label: getAttachmentLabel(m),
     scale: 1,
-    kind: isVideoAsset(url) ? 'video' : 'image'
+    kind: getMessageType(m) === 'gif' ? getGifRenderMode(m) : (isVideoAsset(url) ? 'video' : 'image')
   };
 }
 
@@ -426,59 +455,8 @@ onUnmounted(() => {
   opacity: 0.6;
 }
 
-.typing-indicator {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  position: sticky;
-  bottom: 0;
-  z-index: 2;
-  width: fit-content;
-  margin-top: auto;
-  margin-left: 4px;
-  padding: 8px 12px;
-  border-radius: 999px;
-  background: rgba(15, 18, 34, 0.5);
-  backdrop-filter: blur(10px);
-  opacity: 0.5;
-  pointer-events: none;
-}
-
-.typing-dots {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.typing-dots span {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent);
-  animation: typing-bounce 1s infinite ease-in-out;
-}
-
-.typing-dots span:nth-child(2) {
-  animation-delay: 0.15s;
-}
-
-.typing-dots span:nth-child(3) {
-  animation-delay: 0.3s;
-}
-
-@keyframes typing-bounce {
-  0%, 80%, 100% {
-    transform: translateY(0);
-    opacity: 0.45;
-  }
-  40% {
-    transform: translateY(-3px);
-    opacity: 1;
-  }
-}
-
 .msg-bubble {
-  max-width: min(85%, 320px);
+  max-width: min(88%, 28rem);
   min-width: 0;
   padding: 10px 14px;
   border-radius: 16px;
@@ -489,7 +467,7 @@ onUnmounted(() => {
 
 .msg-bubble.media-bubble {
   padding: 4px;
-  max-width: min(85%, 372px);
+  max-width: min(92%, 32rem);
 }
 
 .msg-bubble.sent {
@@ -531,6 +509,11 @@ onUnmounted(() => {
 .msg-content {
   line-height: 1.4;
   white-space: pre-wrap;
+}
+
+.msg-content.tombstone {
+  font-style: italic;
+  color: var(--muted);
 }
 
 .media-block {
@@ -669,6 +652,14 @@ onUnmounted(() => {
 .viewer-video {
   width: min(100%, 960px);
   height: auto;
+}
+
+.typing-indicator {
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  color: var(--accent);
+  opacity: 0.7;
+  flex-shrink: 0;
 }
 
 .messages-container::-webkit-scrollbar {

@@ -160,7 +160,7 @@ describe('MessageList.vue Delivery States', () => {
     expect(wrapper.find('.status-indicator.seen').text()).toContain('✓✓');
   });
 
-  it('renders a typing indicator for active remote participants', () => {
+  it('renders the typing indicator when typingMembers are present', () => {
     const wrapper = mount(MessageList, {
       props: {
         messages: [],
@@ -171,8 +171,34 @@ describe('MessageList.vue Delivery States', () => {
       }
     });
 
-    expect(wrapper.text()).toContain('Ryan is typing...');
     expect(wrapper.find('.typing-indicator').exists()).toBe(true);
+    expect(wrapper.text()).toContain('Ryan is typing...');
+  });
+
+  it('hides the typing indicator when typingMembers is empty', () => {
+    const wrapper = mount(MessageList, {
+      props: {
+        messages: [],
+        currentUserId,
+        typingMembers: []
+      }
+    });
+
+    expect(wrapper.find('.typing-indicator').exists()).toBe(false);
+  });
+
+  it('filters out the current user from the typing indicator', () => {
+    const wrapper = mount(MessageList, {
+      props: {
+        messages: [],
+        currentUserId,
+        typingMembers: [
+          { userId: 'user-1', displayName: 'Me' }
+        ]
+      }
+    });
+
+    expect(wrapper.find('.typing-indicator').exists()).toBe(false);
   });
 
   it('renders inline image messages from metadata without file caption text', () => {
@@ -223,7 +249,33 @@ describe('MessageList.vue Delivery States', () => {
     expect(wrapper.text()).not.toContain('Bobs Burgers GIF by Someone');
   });
 
-  it('uses the animated Klipy asset inline so Klipy GIFs animate in chat', () => {
+  it('renders hidden messages as tombstones instead of media tiles', () => {
+    const wrapper = mount(MessageList, {
+      props: {
+        messages: [{
+          id: 'hidden-1',
+          chatId: 'chat-1',
+          senderId: 'user-2',
+          senderUsername: 'ryantest',
+          content: 'Message removed by moderation.',
+          type: 'gif',
+          metadata: {
+            url: 'https://media.example/full.gif',
+            previewUrl: 'https://media.example/preview.gif'
+          },
+          createdAt: new Date().toISOString(),
+          hidden: true
+        }],
+        currentUserId
+      }
+    });
+
+    expect(wrapper.find('.msg-content.tombstone').exists()).toBe(true);
+    expect(wrapper.find('.media-image').exists()).toBe(false);
+    expect(wrapper.text()).toContain('Message removed by moderation.');
+  });
+
+  it('renders Klipy image-mode GIFs as inline images using the animated URL', () => {
     const wrapper = mount(MessageList, {
       props: {
         messages: [{
@@ -237,6 +289,7 @@ describe('MessageList.vue Delivery States', () => {
             provider: 'klipy',
             url: 'https://media.example/animated-klipy.gif',
             previewUrl: 'https://media.example/static-klipy.jpg',
+            renderMode: 'image',
             title: 'Klipy GIF'
           },
           createdAt: new Date().toISOString()
@@ -245,10 +298,40 @@ describe('MessageList.vue Delivery States', () => {
       }
     });
 
+    expect(wrapper.find('.media-image').exists()).toBe(true);
+    expect(wrapper.find('.media-video').exists()).toBe(false);
     expect(wrapper.find('.media-image').attributes('src')).toBe('https://media.example/animated-klipy.gif');
   });
 
-  it('renders Klipy mp4 assets inline as looping video instead of a static image', () => {
+  it('uses still previews for GIFs when automatic animation is disabled', () => {
+    const wrapper = mount(MessageList, {
+      props: {
+        messages: [{
+          id: 'gif-still-1',
+          chatId: 'chat-1',
+          senderId: 'user-2',
+          senderUsername: 'ryantest',
+          content: 'Animated GIF',
+          type: 'gif',
+          metadata: {
+            provider: 'klipy',
+            url: 'https://media.example/animated-klipy.gif',
+            previewUrl: 'https://media.example/static-klipy.jpg',
+            renderMode: 'image',
+            title: 'Animated GIF'
+          },
+          createdAt: new Date().toISOString()
+        }],
+        currentUserId,
+        animateGifsAutomatically: false,
+        reducedDataMode: false
+      }
+    });
+
+    expect(wrapper.find('.media-image').attributes('src')).toBe('https://media.example/static-klipy.jpg');
+  });
+
+  it('renders Klipy video-mode GIFs as inline video using the attachment URL', () => {
     const wrapper = mount(MessageList, {
       props: {
         messages: [{
@@ -262,6 +345,7 @@ describe('MessageList.vue Delivery States', () => {
             provider: 'klipy',
             url: 'https://media.example/animated-klipy.mp4',
             previewUrl: 'https://media.example/static-klipy.jpg',
+            renderMode: 'video',
             title: 'Klipy Video GIF'
           },
           createdAt: new Date().toISOString()
@@ -271,8 +355,42 @@ describe('MessageList.vue Delivery States', () => {
     });
 
     expect(wrapper.find('.media-video').exists()).toBe(true);
-    expect(wrapper.find('.media-video').attributes('src')).toBe('https://media.example/animated-klipy.mp4');
     expect(wrapper.find('.media-image').exists()).toBe(false);
+    expect(wrapper.find('.media-video').attributes('src')).toBe('https://media.example/animated-klipy.mp4');
+  });
+
+  it('renders video-mode GIFs as still previews in reduced data mode but opens the real asset fullscreen', async () => {
+    const wrapper = mount(MessageList, {
+      props: {
+        messages: [{
+          id: 'gif-klipy-video-still-1',
+          chatId: 'chat-1',
+          senderId: 'user-2',
+          senderUsername: 'ryantest',
+          content: 'Klipy video GIF',
+          type: 'gif',
+          metadata: {
+            provider: 'klipy',
+            url: 'https://media.example/animated-klipy.mp4',
+            previewUrl: 'https://media.example/static-klipy.jpg',
+            renderMode: 'video',
+            title: 'Klipy Video GIF'
+          },
+          createdAt: new Date().toISOString()
+        }],
+        currentUserId,
+        animateGifsAutomatically: true,
+        reducedDataMode: true
+      }
+    });
+
+    expect(wrapper.find('.media-video').exists()).toBe(false);
+    expect(wrapper.find('.media-image').attributes('src')).toBe('https://media.example/static-klipy.jpg');
+
+    await wrapper.find('.media-tile').trigger('click');
+
+    expect(wrapper.find('.viewer-video').exists()).toBe(true);
+    expect(wrapper.find('.viewer-video').attributes('src')).toBe('https://media.example/animated-klipy.mp4');
   });
 
   it('opens an image viewer modal when an image bubble is tapped', async () => {

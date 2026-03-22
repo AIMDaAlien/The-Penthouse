@@ -5,6 +5,8 @@ import { ClientMessageSendEventSchema, type MessageType } from '@penthouse/contr
 import { randomUUID } from 'node:crypto';
 import { env } from '../config/env.js';
 import { avatarUrlFromFileName, getUserById, requiresTestNoticeAck } from '../utils/users.js';
+import { sendPushForNewMessage } from '../push/fcm.js';
+import { getChatSendState } from '../utils/chats.js';
 
 async function isMember(userId: string, chatId: string): Promise<boolean> {
   const res = await pool.query('SELECT 1 FROM chat_members WHERE user_id = $1 AND chat_id = $2', [userId, chatId]);
@@ -171,6 +173,14 @@ export function initRealtime(app: FastifyInstance): Server {
 
   function scheduleSocketOffline(socket: { id: string; data: { userId?: string } }): void {
     clearInactivePresenceTimer(socket.id);
+    app.log.info(
+      {
+        userId: socket.data.userId,
+        socketId: socket.id,
+        timeoutMs: PRESENCE_INACTIVE_TIMEOUT_MS
+      },
+      'socket presence expiry scheduled'
+    );
     inactivePresenceTimers.set(socket.id, setTimeout(() => {
       markSocketOffline(socket);
     }, PRESENCE_INACTIVE_TIMEOUT_MS));
@@ -200,6 +210,15 @@ export function initRealtime(app: FastifyInstance): Server {
     const chatTyping = typingByChat.get(chatId);
     if (!chatTyping) return;
     const currentUserId = socket.data.userId;
+    app.log.info(
+      {
+        userId: currentUserId,
+        socketId: (socket as { id?: string }).id ?? null,
+        chatId,
+        activeTypers: Array.from(chatTyping.keys()).filter((userId) => userId !== currentUserId)
+      },
+      'socket typing state replayed'
+    );
     for (const [userId, entry] of chatTyping.entries()) {
       if (userId === currentUserId) continue;
       socket.emit('typing.update', {
@@ -334,6 +353,7 @@ export function initRealtime(app: FastifyInstance): Server {
       socket.data.username = user.username;
       socket.data.displayName = user.display_name;
       socket.data.avatarUrl = avatarUrlFromFileName(user.avatar_storage_key);
+      socket.data.appActive = true;
       next();
     } catch (error) {
       socketAuthFailures++;
@@ -396,6 +416,15 @@ export function initRealtime(app: FastifyInstance): Server {
 
     socket.on('app.state', (payload: unknown) => {
       const active = Boolean((payload as { active?: boolean } | null)?.active ?? false);
+      socket.data.appActive = active;
+      app.log.info(
+        {
+          userId,
+          socketId: socket.id,
+          active
+        },
+        'socket app state updated'
+      );
       if (active) {
         markSocketOnline(socket);
         return;
@@ -461,7 +490,8 @@ export function initRealtime(app: FastifyInstance): Server {
       if (!parsed.success) return;
 
       const event = parsed.data;
-      if (!(await isMember(userId, event.chatId))) return;
+      const sendState = await getChatSendState(pool, userId, event.chatId);
+      if (!sendState.isMember || sendState.isReadOnly) return;
 
       const inserted = await pool.query(
         `INSERT INTO messages(id, chat_id, sender_id, content, message_type, metadata, client_message_id)
@@ -512,13 +542,15 @@ export function initRealtime(app: FastifyInstance): Server {
         metadata: row.metadata ?? null,
         createdAt: new Date(row.created_at).toISOString(),
         clientMessageId: row.client_message_id ?? undefined,
-        seenAt: null
+        seenAt: null,
+        hidden: false
       };
 
       io.to(`chat:${event.chatId}`).emit('message.new', {
         type: 'message.new',
         payload: messagePayload
       });
+      void sendPushForNewMessage(app.log, event.chatId, userId, messagePayload);
 
       io.to(`user:${userId}`).emit('message.ack', {
         type: 'message.ack',

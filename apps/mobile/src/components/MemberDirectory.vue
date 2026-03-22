@@ -25,13 +25,9 @@
         <div v-else class="avatar-placeholder">
           {{ member.displayName ? member.displayName[0].toUpperCase() : '?' }}
         </div>
+        <span class="presence-dot" :class="{ online: presenceMap?.[member.id] === 'online' }" />
         <div class="member-info">
-          <div class="identity-row">
-            <div class="display-name">{{ member.displayName || member.username }}</div>
-            <span class="presence-pill" :class="presenceClass(member.id)">
-              {{ presenceLabel(member.id) }}
-            </span>
-          </div>
+          <div class="display-name">{{ member.displayName || member.username }}</div>
           <div class="username small">@{{ member.username }}</div>
         </div>
       </div>
@@ -43,10 +39,9 @@
 import { ref, onMounted, onUnmounted, watch } from 'vue';
 import { getMembers } from '../services/http';
 import type { MemberSummary } from '@penthouse/contracts';
-import type { PresenceStatus } from '../types';
 
-const props = defineProps<{
-  presenceByUserId?: Record<string, PresenceStatus>;
+defineProps<{
+  presenceMap?: Record<string, import('../types').PresenceStatus>;
 }>();
 
 defineEmits<{
@@ -83,18 +78,6 @@ watch(query, () => {
 onUnmounted(() => {
   if (queryTimer) clearTimeout(queryTimer);
 });
-
-function presenceStatus(memberId: string): PresenceStatus {
-  return props.presenceByUserId?.[memberId] ?? 'offline';
-}
-
-function presenceLabel(memberId: string): string {
-  return presenceStatus(memberId) === 'online' ? 'Online' : 'Offline';
-}
-
-function presenceClass(memberId: string): string {
-  return presenceStatus(memberId);
-}
 </script>
 
 <style scoped>
@@ -164,31 +147,19 @@ h2 {
   font-size: 1.05rem;
 }
 
-.identity-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  justify-content: space-between;
-}
-
 .username {
   opacity: 0.6;
 }
 
-.presence-pill {
-  padding: 3px 8px;
-  border-radius: 999px;
-  font-size: 0.72rem;
-  font-weight: 600;
+.presence-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex-shrink: 0;
 }
 
-.presence-pill.online {
-  background: rgba(126, 241, 168, 0.14);
-  color: var(--ok);
-}
-
-.presence-pill.offline {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.65);
+.presence-dot.online {
+  background: var(--ok);
 }
 </style>

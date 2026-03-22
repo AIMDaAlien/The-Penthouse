@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import {
-  ChatSummarySchema,
+  ChatPreferencesRequestSchema,
+  ChatPreferencesResponseSchema,
+  CreateDirectChatRequestSchema,
   MarkChatReadResponseSchema,
   MessageSchema,
   SendMessageRequestSchema,
@@ -9,7 +11,32 @@ import {
   type MessageType
 } from '@penthouse/contracts';
 import { pool } from '../db/pool.js';
-import { avatarUrlFromFileName } from '../utils/users.js';
+import { toMemberMessage } from '../utils/messages.js';
+import { sendPushForNewMessage } from '../push/fcm.js';
+import { getUserById } from '../utils/users.js';
+import {
+  getChatSendState,
+  getChatSummaryForUser,
+  listChatSummariesForUser,
+  orderDirectChatParticipants
+} from '../utils/chats.js';
+
+function joinUserSocketsToChat(app: FastifyInstance, chatId: string, userIds: string[]): void {
+  const io = app.io as
+    | {
+        in?: (room: string) => {
+          socketsJoin?: (targetRoom: string) => void;
+        };
+      }
+    | undefined;
+
+  if (!io?.in) return;
+
+  const targetRoom = `chat:${chatId}`;
+  for (const userId of new Set(userIds)) {
+    io.in(`user:${userId}`).socketsJoin?.(targetRoom);
+  }
+}
 
 async function ensureMembership(userId: string, chatId: string): Promise<boolean> {
   const res = await pool.query('SELECT 1 FROM chat_members WHERE user_id = $1 AND chat_id = $2', [userId, chatId]);
@@ -41,6 +68,7 @@ async function markChatRead(chatId: string, userId: string): Promise<{
        JOIN users u ON u.id = m.sender_id
        WHERE m.chat_id = $1
          AND u.status = 'active'
+         AND COALESCE(m.hidden_by_moderation, FALSE) = FALSE
        ORDER BY m.created_at DESC
        LIMIT 1`,
       [chatId]
@@ -69,6 +97,7 @@ async function markChatRead(chatId: string, userId: string): Promise<{
        WHERE m.chat_id = $1
          AND m.sender_id <> $2
          AND u.status = 'active'
+         AND COALESCE(m.hidden_by_moderation, FALSE) = FALSE
          AND m.created_at > $3`,
       [chatId, userId, effectiveReadAt.toISOString()]
     );
@@ -91,33 +120,106 @@ async function markChatRead(chatId: string, userId: string): Promise<{
 
 export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/v1/chats', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request) => {
-    const userId = request.user.userId;
-    const rows = await pool.query(
-      `SELECT c.id, c.type, c.name, c.updated_at,
-              COUNT(m.id) FILTER (
-                WHERE m.sender_id <> $1
-                  AND u.status = 'active'
-                  AND m.created_at > cm.last_read_at
-              )::int AS unread_count
-       FROM chats c
-       JOIN chat_members cm ON cm.chat_id = c.id
-       LEFT JOIN messages m ON m.chat_id = c.id
-       LEFT JOIN users u ON u.id = m.sender_id
-       WHERE cm.user_id = $1
-       GROUP BY c.id, c.type, c.name, c.updated_at, cm.last_read_at
-       ORDER BY c.updated_at DESC`,
-      [userId]
-    );
+    return listChatSummariesForUser(pool, request.user.userId);
+  });
 
-    return rows.rows.map((r: { id: string; type: 'dm' | 'channel'; name: string; updated_at: string; unread_count: number }) =>
-      ChatSummarySchema.parse({
-        id: r.id,
-        type: r.type,
-        name: r.name,
-        updatedAt: new Date(r.updated_at).toISOString(),
-        unreadCount: Number(r.unread_count ?? 0)
-      })
-    );
+  app.post('/api/v1/chats/dm', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
+    const userId = request.user.userId;
+    const parsed = CreateDirectChatRequestSchema.safeParse(request.body ?? {});
+    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() });
+
+    if (parsed.data.memberId === userId) {
+      return reply.status(409).send({ error: 'Cannot message yourself' });
+    }
+
+    const target = await getUserById(pool, parsed.data.memberId);
+    if (!target) {
+      return reply.status(404).send({ error: 'Member not found' });
+    }
+
+    if (target.status !== 'active') {
+      return reply.status(409).send({ error: 'Member account is not active' });
+    }
+
+    const [firstUserId, secondUserId] = orderDirectChatParticipants(userId, parsed.data.memberId);
+    const client = await pool.connect();
+
+    let chatId: string | null = null;
+
+    try {
+      await client.query('BEGIN');
+
+      const existing = await client.query(
+        `SELECT chat_id
+         FROM direct_chats
+         WHERE first_user_id = $1 AND second_user_id = $2`,
+        [firstUserId, secondUserId]
+      );
+
+      chatId = (existing.rows[0] as { chat_id: string } | undefined)?.chat_id ?? null;
+
+      if (!chatId) {
+        const insertedChatId = randomUUID();
+        await client.query(
+          `INSERT INTO chats(id, type, name)
+           VALUES($1, 'dm', 'Direct message')`,
+          [insertedChatId]
+        );
+
+        const insertedDirectChat = await client.query(
+          `INSERT INTO direct_chats(chat_id, first_user_id, second_user_id)
+           VALUES($1, $2, $3)
+           ON CONFLICT (first_user_id, second_user_id) DO NOTHING
+           RETURNING chat_id`,
+          [insertedChatId, firstUserId, secondUserId]
+        );
+
+        if (insertedDirectChat.rowCount) {
+          chatId = insertedChatId;
+        } else {
+          await client.query('DELETE FROM chats WHERE id = $1', [insertedChatId]);
+          const raced = await client.query(
+            `SELECT chat_id
+             FROM direct_chats
+             WHERE first_user_id = $1 AND second_user_id = $2`,
+            [firstUserId, secondUserId]
+          );
+          chatId = (raced.rows[0] as { chat_id: string } | undefined)?.chat_id ?? null;
+        }
+      }
+
+      if (!chatId) {
+        throw new Error('Failed to resolve direct chat');
+      }
+
+      await client.query(
+        `INSERT INTO chat_members(chat_id, user_id)
+         VALUES ($1, $2), ($1, $3)
+         ON CONFLICT (chat_id, user_id) DO NOTHING`,
+        [chatId, userId, parsed.data.memberId]
+      );
+
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      request.log.error({ error, userId, counterpartUserId: parsed.data.memberId }, 'failed to resolve direct chat');
+      return reply.status(500).send({ error: 'Failed to resolve direct chat' });
+    } finally {
+      client.release();
+    }
+
+    if (!chatId) {
+      return reply.status(500).send({ error: 'Failed to resolve direct chat' });
+    }
+
+    joinUserSocketsToChat(app, chatId, [userId, parsed.data.memberId]);
+
+    const summary = await getChatSummaryForUser(pool, userId, chatId);
+    if (!summary) {
+      return reply.status(500).send({ error: 'Failed to load direct chat' });
+    }
+
+    return reply.send(summary);
   });
 
   app.get('/api/v1/chats/:chatId/messages', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
@@ -132,6 +234,8 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
 
     const query = cursor
       ? `SELECT m.id, m.chat_id, m.sender_id, u.username AS sender_username, u.display_name AS sender_display_name,
+                u.status AS sender_status,
+                m.hidden_by_moderation, m.moderation_action, m.moderation_reason, m.moderation_updated_at, m.moderation_actor_user_id,
                 media.storage_key AS avatar_storage_key, m.content, m.message_type, m.metadata, m.created_at, m.client_message_id,
                 seen.seen_at
          FROM messages m
@@ -146,10 +250,11 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
              AND u_seen.status = 'active'
          ) seen ON TRUE
          WHERE m.chat_id = $1 AND m.created_at < (SELECT created_at FROM messages WHERE id = $2)
-           AND u.status = 'active'
          ORDER BY m.created_at DESC
          LIMIT $3`
       : `SELECT m.id, m.chat_id, m.sender_id, u.username AS sender_username, u.display_name AS sender_display_name,
+                u.status AS sender_status,
+                m.hidden_by_moderation, m.moderation_action, m.moderation_reason, m.moderation_updated_at, m.moderation_actor_user_id,
                 media.storage_key AS avatar_storage_key, m.content, m.message_type, m.metadata, m.created_at, m.client_message_id,
                 seen.seen_at
          FROM messages m
@@ -164,29 +269,13 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
              AND u_seen.status = 'active'
          ) seen ON TRUE
          WHERE m.chat_id = $1
-           AND u.status = 'active'
          ORDER BY m.created_at DESC
          LIMIT $2`;
 
     const values = cursor ? [chatId, cursor, safeLimit] : [chatId, safeLimit];
     const rows = await pool.query(query, values);
 
-    return rows.rows.map((m: any) =>
-      MessageSchema.parse({
-        id: m.id,
-        chatId: m.chat_id,
-        senderId: m.sender_id,
-        senderUsername: m.sender_username,
-        senderDisplayName: m.sender_display_name,
-        senderAvatarUrl: avatarUrlFromFileName(m.avatar_storage_key),
-        content: m.content,
-        type: (m.message_type as MessageType | null) ?? 'text',
-        metadata: m.metadata ?? null,
-        createdAt: new Date(m.created_at).toISOString(),
-        clientMessageId: m.client_message_id ?? undefined,
-        seenAt: m.seen_at ? new Date(m.seen_at).toISOString() : null
-      })
-    );
+    return rows.rows.map((m: any) => MessageSchema.parse(toMemberMessage(m)));
   });
 
   app.post('/api/v1/chats/:chatId/messages', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
@@ -200,8 +289,9 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
 
     if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() });
 
-    const isMember = await ensureMembership(userId, parsed.data.chatId);
-    if (!isMember) return reply.status(403).send({ error: 'Forbidden' });
+    const sendState = await getChatSendState(pool, userId, parsed.data.chatId);
+    if (!sendState.isMember) return reply.status(403).send({ error: 'Forbidden' });
+    if (sendState.isReadOnly) return reply.status(409).send({ error: 'Direct message is unavailable' });
 
     const messageType = parsed.data.type ?? 'text';
     const metadata = parsed.data.metadata ?? null;
@@ -247,13 +337,15 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
       metadata: msg.metadata ?? null,
       createdAt: new Date(msg.created_at).toISOString(),
       clientMessageId: msg.client_message_id ?? undefined,
-      seenAt: null
+      seenAt: null,
+      hidden: false
     };
 
     app.io.to(`chat:${parsed.data.chatId}`).emit('message.new', {
       type: 'message.new',
       payload: messagePayload
     });
+    void sendPushForNewMessage(request.log, parsed.data.chatId, userId, messagePayload);
 
     app.io.to(`user:${userId}`).emit('message.ack', {
       type: 'message.ack',
@@ -271,6 +363,33 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
     });
 
     return reply.send(response);
+  });
+
+  app.patch('/api/v1/chats/:chatId/preferences', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
+    const userId = request.user.userId;
+    const { chatId } = request.params as { chatId: string };
+    const parsed = ChatPreferencesRequestSchema.safeParse(request.body ?? {});
+    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() });
+
+    const result = await pool.query(
+      `UPDATE chat_members
+       SET notifications_muted = $1
+       WHERE chat_id = $2 AND user_id = $3
+       RETURNING chat_id, notifications_muted`,
+      [parsed.data.notificationsMuted, chatId, userId]
+    );
+
+    if (!result.rowCount) {
+      return reply.status(403).send({ error: 'Forbidden' });
+    }
+
+    const row = result.rows[0] as { chat_id: string; notifications_muted: boolean };
+    return reply.send(
+      ChatPreferencesResponseSchema.parse({
+        chatId: row.chat_id,
+        notificationsMuted: Boolean(row.notifications_muted)
+      })
+    );
   });
 
   app.post('/api/v1/chats/:chatId/read', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
