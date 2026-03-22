@@ -4,17 +4,11 @@
       <div class="control-group">
         <label>Concept:</label>
         <select v-model="activeConcept">
-          <option value="1">1. Skyline Editorial</option>
-          <option value="2">2. Gallery Residence</option>
-          <option value="3">3. Velvet Private Club</option>
-          <option value="4">4. Prism Penthouse</option>
-          <option value="5">5. Soft Couture</option>
-          <option value="6">6. The Monolith (Wave 2)</option>
-          <option value="7">7. Floating Plates (Wave 2)</option>
-          <option value="8">8. The Magazine Grid (Wave 2)</option>
-          <option value="9">9. The Vertical Pillar (Wave 3)</option>
-          <option value="10">10. Kinetic Scroll (Wave 3)</option>
-          <option value="11">11. Oversized Typography (Wave 3)</option>
+          <option value="1">1. Rose Pillar (Wave 4)</option>
+          <option value="2">2. Soft Iris (Wave 4)</option>
+          <option value="3">3. Pine Magazine (Wave 4)</option>
+          <option value="4">4. Kinetic Gold (Wave 4)</option>
+          <option value="5">5. Sunset Editorial (Wave 4)</option>
         </select>
       </div>
       <div class="control-group">
@@ -33,12 +27,6 @@
       <Concept3 v-else-if="activeConcept === '3'" :shellState="activeState" />
       <Concept4 v-else-if="activeConcept === '4'" :shellState="activeState" />
       <Concept5 v-else-if="activeConcept === '5'" :shellState="activeState" />
-      <Concept6 v-else-if="activeConcept === '6'" :shellState="activeState" />
-      <Concept7 v-else-if="activeConcept === '7'" :shellState="activeState" />
-      <Concept8 v-else-if="activeConcept === '8'" :shellState="activeState" />
-      <Concept9 v-else-if="activeConcept === '9'" :shellState="activeState" />
-      <Concept10 v-else-if="activeConcept === '10'" :shellState="activeState" />
-      <Concept11 v-else-if="activeConcept === '11'" :shellState="activeState" />
     </div>
   </div>
 </template>
@@ -50,17 +38,12 @@ import Concept2 from './concept-2/Concept2.vue';
 import Concept3 from './concept-3/Concept3.vue';
 import Concept4 from './concept-4/Concept4.vue';
 import Concept5 from './concept-5/Concept5.vue';
-import Concept6 from './concept-6/Concept6.vue';
-import Concept7 from './concept-7/Concept7.vue';
-import Concept8 from './concept-8/Concept8.vue';
-import Concept9 from './concept-9/Concept9.vue';
-import Concept10 from './concept-10/Concept10.vue';
-import Concept11 from './concept-11/Concept11.vue';
 
 import '../../assets/fonts/Erode/css/erode.css';
 
-const activeConcept = ref('9');
+const activeConcept = ref('1');
 const activeState = ref<'auth'|'gated'|'signedin'>('auth');
+
 </script>
 
 <style>

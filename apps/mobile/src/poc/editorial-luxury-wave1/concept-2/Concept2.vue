@@ -1,54 +1,56 @@
 <template>
-  <div class="gallery-shell">
-    <header class="gallery-header">
-      <h1 class="gallery-wordmark">The Penthouse</h1>
-      <div class="gallery-connection" v-if="shellState === 'signedin'">
-        <span class="utility-font">Connected</span>
-        <div class="conn-dot"></div>
-      </div>
-    </header>
+  <div class="shell">
+    <transition name="topbar-fade">
+      <header v-if="shellState !== 'signedin'" class="top-bar">
+        <div class="large-logo">
+          <span class="logo-the">The</span>
+          <span class="logo-pent">PENT</span>
+          <span class="logo-house">HOUSE</span>
+        </div>
+      </header>
+    </transition>
 
-    <main class="gallery-content">
-      <!-- 1. Auth State -->
-      <section v-if="shellState === 'auth'" class="gallery-state">
-        <div class="gallery-card">
-          <h2>Welcome</h2>
-          <p>Login to your account.</p>
-          <div class="mock-form">
-            <div class="mock-input"></div>
-            <div class="mock-input"></div>
-            <div class="mock-btn">Continue</div>
-          </div>
+    <main class="viewport" :class="{ 'is-signedin': shellState === 'signedin' }">
+      <!-- State: Auth -->
+      <section v-if="shellState === 'auth'" class="stack">
+        <div class="pill tall">
+           <span class="tag">Identity</span>
+           <h2>Access<br>Port</h2>
+        </div>
+        <div class="pill">
+           <div class="mock-input"></div>
+           <div class="action-btn">Enter</div>
         </div>
       </section>
 
-      <!-- 2. Gated State (Test Notice / Session Sync) -->
-      <section v-else-if="shellState === 'gated'" class="gallery-state">
-        <div class="gallery-card">
-          <p class="utility-font accent">INTERNAL</p>
-          <h2>Testing Base</h2>
-          <p>Confirm the current internal build rules.</p>
-          <div class="mock-btn outline">Accept</div>
+      <!-- State: Gated -->
+      <section v-else-if="shellState === 'gated'" class="stack">
+        <div class="pill tall warning">
+           <span class="tag">System</span>
+           <h2>Locked</h2>
+        </div>
+        <div class="pill">
+           <p>Wait for build clearance.</p>
+           <div class="action-btn outline">Ack</div>
         </div>
       </section>
 
-      <!-- 3. Signed In State -->
-      <section v-else-if="shellState === 'signedin'" class="gallery-state gallery-app">
-        <nav class="gallery-nav">
-          <button class="active">Chats</button>
-          <button>Directory</button>
-          <button class="utility-font">Settings</button>
-        </nav>
-
-        <div class="gallery-glass-pane">
-          <div style="flex: 1; display:flex; flex-direction:column; gap:12px;">
-             <!-- Chat List Mock -->
-             <div class="mock-item active-mock"></div>
-             <div class="mock-item"></div>
-          </div>
-          <div style="flex: 2; border-left: 1px solid rgba(255,255,255,0.1); padding-left: 16px;">
-             <div class="mock-content"></div>
-          </div>
+      <!-- State: Signed In -->
+      <section v-else-if="shellState === 'signedin'" class="stack signedin-stack">
+        <header class="signedin-header">
+           <div class="mini-logo">TPH</div>
+           <div class="avatar"></div>
+        </header>
+        <div class="nav-pills">
+           <div class="nav-item active">Feed</div>
+           <div class="nav-item">Explore</div>
+        </div>
+        <div class="pill content-card">
+           <div class="line"></div>
+           <div class="line short"></div>
+        </div>
+        <div class="pill content-card">
+           <div class="line"></div>
         </div>
       </section>
     </main>
@@ -62,185 +64,205 @@ defineProps<{
 </script>
 
 <style scoped>
-/* Concept 2: Gallery Residence. Calm luxury, oversized margins, sparse chrome, museum-like restraint, large glass planes. */
-
-.gallery-shell {
+/* Wave 4 - Concept 2: Soft Iris */
+.shell {
   height: 100%;
   width: 100%;
+  background: #191724; /* rp-base */
+  color: #e0def4; /* rp-text */
+  font-family: "Ubuntu Variable", sans-serif;
   display: flex;
   flex-direction: column;
-  background: #111424;
-  color: #fff;
-  font-family: "Ubuntu Variable", "Ubuntu", sans-serif;
+  position: relative;
   overflow: hidden;
 }
 
-.gallery-header {
-  padding: max(40px, env(safe-area-inset-top)) 40px 20px;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-}
-
-.gallery-wordmark {
-  font-family: "Erode", serif;
-  font-size: 1.8rem;
-  font-weight: 300;
-  letter-spacing: 0.02em;
-  margin: 0;
-  color: #fff;
-}
-
-.gallery-connection {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  opacity: 0.6;
-}
-
-.utility-font {
-  font-family: "JetBrains Mono", monospace !important;
-  font-size: 0.65rem !important;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-}
-
-.conn-dot {
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: #9af0b9;
-}
-
-.gallery-content {
-  flex: 1;
-  padding: 0 40px 40px;
-  display: flex;
-  flex-direction: column;
-}
-
-.gallery-state {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  animation: glide-in 0.8s cubic-bezier(0.25, 1, 0.5, 1);
-}
-
-@keyframes glide-in {
-  from { opacity: 0; transform: translateX(20px); }
-  to { opacity: 1; transform: translateX(0); }
-}
-
-.gallery-card {
-  margin: auto;
+.top-bar {
   width: 100%;
-  max-width: 400px;
-  background: rgba(255,255,255,0.02);
-  border: 1px solid rgba(255,255,255,0.06);
-  padding: 48px;
-  border-radius: 0; /* sharper edges for museum gallery look */
-  backdrop-filter: blur(40px);
-  -webkit-backdrop-filter: blur(40px);
-}
-
-.gallery-card h2 {
-  font-family: "Erode", serif;
-  font-size: 1.8rem;
-  font-weight: 300;
-  margin: 0 0 16px 0;
-}
-
-.gallery-card p {
-  color: rgba(255,255,255,0.5);
-  font-size: 0.9rem;
-  line-height: 1.6;
-  margin: 0 0 32px 0;
-}
-
-.accent {
-  color: #8cd8ff !important;
-}
-
-.mock-form {
+  height: 22vh;
+  padding: 30px 24px;
+  background: rgba(196, 167, 231, 0.05); /* rp-iris tint */
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(196, 167, 231, 0.1);
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  justify-content: flex-end;
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 20;
+}
+
+.topbar-fade-enter-active,
+.topbar-fade-leave-active {
+  transition: all 0.7s cubic-bezier(0.25, 1, 0.5, 1);
+  transform-origin: top center;
+}
+
+.topbar-fade-enter-from,
+.topbar-fade-leave-to {
+  opacity: 0;
+  transform: scaleY(0.8);
+}
+
+.large-logo {
+  display: flex;
+  flex-direction: column;
+  line-height: 0.85;
+}
+
+.logo-the {
+  font-family: "Erode", serif;
+  font-size: 1.5rem;
+  color: #ebbcba; /* rp-rose */
+}
+
+.logo-pent, .logo-house {
+  font-family: "Erode", serif;
+  font-size: 3.5rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #e0def4; /* rp-text */
+}
+
+.viewport {
+  flex: 1;
+  padding: 22vh 20px 40px 20px;
+  overflow-y: auto;
+  position: relative;
+  z-index: 10;
+  transition: padding-top 0.7s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.viewport.is-signedin {
+  padding-top: 20px;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-top: 10px;
+  animation: float-up 1s cubic-bezier(0.19, 1, 0.22, 1);
+}
+
+@keyframes float-up {
+  from { opacity: 0; transform: translateY(60px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.pill {
+  background: rgba(38, 35, 58, 0.6); /* rp-overlay with opacity */
+  border-radius: 40px;
+  padding: 30px;
+  border: 1px solid rgba(82, 79, 103, 0.3); /* rp-highlight-high */
+}
+
+.pill.tall {
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.pill.warning {
+  background: rgba(235, 111, 146, 0.15); /* rp-love */
+  border-color: rgba(235, 111, 146, 0.4);
+}
+
+.tag {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  color: #f6c177; /* rp-gold */
+  margin-bottom: 12px;
+}
+
+.pill h2 {
+  font-family: "Erode", serif;
+  font-size: 3rem;
+  margin: 0;
+  font-weight: 400;
+  line-height: 0.9;
 }
 
 .mock-input {
-  height: 40px;
-  border-bottom: 1px solid rgba(255,255,255,0.2);
+  height: 2px;
+  background: #6e6a86; /* rp-muted */
+  margin-bottom: 30px;
+  margin-top: 10px;
 }
 
-.mock-btn {
-  height: 48px;
-  background: #fff;
-  color: #000;
+.action-btn {
+  height: 60px;
+  background: #c4a7e7; /* rp-iris */
+  color: #191724; /* rp-base */
+  border-radius: 30px;
   display: flex;
   align-items: center;
   justify-content: center;
-  text-transform: uppercase;
-  font-family: "JetBrains Mono", monospace;
-  font-size: 0.75rem;
-  letter-spacing: 0.05em;
-  margin-top: 24px;
+  font-weight: 600;
+  font-size: 1.1rem;
 }
 
-.mock-btn.outline {
+.action-btn.outline {
   background: transparent;
-  color: #fff;
-  border: 1px solid rgba(255,255,255,0.2);
+  color: #c4a7e7;
+  border: 1px solid #c4a7e7;
 }
 
-.gallery-app {
-  justify-content: flex-start;
-}
-
-.gallery-nav {
+.signedin-header {
   display: flex;
-  gap: 40px;
-  margin-bottom: 32px;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
 }
 
-.gallery-nav button {
-  background: none;
-  border: none;
-  color: rgba(255,255,255,0.3);
-  font-family: inherit;
-  font-size: 1rem;
-  padding: 0;
-  cursor: pointer;
-  transition: color 0.3s;
+.mini-logo {
+  font-family: "Erode", serif;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #c4a7e7;
 }
 
-.gallery-nav button.active {
-  color: #fff;
+.avatar {
+  width: 40px; height: 40px; border-radius: 20px; background: #ebbcba; /* rp-rose */
 }
 
-.gallery-glass-pane {
-  flex: 1;
-  background: rgba(255,255,255,0.015);
-  border: 1px solid rgba(255,255,255,0.04);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  padding: 24px;
+.nav-pills {
   display: flex;
-  gap: 16px;
+  gap: 12px;
+  margin-bottom: 10px;
 }
 
-.mock-item {
-  height: 64px;
-  background: rgba(255,255,255,0.02);
+.nav-item {
+  padding: 12px 24px;
+  background: transparent;
+  border: 1px solid #403d52;
+  border-radius: 24px;
+  color: #908caa;
 }
 
-.mock-item.active-mock {
-  background: rgba(140, 216, 255, 0.05);
-  border-left: 2px solid #8cd8ff;
+.nav-item.active {
+  background: rgba(196, 167, 231, 0.2);
+  border-color: #c4a7e7;
+  color: #c4a7e7;
 }
 
-.mock-content {
+.content-card {
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.line {
+  height: 60px;
+  background: #403d52;
+  border-radius: 20px;
   width: 100%;
-  height: 100%;
-  background: rgba(255,255,255,0.01);
 }
+
+.line.short { width: 60%; }
 </style>

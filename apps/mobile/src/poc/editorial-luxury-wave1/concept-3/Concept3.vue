@@ -1,51 +1,59 @@
 <template>
-  <div class="velvet-shell">
-    <header class="velvet-header">
-      <div class="velvet-connection" v-if="shellState === 'signedin'">
-        <div class="conn-dot"></div>
-      </div>
-      <h1 class="velvet-wordmark">The Penthouse</h1>
-    </header>
+  <div class="shell">
+    <transition name="topbar-flip">
+      <header v-if="shellState !== 'signedin'" class="top-bar">
+        <div class="large-logo">
+          <span class="logo-the">The</span>
+          <span class="logo-pent">PENT</span>
+          <span class="logo-house">HOUSE</span>
+        </div>
+      </header>
+    </transition>
 
-    <main class="velvet-content">
-      <!-- 1. Auth State -->
-      <section v-if="shellState === 'auth'" class="velvet-state">
-        <div class="velvet-card">
-          <h2>Private Access</h2>
-          <div class="mock-form">
-            <div class="mock-input"></div>
-            <div class="mock-input"></div>
-            <div class="mock-btn">Authenticate</div>
-          </div>
+    <main class="viewport" :class="{ 'is-signedin': shellState === 'signedin' }">
+      <!-- State: Auth -->
+      <section v-if="shellState === 'auth'" class="stack grid-stack">
+        <div class="pill tall span-full">
+           <span class="tag">Identity</span>
+           <h2>Access<br>Port</h2>
+        </div>
+        <div class="pill span-full outline-pill">
+           <div class="mock-input"></div>
+           <div class="action-btn">Enter</div>
         </div>
       </section>
 
-      <!-- 2. Gated State (Test Notice / Session Sync) -->
-      <section v-else-if="shellState === 'gated'" class="velvet-state">
-        <div class="velvet-card highlight">
-          <h2>Internal Ops</h2>
-          <p>Please accept the testing boundaries.</p>
-          <div class="mock-btn outline">Accept</div>
+      <!-- State: Gated -->
+      <section v-else-if="shellState === 'gated'" class="stack grid-stack">
+        <div class="pill tall warning span-full">
+           <span class="tag">System</span>
+           <h2>Locked</h2>
+        </div>
+        <div class="pill span-full outline-pill">
+           <p>Wait for build clearance.</p>
+           <div class="action-btn outline">Ack</div>
         </div>
       </section>
 
-      <!-- 3. Signed In State -->
-      <section v-else-if="shellState === 'signedin'" class="velvet-state velvet-app">
-        <nav class="velvet-nav">
-          <div class="nav-pill active">Chats</div>
-          <div class="nav-pill">Directory</div>
-          <div class="nav-pill utility-font">Settings</div>
-        </nav>
-
-        <div class="velvet-panels">
-          <div class="velvet-list">
-             <div class="mock-contact active-contact"></div>
-             <div class="mock-contact"></div>
-             <div class="mock-contact"></div>
-          </div>
-          <div class="velvet-main">
-             <div class="mock-thread"></div>
-          </div>
+      <!-- State: Signed In -->
+      <section v-else-if="shellState === 'signedin'" class="stack signedin-stack grid-stack">
+        <header class="signedin-header span-full">
+           <div class="mini-logo">TPH</div>
+           <div class="avatar"></div>
+        </header>
+        <div class="nav-pills span-full">
+           <div class="nav-item active">Feed</div>
+           <div class="nav-item">Explore</div>
+        </div>
+        <div class="pill content-card span-full outline-pill">
+           <div class="line"></div>
+           <div class="line short"></div>
+        </div>
+        <div class="pill content-card span-half outline-pill">
+           <div class="line"></div>
+        </div>
+        <div class="pill content-card span-half outline-pill">
+           <div class="line"></div>
         </div>
       </section>
     </main>
@@ -59,212 +67,214 @@ defineProps<{
 </script>
 
 <style scoped>
-/* Concept 3: Velvet Private Club. Deeper blacks, ink-violet surfaces, richer contrast, intimate lighting. */
-
-.velvet-shell {
+/* Wave 4 - Concept 3: Pine Magazine */
+.shell {
   height: 100%;
   width: 100%;
+  background: #191724; /* rp-base */
+  color: #e0def4; /* rp-text */
+  font-family: "Ubuntu Variable", sans-serif;
   display: flex;
   flex-direction: column;
-  background: #020205; /* Deep black */
-  background: radial-gradient(circle at 50% 0%, #170d2b 0%, #020205 80%);
-  color: #e5e0f5;
-  font-family: "Ubuntu Variable", "Ubuntu", sans-serif;
-  overflow: hidden;
-  box-shadow: inset 0 0 100px rgba(0,0,0,0.8);
-}
-
-.velvet-header {
-  padding: max(24px, env(safe-area-inset-top)) 24px 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   position: relative;
-  border-bottom: 1px solid rgba(138, 92, 255, 0.1);
-  background: rgba(2, 2, 5, 0.5);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  overflow: hidden;
+  perspective: 1000px;
 }
 
-.velvet-wordmark {
-  font-family: "Erode", serif;
-  font-size: 1.6rem;
-  font-weight: 300;
-  margin: 0;
-  color: #fff;
-  text-shadow: 0 4px 12px rgba(138, 92, 255, 0.5);
-}
-
-.velvet-connection {
+.top-bar {
+  width: 100%;
+  height: 18vh;
+  padding: 30px 24px;
+  background: #31748f; /* rp-pine */
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
   position: absolute;
-  left: 24px;
-  top: 50%;
-  transform: translateY(-50%);
+  top: 0;
+  left: 0;
+  z-index: 20;
 }
 
-.conn-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #8cd8ff;
-  border: 2px solid rgba(138, 92, 255, 0.5);
-  box-shadow: 0 0 10px #8cd8ff;
+.topbar-flip-enter-active,
+.topbar-flip-leave-active {
+  transition: all 0.6s cubic-bezier(0.8, 0, 0.2, 1);
+  transform-origin: top;
 }
 
-.utility-font {
-  font-family: "JetBrains Mono", monospace !important;
-  font-size: 0.75rem !important;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+.topbar-flip-enter-from,
+.topbar-flip-leave-to {
+  transform: rotateX(90deg);
+  opacity: 0;
 }
 
-.velvet-content {
-  flex: 1;
-  padding: 24px;
+.large-logo {
   display: flex;
   flex-direction: column;
+  line-height: 0.85;
 }
 
-.velvet-state {
+.logo-the {
+  font-family: "Erode", serif;
+  font-size: 1.5rem;
+  color: #191724; /* rp-base */
+}
+
+.logo-pent, .logo-house {
+  font-family: "Erode", serif;
+  font-size: 3.5rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #191724; /* rp-base */
+}
+
+.viewport {
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  animation: fade-scale 0.5s ease-out;
+  padding: 18vh 20px 40px 20px;
+  overflow-y: auto;
+  position: relative;
+  z-index: 10;
+  transition: padding-top 0.6s cubic-bezier(0.8, 0, 0.2, 1);
 }
 
-@keyframes fade-scale {
-  from { opacity: 0; transform: scale(0.98); }
+.viewport.is-signedin {
+  padding-top: 20px;
+}
+
+.grid-stack {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 20px;
+  animation: grid-in 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes grid-in {
+  from { opacity: 0; transform: scale(0.95); }
   to { opacity: 1; transform: scale(1); }
 }
 
-.velvet-card {
-  margin: auto;
-  width: 100%;
-  max-width: 380px;
-  background: linear-gradient(145deg, rgba(30, 20, 50, 0.6), rgba(10, 5, 20, 0.8));
-  border: 1px solid rgba(138, 92, 255, 0.15);
-  padding: 40px 32px;
-  border-radius: 20px;
-  box-shadow: 0 20px 40px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.05);
+.span-full {
+  grid-column: 1 / -1;
+}
+
+.pill {
+  background: #1f1d2e; /* rp-surface */
+  border-radius: 30px;
+  padding: 24px;
+}
+
+.outline-pill {
+  background: transparent;
+  border: 2px solid #26233a; /* rp-overlay */
+}
+
+.pill.tall {
+  min-height: 200px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  justify-content: flex-end;
 }
 
-.velvet-card.highlight {
-  border-color: rgba(140, 216, 255, 0.3);
-  box-shadow: 0 20px 40px rgba(0,0,0,0.6), 0 0 40px rgba(140, 216, 255, 0.05);
+.pill.warning {
+  background: #eb6f92; /* rp-love */
+  color: #191724;
 }
 
-.velvet-card h2 {
+.tag {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  color: #9ccfd8; /* rp-foam */
+  margin-bottom: 12px;
+}
+
+.pill.warning .tag { color: #191724; opacity: 0.8; }
+.pill.warning h2 { color: #191724; }
+
+.pill h2 {
   font-family: "Erode", serif;
-  font-size: 2rem;
-  font-weight: 300;
+  font-size: 3rem;
   margin: 0;
-  color: #fff;
-}
-
-.velvet-card p {
-  color: rgba(229, 224, 245, 0.6);
-  line-height: 1.5;
-  margin: 0;
-}
-
-.mock-form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-top: 16px;
+  font-weight: 400;
+  line-height: 0.9;
 }
 
 .mock-input {
-  height: 44px;
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.4);
-  border: 1px solid rgba(138, 92, 255, 0.2);
+  height: 2px;
+  background: #6e6a86; /* rp-muted */
+  margin-bottom: 30px;
+  margin-top: 10px;
 }
 
-.mock-btn {
-  height: 48px;
-  border-radius: 8px;
-  background: linear-gradient(180deg, #3d2a70, #221445);
-  border: 1px solid #483480;
-  color: #fff;
+.action-btn {
+  height: 60px;
+  background: #31748f; /* rp-pine */
+  color: #e0def4; /* rp-text */
+  border-radius: 30px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 500;
-  margin-top: 8px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  font-weight: 600;
+  font-size: 1.1rem;
 }
 
-.mock-btn.outline {
+.action-btn.outline {
   background: transparent;
-  border-color: rgba(140, 216, 255, 0.4);
-  color: #8cd8ff;
+  color: #31748f;
+  border: 1px solid #31748f;
 }
 
-.velvet-app {
-  justify-content: flex-start;
-}
-
-.velvet-nav {
+.signedin-header {
   display: flex;
-  gap: 8px;
-  margin-bottom: 24px;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
 }
 
-.nav-pill {
-  padding: 8px 16px;
-  border-radius: 20px;
-  background: rgba(255,255,255,0.03);
-  color: rgba(255,255,255,0.5);
-  font-size: 0.9rem;
-  border: 1px solid transparent;
+.mini-logo {
+  font-family: "Erode", serif;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #31748f;
 }
 
-.nav-pill.active {
-  background: rgba(138, 92, 255, 0.15);
-  border-color: rgba(138, 92, 255, 0.3);
-  color: #fff;
+.avatar {
+  width: 40px; height: 40px; border-radius: 20px; background: #9ccfd8; /* rp-foam */
 }
 
-.velvet-panels {
-  flex: 1;
+.nav-pills {
   display: flex;
-  gap: 16px;
-  min-height: 0;
+  gap: 12px;
+  margin-bottom: 10px;
 }
 
-.velvet-list {
-  width: 35%;
+.nav-item {
+  padding: 12px 24px;
+  background: transparent;
+  border: 1px solid #403d52;
+  border-radius: 24px;
+  color: #908caa;
+}
+
+.nav-item.active {
+  background: #31748f;
+  border-color: #31748f;
+  color: #e0def4;
+}
+
+.content-card {
+  min-height: 120px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
 
-.mock-contact {
-  height: 56px;
-  border-radius: 12px;
-  background: rgba(255,255,255,0.02);
+.line {
+  height: 60px;
+  background: #26233a; /* rp-overlay */
+  border-radius: 20px;
+  width: 100%;
 }
 
-.mock-contact.active-contact {
-  background: rgba(138, 92, 255, 0.1);
-  border: 1px solid rgba(138, 92, 255, 0.2);
-}
-
-.velvet-main {
-  flex: 1;
-  background: rgba(0,0,0,0.4);
-  border-radius: 16px;
-  border: 1px solid rgba(138, 92, 255, 0.08);
-  padding: 16px;
-}
-
-.mock-thread {
-  height: 100%;
-  border-radius: 8px;
-  background: repeating-linear-gradient(0deg, rgba(255,255,255,0.02) 0, rgba(255,255,255,0.02) 1px, transparent 1px, transparent 40px);
-}
+.line.short { width: 60%; }
 </style>

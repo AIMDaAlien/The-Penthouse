@@ -1,53 +1,56 @@
 <template>
-  <div class="prism-shell">
-    <header class="prism-header">
-      <h1 class="prism-wordmark">The Penthouse</h1>
-      <div class="prism-connection" v-if="shellState === 'signedin'">
-        <div class="prism-status-bar">
-           <div class="prism-status-fill"></div>
+  <div class="shell">
+    <transition name="topbar-slide-left">
+      <header v-if="shellState !== 'signedin'" class="top-bar">
+        <div class="large-logo">
+          <span class="logo-the">The</span>
+          <span class="logo-pent">PENT</span>
+          <span class="logo-house">HOUSE</span>
         </div>
-      </div>
-    </header>
+      </header>
+    </transition>
 
-    <main class="prism-content">
-      <!-- 1. Auth State -->
-      <section v-if="shellState === 'auth'" class="prism-state">
-        <div class="prism-card">
-          <h2>Access Gateway</h2>
-          <div class="mock-form">
-            <div class="mock-input"></div>
-            <div class="mock-input"></div>
-            <div class="mock-btn">Initialize</div>
-          </div>
+    <main class="viewport" :class="{ 'is-signedin': shellState === 'signedin' }">
+      <!-- State: Auth -->
+      <section v-if="shellState === 'auth'" class="stack">
+        <div class="pill tall">
+           <span class="tag">Identity</span>
+           <h2>Access<br>Port</h2>
         </div>
-      </section>
-
-      <!-- 2. Gated State (Test Notice / Session Sync) -->
-      <section v-else-if="shellState === 'gated'" class="prism-state">
-        <div class="prism-card offset">
-          <p class="utility-font">Diagnostics</p>
-          <h2>Testing Protocol</h2>
-          <div class="mock-btn outline">Confirm</div>
+        <div class="pill">
+           <div class="mock-input"></div>
+           <div class="action-btn">Enter</div>
         </div>
       </section>
 
-      <!-- 3. Signed In State -->
-      <section v-else-if="shellState === 'signedin'" class="prism-state prism-app">
-        <div class="prism-layout">
-           <nav class="prism-sidebar">
-             <div class="nav-facets">
-               <div class="facet active">Chats</div>
-               <div class="facet">Directory</div>
-               <div class="facet utility-font">Settings</div>
-             </div>
-           </nav>
-           
-           <div class="prism-main-view">
-             <div class="prism-glass-panel">
-               <div class="mock-chat-header"></div>
-               <div class="mock-chat-body"></div>
-             </div>
-           </div>
+      <!-- State: Gated -->
+      <section v-else-if="shellState === 'gated'" class="stack">
+        <div class="pill tall warning">
+           <span class="tag">System</span>
+           <h2>Locked</h2>
+        </div>
+        <div class="pill">
+           <p>Wait for build clearance.</p>
+           <div class="action-btn outline">Ack</div>
+        </div>
+      </section>
+
+      <!-- State: Signed In -->
+      <section v-else-if="shellState === 'signedin'" class="stack signedin-stack">
+        <header class="signedin-header">
+           <div class="mini-logo">TPH</div>
+           <div class="avatar"></div>
+        </header>
+        <div class="nav-pills">
+           <div class="nav-item active">Feed</div>
+           <div class="nav-item">Explore</div>
+        </div>
+        <div class="pill content-card">
+           <div class="line"></div>
+           <div class="line short"></div>
+        </div>
+        <div class="pill content-card">
+           <div class="line"></div>
         </div>
       </section>
     </main>
@@ -61,222 +64,199 @@ defineProps<{
 </script>
 
 <style scoped>
-/* Concept 4: Prism Penthouse. Sharper geometry, faceted glass edges, reflective layering, architectural. */
-
-.prism-shell {
+/* Wave 4 - Concept 4: Kinetic Gold */
+.shell {
   height: 100%;
   width: 100%;
+  background: #191724; /* rp-base */
+  color: #e0def4; /* rp-text */
+  font-family: "Ubuntu Variable", sans-serif;
   display: flex;
   flex-direction: column;
-  background: #0a0b12;
-  background-image: 
-    linear-gradient(45deg, rgba(140, 216, 255, 0.03) 25%, transparent 25%),
-    linear-gradient(-45deg, rgba(140, 216, 255, 0.03) 25%, transparent 25%);
-  background-size: 60px 60px;
-  color: #fff;
-  font-family: "Ubuntu Variable", "Ubuntu", sans-serif;
-  overflow: hidden;
   position: relative;
+  overflow: hidden;
 }
 
-.prism-shell::after {
-  content: '';
-  position: absolute;
-  top: 0; right: 0; bottom: 0; left: 0;
-  background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, transparent 100%);
-  pointer-events: none;
-}
-
-.prism-header {
-  padding: max(20px, env(safe-area-inset-top)) 32px 20px;
+.top-bar {
+  width: 100%;
+  height: 20vh;
+  padding: 30px 24px;
+  background: #191724; /* rp-base */
+  border-bottom: 2px solid #eb6f92; /* rp-love */
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
-  background: rgba(10, 11, 18, 0.8);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  z-index: 10;
+  flex-direction: column;
+  justify-content: flex-end;
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 20;
 }
 
-.prism-wordmark {
+.topbar-slide-left-enter-active,
+.topbar-slide-left-leave-active {
+  transition: all 0.5s cubic-bezier(0.5, 0, 0, 1);
+}
+
+.topbar-slide-left-enter-from,
+.topbar-slide-left-leave-to {
+  transform: translateX(-100%);
+}
+
+.large-logo {
+  display: flex;
+  flex-direction: column;
+  line-height: 0.85;
+}
+
+.logo-the {
   font-family: "Erode", serif;
   font-size: 1.5rem;
-  font-weight: 400;
-  margin: 0;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  background: linear-gradient(135deg, #fff 40%, #8cd8ff 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: #f6c177; /* rp-gold */
 }
 
-.prism-connection {
-  width: 40px;
-}
-
-.prism-status-bar {
-  height: 4px;
-  background: rgba(255,255,255,0.1);
-  border-radius: 2px;
-  overflow: hidden;
-}
-
-.prism-status-fill {
-  width: 100%;
-  height: 100%;
-  background: #8cd8ff;
-  box-shadow: 0 0 8px #8cd8ff;
-}
-
-.utility-font {
-  font-family: "JetBrains Mono", monospace !important;
-  font-size: 0.75rem !important;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-}
-
-.prism-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  z-index: 10;
-}
-
-.prism-state {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  animation: slide-up 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-@keyframes slide-up {
-  from { opacity: 0; transform: translateY(30px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.prism-card {
-  margin: auto;
-  width: 100%;
-  max-width: 440px;
-  background: rgba(20, 22, 40, 0.6);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-top: 1px solid rgba(255,255,255,0.25);
-  border-left: 1px solid rgba(255,255,255,0.15);
-  padding: 48px 40px;
-  backdrop-filter: blur(30px);
-  -webkit-backdrop-filter: blur(30px);
-  box-shadow: 20px 20px 60px rgba(0,0,0,0.5), -1px -1px 0 rgba(255,255,255,0.1);
-  transform: perspective(1000px) rotateY(-2deg) rotateX(2deg);
-}
-
-.prism-card.offset {
-  transform: perspective(1000px) rotateY(2deg) rotateX(2deg);
-}
-
-.prism-card h2 {
+.logo-pent, .logo-house {
   font-family: "Erode", serif;
-  font-size: 1.8rem;
-  font-weight: 300;
-  margin: 0 0 24px 0;
+  font-size: 3.5rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #f6c177; /* rp-gold */
 }
 
-.mock-form {
+.viewport {
+  flex: 1;
+  padding: 20vh 20px 40px 20px;
+  overflow-y: auto;
+  position: relative;
+  z-index: 10;
+  transition: padding-top 0.5s cubic-bezier(0.5, 0, 0, 1);
+}
+
+.viewport.is-signedin {
+  padding-top: 20px;
+}
+
+.stack {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  margin-top: 20px;
+  animation: slide-in 0.8s cubic-bezier(0.19, 1, 0.22, 1);
+}
+
+@keyframes slide-in {
+  from { opacity: 0; transform: translateX(40px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.pill {
+  background: linear-gradient(145deg, #26233a, #1f1d2e);
+  border-radius: 40px;
+  padding: 30px;
+  border: 1px solid #403d52; /* rp-highlight-med */
+}
+
+.pill.tall {
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.pill.warning {
+  background: linear-gradient(145deg, rgba(235, 111, 146, 0.2), rgba(235, 111, 146, 0.05));
+  border-color: #eb6f92;
+}
+
+.tag {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  color: #ebbcba; /* rp-rose */
+  margin-bottom: 12px;
+}
+
+.pill h2 {
+  font-family: "Erode", serif;
+  font-size: 3rem;
+  margin: 0;
+  font-weight: 400;
+  line-height: 0.9;
 }
 
 .mock-input {
-  height: 48px;
-  background: rgba(0,0,0,0.5);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-right: 1px solid rgba(255,255,255,0.2);
-  border-bottom: 1px solid rgba(255,255,255,0.2);
+  height: 2px;
+  background: #6e6a86; /* rp-muted */
+  margin-bottom: 30px;
+  margin-top: 10px;
 }
 
-.mock-btn {
-  height: 48px;
-  background: #8cd8ff;
-  color: #000;
+.action-btn {
+  height: 60px;
+  background: #f6c177; /* rp-gold */
+  color: #191724; /* rp-base */
+  border-radius: 30px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 600;
-  margin-top: 16px;
-  clip-path: polygon(0 0, 100% 0, 95% 100%, 5% 100%);
+  font-size: 1.1rem;
 }
 
-.mock-btn.outline {
+.action-btn.outline {
   background: transparent;
-  color: #8cd8ff;
-  border: 1px solid #8cd8ff;
+  color: #f6c177;
+  border: 1px solid #f6c177;
 }
 
-.prism-app {
-  justify-content: flex-start;
-}
-
-.prism-layout {
+.signedin-header {
   display: flex;
-  flex: 1;
-}
-
-.prism-sidebar {
-  width: 80px;
-  border-right: 1px solid rgba(255,255,255,0.08);
-  background: rgba(0,0,0,0.2);
-  display: flex;
-  flex-direction: column;
-  padding: 24px 0;
-}
-
-.nav-facets {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
+  justify-content: space-between;
   align-items: center;
+  margin-bottom: 20px;
 }
 
-.facet {
-  writing-mode: vertical-rl;
-  transform: rotate(180deg);
-  font-size: 0.9rem;
-  color: rgba(255,255,255,0.4);
-  padding: 16px 8px;
-  border-left: 2px solid transparent; /* Actually on right due to rotation, acts as indicator */
+.mini-logo {
+  font-family: "Erode", serif;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #f6c177;
 }
 
-.facet.active {
-  color: #fff;
-  border-color: #8cd8ff;
-  background: linear-gradient(90deg, transparent, rgba(140, 216, 255, 0.1));
+.avatar {
+  width: 40px; height: 40px; border-radius: 20px; background: #eb6f92; /* rp-love */
 }
 
-.prism-main-view {
-  flex: 1;
-  padding: 24px;
+.nav-pills {
   display: flex;
+  gap: 12px;
+  margin-bottom: 10px;
 }
 
-.prism-glass-panel {
-  flex: 1;
-  background: rgba(255,255,255,0.02);
-  border: 1px solid rgba(255,255,255,0.08);
-  border-top: 1px solid rgba(255,255,255,0.2);
-  border-left: 1px solid rgba(255,255,255,0.15);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+.nav-item {
+  padding: 12px 24px;
+  background: #26233a;
+  border-radius: 24px;
+  color: #908caa;
+}
+
+.nav-item.active {
+  background: #eb6f92;
+  color: #191724;
+}
+
+.content-card {
+  min-height: 120px;
   display: flex;
   flex-direction: column;
+  gap: 12px;
 }
 
-.mock-chat-header {
-  height: 64px;
-  border-bottom: 1px solid rgba(255,255,255,0.05);
+.line {
+  height: 60px;
+  background: #403d52;
+  border-radius: 20px;
+  width: 100%;
 }
 
-.mock-chat-body {
-  flex: 1;
-}
+.line.short { width: 60%; }
 </style>

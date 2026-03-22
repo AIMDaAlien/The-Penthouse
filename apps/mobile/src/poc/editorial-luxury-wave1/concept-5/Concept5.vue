@@ -1,53 +1,56 @@
 <template>
-  <div class="couture-shell">
-    <header class="couture-header">
-      <div class="couture-header-inner">
-        <h1 class="couture-wordmark">The Penthouse</h1>
-        <div class="couture-connection" v-if="shellState === 'signedin'">
-          <div class="conn-dot"></div>
-          <span class="utility-font">Live</span>
+  <div class="shell">
+    <transition name="topbar-lift">
+      <header v-if="shellState !== 'signedin'" class="top-bar">
+        <div class="large-logo">
+          <span class="logo-the">The</span>
+          <span class="logo-pent">PENT</span>
+          <span class="logo-house">HOUSE</span>
         </div>
-      </div>
-    </header>
+      </header>
+    </transition>
 
-    <main class="couture-content">
-      <!-- 1. Auth State -->
-      <section v-if="shellState === 'auth'" class="couture-state">
-        <div class="couture-card">
-          <div class="couture-card-header">
-            <h2>Sign In</h2>
-          </div>
-          <div class="mock-form">
-            <div class="mock-input"></div>
-            <div class="mock-input"></div>
-            <div class="mock-btn">Continue</div>
-          </div>
+    <main class="viewport" :class="{ 'is-signedin': shellState === 'signedin' }">
+      <!-- State: Auth -->
+      <section v-if="shellState === 'auth'" class="stack">
+        <div class="pill tall">
+           <span class="tag">Identity</span>
+           <h2>Access<br>Port</h2>
+        </div>
+        <div class="pill">
+           <div class="mock-input"></div>
+           <div class="action-btn">Enter</div>
         </div>
       </section>
 
-      <!-- 2. Gated State (Test Notice / Session Sync) -->
-      <section v-else-if="shellState === 'gated'" class="couture-state">
-        <div class="couture-card">
-          <div class="couture-card-header">
-            <p class="utility-font" style="opacity:0.6; margin-bottom: 8px;">Restricted</p>
-            <h2>Testing Phase</h2>
-          </div>
-          <p class="couture-p">Review the prerequisites below to proceed into the application interface.</p>
-          <div class="mock-btn outline">Accept</div>
+      <!-- State: Gated -->
+      <section v-else-if="shellState === 'gated'" class="stack">
+        <div class="pill tall warning">
+           <span class="tag">System</span>
+           <h2>Locked</h2>
+        </div>
+        <div class="pill">
+           <p>Wait for build clearance.</p>
+           <div class="action-btn outline">Ack</div>
         </div>
       </section>
 
-      <!-- 3. Signed In State -->
-      <section v-else-if="shellState === 'signedin'" class="couture-state couture-app">
-        <nav class="couture-nav">
-          <div class="couture-tab active">Chats</div>
-          <div class="couture-tab">Directory</div>
-          <div class="couture-tab utility-font">Settings</div>
-        </nav>
-        
-        <div class="couture-viewport">
-          <div class="couture-mock-module"></div>
-          <div class="couture-mock-module primary"></div>
+      <!-- State: Signed In -->
+      <section v-else-if="shellState === 'signedin'" class="stack signedin-stack">
+        <header class="signedin-header">
+           <div class="mini-logo">TPH</div>
+           <div class="avatar"></div>
+        </header>
+        <div class="nav-pills">
+           <div class="nav-item active">Feed</div>
+           <div class="nav-item">Explore</div>
+        </div>
+        <div class="pill border-card">
+           <div class="line"></div>
+           <div class="line short"></div>
+        </div>
+        <div class="pill border-card">
+           <div class="line"></div>
         </div>
       </section>
     </main>
@@ -61,189 +64,206 @@ defineProps<{
 </script>
 
 <style scoped>
-/* Concept 5: Soft Couture. Asymmetry, softer framing, tactile elegance, premium but warmer/human. */
-
-.couture-shell {
+/* Wave 4 - Concept 5: Sunset Editorial */
+.shell {
   height: 100%;
   width: 100%;
+  background: #191724; /* rp-base */
+  color: #e0def4; /* rp-text */
+  font-family: "Ubuntu Variable", sans-serif;
   display: flex;
   flex-direction: column;
-  background: #12131C;
-  background: radial-gradient(circle at 70% 20%, #1e2030 0%, #0d0f16 100%);
-  color: #f0edf5;
-  font-family: "Ubuntu Variable", "Ubuntu", sans-serif;
+  position: relative;
   overflow: hidden;
 }
 
-.couture-header {
-  padding: max(24px, env(safe-area-inset-top)) 24px 0;
-}
-
-.couture-header-inner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-bottom: 24px;
-}
-
-.couture-wordmark {
-  font-family: "Erode", serif;
-  font-size: 2.2rem;
-  font-weight: 300;
-  margin: 0;
-  color: #fff;
-  font-style: italic; /* Soft couture touch */
-}
-
-.couture-connection {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: rgba(255,255,255,0.06);
-  padding: 6px 14px;
-  border-radius: 30px; /* Soft rounding */
-}
-
-.conn-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #8cd8ff;
-  box-shadow: 0 0 12px #8cd8ff;
-}
-
-.utility-font {
-  font-family: "JetBrains Mono", monospace !important;
-  font-size: 0.75rem !important;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.couture-content {
-  flex: 1;
-  padding: 0 24px 24px;
-  display: flex;
-  flex-direction: column;
-}
-
-.couture-state {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  animation: float-up 0.7s cubic-bezier(0.33, 1, 0.68, 1);
-}
-
-@keyframes float-up {
-  from { opacity: 0; transform: translateY(20px); filter: blur(5px); }
-  to { opacity: 1; transform: translateY(0); filter: blur(0); }
-}
-
-.couture-card {
-  margin: auto;
+.top-bar {
   width: 100%;
-  max-width: 420px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  padding: 0; /* padding applied to inner elements for asymmetrical look */
-  border-radius: 32px;
-  backdrop-filter: blur(25px);
-  -webkit-backdrop-filter: blur(25px);
-  overflow: hidden;
+  height: 20vh;
+  padding: 30px 24px;
+  background: #1f1d2e; /* rp-surface */
+  border-bottom: 4px solid #9ccfd8; /* rp-foam */
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 20;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
 }
 
-.couture-card-header {
-  padding: 40px 40px 20px;
-  background: linear-gradient(180deg, rgba(255,255,255,0.04), transparent);
+.topbar-lift-enter-active,
+.topbar-lift-leave-active {
+  transition: all 0.7s cubic-bezier(0.68, -0.55, 0.265, 1.55);
 }
 
-.couture-card h2 {
+.topbar-lift-enter-from,
+.topbar-lift-leave-to {
+  transform: translateY(-120%);
+}
+
+.large-logo {
+  display: flex;
+  flex-direction: column;
+  line-height: 0.85;
+}
+
+.logo-the {
   font-family: "Erode", serif;
-  font-size: 2.2rem;
-  font-weight: 300;
-  margin: 0;
+  font-size: 1.5rem;
+  color: #ebbcba; /* rp-rose */
 }
 
-.couture-p {
-  padding: 0 40px;
-  color: rgba(255,255,255,0.6);
-  line-height: 1.6;
+.logo-pent, .logo-house {
+  font-family: "Erode", serif;
+  font-size: 3.5rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #ebbcba; /* rp-rose */
 }
 
-.mock-form {
-  padding: 0 40px 40px;
+.viewport {
+  flex: 1;
+  padding: 20vh 20px 40px 20px;
+  overflow-y: auto;
+  position: relative;
+  z-index: 10;
+  transition: padding-top 0.7s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.viewport.is-signedin {
+  padding-top: 20px;
+}
+
+.stack {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  margin-top: 20px;
+  animation: fade-in 1s ease-out;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.pill {
+  background: #26233a; /* rp-overlay */
+  border-radius: 40px;
+  padding: 30px;
+}
+
+.border-card {
+  background: transparent;
+  border: 1px solid #6e6a86; /* rp-muted */
+}
+
+.pill.tall {
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.pill.warning {
+  background: #1f1d2e;
+  border: 2px solid #ebbcba;
+}
+
+.tag {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  color: #9ccfd8; /* rp-foam */
+  margin-bottom: 12px;
+}
+
+.pill h2 {
+  font-family: "Erode", serif;
+  font-size: 3rem;
+  margin: 0;
+  font-weight: 400;
+  line-height: 0.9;
 }
 
 .mock-input {
-  height: 54px;
-  border-radius: 27px;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.08);
+  height: 2px;
+  background: #6e6a86; /* rp-muted */
+  margin-bottom: 30px;
+  margin-top: 10px;
 }
 
-.mock-btn {
-  height: 54px;
-  border-radius: 27px;
-  background: #f0edf5;
-  color: #12131C;
+.action-btn {
+  height: 60px;
+  background: #9ccfd8; /* rp-foam */
+  color: #191724; /* rp-base */
+  border-radius: 30px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 500;
-  margin-top: 16px;
-  font-size: 1.05rem;
+  font-weight: 600;
+  font-size: 1.1rem;
 }
 
-.mock-btn.outline {
+.action-btn.outline {
   background: transparent;
-  color: #f0edf5;
-  border: 1px solid #f0edf5;
-  margin: 0 40px 40px;
+  color: #9ccfd8;
+  border: 1px solid #9ccfd8;
 }
 
-.couture-app {
-  justify-content: flex-start;
+.signedin-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
 }
 
-.couture-nav {
+.mini-logo {
+  font-family: "Erode", serif;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #ebbcba;
+}
+
+.avatar {
+  width: 40px; height: 40px; border-radius: 20px; background: #ebbcba; 
+}
+
+.nav-pills {
   display: flex;
   gap: 12px;
-  margin-bottom: 24px;
-  overflow-x: auto;
-  padding-bottom: 8px; /* For scrollbar */
+  margin-bottom: 10px;
 }
 
-.couture-tab {
+.nav-item {
   padding: 12px 24px;
-  background: rgba(255,255,255,0.02);
+  background: transparent;
+  border: 1px solid #403d52;
   border-radius: 24px;
-  color: rgba(255,255,255,0.4);
-  white-space: nowrap;
+  color: #908caa;
 }
 
-.couture-tab.active {
-  background: #f0edf5;
-  color: #12131C;
+.nav-item.active {
+  background: #9ccfd8;
+  color: #191724;
+  border-color: #9ccfd8;
 }
 
-.couture-viewport {
-  flex: 1;
+.border-card {
+  min-height: 120px;
   display: flex;
-  gap: 16px;
-  min-height: 0;
+  flex-direction: column;
+  gap: 12px;
 }
 
-.couture-mock-module {
-  width: 30%;
-  background: rgba(255,255,255,0.02);
-  border-radius: 32px;
+.line {
+  height: 60px;
+  background: #403d52;
+  border-radius: 20px;
+  width: 100%;
 }
 
-.couture-mock-module.primary {
-  flex: 1;
-  background: rgba(255,255,255,0.04);
-  border-radius: 32px;
-}
+.line.short { width: 60%; }
 </style>
