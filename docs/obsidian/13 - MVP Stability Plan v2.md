@@ -77,6 +77,17 @@ Status: in progress
   - member tombstones
   - admin audit visibility of original content plus moderation metadata
   - expanded read-only operator diagnostics
+- Ops hardening v2 now extends that operator surface with:
+  - truthful build/runtime metadata
+  - uploads/storage diagnostics
+  - push since-start counters
+  - bounded 5xx summaries
+  - optional backup status from a real file source
+- Small hardening cleanup pass completed on top of Ops v2:
+  - push warning logs redact raw FCM tokens
+  - upload diagnostics use a capped scan instead of an unbounded walk
+  - malformed backup-status files fall back cleanly
+  - direct tests now cover the malformed-backup path and the real 5xx response hook
 - The next work is expanding moderation and server-management depth without adding remote-control operations too early.
 
 ## Current status

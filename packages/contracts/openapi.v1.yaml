@@ -202,6 +202,37 @@ components:
         recoveryCode:
           type: string
 
+    SessionSummary:
+      type: object
+      required: [id, createdAt, lastUsedAt, deviceLabel, appContext, hasPushToken, current]
+      properties:
+        id:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        lastUsedAt:
+          type: string
+          format: date-time
+        deviceLabel:
+          type: string
+        appContext:
+          type: string
+          nullable: true
+        hasPushToken:
+          type: boolean
+        current:
+          type: boolean
+
+    RevokeOtherSessionsResponse:
+      type: object
+      required: [revokedCount]
+      properties:
+        revokedCount:
+          type: integer
+          minimum: 0
+
     TestNoticeAckRequest:
       type: object
       required: [version]
@@ -221,9 +252,72 @@ components:
           type: string
           format: date-time
 
+    RegisterDeviceTokenRequest:
+      type: object
+      required: [platform, token]
+      properties:
+        platform:
+          type: string
+          enum: [android, ios]
+        token:
+          type: string
+          minLength: 1
+          maxLength: 4096
+        previousToken:
+          type: string
+          minLength: 1
+          maxLength: 4096
+
+    RegisterDeviceTokenResponse:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+          format: uuid
+
+    UnregisterDeviceTokenRequest:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+          minLength: 1
+          maxLength: 4096
+
+    DeviceNotificationSettings:
+      type: object
+      required: [token, notificationsEnabled, previewsEnabled, quietHoursEnabled, quietHoursStartMinute, quietHoursEndMinute, timezone]
+      properties:
+        token:
+          type: string
+          minLength: 1
+          maxLength: 4096
+        notificationsEnabled:
+          type: boolean
+        previewsEnabled:
+          type: boolean
+        quietHoursEnabled:
+          type: boolean
+        quietHoursStartMinute:
+          type: integer
+          nullable: true
+          minimum: 0
+          maximum: 1439
+        quietHoursEndMinute:
+          type: integer
+          nullable: true
+          minimum: 0
+          maximum: 1439
+        timezone:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 128
+
     ChatSummary:
       type: object
-      required: [id, type, name, updatedAt]
+      required: [id, type, name, updatedAt, unreadCount]
       properties:
         id:
           type: string
@@ -236,6 +330,42 @@ components:
         updatedAt:
           type: string
           format: date-time
+        unreadCount:
+          type: integer
+          minimum: 0
+        counterpartMemberId:
+          type: string
+          format: uuid
+        counterpartAvatarUrl:
+          type: string
+          nullable: true
+        notificationsMuted:
+          type: boolean
+
+    CreateDirectChatRequest:
+      type: object
+      required: [memberId]
+      properties:
+        memberId:
+          type: string
+          format: uuid
+
+    ChatPreferencesRequest:
+      type: object
+      required: [notificationsMuted]
+      properties:
+        notificationsMuted:
+          type: boolean
+
+    ChatPreferencesResponse:
+      type: object
+      required: [chatId, notificationsMuted]
+      properties:
+        chatId:
+          type: string
+          format: uuid
+        notificationsMuted:
+          type: boolean
 
     Message:
       type: object
@@ -273,6 +403,50 @@ components:
         clientMessageId:
           type: string
           description: Client-supplied idempotency key (optional on received messages)
+        hidden:
+          type: boolean
+          description: True when members should render a tombstone placeholder instead of original content
+
+    ModerationAction:
+      type: string
+      enum: [hide, unhide]
+
+    AdminMessageModeration:
+      type: object
+      required: [hiddenByModeration, latestAction, latestReason, latestCreatedAt, latestActorUserId]
+      properties:
+        hiddenByModeration:
+          type: boolean
+        latestAction:
+          allOf:
+            - $ref: '#/components/schemas/ModerationAction'
+          nullable: true
+        latestReason:
+          type: string
+          nullable: true
+        latestCreatedAt:
+          type: string
+          format: date-time
+          nullable: true
+        latestActorUserId:
+          type: string
+          format: uuid
+          nullable: true
+        latestActorUsername:
+          type: string
+          nullable: true
+        latestActorDisplayName:
+          type: string
+          nullable: true
+
+    AdminModerateMessageRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
 
     SendMessageRequest:
       type: object
@@ -329,7 +503,7 @@ components:
 
     GifResult:
       type: object
-      required: [id, url, previewUrl, provider]
+      required: [id, url, previewUrl, renderMode, provider]
       properties:
         id:
           type: string
@@ -337,6 +511,9 @@ components:
           type: string
         previewUrl:
           type: string
+        renderMode:
+          type: string
+          enum: [image, video]
         title:
           type: string
           nullable: true
@@ -419,6 +596,204 @@ components:
           type: string
           format: date-time
 
+    DiagnosticsAvailability:
+      type: string
+      enum: [available, unavailable, unconfigured]
+
+    AdminRouteErrorSummary:
+      type: object
+      required: [group, count]
+      properties:
+        group:
+          type: string
+        count:
+          type: integer
+          minimum: 0
+
+    AdminOperatorSummary:
+      type: object
+      required: [app, members, content, realtime, moderation, invite, push, uploads, errors, backup]
+      properties:
+        app:
+          type: object
+          required: [name, checkedAt, databaseReachable, startedAt, uptimeSeconds, version, buildId, deployedAt]
+          properties:
+            name:
+              type: string
+            checkedAt:
+              type: string
+              format: date-time
+            databaseReachable:
+              type: boolean
+            startedAt:
+              type: string
+              format: date-time
+              nullable: true
+            uptimeSeconds:
+              type: integer
+              minimum: 0
+              nullable: true
+            version:
+              type: string
+              nullable: true
+            buildId:
+              type: string
+              nullable: true
+            deployedAt:
+              type: string
+              format: date-time
+              nullable: true
+        members:
+          type: object
+          required: [total, active, banned, removed, admins]
+          properties:
+            total:
+              type: integer
+              minimum: 0
+            active:
+              type: integer
+              minimum: 0
+            banned:
+              type: integer
+              minimum: 0
+            removed:
+              type: integer
+              minimum: 0
+            admins:
+              type: integer
+              minimum: 0
+        content:
+          type: object
+          required: [chats, messages, uploads, uploadBytesTotal]
+          properties:
+            chats:
+              type: integer
+              minimum: 0
+            messages:
+              type: integer
+              minimum: 0
+            uploads:
+              type: integer
+              minimum: 0
+            uploadBytesTotal:
+              type: integer
+              minimum: 0
+        realtime:
+          type: object
+          required: [sockets, connectedUsers, activeChatRooms]
+          properties:
+            sockets:
+              type: integer
+              minimum: 0
+            connectedUsers:
+              type: integer
+              minimum: 0
+            activeChatRooms:
+              type: integer
+              minimum: 0
+        moderation:
+          type: object
+          required: [hiddenMessages, recentActions24h]
+          properties:
+            hiddenMessages:
+              type: integer
+              minimum: 0
+            recentActions24h:
+              type: integer
+              minimum: 0
+        invite:
+          $ref: '#/components/schemas/AdminInviteResponse'
+        push:
+          type: object
+          required: [configured, androidTokens, iosTokens, notificationsDisabled, quietHoursEnabled, previewsDisabled, sinceStart]
+          properties:
+            configured:
+              type: boolean
+            androidTokens:
+              type: integer
+              minimum: 0
+            iosTokens:
+              type: integer
+              minimum: 0
+            notificationsDisabled:
+              type: integer
+              minimum: 0
+            quietHoursEnabled:
+              type: integer
+              minimum: 0
+            previewsDisabled:
+              type: integer
+              minimum: 0
+            sinceStart:
+              type: object
+              required: [successfulSends, failedSends, staleTokensRemoved, lastFailureAt]
+              properties:
+                successfulSends:
+                  type: integer
+                  minimum: 0
+                failedSends:
+                  type: integer
+                  minimum: 0
+                staleTokensRemoved:
+                  type: integer
+                  minimum: 0
+                lastFailureAt:
+                  type: string
+                  format: date-time
+                  nullable: true
+        uploads:
+          type: object
+          required: [status, directoryBytes, fileCount, latestUploadAt, scanLimited]
+          properties:
+            status:
+              $ref: '#/components/schemas/DiagnosticsAvailability'
+            directoryBytes:
+              type: integer
+              minimum: 0
+              nullable: true
+            fileCount:
+              type: integer
+              minimum: 0
+              nullable: true
+            latestUploadAt:
+              type: string
+              format: date-time
+              nullable: true
+            scanLimited:
+              type: boolean
+        errors:
+          type: object
+          required: [sinceStart]
+          properties:
+            sinceStart:
+              type: object
+              required: [serverErrorCount, lastServerErrorAt, routeGroups]
+              properties:
+                serverErrorCount:
+                  type: integer
+                  minimum: 0
+                lastServerErrorAt:
+                  type: string
+                  format: date-time
+                  nullable: true
+                routeGroups:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/AdminRouteErrorSummary'
+        backup:
+          type: object
+          required: [status, target, lastSuccessfulBackupAt]
+          properties:
+            status:
+              type: string
+            target:
+              type: string
+              nullable: true
+            lastSuccessfulBackupAt:
+              type: string
+              format: date-time
+              nullable: true
+
     AdminTempPasswordResponse:
       type: object
       required: [userId, username, temporaryPassword]
@@ -435,12 +810,12 @@ components:
       allOf:
         - $ref: '#/components/schemas/Message'
         - type: object
-          required: [senderStatus, hidden]
+          required: [senderStatus, moderation]
           properties:
             senderStatus:
               $ref: '#/components/schemas/UserStatus'
-            hidden:
-              type: boolean
+            moderation:
+              $ref: '#/components/schemas/AdminMessageModeration'
 
 paths:
   /api/v1/health:
@@ -661,6 +1036,89 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/v1/me/sessions:
+    get:
+      summary: List active sessions for the current member
+      operationId: listMySessions
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Active refresh-token-backed sessions for this member
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SessionSummary'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/me/sessions/others:
+    delete:
+      summary: Revoke all other active sessions for the current member
+      operationId: revokeOtherSessions
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Other sessions revoked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevokeOtherSessionsResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Current session could not be identified cleanly
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/me/sessions/{sessionId}:
+    delete:
+      summary: Revoke one other active session for the current member
+      operationId: revokeSession
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Session revoked
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Session not found for this member
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Current session must be ended through the normal logout path
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/v1/me/profile:
     patch:
       summary: Update current member profile
@@ -789,6 +1247,140 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/v1/me/device-tokens:
+    put:
+      summary: Register or refresh the current device push token
+      operationId: registerDeviceToken
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterDeviceTokenRequest'
+      responses:
+        '200':
+          description: Device token registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterDeviceTokenResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      summary: Unregister the current device push token
+      operationId: unregisterDeviceToken
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UnregisterDeviceTokenRequest'
+      responses:
+        '204':
+          description: Device token removed if it belonged to the current user
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/me/device-notification-settings:
+    get:
+      summary: Get notification settings for the current device token
+      operationId: getDeviceNotificationSettings
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 4096
+      responses:
+        '200':
+          description: Device notification settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceNotificationSettings'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Token not found for this user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      summary: Update notification settings for the current device token
+      operationId: updateDeviceNotificationSettings
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceNotificationSettings'
+      responses:
+        '200':
+          description: Updated device notification settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceNotificationSettings'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Token not found for this user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/v1/members:
     get:
       summary: Search active members
@@ -876,6 +1468,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AdminInviteResponse'
+        '403':
+          description: Admin only, password change required, or account unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/admin/operator/summary:
+    get:
+      summary: Get a read-only operator summary for admin use
+      operationId: adminGetOperatorSummary
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Operator summary snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminOperatorSummary'
         '403':
           description: Admin only, password change required, or account unavailable
           content:
@@ -1083,6 +1695,130 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/v1/admin/chats:
+    get:
+      summary: List all chats for admin moderation, including direct messages
+      operationId: adminListChats
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Chat summaries for moderation pickers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ChatSummary'
+        '403':
+          description: Admin only, password change required, or account unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/admin/messages/{messageId}/hide:
+    post:
+      summary: Hide a message from normal member views
+      operationId: adminHideMessage
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminModerateMessageRequest'
+      responses:
+        '200':
+          description: Updated admin-visible message state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminMessage'
+        '400':
+          description: Invalid moderation request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Admin only, password change required, or account unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Message not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Message already hidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/admin/messages/{messageId}/unhide:
+    post:
+      summary: Restore a previously hidden message to normal member views
+      operationId: adminUnhideMessage
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminModerateMessageRequest'
+      responses:
+        '200':
+          description: Updated admin-visible message state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminMessage'
+        '400':
+          description: Invalid moderation request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Admin only, password change required, or account unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Message not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Message already visible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/v1/chats:
     get:
       summary: List chats available to current user
@@ -1106,6 +1842,44 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
               example:
                 error: 'Unauthorized'
+
+  /api/v1/chats/dm:
+    post:
+      summary: Resolve or create a 1:1 direct message chat
+      operationId: createDirectChat
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDirectChatRequest'
+      responses:
+        '200':
+          description: Existing or newly created DM summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatSummary'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Self-DM or inactive target rejected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/chats/{chatId}/messages:
     get:
@@ -1159,6 +1933,57 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
               example:
                 error: 'Forbidden'
+        '409':
+          description: Direct message is read-only because the counterpart is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/chats/{chatId}/preferences:
+    patch:
+      summary: Update the current member's chat-level preferences
+      operationId: updateChatPreferences
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: chatId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatPreferencesRequest'
+      responses:
+        '200':
+          description: Updated preference state for this member's chat row
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatPreferencesResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Not a member of this chat
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
     post:
       summary: Send message with idempotent clientMessageId

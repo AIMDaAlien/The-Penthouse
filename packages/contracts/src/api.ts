@@ -404,11 +404,23 @@ export const AuthConfigResponseSchema = z.object({
   registrationMode: RegistrationModeSchema
 });
 
+const DiagnosticsAvailabilitySchema = z.enum(['available', 'unavailable', 'unconfigured']);
+
+export const AdminRouteErrorSummarySchema = z.object({
+  group: z.string(),
+  count: z.number().int().nonnegative()
+});
+
 export const AdminOperatorSummarySchema = z.object({
   app: z.object({
     name: z.string(),
     checkedAt: z.string(),
-    databaseReachable: z.boolean()
+    databaseReachable: z.boolean(),
+    startedAt: z.string().nullable(),
+    uptimeSeconds: z.number().int().nonnegative().nullable(),
+    version: z.string().nullable(),
+    buildId: z.string().nullable(),
+    deployedAt: z.string().nullable()
   }),
   members: z.object({
     total: z.number().int().nonnegative(),
@@ -439,7 +451,32 @@ export const AdminOperatorSummarySchema = z.object({
     iosTokens: z.number().int().nonnegative(),
     notificationsDisabled: z.number().int().nonnegative(),
     quietHoursEnabled: z.number().int().nonnegative(),
-    previewsDisabled: z.number().int().nonnegative()
+    previewsDisabled: z.number().int().nonnegative(),
+    sinceStart: z.object({
+      successfulSends: z.number().int().nonnegative(),
+      failedSends: z.number().int().nonnegative(),
+      staleTokensRemoved: z.number().int().nonnegative(),
+      lastFailureAt: z.string().nullable()
+    })
+  }),
+  uploads: z.object({
+    status: DiagnosticsAvailabilitySchema,
+    directoryBytes: z.number().int().nonnegative().nullable(),
+    fileCount: z.number().int().nonnegative().nullable(),
+    latestUploadAt: z.string().nullable(),
+    scanLimited: z.boolean()
+  }),
+  errors: z.object({
+    sinceStart: z.object({
+      serverErrorCount: z.number().int().nonnegative(),
+      lastServerErrorAt: z.string().nullable(),
+      routeGroups: z.array(AdminRouteErrorSummarySchema)
+    })
+  }),
+  backup: z.object({
+    status: z.string(),
+    target: z.string().nullable(),
+    lastSuccessfulBackupAt: z.string().nullable()
   })
 });
 

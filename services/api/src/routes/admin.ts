@@ -25,6 +25,13 @@ import {
 } from '../utils/users.js';
 import { toAdminMessage, toMemberMessage } from '../utils/messages.js';
 import { listAdminChatSummaries } from '../utils/chats.js';
+import {
+  getBackupDiagnostics,
+  getBuildRuntimeDiagnostics,
+  getErrorRuntimeDiagnostics,
+  getPushRuntimeDiagnostics,
+  getUploadDiagnostics
+} from '../utils/operatorDiagnostics.js';
 
 function ensureAdmin(request: any, reply: any) {
   if (request.user.role !== 'admin') {
@@ -318,7 +325,9 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
 
     const checkedAt = new Date().toISOString();
     const realtime = getRealtimeDiagnostics(app);
-    const [memberCounts, contentCounts, moderationCounts, pushCounts, firstActiveInviteResult, pushConfigured] = await Promise.all([
+    const errorRuntime = getErrorRuntimeDiagnostics();
+    const pushRuntime = getPushRuntimeDiagnostics();
+    const [memberCounts, contentCounts, moderationCounts, pushCounts, firstActiveInviteResult, pushConfigured, buildRuntime, uploadDiagnostics, backupDiagnostics] = await Promise.all([
       pool.query(
         `SELECT
            COUNT(*)::int AS total,
@@ -357,7 +366,10 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
          ORDER BY created_at ASC
          LIMIT 1`
       ),
-      isPushConfigured()
+      isPushConfigured(),
+      getBuildRuntimeDiagnostics(),
+      getUploadDiagnostics(),
+      getBackupDiagnostics()
     ]);
 
     const memberRow = memberCounts.rows[0] as {
@@ -390,7 +402,12 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       app: {
         name: 'The Penthouse API',
         checkedAt,
-        databaseReachable: true
+        databaseReachable: true,
+        startedAt: buildRuntime.startedAt,
+        uptimeSeconds: buildRuntime.uptimeSeconds,
+        version: buildRuntime.version,
+        buildId: buildRuntime.buildId,
+        deployedAt: buildRuntime.deployedAt
       },
       members: {
         total: Number(memberRow.total),
@@ -422,7 +439,23 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
         iosTokens: Number(pushRow.ios_tokens),
         notificationsDisabled: Number(pushRow.notifications_disabled),
         quietHoursEnabled: Number(pushRow.quiet_hours_enabled),
-        previewsDisabled: Number(pushRow.previews_disabled)
+        previewsDisabled: Number(pushRow.previews_disabled),
+        sinceStart: pushRuntime
+      },
+      uploads: {
+        status: uploadDiagnostics.status,
+        directoryBytes: uploadDiagnostics.directoryBytes,
+        fileCount: uploadDiagnostics.fileCount,
+        latestUploadAt: uploadDiagnostics.latestUploadAt,
+        scanLimited: uploadDiagnostics.scanLimited
+      },
+      errors: {
+        sinceStart: errorRuntime
+      },
+      backup: {
+        status: backupDiagnostics.status,
+        target: backupDiagnostics.target,
+        lastSuccessfulBackupAt: backupDiagnostics.lastSuccessfulBackupAt
       }
     });
   });

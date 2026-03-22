@@ -85,6 +85,17 @@ This vault is the "what we built and why" map for people joining the project lat
   - revoke one other session
   - revoke all other sessions
   - lightweight device labels plus push-active state per session
+- Ops hardening v2 is now visible in the operator panel:
+  - truthful build/runtime metadata
+  - uploads directory diagnostics with unavailable fallbacks
+  - push counters labeled since process start
+  - bounded 5xx diagnostics by route group
+  - optional backup status from a real status file when configured
+  - cleanup pass applied:
+    - FCM warning logs no longer print raw device tokens
+    - upload scanning is now capped for operator safety
+    - malformed backup-status files degrade cleanly to `unavailable`
+    - the Fastify 5xx response hook now has direct test coverage
 - Invite and onboarding controls v1 are now implemented:
   - multi-invite management replaces the single master invite code
   - admin can create, list, and revoke invite codes with labels and optional limits

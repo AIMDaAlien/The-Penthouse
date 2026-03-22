@@ -112,7 +112,12 @@ vi.mock('./services/http', () => ({
     app: {
       name: 'The Penthouse API',
       checkedAt: new Date().toISOString(),
-      databaseReachable: true
+      databaseReachable: true,
+      startedAt: new Date().toISOString(),
+      uptimeSeconds: 123,
+      version: '0.1.0',
+      buildId: null,
+      deployedAt: null
     },
     members: {
       total: 3,
@@ -148,7 +153,32 @@ vi.mock('./services/http', () => ({
       iosTokens: 0,
       notificationsDisabled: 0,
       quietHoursEnabled: 0,
-      previewsDisabled: 0
+      previewsDisabled: 0,
+      sinceStart: {
+        successfulSends: 0,
+        failedSends: 0,
+        staleTokensRemoved: 0,
+        lastFailureAt: null
+      }
+    },
+    uploads: {
+      status: 'available',
+      directoryBytes: 1024,
+      fileCount: 1,
+      latestUploadAt: new Date().toISOString(),
+      scanLimited: false
+    },
+    errors: {
+      sinceStart: {
+        serverErrorCount: 0,
+        lastServerErrorAt: null,
+        routeGroups: []
+      }
+    },
+    backup: {
+      status: 'unconfigured',
+      target: null,
+      lastSuccessfulBackupAt: null
     }
   })),
   getAdminChats: vi.fn(() => Promise.resolve([{ id: 'chat-1', name: 'General', type: 'channel', updatedAt: new Date().toISOString(), unreadCount: 0 }])),
