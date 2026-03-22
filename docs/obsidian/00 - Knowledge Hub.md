@@ -22,7 +22,7 @@ This vault is the "what we built and why" map for people joining the project lat
 11. [[11 - Stability Fixes v1]]
 12. [[12 - Native Notifications and Strict Read Receipts]]
 13. [[13 - MVP Stability Plan v2]]
-14. [[14 - Opencode Handoff]]
+14. [[14 - Opencode Handoff]] (historical snapshot)
 
 ## Source docs in repo
 

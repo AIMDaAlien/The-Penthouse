@@ -63,9 +63,9 @@ Owner: Opus
 - Use screenshot-guided restoration toward the main-branch feel.
 - Do not change backend contracts in this phase unless a real blocker appears.
 
-Working prompt:
+Historical prompt:
 
-- `antigravity/handoffs/OPUS_PHASE3_UI_RECOVERY_PROMPT.md`
+- `antigravity/handoffs/archive/2026-03-internal-rollout/OPUS_PHASE3_UI_RECOVERY_PROMPT.md`
 
 ## Phase 4 - Admin/operator depth
 

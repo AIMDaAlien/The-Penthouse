@@ -113,9 +113,42 @@ Current working tree:
 - Backend regression coverage expanded for notice-version mismatch and acknowledgement flows.
 - Rollout is paused pending UI recovery and client-side notice UX wiring.
 
+### 2026-03-15 - Runtime UI recovery follow-up
+
+Current working tree:
+- Typing was already wired end-to-end, but the indicator lived inside the scroll container and was clipped below the viewport in real chats.
+- Directory presence looked missing in runtime because offline users rendered no marker at all; the directory now always shows a presence dot.
+- Klipy inline chat rendering was using the preview asset instead of the animated asset; inline playback now follows the animated URL.
+- The typing event contract now accepts nullable `displayName` values so valid typing events are not dropped for users without a display name.
+- Two-emulator Android retesting confirmed typing, presence, and Klipy inline playback are restored in runtime.
+
+### 2026-03-19 - Push proof + public rollout staging
+
+Current working tree:
+- Android push is now proven on Google Play-backed emulator/runtime paths:
+  - background push works
+  - killed-app push works
+  - push tap-through opens the correct chat
+  - logout cleanup still holds
+- The failed push investigation ended with two environment truths:
+  - AOSP-only emulator images are not the right target for Firebase push validation
+  - the backend must actually start with the Firebase Admin key configured or FCM silently becomes a no-op
+- Public rollout support was added and staged:
+  - rebuild landing page
+  - legacy fallback page
+  - separate rebuild APK path
+  - preserved legacy APK path
+- TrueNAS staging now runs beside the old live app before public cutover.
+- Android release readiness moved forward:
+  - release build baseline bumped to `versionCode 100`
+  - `versionName` set to `2.0.0-alpha.1`
+  - optional signing scaffold added
+  - fresh signing key created outside the repo
+  - signed rebuild APK produced and copied to the TrueNAS rebuild downloads directory
+
 ## Where this leaves us now
 
-- Auth, chat, media, user management, realtime hardening, and local-notification foundations are present.
+- Auth, chat, media, user management, realtime hardening, and Android push foundations are present.
 - Phase 1/2 backend work for MVP Stability Plan v2 is done in code.
 - Strict DB release gate still needs a clean rerun in a working Docker/Postgres environment.
-- Phase 3 UI recovery is the next active phase.
+- The remaining launch blockers are now release signing, public cutover, and one small Klipy picker polish item.

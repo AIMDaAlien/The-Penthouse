@@ -396,6 +396,13 @@ const CHAT_BOOTSTRAP_MAX_ATTEMPTS = 3;
 const CHAT_BOOTSTRAP_RETRY_DELAY_MS = 900;
 const IN_APP_TOAST_DURATION_MS = 5_000;
 const MOBILE_DIAGNOSTICS_ENABLED = import.meta.env.DEV;
+const MOBILE_VERBOSE_DIAGNOSTICS_ENABLED =
+  MOBILE_DIAGNOSTICS_ENABLED && import.meta.env.VITE_VERBOSE_MOBILE_DIAGNOSTICS === '1';
+
+type MobileDiagnosticOptions = {
+  level?: 'debug' | 'warn';
+  verbose?: boolean;
+};
 
 // State
 const authError = ref('');
@@ -608,9 +615,16 @@ function handleMobileBack() {
   }
 }
 
-function logMobileDiagnostic(topic: string, details?: Record<string, unknown>): void {
+function logMobileDiagnostic(
+  topic: string,
+  details?: Record<string, unknown>,
+  options: MobileDiagnosticOptions = {}
+): void {
   if (!MOBILE_DIAGNOSTICS_ENABLED) return;
-  console.debug(`[mobile] ${topic}`, details ?? {});
+  if (options.verbose && !MOBILE_VERBOSE_DIAGNOSTICS_ENABLED) return;
+
+  const logger = options.level === 'warn' ? console.warn : console.debug;
+  logger(`[mobile] ${topic}`, details ?? {});
 }
 
 function clearChatBootstrapRetryTimer(): void {
@@ -681,12 +695,16 @@ function queueInAppToast(message: ChatMessage, chatName: string | null): void {
   if (!showInAppToasts.value) return;
   const id = `chat:${message.chatId}`;
   const title = message.senderDisplayName || message.senderUsername || 'New message';
-  logMobileDiagnostic('toast.queue', {
-    chatId: message.chatId,
-    messageId: message.id,
-    type: message.type,
-    chatName: chatName ?? null
-  });
+  logMobileDiagnostic(
+    'toast.queue',
+    {
+      chatId: message.chatId,
+      messageId: message.id,
+      type: message.type,
+      chatName: chatName ?? null
+    },
+    { verbose: true }
+  );
 
   clearInAppToastTimer(id);
   inAppToasts.value = [
@@ -745,18 +763,26 @@ async function handlePushTokenSync(token: string, previousToken: string | null =
 
   try {
     await registerDeviceToken('android', token, previousToken);
-    logMobileDiagnostic('push.token.registered', { tokenLength: token.length });
+    logMobileDiagnostic('push.token.registered', { tokenLength: token.length }, { verbose: true });
     if (previousToken && previousToken !== token) {
       await unregisterDeviceToken(previousToken).catch(() => undefined);
-      logMobileDiagnostic('push.token.replaced', {
-        previousTokenLength: previousToken.length,
-        tokenLength: token.length
-      });
+      logMobileDiagnostic(
+        'push.token.replaced',
+        {
+          previousTokenLength: previousToken.length,
+          tokenLength: token.length
+        },
+        { verbose: true }
+      );
     }
   } catch (error) {
-    logMobileDiagnostic('push.token.register.failed', {
-      message: error instanceof Error ? error.message : 'unknown-error'
-    });
+    logMobileDiagnostic(
+      'push.token.register.failed',
+      {
+        message: error instanceof Error ? error.message : 'unknown-error'
+      },
+      { level: 'warn' }
+    );
   }
 }
 
@@ -1557,7 +1583,7 @@ function emitTypingStartForChat(chatId: string): void {
   if (!chatId) return;
   const socket = getSocket();
   if (!socket?.connected) return;
-  logMobileDiagnostic('typing.start.emit', { chatId, joinedChatId: joinedChatId.value || null });
+  logMobileDiagnostic('typing.start.emit', { chatId, joinedChatId: joinedChatId.value || null }, { verbose: true });
   socket.emit('typing.start', { chatId });
 }
 
@@ -1565,7 +1591,7 @@ function emitTypingStopForChat(chatId: string): void {
   if (!chatId) return;
   const socket = getSocket();
   if (!socket?.connected) return;
-  logMobileDiagnostic('typing.stop.emit', { chatId, joinedChatId: joinedChatId.value || null });
+  logMobileDiagnostic('typing.stop.emit', { chatId, joinedChatId: joinedChatId.value || null }, { verbose: true });
   socket.emit('typing.stop', { chatId });
 }
 
@@ -1670,10 +1696,14 @@ function handleTypingStart(): void {
   const chatId = selectedChatId.value;
   if (!chatId || currentView.value !== 'chats') return;
   pendingTypingChatId.value = chatId;
-  logMobileDiagnostic('typing.start.requested', {
-    chatId,
-    joinedChatId: joinedChatId.value || null
-  });
+  logMobileDiagnostic(
+    'typing.start.requested',
+    {
+      chatId,
+      joinedChatId: joinedChatId.value || null
+    },
+    { verbose: true }
+  );
   if (joinedChatId.value === chatId) {
     emitTypingStartForChat(chatId);
     return;
@@ -1684,10 +1714,14 @@ function handleTypingStart(): void {
 function handleTypingStop(): void {
   const chatId = selectedChatId.value;
   if (!chatId) return;
-  logMobileDiagnostic('typing.stop.requested', {
-    chatId,
-    joinedChatId: joinedChatId.value || null
-  });
+  logMobileDiagnostic(
+    'typing.stop.requested',
+    {
+      chatId,
+      joinedChatId: joinedChatId.value || null
+    },
+    { verbose: true }
+  );
   if (pendingTypingChatId.value === chatId) {
     pendingTypingChatId.value = null;
   }
@@ -2383,12 +2417,16 @@ async function handleSessionSyncRetry(): Promise<void> {
 function setAppActive(nextValue: boolean): void {
   const wasActive = appIsActive.value;
   appIsActive.value = nextValue;
-  logMobileDiagnostic('app.active', {
-    nextValue,
-    wasActive,
-    selectedChatId: selectedChatId.value || null,
-    currentView: currentView.value
-  });
+  logMobileDiagnostic(
+    'app.active',
+    {
+      nextValue,
+      wasActive,
+      selectedChatId: selectedChatId.value || null,
+      currentView: currentView.value
+    },
+    { verbose: true }
+  );
   if (!nextValue) {
     if (pendingTypingChatId.value === selectedChatId.value) {
       pendingTypingChatId.value = null;

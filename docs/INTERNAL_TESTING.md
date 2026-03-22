@@ -17,6 +17,7 @@ Validate the first stable slice on real hardware before adding more scope:
 - live presence badges/counts
 - strict read receipts only when the latest messages are actually visible
 - local native notifications for unread messages outside the active chat
+- Android push notifications via FCM when Firebase is configured
 - offline queue and retry
 - reconnect after API/network interruption
 
@@ -56,6 +57,9 @@ Output:
 - JDK 17 available
 - Android SDK installed and discoverable through `ANDROID_SDK_ROOT`, `ANDROID_HOME`, or `apps/mobile/android/local.properties`
 - Optional: a device or emulator visible in `adb devices`
+- For Android push validation only:
+  - `apps/mobile/android/app/google-services.json`
+  - `services/api/.env` with `FCM_SERVICE_ACCOUNT_PATH` pointing at a Firebase service account JSON
 
 ## Preflight checks
 
@@ -217,23 +221,25 @@ Pass:
 - GIF tiles appear in chat without caption text
 - Klipy never fakes an empty state when the provider is actually failing
 
-### 3c. Local notifications
+### 3c. Android notifications
 
 1. Put client 2 on Android home with the app still installed and logged in.
 2. Send a message from client 1 into `General`.
-3. If the runtime stays alive, confirm Android shows a local device notification.
-4. Tap the notification.
-5. Confirm the app opens back into `General`.
+3. If Firebase is configured and the runtime is backgrounded or dead, confirm Android shows a push notification.
+4. If the runtime is still alive enough to receive the socket event, a local notification may also fire as the fast fallback path.
+5. Tap the notification.
+6. Confirm the app opens back into `General`.
 
 Pass:
 
-- unread messages outside the active chat can trigger a local device notification
+- unread messages outside the active chat can trigger an Android notification
 - tapping the notification opens the target chat
 
 Note:
 
-- this is a local-notification slice, not true remote push
-- if Android suspends the runtime fully in background, delivery can still be missed until a future FCM/APNs push slice
+- without Firebase config, this falls back to the local-notification-only behavior
+- local notifications still depend on the runtime being alive enough to receive the incoming realtime event
+- true background Android delivery now depends on FCM being configured end to end
 
 ### 4. Connection badge honesty
 

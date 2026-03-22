@@ -9,6 +9,8 @@ describe('shell layout CSS', () => {
     expect(css).not.toContain('--app-viewport-width');
     expect(css).not.toContain('--app-viewport-offset-left');
     expect(css).not.toContain('left: calc(');
-    expect(css).toContain('max-width: 900px;');
+    expect(css).toContain('max-width: 1280px;');
+    expect(css).toContain('box-sizing: border-box;');
+    expect(css).not.toMatch(/box-sizing:\s*inherit/);
   });
 });

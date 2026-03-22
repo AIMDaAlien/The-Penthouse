@@ -27,7 +27,9 @@ The client only emits these while the socket is actually connected, so stale typ
 
 ### Typing indicator UI
 
-The active chat now shows a typing indicator at the bottom of the message list.
+The active chat now shows a typing indicator between the scrollable message history and the composer.
+
+That placement matters. The earlier version rendered inside the scroll container, so the indicator could exist in the DOM while still sitting below the visible viewport in any real chat with enough messages.
 
 Rules:
 
@@ -52,9 +54,13 @@ This matters because otherwise presence would only become correct after everyone
 
 Presence now surfaces in the member-facing app in low-noise places:
 
-- online count in the chat list
-- online/offline badges in the member directory
+- always-visible online/offline dots in the member directory
 - online/offline status in the member profile sheet
+
+Directory rule:
+
+- gray dot = offline or no live presence yet
+- green dot = online
 
 ## Design rule used here
 
@@ -81,8 +87,8 @@ That is stricter than showing "last known online", but it is more honest.
 
 Use two clients and verify:
 
-- both users see the same online count
-- directory badges update without reopening the app
+- directory dots update without reopening the app
+- profile-sheet status updates without reopening the app
 - typing indicator shows correct display name
 - typing clears on send and idle timeout
 - reconnect restores presence snapshot without full reinstall
@@ -95,3 +101,12 @@ This slice finishes the core realtime loop enough to justify moving into one of 
 2. basic admin/operator UI
 
 Media is the more natural product-facing next step.
+
+## DM v1 note
+
+The chat stack now also supports 1:1 direct messages without introducing a second message system.
+
+- DMs are created on first send, not on open
+- one DM thread exists per member pair
+- DMs stay mixed into the normal chat list and reuse typing, read state, media, GIF, and moderation behavior
+- if a counterpart is later removed or banned, the remaining member can still read history but the DM becomes read-only
