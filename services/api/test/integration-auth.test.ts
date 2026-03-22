@@ -208,6 +208,118 @@ describe('[integration] refresh token rotation', { skip: SKIP, concurrency: fals
   });
 });
 
+describe('[integration] auth rate limiting', { skip: SKIP, concurrency: false }, () => {
+  let app: any;
+
+  beforeEach(async () => {
+    process.env.JWT_SECRET ??= 'integration-test-jwt-secret-long-enough';
+    const helpers = await import('./helpers.js');
+    await helpers.migrate();
+    await helpers.cleanup();
+    const result = await helpers.buildTestApp();
+    app = result.app;
+  });
+
+  afterEach(async () => {
+    await app?.close();
+    const helpers = await import('./helpers.js');
+    await helpers.cleanup();
+  });
+
+  test('login is rate limited after repeated attempts from the same IP', async () => {
+    const { registerUser } = await import('./helpers.js');
+    await registerUser(app, 'rate_limit_login_user');
+
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/login',
+        payload: {
+          username: 'rate_limit_login_user',
+          password: 'wrong-password'
+        }
+      });
+      assert.equal(response.statusCode, 401);
+    }
+
+    const limited = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: {
+        username: 'rate_limit_login_user',
+        password: 'supersecurepassword'
+      }
+    });
+    assert.equal(limited.statusCode, 429);
+    assert.match(limited.payload, /too many login attempts/i);
+    assert.ok(limited.headers['retry-after']);
+  });
+
+  test('registration is rate limited after repeated attempts from the same IP', async () => {
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/register',
+        payload: {
+          username: `rate_limit_register_${attempt}`,
+          password: 'supersecurepassword',
+          inviteCode: 'PENTHOUSE-ALPHA',
+          acceptTestNotice: true,
+          testNoticeVersion: 'alpha-v1'
+        }
+      });
+      assert.equal(response.statusCode, 201);
+    }
+
+    const limited = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/register',
+      payload: {
+        username: 'rate_limit_register_blocked',
+        password: 'supersecurepassword',
+        inviteCode: 'PENTHOUSE-ALPHA',
+        acceptTestNotice: true,
+        testNoticeVersion: 'alpha-v1'
+      }
+    });
+    assert.equal(limited.statusCode, 429);
+    assert.match(limited.payload, /too many registration attempts/i);
+    assert.ok(limited.headers['retry-after']);
+  });
+
+  test('password reset is rate limited after repeated attempts from the same IP', async () => {
+    const { registerUser } = await import('./helpers.js');
+    const user = await registerUser(app, 'rate_limit_reset_user');
+    assert.ok(user.recoveryCode);
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/password-reset',
+        payload: {
+          username: 'rate_limit_reset_user',
+          recoveryCode: 'WRNG-WRNG-WRNG-WRNG',
+          newPassword: 'brandnewpassword'
+        }
+      });
+      assert.equal(response.statusCode, 401);
+    }
+
+    const limited = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/password-reset',
+      payload: {
+        username: 'rate_limit_reset_user',
+        recoveryCode: user.recoveryCode,
+        newPassword: 'brandnewpassword'
+      }
+    });
+    assert.equal(limited.statusCode, 429);
+    assert.match(limited.payload, /too many password reset attempts/i);
+    assert.ok(limited.headers['retry-after']);
+  });
+});
+
 describe('[integration] member self-service', { skip: SKIP, concurrency: false }, () => {
   let app: any;
 

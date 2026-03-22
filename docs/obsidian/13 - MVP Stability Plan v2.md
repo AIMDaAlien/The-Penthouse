@@ -13,7 +13,7 @@ This phase also carries a temporary delegation override:
 
 - Codex owns backend/contracts/tests/release gate
 - Opus owns all non-backend implementation for the current cycle
-- Gemini is paused unless explicitly re-enabled
+- Gemini was paused during the stabilization cycle and is now explicitly re-enabled for the member-facing editorial-luxury visual exploration wave
 
 ## Phase 1 - Backend-only hardening
 

@@ -6,6 +6,7 @@
  */
 import test, { describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 
 const SKIP = !process.env.DATABASE_URL ? 'DATABASE_URL not set — skipping integration tests' : undefined;
 
@@ -624,7 +625,7 @@ describe('[integration] message idempotency', { skip: SKIP }, () => {
     assert.equal(secondBody.deduped, false);
   });
 
-  test('idempotent send emits socket events for both sends', async () => {
+  test('idempotent send avoids rebroadcasting message.new while still acknowledging retries', async () => {
     const { registerUser } = await import('./helpers.js');
     const hank = await registerUser(app, 'hank_events');
 
@@ -645,12 +646,78 @@ describe('[integration] message idempotency', { skip: SKIP }, () => {
       payload: { content: 'event test', clientMessageId }
     });
 
-    // Check that message.new and message.ack were emitted
+    await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${chatId}/messages`,
+      headers: { authorization: `Bearer ${hank.accessToken}` },
+      payload: { content: 'event test', clientMessageId }
+    });
+
+    // First send broadcasts the message; the retry only gets an ack.
     const newEvents = emitted.slice(startIdx).filter((e: any) => e.event === 'message.new');
     const ackEvents = emitted.slice(startIdx).filter((e: any) => e.event === 'message.ack');
-    assert.ok(newEvents.length >= 1, 'message.new should be emitted');
-    assert.ok(ackEvents.length >= 1, 'message.ack should be emitted');
+    assert.equal(newEvents.length, 1, 'deduped retries must not rebroadcast message.new');
+    assert.equal(ackEvents.length, 2, 'sender should still receive an ack for both attempts');
     assert.equal(ackEvents[0].data.payload.clientMessageId, clientMessageId);
+    assert.equal(ackEvents[1].data.payload.clientMessageId, clientMessageId);
+  });
+
+  test('REST send reflects the latest display name and avatar metadata', async () => {
+    const { pool, registerUser } = await import('./helpers.js');
+    const sender = await registerUser(app, 'rest_profile_sender');
+
+    const senderChats = await app.inject({
+      method: 'GET',
+      url: '/api/v1/chats',
+      headers: { authorization: `Bearer ${sender.accessToken}` }
+    });
+    const chatId = JSON.parse(senderChats.payload)[0].id;
+
+    const avatarId = randomUUID();
+    const storageKey = `rest-profile-${avatarId}.png`;
+    await pool.query(
+      `INSERT INTO media_uploads(
+         id,
+         uploader_id,
+         file_name,
+         original_file_name,
+         storage_key,
+         file_path,
+         size_bytes,
+         content_type,
+         media_kind
+       ) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [
+        avatarId,
+        sender.user.id,
+        storageKey,
+        'rest-profile.png',
+        storageKey,
+        `/tmp/${storageKey}`,
+        128,
+        'image/png',
+        'image'
+      ]
+    );
+    await pool.query(
+      'UPDATE users SET display_name = $1, avatar_media_id = $2 WHERE id = $3',
+      ['REST Fresh Alias', avatarId, sender.user.id]
+    );
+
+    const sent = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${chatId}/messages`,
+      headers: { authorization: `Bearer ${sender.accessToken}` },
+      payload: {
+        content: 'rest parity test',
+        clientMessageId: 'rest-profile-parity-001'
+      }
+    });
+    assert.equal(sent.statusCode, 200);
+
+    const body = JSON.parse(sent.payload);
+    assert.equal(body.message.senderDisplayName, 'REST Fresh Alias');
+    assert.equal(body.message.senderAvatarUrl, `/uploads/${encodeURIComponent(storageKey)}`);
   });
 
   test('concurrent duplicate sends do not crash and resolve to one message id', async () => {

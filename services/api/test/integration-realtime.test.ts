@@ -6,6 +6,7 @@
 import test, { after, before, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import type { AddressInfo } from 'node:net';
+import { randomUUID } from 'node:crypto';
 import { io as createClient, type Socket } from 'socket.io-client';
 
 const SKIP = !process.env.DATABASE_URL ? 'DATABASE_URL not set — skipping integration tests' : undefined;
@@ -335,6 +336,93 @@ describe('[integration] realtime observability', { skip: SKIP }, () => {
     });
 
     await typingReplay;
+
+    await closeSocket(senderSocket);
+    await closeSocket(receiverSocket);
+  });
+
+  test('socket message send uses the latest profile display name after a profile update', async () => {
+    const { authHeaders, cleanup, pool, registerUser } = await import('./helpers.js');
+    await cleanup();
+
+    const sender = await registerUser(app, 'socket_profile_sender');
+    const receiver = await registerUser(app, 'socket_profile_receiver');
+
+    const senderSocket = createClient(baseUrl, {
+      path: '/socket.io/',
+      transports: ['polling'],
+      auth: { token: sender.accessToken },
+      reconnection: false,
+      forceNew: true
+    });
+    await waitForSocketConnect(senderSocket);
+
+    const receiverSocket = createClient(baseUrl, {
+      path: '/socket.io/',
+      transports: ['polling'],
+      auth: { token: receiver.accessToken },
+      reconnection: false,
+      forceNew: true
+    });
+    await waitForSocketConnect(receiverSocket);
+
+    const avatarId = randomUUID();
+    const storageKey = `socket-profile-${avatarId}.png`;
+    await pool.query(
+      `INSERT INTO media_uploads(
+         id,
+         uploader_id,
+         file_name,
+         original_file_name,
+         storage_key,
+         file_path,
+         size_bytes,
+         content_type,
+         media_kind
+       ) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [
+        avatarId,
+        sender.user.id,
+        storageKey,
+        'socket-profile.png',
+        storageKey,
+        `/tmp/${storageKey}`,
+        128,
+        'image/png',
+        'image'
+      ]
+    );
+
+    const profileUpdate = await app.inject({
+      method: 'PATCH',
+      url: '/api/v1/me/profile',
+      headers: authHeaders(sender.accessToken),
+      payload: {
+        displayName: 'Fresh Alias',
+        bio: 'updated over HTTP before socket send'
+      }
+    });
+    assert.equal(profileUpdate.statusCode, 200);
+    await pool.query('UPDATE users SET avatar_media_id = $1 WHERE id = $2', [avatarId, sender.user.id]);
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    const clientMessageId = 'socket-profile-parity-001';
+    const messageNew = waitForSocketEvent(receiverSocket, 'message.new', (event: any) => (
+      event?.payload?.chatId === GENERAL_CHAT_ID &&
+      event?.payload?.clientMessageId === clientMessageId
+    ), 1_500);
+
+    senderSocket.emit('message.send', {
+      chatId: GENERAL_CHAT_ID,
+      content: 'profile parity check',
+      clientMessageId
+    });
+
+    const delivered = await messageNew;
+    assert.equal(delivered.payload.senderDisplayName, 'Fresh Alias');
+    assert.equal(delivered.payload.senderUsername, 'socket_profile_sender');
+    assert.equal(delivered.payload.senderAvatarUrl, `/uploads/${encodeURIComponent(storageKey)}`);
 
     await closeSocket(senderSocket);
     await closeSocket(receiverSocket);

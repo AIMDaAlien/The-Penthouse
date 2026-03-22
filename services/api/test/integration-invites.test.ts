@@ -174,10 +174,17 @@ describe('[integration] invite management', { skip: SKIP, concurrency: false }, 
       method: 'POST',
       url: '/api/v1/admin/invites',
       headers: authHeaders(admin.accessToken),
-      payload: { label: 'Expiring', maxUses: 10, expiresAt: new Date(Date.now() - 86400_000).toISOString() }
+      payload: { label: 'Expiring', maxUses: 10 }
     });
     assert.equal(createRes.statusCode, 201);
     const invite = JSON.parse(createRes.payload);
+
+    await pool.query(
+      `UPDATE signup_invites
+       SET expires_at = NOW() - INTERVAL '1 day'
+       WHERE id = $1`,
+      [invite.id]
+    );
 
     const regRes = await app.inject({
       method: 'POST',

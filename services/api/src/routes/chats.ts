@@ -7,12 +7,11 @@ import {
   MarkChatReadResponseSchema,
   MessageSchema,
   SendMessageRequestSchema,
-  SendMessageResponseSchema,
-  type MessageType
+  SendMessageResponseSchema
 } from '@penthouse/contracts';
 import { pool } from '../db/pool.js';
+import { sendChatMessage } from '../utils/chatMessages.js';
 import { toMemberMessage } from '../utils/messages.js';
-import { sendPushForNewMessage } from '../push/fcm.js';
 import { getUserById } from '../utils/users.js';
 import {
   getChatSendState,
@@ -293,76 +292,23 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
     if (!sendState.isMember) return reply.status(403).send({ error: 'Forbidden' });
     if (sendState.isReadOnly) return reply.status(409).send({ error: 'Direct message is unavailable' });
 
-    const messageType = parsed.data.type ?? 'text';
-    const metadata = parsed.data.metadata ?? null;
+    try {
+      const response = await sendChatMessage({
+        io: app.io,
+        log: request.log,
+        chatId: parsed.data.chatId,
+        senderUserId: userId,
+        content: parsed.data.content,
+        clientMessageId: parsed.data.clientMessageId,
+        messageType: parsed.data.type ?? 'text',
+        metadata: parsed.data.metadata ?? null
+      });
 
-    const inserted = await pool.query(
-      `INSERT INTO messages(id, chat_id, sender_id, content, message_type, metadata, client_message_id)
-       VALUES($1, $2, $3, $4, $5, $6, $7)
-       ON CONFLICT (chat_id, sender_id, client_message_id) DO NOTHING
-       RETURNING id, chat_id, sender_id, content, message_type, metadata, created_at, client_message_id`,
-      [randomUUID(), parsed.data.chatId, userId, parsed.data.content, messageType, metadata, parsed.data.clientMessageId]
-    );
-
-    const deduped = inserted.rowCount === 0;
-    const msg = deduped
-      ? (
-          await pool.query(
-            `SELECT id, chat_id, sender_id, content, message_type, metadata, created_at, client_message_id
-             FROM messages
-             WHERE chat_id = $1 AND sender_id = $2 AND client_message_id = $3`,
-            [parsed.data.chatId, userId, parsed.data.clientMessageId]
-          )
-        ).rows[0]
-      : inserted.rows[0];
-
-    if (!msg) {
-      request.log.error({ chatId: parsed.data.chatId, userId }, 'message missing after insert/dedup lookup');
+      return reply.send(SendMessageResponseSchema.parse(response));
+    } catch (error) {
+      request.log.error({ error, chatId: parsed.data.chatId, userId }, 'failed to send message');
       return reply.status(500).send({ error: 'Failed to send message' });
     }
-
-    if (!deduped) {
-      await pool.query('UPDATE chats SET updated_at = NOW() WHERE id = $1', [parsed.data.chatId]);
-    }
-
-    const messagePayload = {
-      id: msg.id,
-      chatId: msg.chat_id,
-      senderId: msg.sender_id,
-      senderUsername: request.user.username,
-      senderDisplayName: request.user.displayName,
-      senderAvatarUrl: request.user.avatarUrl,
-      content: msg.content,
-      type: (msg.message_type as MessageType | null) ?? 'text',
-      metadata: msg.metadata ?? null,
-      createdAt: new Date(msg.created_at).toISOString(),
-      clientMessageId: msg.client_message_id ?? undefined,
-      seenAt: null,
-      hidden: false
-    };
-
-    app.io.to(`chat:${parsed.data.chatId}`).emit('message.new', {
-      type: 'message.new',
-      payload: messagePayload
-    });
-    void sendPushForNewMessage(request.log, parsed.data.chatId, userId, messagePayload);
-
-    app.io.to(`user:${userId}`).emit('message.ack', {
-      type: 'message.ack',
-      payload: {
-        clientMessageId: parsed.data.clientMessageId,
-        messageId: msg.id,
-        chatId: parsed.data.chatId,
-        deliveredAt: new Date().toISOString()
-      }
-    });
-
-    const response = SendMessageResponseSchema.parse({
-      message: messagePayload,
-      deduped
-    });
-
-    return reply.send(response);
   });
 
   app.patch('/api/v1/chats/:chatId/preferences', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {

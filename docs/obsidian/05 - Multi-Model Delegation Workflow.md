@@ -58,9 +58,9 @@ Templates live in:
 - Makes rollback and ownership clear before execution starts.
 - Keeps stability priority above feature speed.
 
-## Current execution override (2026-03-12)
+## Current execution override (2026-03-22)
 
-This is a temporary operating override for the current stabilization cycle. It does not replace the base Antigravity policy.
+This is the current operating override for the active stabilization + visual-exploration cycle. It does not replace the base Antigravity policy.
 
 - Codex:
   - backend
@@ -69,9 +69,10 @@ This is a temporary operating override for the current stabilization cycle. It d
   - release-gate work
   - final arbiter
 - Opus:
-  - all non-backend implementation for the current cycle
-  - UI recovery
-  - notification UX hardening
-  - screenshot-guided restoration
+  - bounded design-review partner for Gemini-led visual exploration
+  - deep decomposition / review when a frontend slice needs it
 - Gemini:
-  - paused unless explicitly re-enabled by the user
+  - explicitly re-enabled for member-facing `frontend_ui` exploration
+  - current visual-exploration entry packet:
+    - `antigravity/handoffs/GEMINI_EDITORIAL_LUXURY_WAVE1_2026-03-22.md`
+  - first wave limited to app shell exploration only

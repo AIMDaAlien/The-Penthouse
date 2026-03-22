@@ -5,6 +5,7 @@ This folder keeps execution packets, review packets, and follow-on packets that 
 Current naming groups:
 
 - `OPENCODE_*`: implementation-facing packets for OpenCode/Codex-style backend or repo work
+- `GEMINI_*`: implementation-facing packets for Gemini-led frontend visual or UI exploration work
 - `OPUS_*_REVIEW_*`: review packets or design-review packets for Opus
 - `NEXT_STEP_AGENT_PACKET_*`: short routing packets for the next agent in a chain
 

@@ -27,11 +27,29 @@ import {
   maybeBootstrapAdmin,
   type UserRow
 } from '../utils/users.js';
+import { createAuthRateLimiter, replyIfRateLimited } from '../utils/authRateLimit.js';
 import { createAuthResponse, getSessionMetadataFromRequest, issueRecoveryCode, mergeSessionMetadata } from '../utils/sessions.js';
 import { getRegistrationMode } from '../utils/settings.js';
 
 const SHARED_GENERAL_CHAT_ID = '00000000-0000-0000-0000-000000000001';
 const SHARED_GENERAL_SYSTEM_KEY = 'general';
+const AUTH_RATE_LIMITS = {
+  register: {
+    windowMs: 15 * 60_000,
+    maxRequests: 5,
+    error: 'Too many registration attempts. Try again in a few minutes.'
+  },
+  login: {
+    windowMs: 10 * 60_000,
+    maxRequests: 10,
+    error: 'Too many login attempts. Try again in a few minutes.'
+  },
+  passwordReset: {
+    windowMs: 15 * 60_000,
+    maxRequests: 5,
+    error: 'Too many password reset attempts. Try again in a few minutes.'
+  }
+} as const;
 
 async function ensureSharedGeneralChannel(client: PoolClient): Promise<string> {
   await client.query(
@@ -57,9 +75,22 @@ function blockInactiveUser(reply: any, user: Pick<UserRow, 'status'>) {
 }
 
 export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
+  const registerRateLimiter = createAuthRateLimiter(AUTH_RATE_LIMITS.register);
+  const loginRateLimiter = createAuthRateLimiter(AUTH_RATE_LIMITS.login);
+  const passwordResetRateLimiter = createAuthRateLimiter(AUTH_RATE_LIMITS.passwordReset);
+
   app.post('/api/v1/auth/register', async (request, reply) => {
     const parsed = RegisterRequestSchema.safeParse(request.body);
     if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() });
+    if (
+      replyIfRateLimited(
+        reply,
+        registerRateLimiter.consume(request.ip),
+        AUTH_RATE_LIMITS.register.error
+      )
+    ) {
+      return;
+    }
 
     const { username, password, inviteCode, testNoticeVersion } = parsed.data;
     if (testNoticeVersion !== env.TEST_ACCOUNT_NOTICE_VERSION) {
@@ -165,6 +196,11 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   app.post('/api/v1/auth/login', async (request, reply) => {
     const parsed = LoginRequestSchema.safeParse(request.body);
     if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() });
+    if (
+      replyIfRateLimited(reply, loginRateLimiter.consume(request.ip), AUTH_RATE_LIMITS.login.error)
+    ) {
+      return;
+    }
 
     const { username, password } = parsed.data;
     const user = await getUserByUsername(pool, username);
@@ -192,6 +228,15 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   app.post('/api/v1/auth/password-reset', async (request, reply) => {
     const parsed = PasswordResetRequestSchema.safeParse(request.body);
     if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() });
+    if (
+      replyIfRateLimited(
+        reply,
+        passwordResetRateLimiter.consume(request.ip),
+        AUTH_RATE_LIMITS.passwordReset.error
+      )
+    ) {
+      return;
+    }
 
     const { username, recoveryCode, newPassword } = parsed.data;
     const user = await getUserByUsername(pool, username);

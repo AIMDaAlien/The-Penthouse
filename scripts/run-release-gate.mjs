@@ -36,9 +36,12 @@ async function main() {
     }
   ];
 
+  const results = [];
+  const integrationLabel = 'api integration tests (auth/invites/chats/moderation/push/realtime)';
+
   if (process.env.DATABASE_URL) {
     checks.push({
-      label: 'api integration tests (DATABASE_URL detected)',
+      label: integrationLabel,
       command: 'npm',
       args: ['--workspace', 'services/api', 'run', 'test:integration'],
       required: true
@@ -49,9 +52,14 @@ async function main() {
   } else {
     console.warn('[release-gate] DATABASE_URL not set, skipping integration tests.');
     console.warn('[release-gate] Re-run with DATABASE_URL and --require-db before production release.');
+    results.push({
+      label: integrationLabel,
+      ok: false,
+      skipped: true,
+      reason: 'DATABASE_URL not set'
+    });
   }
 
-  const results = [];
   for (const check of checks) {
     const code = await runCommand(check.label, check.command, check.args);
     const ok = code === 0;
@@ -65,12 +73,21 @@ async function main() {
   }
 
   printSummary(results);
+  if (results.some((result) => result.skipped)) {
+    console.error('\n[release-gate] INCOMPLETE: database-backed integration was not verified.');
+    process.exit(1);
+  }
+
   console.log('\n[release-gate] PASS');
 }
 
 function printSummary(results) {
   console.log('\n[release-gate] Summary');
   for (const r of results) {
+    if (r.skipped) {
+      console.log(`- SKIP: ${r.label} (${r.reason})`);
+      continue;
+    }
     console.log(`- ${r.ok ? 'PASS' : 'FAIL'}: ${r.label}`);
   }
 }

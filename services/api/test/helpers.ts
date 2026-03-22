@@ -89,10 +89,20 @@ export async function cleanup() {
   }
 }
 
+let injectedClientCounter = 1;
+
+function nextInjectedRemoteAddress(): string {
+  const counter = injectedClientCounter++;
+  const thirdOctet = Math.floor((counter - 1) / 250);
+  const fourthOctet = ((counter - 1) % 250) + 1;
+  return `10.0.${thirdOctet}.${fourthOctet}`;
+}
+
 export async function registerUser(app: FastifyInstance, username: string) {
   const res = await app.inject({
     method: 'POST',
     url: '/api/v1/auth/register',
+    remoteAddress: nextInjectedRemoteAddress(),
     payload: {
       username,
       password: 'supersecurepassword',
@@ -126,6 +136,7 @@ export async function loginUser(app: FastifyInstance, username: string, password
   const res = await app.inject({
     method: 'POST',
     url: '/api/v1/auth/login',
+    remoteAddress: nextInjectedRemoteAddress(),
     payload: { username, password }
   });
 

@@ -1,12 +1,11 @@
 import type { FastifyInstance } from 'fastify';
 import { Server } from 'socket.io';
 import { pool } from '../db/pool.js';
-import { ClientMessageSendEventSchema, type MessageType } from '@penthouse/contracts';
-import { randomUUID } from 'node:crypto';
+import { ClientMessageSendEventSchema } from '@penthouse/contracts';
 import { env } from '../config/env.js';
 import { avatarUrlFromFileName, getUserById, requiresTestNoticeAck } from '../utils/users.js';
-import { sendPushForNewMessage } from '../push/fcm.js';
 import { getChatSendState } from '../utils/chats.js';
+import { sendChatMessage } from '../utils/chatMessages.js';
 
 async function isMember(userId: string, chatId: string): Promise<boolean> {
   const res = await pool.query('SELECT 1 FROM chat_members WHERE user_id = $1 AND chat_id = $2', [userId, chatId]);
@@ -493,74 +492,33 @@ export function initRealtime(app: FastifyInstance): Server {
       const sendState = await getChatSendState(pool, userId, event.chatId);
       if (!sendState.isMember || sendState.isReadOnly) return;
 
-      const inserted = await pool.query(
-        `INSERT INTO messages(id, chat_id, sender_id, content, message_type, metadata, client_message_id)
-         VALUES($1, $2, $3, $4, $5, $6, $7)
-         ON CONFLICT (chat_id, sender_id, client_message_id) DO NOTHING
-         RETURNING id, chat_id, sender_id, content, message_type, metadata, created_at, client_message_id`,
-        [randomUUID(), event.chatId, userId, event.content, event.messageType ?? 'text', event.metadata ?? null, event.clientMessageId]
-      );
-
-      const row = inserted.rowCount
-        ? inserted.rows[0]
-        : (
-            await pool.query(
-              `SELECT id, chat_id, sender_id, content, message_type, metadata, created_at, client_message_id
-               FROM messages
-               WHERE chat_id = $1 AND sender_id = $2 AND client_message_id = $3`,
-              [event.chatId, userId, event.clientMessageId]
-            )
-          ).rows[0];
-
-      if (!row) return;
-
-      clearTypingState(event.chatId, userId);
-
-      if (inserted.rowCount) {
-        await pool.query('UPDATE chats SET updated_at = NOW() WHERE id = $1', [event.chatId]);
-      }
-
-      app.log.info(
-        {
-          userId,
-          socketId: socket.id,
+      try {
+        const response = await sendChatMessage({
+          io,
+          log: app.log,
           chatId: event.chatId,
-          messageId: row.id
-        },
-        'socket message handled'
-      );
-
-      const messagePayload = {
-        id: row.id,
-        chatId: row.chat_id,
-        senderId: row.sender_id,
-        senderUsername: socket.data.username as string,
-        senderDisplayName: socket.data.displayName as string,
-        senderAvatarUrl: (socket.data.avatarUrl as string | null) ?? null,
-        content: row.content,
-        type: (row.message_type as MessageType | null) ?? 'text',
-        metadata: row.metadata ?? null,
-        createdAt: new Date(row.created_at).toISOString(),
-        clientMessageId: row.client_message_id ?? undefined,
-        seenAt: null,
-        hidden: false
-      };
-
-      io.to(`chat:${event.chatId}`).emit('message.new', {
-        type: 'message.new',
-        payload: messagePayload
-      });
-      void sendPushForNewMessage(app.log, event.chatId, userId, messagePayload);
-
-      io.to(`user:${userId}`).emit('message.ack', {
-        type: 'message.ack',
-        payload: {
+          senderUserId: userId,
+          content: event.content,
           clientMessageId: event.clientMessageId,
-          messageId: row.id,
-          chatId: event.chatId,
-          deliveredAt: new Date().toISOString()
-        }
-      });
+          messageType: event.messageType ?? 'text',
+          metadata: event.metadata ?? null,
+          beforeBroadcast: () => {
+            clearTypingState(event.chatId, userId);
+          }
+        });
+
+        app.log.info(
+          {
+            userId,
+            socketId: socket.id,
+            chatId: event.chatId,
+            messageId: response.message.id
+          },
+          'socket message handled'
+        );
+      } catch (error) {
+        app.log.error({ error, userId, socketId: socket.id, chatId: event.chatId }, 'socket message failed');
+      }
     });
 
     socket.on('disconnect', (reason) => {

@@ -1,9 +1,16 @@
 import type { PendingMessage } from '../types';
 
 const KEY = 'penthouse.pendingMessages';
+export type FlushQueueResult = 'delivered' | 'keep';
 
-function readQueue(): PendingMessage[] {
-  const raw = localStorage.getItem(KEY);
+function storageKey(scopeKey: string): string {
+  return `${KEY}:${scopeKey}`;
+}
+
+function readQueue(scopeKey: string): PendingMessage[] {
+  const key = storageKey(scopeKey);
+
+  const raw = localStorage.getItem(key);
   if (!raw) return [];
 
   try {
@@ -34,34 +41,51 @@ function readQueue(): PendingMessage[] {
   }
 }
 
-function writeQueue(queue: PendingMessage[]): void {
-  localStorage.setItem(KEY, JSON.stringify(queue));
+function writeQueue(queue: PendingMessage[], scopeKey: string): void {
+  const key = storageKey(scopeKey);
+
+  if (queue.length === 0) {
+    localStorage.removeItem(key);
+    return;
+  }
+
+  localStorage.setItem(key, JSON.stringify(queue));
 }
 
-export function enqueueMessage(item: PendingMessage): void {
-  const queue = readQueue();
+export function enqueueMessage(item: PendingMessage, scopeKey: string): void {
+  const queue = readQueue(scopeKey);
   queue.push(item);
-  writeQueue(queue);
+  writeQueue(queue, scopeKey);
 }
 
-export function removeQueued(clientMessageId: string): void {
-  writeQueue(readQueue().filter((item) => item.clientMessageId !== clientMessageId));
+export function removeQueued(clientMessageId: string, scopeKey: string): void {
+  writeQueue(
+    readQueue(scopeKey).filter((item) => item.clientMessageId !== clientMessageId),
+    scopeKey
+  );
 }
 
-export function getQueued(): PendingMessage[] {
-  return readQueue();
+export function getQueued(scopeKey: string): PendingMessage[] {
+  return readQueue(scopeKey);
+}
+
+export function clearQueued(scopeKey: string): void {
+  writeQueue([], scopeKey);
 }
 
 export async function flushQueue(
-  sender: (item: PendingMessage) => Promise<void>,
+  sender: (item: PendingMessage) => Promise<FlushQueueResult>,
+  scopeKey: string,
   onAttempt?: (item: PendingMessage) => void
 ): Promise<void> {
-  const queue = readQueue();
+  const queue = readQueue(scopeKey);
   for (const item of queue) {
     onAttempt?.(item);
     try {
-      await sender(item);
-      removeQueued(item.clientMessageId);
+      const result = await sender(item);
+      if (result === 'delivered') {
+        removeQueued(item.clientMessageId, scopeKey);
+      }
     } catch {
       // Leave in queue for next flush attempt; continue with remaining items
     }
