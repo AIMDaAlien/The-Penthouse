@@ -1,0 +1,65 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - penthouse_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ../../
+      dockerfile: services/api/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      JWT_SECRET: ${JWT_SECRET}
+      CORS_ORIGIN: ${CORS_ORIGIN}
+      UPLOAD_MAX_MB: ${UPLOAD_MAX_MB:-20}
+      ADMIN_BOOTSTRAP_USERNAME: ${ADMIN_BOOTSTRAP_USERNAME:-}
+      TEST_ACCOUNT_NOTICE_VERSION: ${TEST_ACCOUNT_NOTICE_VERSION:-alpha-v1}
+      GIPHY_API_KEY: ${GIPHY_API_KEY:-}
+      KLIPY_API_KEY: ${KLIPY_API_KEY:-}
+      FCM_SERVICE_ACCOUNT_PATH: /run/secrets/firebase-admin.json
+    expose:
+      - "3000"
+    volumes:
+      - penthouse_uploads:/app/services/api/uploads
+      - ${FCM_SERVICE_ACCOUNT_FILE}:/run/secrets/firebase-admin.json:ro
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      ROOT_SITE_ADDRESS: ${ROOT_SITE_ADDRESS}
+      API_SITE_ADDRESS: ${API_SITE_ADDRESS}
+    ports:
+      - "${CADDY_HTTP_PORT:-80}:80"
+      - "${CADDY_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./caddy/Caddyfile.production:/etc/caddy/Caddyfile:ro
+      - ./site/public:/srv/site:ro
+      - ${PUBLIC_DOWNLOADS_PATH}:/srv/downloads:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  penthouse_pgdata:
+  penthouse_uploads:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,17 @@
+services:
+  postgres:
+    volumes:
+      - ${TRUENAS_POSTGRES_PATH}:/var/lib/postgresql/data
+
+  api:
+    volumes:
+      - ${TRUENAS_UPLOADS_PATH}:/app/services/api/uploads
+      - ${FCM_SERVICE_ACCOUNT_FILE}:/run/secrets/firebase-admin.json:ro
+
+  caddy:
+    volumes:
+      - ./caddy/Caddyfile.production:/etc/caddy/Caddyfile:ro
+      - ./site/public:/srv/site:ro
+      - ${TRUENAS_DOWNLOADS_PATH}:/srv/downloads:ro
+      - ${TRUENAS_CADDY_DATA_PATH}:/data
+      - ${TRUENAS_CADDY_CONFIG_PATH}:/config

@@ -1,0 +1,8 @@
+services:
+  api:
+    ports:
+      - "3001:3000"
+
+  caddy:
+    profiles:
+      - manual-only
