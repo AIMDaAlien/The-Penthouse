@@ -1,7 +1,5 @@
 import { z } from 'zod';
 
-export const RiskLevelSchema = z.enum(['low', 'medium', 'high', 'critical']);
-
 export const AUTH_CONSTRAINTS = {
   usernameMin: 3,
   usernameMax: 32,
