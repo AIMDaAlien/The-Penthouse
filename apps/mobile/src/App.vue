@@ -1,6 +1,11 @@
 <template>
   <main class="shell">
-    <header class="app-header">
+    <div class="background-texture"></div>
+    <div class="glow-orb orb-1"></div>
+    <div class="glow-orb orb-2"></div>
+    <div class="glow-orb orb-3"></div>
+
+    <header class="app-header glass-panel" style="border-radius: 20px; margin-bottom: 24px; padding: 12px 16px;" v-if="session">
       <div class="header-title">
         <button 
           v-if="session && isContentActive" 
@@ -37,15 +42,25 @@
       </div>
     </section>
 
-    <section v-else-if="!session" class="chat-shell auth-shell">
-      <AuthPanel
-        :error="authError"
-        :loading="isAuthenticating"
-        :registrationMode="registrationMode"
-        @login="handleLogin"
-        @register="handleRegister"
-        @reset-password="handlePasswordReset"
-      />
+    <section v-else-if="!session" class="chat-shell auth-shell auth-layout">
+      <div class="auth-hero-logo" :class="`auth-mode-${currentAuthMode}`">
+        <div class="large-logo">
+          <span class="logo-the">The</span><br>
+          <span class="logo-pent">PENT</span><br>
+          <span class="logo-house">HOUSE</span>
+        </div>
+      </div>
+      <div class="auth-panel-container">
+        <AuthPanel
+          :error="authError"
+          :loading="isAuthenticating"
+          :registrationMode="registrationMode"
+          @login="handleLogin"
+          @register="handleRegister"
+          @reset-password="handlePasswordReset"
+          @mode-changed="currentAuthMode = $event"
+        />
+      </div>
     </section>
 
     <section v-else-if="sessionSyncRequired" class="chat-shell session-sync-gate">
@@ -348,6 +363,7 @@ const inAppToasts = ref<InAppToast[]>([]);
 const isViewingLatest = ref(true);
 const chatActionError = ref('');
 const inAppToastTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const currentAuthMode = ref<'login' | 'register' | 'reset'>('login');
 
 let appStateListener: any = null;
 let appPauseListener: any = null;
@@ -1337,5 +1353,60 @@ onUnmounted(() => {
   .chat-layout:not(.content-active) .chat-main {
     display: flex;
   }
+}
+.auth-layout {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 4vh 0 2vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.auth-hero-logo {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.large-logo {
+  line-height: 0.85;
+  transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.logo-the {
+  font-family: "Erode", serif;
+  font-size: 1.6rem;
+  color: var(--action-primary);
+  text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.logo-pent, .logo-house {
+  font-family: "Erode", serif;
+  font-size: 4rem;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  color: var(--text-primary);
+  text-shadow: 0 2px 10px rgba(0,0,0,0.4);
+  transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* Dynamic Logo Scaling */
+.auth-mode-login .logo-the { font-size: 2.8rem; }
+.auth-mode-login .logo-pent, .auth-mode-login .logo-house { font-size: 7rem; }
+
+.auth-mode-register .logo-the { font-size: 1.84rem; }
+.auth-mode-register .logo-pent, .auth-mode-register .logo-house { font-size: 4.6rem; }
+.auth-mode-register {
+  margin-bottom: 1.5vh;
+}
+
+.auth-panel-container {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
 }
 </style>

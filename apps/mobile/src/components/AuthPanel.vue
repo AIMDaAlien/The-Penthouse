@@ -1,9 +1,9 @@
 <template>
-  <section class="card auth-panel">
-    <div class="auth-mode-switcher" style="margin-bottom: 15px;">
-      <button :class="mode === 'login' ? '' : 'secondary'" @click="mode = 'login'">Login</button>
-      <button :class="mode === 'register' ? '' : 'secondary'" @click="mode = 'register'">Register</button>
-      <button :class="mode === 'reset' ? '' : 'secondary'" @click="mode = 'reset'">Reset</button>
+  <section class="card glass-panel auth-panel">
+    <div class="auth-mode-switcher glass-inset" style="margin-bottom: 24px; padding: 6px;">
+      <button class="small-btn" :class="mode === 'login' ? '' : 'secondary'" @click="mode = 'login'">Login</button>
+      <button class="small-btn" :class="mode === 'register' ? '' : 'secondary'" @click="mode = 'register'">Register</button>
+      <button class="small-btn" :class="mode === 'reset' ? '' : 'secondary'" @click="mode = 'reset'">Reset</button>
     </div>
 
     <div v-if="mode === 'register' && props.registrationMode === 'closed'" class="registration-closed-notice">
@@ -104,6 +104,7 @@ const emit = defineEmits<{
   (e: 'login', username: string, password: string): void;
   (e: 'register', username: string, password: string, invite: string): void;
   (e: 'reset-password', username: string, recoveryCode: string, newPassword: string): void;
+  (e: 'mode-changed', mode: 'login' | 'register' | 'reset'): void;
 }>();
 
 const mode = ref<'login' | 'register' | 'reset'>('login');
@@ -141,7 +142,8 @@ watch(mode, () => {
   if (mode.value !== 'reset') {
     recoveryCode.value = '';
   }
-});
+  emit('mode-changed', mode.value);
+}, { immediate: true });
 
 function handleSubmit() {
   localError.value = '';
@@ -176,36 +178,76 @@ function handleSubmit() {
 
 <style scoped>
 .auth-panel {
+  width: 100%;
   max-width: 400px;
-  margin: 40px auto;
-  width: min(100%, 400px);
+  margin: 0 auto;
+  padding: 20px;
+  border-radius: 24px;
 }
 
 .auth-mode-switcher {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
+  border-radius: 20px;
 }
 
-.auth-mode-switcher button {
-  min-width: 0;
+.auth-mode-switcher .small-btn {
+  width: 100%;
 }
 
 .auth-help {
   opacity: 0.72;
   line-height: 1.4;
+  margin-top: 6px;
+  margin-bottom: 12px;
+}
+
+/* Glass Line Inputs */
+input {
+  width: 100%;
+  padding: 10px 0;
+  background: transparent !important;
+  border: none;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+  color: var(--text-primary);
+  border-radius: 0;
+  font-size: 1.1rem;
+  outline: none;
+  transition: all 0.3s;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+  margin-bottom: 14px;
+}
+
+input:-webkit-autofill,
+input:-webkit-autofill:hover, 
+input:-webkit-autofill:focus, 
+input:-webkit-autofill:active {
+  -webkit-text-fill-color: var(--text-primary) !important;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
+input::placeholder {
+  color: var(--text-secondary);
+  opacity: 0.6;
+  text-shadow: none;
+}
+
+input:focus {
+  border-bottom-color: var(--action-primary);
 }
 
 .test-notice-check {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
-  padding: 12px 14px;
+  gap: 10px;
+  padding: 12px;
   border-radius: 12px;
-  border: 1px solid rgba(140, 216, 255, 0.16);
-  background: rgba(15, 18, 34, 0.72);
-  color: var(--text);
-  line-height: 1.4;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(0, 0, 0, 0.2);
+  margin-bottom: 12px;
+  line-height: 1.35;
+  font-size: 0.85rem;
 }
 
 .test-notice-check input[type='checkbox'] {
@@ -213,14 +255,14 @@ function handleSubmit() {
   height: 18px;
   margin: 2px 0 0;
   padding: 0;
-  border-radius: 6px;
-  accent-color: var(--accent);
+  border-radius: 4px;
+  accent-color: var(--action-primary);
   flex: 0 0 auto;
 }
 
 .registration-closed-notice {
-  padding: 14px 16px;
-  border-radius: 12px;
+  padding: 16px;
+  border-radius: 16px;
   border: 1px solid rgba(255, 204, 128, 0.22);
   background: rgba(255, 204, 128, 0.08);
   text-align: center;
@@ -234,20 +276,5 @@ function handleSubmit() {
 .registration-closed-notice p + p {
   margin-top: 6px;
   opacity: 0.72;
-}
-
-@media (max-width: 420px) {
-  .auth-panel {
-    margin: 24px auto 0;
-  }
-
-  .auth-mode-switcher {
-    gap: 8px;
-  }
-
-  .auth-mode-switcher button {
-    padding: 10px 8px;
-    font-size: 0.85rem;
-  }
 }
 </style>
