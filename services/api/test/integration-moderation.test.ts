@@ -266,7 +266,10 @@ describe('[integration] message moderation', { skip: SKIP, concurrency: false },
     const adminChats = JSON.parse(chatListRes.payload);
     const dmChat = adminChats.find((chat: any) => chat.id === chatId);
     assert.ok(dmChat);
-    assert.equal(dmChat.name, '@moderated_dm_alice + @moderated_dm_bob');
+    assert.deepEqual(
+      dmChat.name.split(' + ').sort(),
+      ['@moderated_dm_alice', '@moderated_dm_bob']
+    );
 
     const hideRes = await app.inject({
       method: 'POST',

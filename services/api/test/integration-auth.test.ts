@@ -36,6 +36,8 @@ async function promoteAdmin(username: string) {
   await pool.query(`UPDATE users SET role = 'admin' WHERE username = $1`, [username]);
 }
 
+describe('[integration] auth suites (serialized file-level)', { skip: SKIP, concurrency: false }, () => {
+
 describe('[integration] refresh token rotation', { skip: SKIP, concurrency: false }, () => {
   let app: any;
 
@@ -929,4 +931,6 @@ describe('[integration] test notice acknowledgement', { skip: SKIP, concurrency:
     assert.equal(refreshed.user.mustAcceptTestNotice, false);
     assert.equal(refreshed.user.acceptedTestNoticeVersion, 'alpha-v2');
   });
+});
+
 });
