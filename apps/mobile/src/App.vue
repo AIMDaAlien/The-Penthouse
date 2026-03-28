@@ -1,9 +1,6 @@
 <template>
   <main class="shell">
-    <div class="background-texture"></div>
-    <div class="glow-orb orb-1"></div>
-    <div class="glow-orb orb-2"></div>
-    <div class="glow-orb orb-3"></div>
+    <ChatBackground v-if="session && !sessionSyncRequired" />
 
     <header class="app-header glass-panel" style="border-radius: 20px; margin-bottom: 24px; padding: 12px 16px;" v-if="session">
       <div class="header-title">
@@ -320,6 +317,7 @@ import { useRealtimeConnection } from './composables/useRealtimeConnection';
 import { useSessionGate } from './composables/useSessionGate';
 
 import AuthPanel from './components/AuthPanel.vue';
+import ChatBackground from './components/ChatBackground.vue';
 import ConnectionStatus from './components/ConnectionStatus.vue';
 import ChatListPanel from './components/ChatListPanel.vue';
 import MessageList from './components/MessageList.vue';
@@ -1056,7 +1054,7 @@ onUnmounted(() => {
   padding: 14px 16px;
   border-radius: 14px;
   border: 1px solid rgba(140, 216, 255, 0.16);
-  background: rgba(15, 18, 34, 0.72);
+  background: rgba(36, 38, 64, 0.72);
   line-height: 1.45;
 }
 
@@ -1122,7 +1120,7 @@ onUnmounted(() => {
   align-items: flex-start;
   gap: 16px;
   padding: 12px 16px;
-  background: rgba(16, 24, 64, 0.82);
+  background: rgba(48, 51, 88, 0.82);
   border: 1px solid rgba(111, 211, 255, 0.25);
   border-radius: 14px;
   flex-shrink: 0;
@@ -1148,7 +1146,7 @@ onUnmounted(() => {
 .chat-main {
   display: flex;
   flex-direction: column;
-  background: rgba(23, 27, 50, 0.5);
+  background: rgba(48, 51, 88, 0.35);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 16px;
   padding: 12px;
@@ -1368,12 +1366,11 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+  transition: margin-bottom 0.3s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
 .large-logo {
   line-height: 0.85;
-  transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
 .logo-the {
@@ -1381,7 +1378,7 @@ onUnmounted(() => {
   font-size: 1.6rem;
   color: var(--action-primary);
   text-shadow: 0 2px 4px rgba(0,0,0,0.3);
-  transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+  transition: font-size 0.3s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
 .logo-pent, .logo-house {
@@ -1391,7 +1388,7 @@ onUnmounted(() => {
   letter-spacing: -0.03em;
   color: var(--text-primary);
   text-shadow: 0 2px 10px rgba(0,0,0,0.4);
-  transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+  transition: font-size 0.3s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
 /* Dynamic Logo Scaling */

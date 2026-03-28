@@ -1,15 +1,15 @@
 :root {
-  --bg-base: #12121C;
-  --bg-surface: #1E1E2D;
+  --bg-base: #242640;
+  --bg-surface: #303358;
   --text-primary: #E2E2EC;
-  --text-secondary: #8C8CC5;
-  --action-primary: #7777C2;
-  --action-hover: #C6C6E6;
-  --border-subtle: rgba(140, 140, 197, 0.2);
+  --text-secondary: #A5B4FC;
+  --action-primary: #818CF8;
+  --action-hover: #C7D2FE;
+  --border-subtle: rgba(165, 180, 252, 0.2);
 
   --bg: var(--bg-base);
   --panel: var(--bg-surface);
-  --panel-2: rgba(30, 30, 45, 0.6);
+  --panel-2: rgba(48, 51, 88, 0.6);
   --text: var(--text-primary);
   --muted: var(--text-secondary);
   --accent: var(--action-primary);
@@ -69,28 +69,28 @@ html,
 .orb-1 {
   width: 300px;
   height: 300px;
-  background: rgba(119, 119, 194, 0.4);
+  background: rgba(129, 140, 248, 0.35);
   top: -100px;
   right: -50px;
 }
 .orb-2 {
   width: 400px;
   height: 400px;
-  background: rgba(80, 80, 150, 0.3);
+  background: rgba(99, 102, 178, 0.3);
   bottom: -150px;
   left: -100px;
 }
 .orb-3 {
   width: 200px;
   height: 200px;
-  background: rgba(140, 140, 197, 0.2);
+  background: rgba(165, 180, 252, 0.18);
   top: 30%;
   left: 40%;
 }
 
 .shell {
   width: 100%;
-  max-width: 440px; /* Constrain shell globally for mobile-first feel */
+  max-width: 1280px;
   margin: 0 auto;
   padding-top: max(16px, calc(env(safe-area-inset-top) + 12px));
   padding-right: max(16px, calc(env(safe-area-inset-right) + 12px));
@@ -113,27 +113,33 @@ html,
 }
 
 .glass-panel {
-  background: rgba(30, 30, 45, 0.45);
+  background: rgba(48, 51, 88, 0.45);
   backdrop-filter: blur(40px);
   -webkit-backdrop-filter: blur(40px);
+  backface-visibility: hidden;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
   border-radius: 24px;
 }
 
 .glass-inset {
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(20, 22, 40, 0.3);
   border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: 20px;
 }
 
 .card {
-  background: rgba(30, 30, 45, 0.45);
+  background: rgba(48, 51, 88, 0.45);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 24px;
   padding: 24px;
   backdrop-filter: blur(40px);
   -webkit-backdrop-filter: blur(40px);
+  backface-visibility: hidden;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
   min-width: 0;
   max-width: 100%;
   box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
@@ -152,9 +158,9 @@ textarea {
 }
 
 button {
-  background: rgba(119, 119, 194, 0.15);
+  background: rgba(129, 140, 248, 0.15);
   color: var(--action-primary);
-  border: 1px solid rgba(119, 119, 194, 0.3);
+  border: 1px solid rgba(129, 140, 248, 0.3);
   border-radius: 20px;
   padding: 12px 18px;
   font-weight: 600;
@@ -167,8 +173,8 @@ button {
 .form-btn {
   width: 100%;
   padding: 18px;
-  background: rgba(119, 119, 194, 0.15);
-  border-color: rgba(119, 119, 194, 0.4);
+  background: rgba(129, 140, 248, 0.15);
+  border-color: rgba(129, 140, 248, 0.4);
   font-size: 1.1rem;
 }
 
@@ -180,7 +186,7 @@ button {
 
 button:active {
   transform: scale(0.98);
-  background: rgba(119, 119, 194, 0.25);
+  background: rgba(129, 140, 248, 0.25);
 }
 
 button.secondary {

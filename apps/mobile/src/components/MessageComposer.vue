@@ -228,15 +228,20 @@ onBeforeUnmount(() => {
 .composer-container {
   display: flex;
   gap: 12px;
-  align-items: flex-end;
-  background: var(--panel-2);
-  padding: 12px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  width: 100%;
+  align-items: center;
+  margin: 0 4px 16px;
+  padding: 6px 10px;
+  border-radius: 40px;
+  background: rgba(48, 51, 88, 0.75);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  backface-visibility: hidden;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+  width: auto;
   min-width: 0;
-  max-width: 100%;
-  overflow: hidden;
 }
 
 textarea {
@@ -245,39 +250,56 @@ textarea {
   width: 100%;
   max-width: 100%;
   resize: none;
-  background: rgba(15, 18, 34, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 10px 14px;
-  border-radius: 16px;
+  background: transparent;
+  border: none;
+  padding: 12px 16px;
   font-family: inherit;
-  color: var(--text);
+  color: #fff;
+  font-weight: 500;
+  font-size: 1rem;
   line-height: 1.4;
 }
 
 textarea:focus {
   outline: none;
-  border-color: var(--accent);
+}
+textarea::placeholder {
+  color: #888;
 }
 
 .send-btn {
+  width: 44px;
   height: 44px;
-  padding: 0 20px;
-  width: auto;
   flex-shrink: 0;
-  border-radius: 16px;
-  background: var(--accent);
-  color: #041027;
-  font-weight: 700;
-  border: none;
+  border-radius: 22px;
+  background: rgba(129, 140, 248, 0.8);
+  border: 2px solid rgba(165, 180, 252, 0.5);
+  color: #fff;
+  font-size: 0; /* Hide 'Send' text */
   cursor: pointer;
-  transition: opacity 0.2s;
+  box-shadow: 0 4px 12px rgba(129, 140, 248, 0.3);
+  transition: transform 0.2s, opacity 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.send-btn::after {
+  content: '↑';
+  font-size: 1.2rem;
+  font-weight: bold;
+}
+
+.send-btn:active {
+  transform: scale(0.9);
 }
 
 .send-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-  background: rgba(255, 255, 255, 0.2);
-  color: rgba(255, 255, 255, 0.5);
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: none;
 }
 
 .actions {
@@ -301,12 +323,25 @@ textarea:focus {
   height: 44px;
   min-width: 44px;
   width: auto;
-  padding: 0 12px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--text);
-  font-weight: 700;
+  padding: 0 16px;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s, background 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.action-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.action-btn:active {
+  transform: scale(0.95);
 }
 
 .hidden-file-input {
@@ -315,39 +350,27 @@ textarea:focus {
 
 @media (max-width: 760px) {
   .composer-container {
-    flex-wrap: wrap;
-    align-items: stretch;
-    gap: 10px;
-    padding: 10px;
+    gap: 8px;
+    padding: 6px 8px;
+    margin: 0 0 12px;
   }
-
-  textarea {
-    flex: 1 1 100%;
-    width: 100%;
-    min-height: 84px;
-  }
-
-  .actions {
-    width: 100%;
-    justify-content: space-between;
-    gap: 6px;
-    min-width: 0;
-  }
-
-  .media-actions {
-    gap: 6px;
-    min-width: 0;
-  }
-
   .action-btn {
-    min-width: 40px;
-    padding: 0 10px;
+    height: 38px;
+    min-width: 38px;
+    padding: 0 8px;
+    border-radius: 19px;
   }
-
   .send-btn {
-    min-width: auto;
-    padding: 0 16px;
-    margin-left: auto;
+    height: 38px;
+    width: 38px;
+    border-radius: 19px;
+  }
+  .send-btn::after {
+    font-size: 1.1rem;
+  }
+  textarea {
+    padding: 8px 10px;
+    font-size: 0.95rem;
   }
 }
 
@@ -358,27 +381,21 @@ textarea:focus {
 @media (max-width: 400px) {
   .composer-container {
     gap: 6px;
-    padding: 6px;
+    padding: 4px 6px;
   }
-
   textarea {
-    padding: 8px 10px;
-    min-height: 72px;
-  }
-
-  .actions {
-    gap: 4px;
-    min-width: 0;
+    padding: 6px 8px;
   }
   .action-btn {
-    height: 40px;
-    min-width: 32px;
-    padding: 0 4px;
+    height: 34px;
+    min-width: 34px;
+    border-radius: 17px;
+    padding: 0 6px;
   }
   .send-btn {
-    height: 40px;
-    min-width: auto;
-    padding: 0 8px;
+    height: 34px;
+    width: 34px;
+    border-radius: 17px;
   }
 }
 </style>

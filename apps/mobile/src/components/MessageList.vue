@@ -13,7 +13,8 @@
           sent: m.senderId === currentUserId,
           received: m.senderId !== currentUserId,
           queued: isLocalId(m.id),
-          'media-bubble': isMediaBubble(m)
+          'media-bubble': isMediaBubble(m),
+          'animate-in': shouldAnimate(m.id)
         }"
       >
         <div class="msg-meta small">
@@ -147,7 +148,30 @@ const scrollRef = ref<HTMLElement | null>(null);
 const viewer = ref<{ url: string; label: string; scale: number; kind: 'image' | 'video' } | null>(null);
 
 const sortedMessages = computed(() => [...props.messages].reverse());
-const MOBILE_DIAGNOSTICS_ENABLED = import.meta.env.DEV;
+
+// Animation gating — only animate messages that arrive in real-time (1–2 at a time),
+// not the initial batch loaded when entering a chat or switching conversations.
+const seenMessageIds = new Set<string>();
+const animateIds = ref(new Set<string>());
+
+watch(() => props.messages, (msgs) => {
+  const fresh = new Set<string>();
+  let newCount = 0;
+  for (const m of msgs) {
+    if (!seenMessageIds.has(m.id)) newCount++;
+  }
+  if (newCount > 0 && newCount <= 2) {
+    for (const m of msgs) {
+      if (!seenMessageIds.has(m.id)) fresh.add(m.id);
+    }
+  }
+  animateIds.value = fresh;
+  for (const m of msgs) seenMessageIds.add(m.id);
+}, { immediate: true });
+
+function shouldAnimate(id: string): boolean {
+  return animateIds.value.has(id);
+}
 
 const typingLabel = computed(() => {
   const names = (props.typingMembers ?? [])
@@ -434,8 +458,7 @@ onUnmounted(() => {
   overflow-y: auto;
   overflow-x: hidden;
   padding: 12px 16px;
-  background: rgba(15, 18, 34, 0.4);
-  border-radius: 12px;
+  background: transparent;
   margin-bottom: 12px;
   display: flex;
   flex-direction: column;
@@ -458,11 +481,22 @@ onUnmounted(() => {
 .msg-bubble {
   max-width: min(88%, 28rem);
   min-width: 0;
-  padding: 10px 14px;
-  border-radius: 16px;
+  padding: 16px 20px;
   position: relative;
   word-wrap: break-word;
   overflow-wrap: anywhere;
+  font-size: 1.05rem;
+  line-height: 1.4;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.msg-bubble.animate-in {
+  animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes popIn {
+  from { opacity: 0; transform: scale(0.95) translateY(10px) translateZ(0); }
+  to { opacity: 1; transform: scale(1) translateY(0) translateZ(0); }
 }
 
 .msg-bubble.media-bubble {
@@ -472,16 +506,17 @@ onUnmounted(() => {
 
 .msg-bubble.sent {
   align-self: flex-end;
-  background: linear-gradient(135deg, rgba(114, 214, 255, 0.15), rgba(121, 166, 255, 0.15));
-  border: 1px solid rgba(135, 206, 250, 0.3);
-  border-bottom-right-radius: 4px;
+  background: rgba(129, 140, 248, 0.38);
+  border: 1px solid rgba(165, 180, 252, 0.35);
+  border-radius: 40px 10px 30px 40px;
+  color: #fff;
 }
 
 .msg-bubble.received {
   align-self: flex-start;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-bottom-left-radius: 4px;
+  background: rgba(48, 51, 88, 0.45);
+  border: 1px solid rgba(165, 180, 252, 0.12);
+  border-radius: 30px 40px 40px 10px;
 }
 
 .msg-bubble.queued {
@@ -493,8 +528,8 @@ onUnmounted(() => {
   display: flex;
   gap: 6px;
   margin-bottom: 6px;
-  font-size: 0.7rem;
-  opacity: 0.7;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
 }
 
 .msg-bubble.sent .msg-meta {
