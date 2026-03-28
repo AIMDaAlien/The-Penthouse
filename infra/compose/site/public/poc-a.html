@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The Penthouse — POC A: Soft Glass</title>
+    <meta name="description" content="Download the staged Penthouse rebuild for Android testing." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <style>
+      /* ─── Erode from fontsource CDN ─── */
+      @import url('https://fonts.cdnfonts.com/css/erode');
+
+      /* ═══════════════════════════════════
+         POC A — "Soft Glass"
+         Rounded, warm, approachable.
+         Gentle floats and soft glows.
+         ═══════════════════════════════════ */
+
+      :root {
+        --bg: #080c1e;
+        --surface: rgba(16, 22, 52, 0.75);
+        --surface-hover: rgba(22, 30, 68, 0.85);
+        --border: rgba(140, 148, 230, 0.12);
+        --border-hover: rgba(140, 148, 230, 0.25);
+        --text: #eef0ff;
+        --text-soft: #a8aed0;
+        --peri: #9598ff;
+        --peri-light: #b4b7ff;
+        --peri-glow: rgba(149, 152, 255, 0.3);
+        --sky: #7ec8f8;
+        --btn-grad: linear-gradient(135deg, #9598ff 0%, #7ec8f8 100%);
+        --btn-shadow: 0 6px 28px rgba(126, 200, 248, 0.2), 0 2px 8px rgba(149, 152, 255, 0.16);
+        --card-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+        --radius: 22px;
+        --radius-sm: 14px;
+        --font-display: 'Erode', 'Iowan Old Style', Georgia, serif;
+        --font-body: 'Ubuntu', 'Segoe UI', sans-serif;
+        --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
+        --ease: cubic-bezier(0.22, 1, 0.36, 1);
+      }
+
+      *, *::before, *::after { box-sizing: border-box; }
+      html { min-height: 100%; }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: var(--font-body);
+        font-weight: 400;
+        font-size: 16px;
+        color: var(--text);
+        background: var(--bg);
+        background-image:
+          radial-gradient(ellipse 70% 55% at 25% -8%, rgba(149, 152, 255, 0.1), transparent),
+          radial-gradient(ellipse 60% 45% at 80% 8%, rgba(126, 200, 248, 0.07), transparent);
+        -webkit-font-smoothing: antialiased;
+        overflow-x: hidden;
+      }
+
+      /* ─── Grain ─── */
+      body::before {
+        content: '';
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        opacity: 0.03;
+        background: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+        background-size: 180px;
+        z-index: 9999;
+      }
+
+      /* ─── Floating orbs ─── */
+      .orb {
+        position: fixed;
+        border-radius: 50%;
+        filter: blur(90px);
+        pointer-events: none;
+      }
+      .orb-1 {
+        width: 450px; height: 450px;
+        top: -160px; left: -80px;
+        background: rgba(149, 152, 255, 0.12);
+        animation: float 16s ease-in-out infinite alternate;
+      }
+      .orb-2 {
+        width: 350px; height: 350px;
+        bottom: -100px; right: -100px;
+        background: rgba(126, 200, 248, 0.08);
+        animation: float 20s ease-in-out infinite alternate-reverse;
+      }
+      @keyframes float {
+        0%   { transform: translate(0, 0) scale(1); }
+        100% { transform: translate(24px, 16px) scale(1.06); }
+      }
+
+      /* ─── Layout ─── */
+      .shell {
+        position: relative;
+        z-index: 1;
+        width: min(980px, calc(100% - 2rem));
+        margin: 0 auto;
+        padding: 2.5rem 0 3.5rem;
+      }
+
+      /* ─── Logo ─── */
+      .logo {
+        margin-bottom: 3rem;
+        animation: riseIn 0.7s var(--ease) both;
+      }
+      .logo-the {
+        display: block;
+        font-family: var(--font-display);
+        font-weight: 400;
+        font-size: 1.35rem;
+        color: var(--text);
+        letter-spacing: 0.02em;
+        margin-bottom: -0.15em;
+      }
+      .logo-penthouse {
+        display: block;
+        font-family: var(--font-display);
+        font-weight: 700;
+        font-size: clamp(2.6rem, 6vw, 4.2rem);
+        line-height: 0.92;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--peri);
+      }
+
+      /* ─── Hero ─── */
+      .hero {
+        animation: riseIn 0.8s var(--ease) 0.08s both;
+      }
+      .badge {
+        display: inline-block;
+        padding: 0.35rem 0.85rem;
+        border-radius: 99px;
+        background: rgba(149, 152, 255, 0.12);
+        border: 1px solid rgba(149, 152, 255, 0.18);
+        font-family: var(--font-mono);
+        font-size: 0.72rem;
+        font-weight: 500;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--peri-light);
+        margin-bottom: 1.25rem;
+      }
+
+      h1 {
+        margin: 0;
+        font-family: var(--font-body);
+        font-weight: 300;
+        font-size: clamp(2rem, 4.5vw, 3.4rem);
+        line-height: 1.15;
+        color: var(--text);
+      }
+      h1 strong {
+        font-weight: 700;
+      }
+
+      .lede {
+        max-width: 54ch;
+        margin: 1rem 0 0;
+        font-size: 1.05rem;
+        font-weight: 300;
+        line-height: 1.7;
+        color: var(--text-soft);
+      }
+
+      /* ─── Buttons ─── */
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        margin: 2rem 0 0;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        min-height: 3.1rem;
+        padding: 0.8rem 1.4rem;
+        border-radius: var(--radius-sm);
+        border: 1px solid transparent;
+        font-family: var(--font-body);
+        font-size: 0.9rem;
+        font-weight: 600;
+        text-decoration: none;
+        cursor: pointer;
+        transition: transform 250ms var(--ease), box-shadow 250ms var(--ease), border-color 250ms ease, background 250ms ease;
+      }
+      .btn:hover { transform: translateY(-2px); }
+      .btn:active { transform: translateY(0); transition-duration: 80ms; }
+
+      .btn svg {
+        width: 18px; height: 18px;
+        stroke: currentColor; fill: none;
+        stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+      }
+
+      .btn-primary {
+        color: #0a0e24;
+        background: var(--btn-grad);
+        box-shadow: var(--btn-shadow);
+      }
+      .btn-primary:hover {
+        box-shadow: 0 10px 36px rgba(126, 200, 248, 0.28), 0 4px 12px rgba(149, 152, 255, 0.22);
+      }
+      .btn-secondary {
+        color: var(--text-soft);
+        background: transparent;
+        border-color: var(--border);
+      }
+      .btn-secondary:hover { border-color: var(--border-hover); }
+      .btn-disabled {
+        opacity: 0.45;
+        cursor: default;
+        pointer-events: none;
+      }
+
+      /* ─── Cards ─── */
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1.1rem;
+        margin-top: 2.5rem;
+        animation: riseIn 0.9s var(--ease) 0.2s both;
+      }
+      .card {
+        padding: 1.6rem;
+        border-radius: var(--radius);
+        border: 1px solid var(--border);
+        background: var(--surface);
+        box-shadow: var(--card-shadow);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        transition: transform 350ms var(--ease), border-color 350ms ease, box-shadow 350ms var(--ease);
+      }
+      .card:hover {
+        transform: translateY(-4px);
+        border-color: var(--border-hover);
+        box-shadow: 0 18px 50px rgba(0, 0, 0, 0.4);
+      }
+
+      .card h2 {
+        margin: 0 0 0.65rem;
+        font-family: var(--font-body);
+        font-weight: 700;
+        font-size: 1.15rem;
+        color: var(--text);
+      }
+      .card p {
+        margin: 0;
+        font-size: 0.95rem;
+        font-weight: 300;
+        line-height: 1.6;
+        color: var(--text-soft);
+      }
+
+      /* ─── Checklist ─── */
+      .checks {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+      }
+      .checks li {
+        position: relative;
+        padding-left: 1.5rem;
+        font-size: 0.95rem;
+        font-weight: 300;
+        line-height: 1.5;
+        color: var(--text-soft);
+      }
+      .checks li + li { margin-top: 0.55rem; }
+      .checks li::before {
+        content: '';
+        position: absolute;
+        left: 0; top: 0.42em;
+        width: 7px; height: 7px;
+        border-radius: 50%;
+        background: var(--peri);
+        box-shadow: 0 0 10px var(--peri-glow);
+      }
+
+      /* ─── Legacy card ─── */
+      .card-legacy {
+        display: flex;
+        flex-direction: column;
+      }
+      .card-legacy .btn {
+        margin-top: auto;
+      }
+      .card-legacy p { margin-bottom: 1.1rem; }
+
+      .file-name {
+        font-family: var(--font-mono);
+        font-size: 0.82rem;
+        color: var(--peri-light);
+      }
+
+      /* ─── Footer ─── */
+      footer {
+        margin-top: 3rem;
+        padding-top: 1.25rem;
+        border-top: 1px solid var(--border);
+        text-align: center;
+        animation: riseIn 1s var(--ease) 0.35s both;
+      }
+      footer p {
+        margin: 0;
+        font-size: 0.78rem;
+        font-weight: 500;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--text-soft);
+        opacity: 0.5;
+      }
+
+      /* ─── Animations ─── */
+      @keyframes riseIn {
+        from { opacity: 0; transform: translateY(20px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
+
+      /* ─── Mobile ─── */
+      @media (max-width: 680px) {
+        .shell { padding: 1.5rem 0 2.5rem; }
+        .logo { margin-bottom: 2rem; }
+        .logo-penthouse { font-size: 2.4rem; }
+        h1 { font-size: 1.75rem; }
+        .actions { flex-direction: column; }
+        .btn { width: 100%; }
+        .grid { grid-template-columns: 1fr; }
+        .card { padding: 1.3rem; border-radius: 16px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="orb orb-1" aria-hidden="true"></div>
+    <div class="orb orb-2" aria-hidden="true"></div>
+
+    <main class="shell">
+      <div class="logo" aria-label="The Penthouse">
+        <span class="logo-the">The</span>
+        <span class="logo-penthouse">Pent<br/>House</span>
+      </div>
+
+      <section class="hero">
+        <div class="badge">staged rebuild &middot; android</div>
+        <h1>The rebuild is <strong>ready to test</strong></h1>
+        <p class="lede">
+          I'm validating the new Penthouse experience in a staged rollout
+          before opening it wider. Messaging, media, notification, and account
+          flow are the focus — reliability first, then the bigger design refresh.
+        </p>
+
+        <div class="actions">
+          <a class="btn btn-primary" href="/downloads/the-penthouse-rebuild.apk" download>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            Download rebuild APK
+          </a>
+          <span class="btn btn-secondary btn-disabled" aria-disabled="true">
+            Google Play — not yet available
+          </span>
+        </div>
+      </section>
+
+      <div class="grid">
+        <article class="card">
+          <h2>What I'm testing</h2>
+          <ul class="checks">
+            <li>Signing in and staying signed in</li>
+            <li>Message, media, file, and GIF sending</li>
+            <li>More dependable notification delivery</li>
+            <li>Day-to-day stability before the larger redesign</li>
+          </ul>
+        </article>
+
+        <article class="card card-legacy">
+          <h2>Need the earlier version?</h2>
+          <p>
+            The previous APK is still here as a fallback while the rebuild
+            moves through staged testing.
+          </p>
+          <a class="btn btn-secondary" href="/downloads/the-penthouse.apk" download>
+            Download legacy APK
+            <span class="file-name">the-penthouse.apk</span>
+          </a>
+        </article>
+      </div>
+
+      <footer>
+        <p>Staged internal release &middot; Not a public launch</p>
+      </footer>
+    </main>
+  </body>
+</html>

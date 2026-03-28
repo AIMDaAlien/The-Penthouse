@@ -146,6 +146,21 @@ Current working tree:
   - fresh signing key created outside the repo
   - signed rebuild APK produced and copied to the TrueNAS rebuild downloads directory
 
+### 2026-03-28 - Public site refresh
+
+Highlights:
+- Redesigned the staged rebuild landing page to match the mobile app's visual identity.
+- Logo treatment aligned with the app auth screen: "The" in periwinkle Erode 300, "PENT HOUSE" in light Erode 300.
+- Typography standardized: Ubuntu (body), JetBrains Mono (technical labels), Erode (logo only).
+- Palette pulled from the mobile app's CSS variables (`--bg-base`, `--action-primary`, `--text-secondary`, etc.) for coherence.
+- Buttons changed from gradient fills to frosted glass periwinkle with backdrop-filter.
+- Added glassmorphic cards for testing scope and legacy fallback sections.
+- Atmospheric background: radial gradient ellipses, floating orbs, grain texture overlay.
+- Mobile-first responsive: 1.5x logo on phones, generous side margins, safe area insets, reduced-motion support.
+- Three POC variants explored (Soft Glass, Editorial Stack, Neon Pulse); Editorial Stack chosen and refined.
+- Copy updated to singular/first-person voice reflecting single-tester staged rollout.
+- Both APK download paths preserved: `/downloads/the-penthouse-rebuild.apk` and `/downloads/the-penthouse.apk`.
+
 ## Where this leaves us now
 
 - Auth, chat, media, user management, realtime hardening, and Android push foundations are present.

@@ -32,7 +32,7 @@ This vault is the "what we built and why" map for people joining the project lat
 - [[../../services/api/docs/RELIABILITY_DRILL|Reliability Drill Runbook]]
 - [[../../antigravity/customizations|Antigravity customizations]]
 
-## Current status (as of 2026-03-20)
+## Current status (as of 2026-03-28)
 
 - Rebuild baseline is in place:
   - Vue + Capacitor
@@ -117,6 +117,11 @@ This vault is the "what we built and why" map for people joining the project lat
   - API/realtime gating active
   - mobile register/ack flow active
 - Real-device smoke proof now exists on a normal Android phone against the public domains.
+- Public site refresh completed:
+  - landing page redesigned to match mobile app visual identity (Erode logo, Ubuntu body, JetBrains Mono technical)
+  - frosted glass periwinkle palette coherent with mobile app CSS variables
+  - glassmorphic cards, atmospheric background, mobile-first responsive
+  - copy updated to singular first-person voice for staged single-tester rollout
 
 ## Current blockers
 

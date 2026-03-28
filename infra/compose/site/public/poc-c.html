@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The Penthouse — POC C: Neon Pulse</title>
+    <meta name="description" content="Download the staged Penthouse rebuild for Android testing." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <style>
+      @import url('https://fonts.cdnfonts.com/css/erode');
+
+      /* ═══════════════════════════════════
+         POC C — "Neon Pulse"
+         Centered, bold, dramatic.
+         Glowing periwinkle hero with
+         breathing light effects and
+         magnetic card hovers.
+         ═══════════════════════════════════ */
+
+      :root {
+        --bg: #060919;
+        --surface: rgba(12, 18, 44, 0.8);
+        --surface-glow: rgba(18, 24, 60, 0.9);
+        --border: rgba(140, 148, 230, 0.1);
+        --border-glow: rgba(149, 152, 255, 0.35);
+        --text: #eef0ff;
+        --text-soft: #a2a8cc;
+        --peri: #9598ff;
+        --peri-light: #c0c2ff;
+        --peri-glow: rgba(149, 152, 255, 0.25);
+        --sky: #7ec8f8;
+        --btn-grad: linear-gradient(135deg, #9598ff 0%, #7ec8f8 100%);
+        --font-display: 'Erode', Georgia, serif;
+        --font-body: 'Ubuntu', sans-serif;
+        --font-mono: 'JetBrains Mono', monospace;
+        --ease: cubic-bezier(0.22, 1, 0.36, 1);
+        --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+      }
+
+      *, *::before, *::after { box-sizing: border-box; }
+      html { min-height: 100%; }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: var(--font-body);
+        font-weight: 400;
+        font-size: 16px;
+        color: var(--text);
+        background: var(--bg);
+        -webkit-font-smoothing: antialiased;
+        overflow-x: hidden;
+      }
+
+      /* ─── Dramatic spotlight ─── */
+      .spotlight {
+        position: fixed;
+        top: -30%;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 700px;
+        height: 700px;
+        background: radial-gradient(
+          circle,
+          rgba(149, 152, 255, 0.1) 0%,
+          rgba(126, 200, 248, 0.04) 40%,
+          transparent 70%
+        );
+        pointer-events: none;
+        animation: pulse 6s ease-in-out infinite;
+      }
+      @keyframes pulse {
+        0%, 100% { opacity: 0.7; transform: translateX(-50%) scale(1); }
+        50%      { opacity: 1; transform: translateX(-50%) scale(1.15); }
+      }
+
+      /* ─── Grain ─── */
+      .grain {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        opacity: 0.025;
+        background: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+        background-size: 180px;
+        z-index: 9999;
+      }
+
+      /* ─── Layout ─── */
+      .shell {
+        position: relative;
+        z-index: 1;
+        width: min(860px, calc(100% - 2rem));
+        margin: 0 auto;
+        padding: 3rem 0 4rem;
+      }
+
+      /* ─── Logo — centered + glow ─── */
+      .logo {
+        text-align: center;
+        margin-bottom: 3.5rem;
+        animation: dropIn 0.7s var(--ease) both;
+      }
+      .logo-the {
+        display: block;
+        font-family: var(--font-display);
+        font-weight: 400;
+        font-size: 1.35rem;
+        color: var(--text);
+        letter-spacing: 0.02em;
+        margin-bottom: -0.1em;
+      }
+      .logo-penthouse {
+        display: block;
+        font-family: var(--font-display);
+        font-weight: 700;
+        font-size: clamp(2.8rem, 7vw, 4.8rem);
+        line-height: 0.92;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--peri);
+        text-shadow: 0 0 40px var(--peri-glow), 0 0 80px rgba(149, 152, 255, 0.1);
+      }
+
+      /* ─── Hero — centered ─── */
+      .hero {
+        text-align: center;
+        margin-bottom: 3rem;
+        animation: dropIn 0.8s var(--ease) 0.08s both;
+      }
+
+      .status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        padding: 0.3rem 0.9rem;
+        border-radius: 99px;
+        background: rgba(149, 152, 255, 0.1);
+        border: 1px solid rgba(149, 152, 255, 0.2);
+        font-family: var(--font-mono);
+        font-size: 0.7rem;
+        font-weight: 500;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--peri-light);
+        margin-bottom: 1.5rem;
+      }
+      .status-dot {
+        width: 6px; height: 6px;
+        border-radius: 50%;
+        background: #5eead4;
+        animation: blink 2s ease-in-out infinite;
+      }
+      @keyframes blink {
+        0%, 100% { opacity: 1; }
+        50%      { opacity: 0.3; }
+      }
+
+      h1 {
+        margin: 0 auto;
+        max-width: 16ch;
+        font-family: var(--font-body);
+        font-weight: 300;
+        font-size: clamp(2rem, 5vw, 3.2rem);
+        line-height: 1.2;
+        color: var(--text);
+      }
+      h1 strong { font-weight: 700; }
+
+      .lede {
+        max-width: 46ch;
+        margin: 1rem auto 0;
+        font-size: 1rem;
+        font-weight: 300;
+        line-height: 1.7;
+        color: var(--text-soft);
+      }
+
+      h2 {
+        margin: 0 0 0.65rem;
+        font-family: var(--font-body);
+        font-weight: 700;
+        font-size: 1.1rem;
+        color: var(--text);
+      }
+
+      /* ─── CTA — big centered button ─── */
+      .cta-block {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.7rem;
+        margin-top: 2rem;
+        animation: dropIn 0.85s var(--ease) 0.14s both;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        min-height: 3.2rem;
+        padding: 0.85rem 2rem;
+        border-radius: 14px;
+        border: 1px solid transparent;
+        font-family: var(--font-body);
+        font-size: 0.92rem;
+        font-weight: 700;
+        text-decoration: none;
+        cursor: pointer;
+        transition:
+          transform 250ms var(--ease-bounce),
+          box-shadow 300ms var(--ease),
+          border-color 200ms ease;
+      }
+      .btn:hover { transform: translateY(-3px) scale(1.02); }
+      .btn:active { transform: translateY(0) scale(0.98); transition-duration: 80ms; }
+
+      .btn svg {
+        width: 18px; height: 18px;
+        stroke: currentColor; fill: none;
+        stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+      }
+
+      .btn-hero {
+        color: #0a0e24;
+        background: var(--btn-grad);
+        box-shadow:
+          0 6px 28px rgba(126, 200, 248, 0.2),
+          0 2px 8px rgba(149, 152, 255, 0.16),
+          0 0 0 1px rgba(149, 152, 255, 0.1);
+        font-size: 1rem;
+        padding: 1rem 2.5rem;
+        border-radius: 16px;
+      }
+      .btn-hero:hover {
+        box-shadow:
+          0 12px 40px rgba(126, 200, 248, 0.3),
+          0 4px 12px rgba(149, 152, 255, 0.24),
+          0 0 0 1px rgba(149, 152, 255, 0.2);
+      }
+      .btn-ghost {
+        color: var(--text-soft);
+        background: transparent;
+        border-color: var(--border);
+        font-weight: 500;
+        font-size: 0.82rem;
+      }
+      .btn-ghost:hover { border-color: var(--border-glow); }
+      .btn-disabled {
+        opacity: 0.4;
+        cursor: default;
+        pointer-events: none;
+      }
+      .btn-disabled:hover { transform: none; }
+
+      .playstore-note {
+        font-family: var(--font-mono);
+        font-size: 0.68rem;
+        color: var(--text-soft);
+        opacity: 0.5;
+        letter-spacing: 0.06em;
+      }
+
+      /* ─── Cards — magnetic hover ─── */
+      .cards {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+        animation: dropIn 0.9s var(--ease) 0.22s both;
+      }
+      .card {
+        padding: 1.5rem;
+        border-radius: 18px;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        transition:
+          transform 400ms var(--ease),
+          border-color 400ms ease,
+          box-shadow 400ms var(--ease);
+      }
+      .card:hover {
+        transform: translateY(-6px) scale(1.01);
+        border-color: var(--border-glow);
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4), 0 0 30px rgba(149, 152, 255, 0.06);
+      }
+
+      .card p {
+        margin: 0;
+        font-size: 0.92rem;
+        font-weight: 300;
+        line-height: 1.6;
+        color: var(--text-soft);
+      }
+
+      /* ─── Progress dots ─── */
+      .progress {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+      .progress li {
+        display: flex;
+        align-items: center;
+        gap: 0.7rem;
+        font-size: 0.92rem;
+        font-weight: 300;
+        color: var(--text-soft);
+      }
+      .progress-dot {
+        width: 8px; height: 8px;
+        border-radius: 50%;
+        background: var(--peri);
+        box-shadow: 0 0 12px var(--peri-glow);
+        flex-shrink: 0;
+        animation: dotPulse 3s ease-in-out infinite;
+      }
+      .progress li:nth-child(2) .progress-dot { animation-delay: 0.4s; }
+      .progress li:nth-child(3) .progress-dot { animation-delay: 0.8s; }
+      .progress li:nth-child(4) .progress-dot { animation-delay: 1.2s; }
+      @keyframes dotPulse {
+        0%, 100% { box-shadow: 0 0 8px var(--peri-glow); }
+        50%      { box-shadow: 0 0 18px var(--peri-glow), 0 0 4px var(--peri); }
+      }
+
+      /* ─── Legacy card ─── */
+      .card-legacy {
+        display: flex;
+        flex-direction: column;
+      }
+      .card-legacy p { margin-bottom: 1rem; }
+      .card-legacy .btn { margin-top: auto; align-self: flex-start; }
+
+      .file-ref {
+        font-family: var(--font-mono);
+        font-size: 0.75rem;
+        color: var(--peri);
+        opacity: 0.6;
+        margin-top: 0.5rem;
+      }
+
+      /* ─── Footer ─── */
+      footer {
+        margin-top: 3rem;
+        text-align: center;
+        animation: dropIn 1s var(--ease) 0.35s both;
+      }
+      footer p {
+        margin: 0;
+        font-size: 0.72rem;
+        font-weight: 500;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--text-soft);
+        opacity: 0.4;
+      }
+      .divider {
+        width: 40px;
+        height: 1px;
+        background: var(--border);
+        margin: 0 auto 1rem;
+      }
+
+      /* ─── Animations ─── */
+      @keyframes dropIn {
+        from { opacity: 0; transform: translateY(24px) scale(0.98); }
+        to   { opacity: 1; transform: translateY(0) scale(1); }
+      }
+
+      /* ─── Mobile ─── */
+      @media (max-width: 680px) {
+        .shell { padding: 2rem 0 3rem; }
+        .logo { margin-bottom: 2.5rem; }
+        .logo-penthouse { font-size: 2.6rem; }
+        .hero { margin-bottom: 2rem; }
+        h1 { font-size: 1.8rem; }
+        .btn-hero { width: 100%; padding: 1rem 1.5rem; }
+        .cards { grid-template-columns: 1fr; }
+        .card { padding: 1.3rem; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="spotlight" aria-hidden="true"></div>
+    <div class="grain" aria-hidden="true"></div>
+
+    <main class="shell">
+      <div class="logo" aria-label="The Penthouse">
+        <span class="logo-the">The</span>
+        <span class="logo-penthouse">Pent<br/>House</span>
+      </div>
+
+      <section class="hero">
+        <div class="status-pill">
+          <span class="status-dot"></span>
+          Staged rebuild
+        </div>
+        <h1>Ready when <strong>you</strong> are</h1>
+        <p class="lede">
+          I'm testing the new Penthouse experience in a staged rollout.
+          Messaging, media, notification, and account flow first —
+          the bigger redesign comes after.
+        </p>
+      </section>
+
+      <div class="cta-block">
+        <a class="btn btn-hero" href="/downloads/the-penthouse-rebuild.apk" download>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          Download rebuild APK
+        </a>
+        <span class="playstore-note">Google Play not yet available</span>
+      </div>
+
+      <div class="cards" style="margin-top: 3rem;">
+        <article class="card">
+          <h2>What I'm testing</h2>
+          <ul class="progress">
+            <li><span class="progress-dot"></span> Sign-in and session persistence</li>
+            <li><span class="progress-dot"></span> Message, media, and file sending</li>
+            <li><span class="progress-dot"></span> Notification reliability</li>
+            <li><span class="progress-dot"></span> Day-to-day app stability</li>
+          </ul>
+        </article>
+
+        <article class="card card-legacy">
+          <h2>Earlier version</h2>
+          <p>
+            The previous APK is still available as a fallback while
+            the rebuild moves through testing.
+          </p>
+          <a class="btn btn-ghost" href="/downloads/the-penthouse.apk" download>
+            Download legacy APK
+          </a>
+          <p class="file-ref">the-penthouse.apk</p>
+        </article>
+      </div>
+
+      <footer>
+        <div class="divider"></div>
+        <p>Staged internal release &middot; Not a public launch</p>
+      </footer>
+    </main>
+  </body>
+</html>
