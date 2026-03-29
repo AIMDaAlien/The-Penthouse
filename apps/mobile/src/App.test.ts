@@ -751,6 +751,8 @@ describe('App.vue read gating', () => {
     await chatList.vm.$emit('select', 'chat-1');
     await flushPromises();
 
+    vi.mocked(http.markChatRead).mockClear();
+
     mockAppListeners.pause?.();
     const messageList = wrapper.findComponent({ name: 'MessageList' });
     await messageList.vm.$emit('viewport-bottom-change', true);
