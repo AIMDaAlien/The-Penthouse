@@ -1,0 +1,33 @@
+{
+	"name": "@penthouse/web",
+	"private": true,
+	"version": "2.1.0-alpha.0",
+	"type": "module",
+	"scripts": {
+		"dev": "vite dev",
+		"build": "vite build",
+		"preview": "vite preview",
+		"prepare": "svelte-kit sync || echo ''",
+		"typecheck": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+		"test": "vitest run"
+	},
+	"dependencies": {
+		"@penthouse/contracts": "file:../../packages/contracts",
+		"socket.io-client": "^4.8.1"
+	},
+	"devDependencies": {
+		"@sveltejs/adapter-static": "^3.0.8",
+		"@sveltejs/kit": "^2.50.2",
+		"@sveltejs/vite-plugin-svelte": "^6.2.4",
+		"@vite-pwa/sveltekit": "^1.1.0",
+		"@testing-library/svelte": "^5.2.7",
+		"svelte": "^5.54.0",
+		"svelte-check": "^4.4.2",
+		"typescript": "^5.9.3",
+		"vite": "^6.4.1",
+		"vitest": "^2.1.9",
+		"workbox-precaching": "^7.3.0",
+		"workbox-routing": "^7.3.0",
+		"workbox-strategies": "^7.3.0"
+	}
+}
