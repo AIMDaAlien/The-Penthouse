@@ -164,56 +164,57 @@
 		min-height: 100dvh;
 		display: flex;
 		flex-direction: column;
-		align-items: center;
+		align-items: flex-start;
 		justify-content: center;
-		padding: var(--space-6) var(--space-4);
-		gap: var(--space-8);
+		padding: var(--space-8) var(--space-6);
+		gap: var(--space-6);
+		max-width: 480px;
+		margin: 0 auto;
 	}
 
 	.auth-hero {
-		text-align: center;
+		text-align: left;
 	}
 
+	/* Logo — matches reference: serif display, "The" in accent, PENTHOUSE in white */
 	.logo {
 		display: flex;
 		flex-direction: column;
-		line-height: 0.9;
-		letter-spacing: -0.02em;
+		font-family: var(--font-display);
+		line-height: 0.88;
 	}
 
 	.logo-the {
-		font-size: var(--text-xl);
-		color: var(--color-text-secondary);
-		font-weight: 300;
-		text-transform: uppercase;
-		letter-spacing: 0.3em;
-	}
-
-	.logo-pent {
-		font-size: 3.5rem;
-		font-weight: 800;
+		font-size: 1.5rem;
+		font-weight: 400;
 		color: var(--color-accent);
+		letter-spacing: 0.02em;
+		margin-bottom: 0.1em;
 	}
 
+	.logo-pent,
 	.logo-house {
-		font-size: 2rem;
-		font-weight: 600;
+		font-size: clamp(3.5rem, 14vw, 5.5rem);
+		font-weight: 900;
 		color: var(--color-text-primary);
-		letter-spacing: 0.15em;
+		letter-spacing: -0.01em;
 	}
 
 	.tagline {
-		margin-top: var(--space-3);
+		margin-top: var(--space-4);
 		color: var(--color-text-secondary);
 		font-size: var(--text-sm);
+		font-family: var(--font-sans);
 	}
 
 	.auth-card {
 		width: 100%;
-		max-width: 380px;
-		background: var(--color-surface);
+		background: var(--color-surface-glass);
+		backdrop-filter: var(--blur-glass);
+		-webkit-backdrop-filter: var(--blur-glass);
 		border: 1px solid var(--color-border);
-		border-radius: var(--radius-lg);
+		border-radius: var(--radius-xl);
+		box-shadow: var(--shadow-card);
 		overflow: hidden;
 	}
 
@@ -235,7 +236,7 @@
 
 	.tab.active {
 		color: var(--color-accent);
-		background: var(--color-surface-raised);
+		background: rgba(119, 119, 194, 0.08);
 		border-bottom: 2px solid var(--color-accent);
 	}
 
@@ -259,17 +260,18 @@
 	}
 
 	input {
-		background: var(--color-bg);
+		background: rgba(0, 0, 0, 0.25);
 		border: 1px solid var(--color-border);
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-md);
 		color: var(--color-text-primary);
 		padding: var(--space-3) var(--space-4);
 		outline: none;
-		transition: border-color 0.15s;
+		transition: border-color 0.2s;
+		width: 100%;
 	}
 
 	input:focus {
-		border-color: var(--color-accent);
+		border-color: var(--color-border-solid);
 	}
 
 	input:disabled {
@@ -285,22 +287,23 @@
 	}
 
 	.submit-btn {
-		background: var(--color-accent);
-		color: #000;
-		border: none;
-		border-radius: var(--radius-sm);
-		padding: var(--space-3) var(--space-4);
-		font-weight: 600;
+		background: var(--color-accent-dim);
+		color: var(--color-accent);
+		border: 1px solid rgba(119, 119, 194, 0.4);
+		border-radius: var(--radius-lg);
+		padding: var(--space-4);
+		font-weight: var(--weight-bold);
 		font-size: var(--text-base);
-		transition: opacity 0.15s;
+		width: 100%;
+		transition: background 0.2s, opacity 0.15s;
+	}
+
+	.submit-btn:not(:disabled):hover {
+		background: rgba(119, 119, 194, 0.25);
 	}
 
 	.submit-btn:disabled {
 		opacity: 0.5;
-	}
-
-	.submit-btn:not(:disabled):hover {
-		opacity: 0.9;
 	}
 
 	.notice-check {

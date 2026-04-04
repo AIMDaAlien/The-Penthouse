@@ -18,13 +18,14 @@
 </script>
 
 <svelte:head>
-	<meta name="theme-color" content="#0d0d0d" />
+	<meta name="theme-color" content="#12121C" />
 	<link rel="manifest" href="/manifest.webmanifest" />
 </svelte:head>
 
 {@render children()}
 
 <style>
+	/* ── Reset ── */
 	:global(*) {
 		box-sizing: border-box;
 		margin: 0;
@@ -32,65 +33,142 @@
 	}
 
 	:global(:root) {
-		/* Core palette */
-		--color-bg: #0d0d0d;
-		--color-surface: #161616;
-		--color-surface-raised: #1e1e1e;
-		--color-border: #2a2a2a;
-		--color-text-primary: #f0f0f0;
-		--color-text-secondary: #888;
-		--color-accent: #c9a84c;
-		--color-accent-dim: #9a7a30;
-		--color-danger: #e05252;
-		--color-success: #52e07a;
+		/* ── Brand palette (v2) ── */
+		--color-bg:             #12121C;
+		--color-surface:        #1E1E2D;
+		--color-surface-glass:  rgba(30, 30, 45, 0.45);
+		--color-surface-raised: rgba(30, 30, 45, 0.6);
+		--color-border:         rgba(140, 140, 197, 0.2);
+		--color-border-solid:   rgba(140, 140, 197, 0.35);
+		--color-text-primary:   #E2E2EC;
+		--color-text-secondary: #8C8CC5;
+		--color-accent:         #7777C2;
+		--color-accent-dim:     rgba(119, 119, 194, 0.15);
+		--color-accent-hover:   #C6C6E6;
+		--color-danger:         #ff8ca6;
+		--color-danger-dim:     rgba(255, 140, 166, 0.15);
+		--color-success:        #34d399;
 
-		/* Typography */
-		--font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-		--font-mono: 'SF Mono', 'Fira Code', monospace;
-		--text-xs: 0.75rem;
-		--text-sm: 0.875rem;
+		/* ── Typography ── */
+		/* UI body: Ubuntu (falls back to system sans) */
+		--font-sans:    'Ubuntu', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+		/* Display/logo: Playfair Display (serif, high-contrast) */
+		--font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
+		/* Settings/code: JetBrains Mono */
+		--font-mono:    'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+
+		/* Font sizes */
+		--text-xs:   0.75rem;
+		--text-sm:   0.875rem;
 		--text-base: 1rem;
-		--text-lg: 1.125rem;
-		--text-xl: 1.25rem;
+		--text-lg:   1.125rem;
+		--text-xl:   1.25rem;
+		--text-2xl:  1.5rem;
 
-		/* Spacing */
+		/* Font weights (Ubuntu variable axis) */
+		--weight-light:    300;
+		--weight-regular:  400;
+		--weight-medium:   500;
+		--weight-bold:     700;
+
+		/* ── Spacing ── */
 		--space-1: 0.25rem;
 		--space-2: 0.5rem;
 		--space-3: 0.75rem;
 		--space-4: 1rem;
+		--space-5: 1.25rem;
 		--space-6: 1.5rem;
 		--space-8: 2rem;
 
-		/* Radii */
-		--radius-sm: 6px;
-		--radius-md: 12px;
-		--radius-lg: 20px;
+		/* ── Radii ── */
+		--radius-sm:   6px;
+		--radius-md:   12px;
+		--radius-lg:   20px;
+		--radius-xl:   24px;
 		--radius-full: 9999px;
 
+		/* ── Shadows / Glass ── */
+		--shadow-card: 0 8px 32px 0 rgba(0, 0, 0, 0.35);
+		--blur-glass:  blur(40px);
+
+		/* Apply base */
 		font-family: var(--font-sans);
+		font-weight: var(--weight-regular);
 		background: var(--color-bg);
 		color: var(--color-text-primary);
 		font-size: var(--text-base);
 		line-height: 1.5;
 		-webkit-font-smoothing: antialiased;
+		-moz-osx-font-smoothing: grayscale;
+	}
+
+	/* ── Body / HTML ── */
+	:global(html, body) {
+		height: 100%;
+		width: 100%;
+		overflow: hidden;
 	}
 
 	:global(body) {
 		min-height: 100dvh;
-		overflow-x: hidden;
+		/* Subtle dot-grid ambient texture from v2 */
+		background-image:
+			radial-gradient(rgba(119, 119, 194, 0.35) 0px, transparent 260px),
+			radial-gradient(rgba(80, 80, 150, 0.2) 0px, transparent 400px),
+			radial-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+		background-size: 100% 100%, 100% 100%, 24px 24px;
+		background-position: top right, bottom left, 0 0;
+		background-attachment: fixed;
 	}
 
+	/* ── Buttons ── */
 	:global(button) {
 		cursor: pointer;
-		font-family: inherit;
+		font-family: var(--font-sans);
+		font-size: inherit;
+		font-weight: var(--weight-medium);
+		background: var(--color-accent-dim);
+		color: var(--color-accent);
+		border: 1px solid rgba(119, 119, 194, 0.3);
+		border-radius: var(--radius-lg);
+		padding: var(--space-3) var(--space-4);
+		transition: background 0.2s, border-color 0.2s, opacity 0.15s;
+		text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+	}
+
+	:global(button:active) {
+		transform: scale(0.98);
+		background: rgba(119, 119, 194, 0.25);
+	}
+
+	:global(button:disabled) {
+		opacity: 0.5;
+		pointer-events: none;
+	}
+
+	/* ── Inputs ── */
+	:global(input, textarea, select) {
+		font-family: var(--font-sans);
 		font-size: inherit;
 	}
 
-	:global(input, textarea) {
-		font-family: inherit;
-		font-size: inherit;
+	/* ── Glass panel utility ── */
+	:global(.glass) {
+		background: var(--color-surface-glass);
+		backdrop-filter: var(--blur-glass);
+		-webkit-backdrop-filter: var(--blur-glass);
+		border: 1px solid var(--color-border);
+		box-shadow: var(--shadow-card);
+		border-radius: var(--radius-xl);
 	}
 
+	/* ── Settings pages: mono font ── */
+	:global([data-settings]) {
+		font-family: var(--font-mono);
+		font-size: var(--text-sm);
+	}
+
+	/* ── Reduced motion ── */
 	@media (prefers-reduced-motion: reduce) {
 		:global(*) {
 			animation-duration: 0.01ms !important;
