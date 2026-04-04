@@ -73,32 +73,36 @@
 		}
 	});
 
-	// ─── Socket events ────────────────────────────────────────────────────────
+	// ─── Socket events (from @penthouse/contracts/src/events.ts) ───────────────
 
 	$effect(() => {
 		const socket = socketStore.instance;
 		if (!socket) return;
 
-		function onMessageNew(payload: Message) {
-			if (payload.chatId !== chatId) return;
+		/** ServerMessageNewEventSchema payload */
+		function onMessageNew(message: Message) {
+			if (message.chatId !== chatId) return;
 			// Replace optimistic message if clientMessageId matches
 			const idx = messages.findIndex(
-				(m) => m.clientMessageId && m.clientMessageId === payload.clientMessageId
+				(m) => m.clientMessageId && m.clientMessageId === message.clientMessageId
 			);
 			if (idx !== -1) {
-				messages[idx] = payload;
+				messages[idx] = message;
 			} else {
-				messages.push(payload);
+				messages.push(message);
 			}
 			scrollToBottom(true);
 		}
 
-		function onMessageAck(payload: {
+		/** ServerMessageAckEventSchema payload */
+		interface MessageAckPayload {
 			clientMessageId: string;
 			messageId: string;
 			chatId: string;
 			deliveredAt: string;
-		}) {
+		}
+
+		function onMessageAck(payload: MessageAckPayload) {
 			if (payload.chatId !== chatId) return;
 			const idx = messages.findIndex((m) => m.clientMessageId === payload.clientMessageId);
 			if (idx !== -1) {
