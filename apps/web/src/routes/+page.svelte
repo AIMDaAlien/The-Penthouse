@@ -41,7 +41,7 @@
 			<div class="state-msg">No conversations yet.</div>
 		{:else}
 			{#each chatList as chat (chat.id)}
-				<button class="chat-row" onclick={() => goto(`/chat/${chat.id}`)}>
+				<button class="chat-row" onclick={() => goto(`/chat/${chat.id}?name=${encodeURIComponent(chat.name ?? 'Direct message')}`)}>
 					<div class="chat-info">
 						<span class="chat-name">{chat.name ?? 'Direct message'}</span>
 						<span class="chat-preview">{new Date(chat.updatedAt).toLocaleDateString()}</span>
