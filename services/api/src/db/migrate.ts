@@ -19,7 +19,9 @@ const migrations = [
   '010_message_moderation.sql',
   '011_direct_messages.sql',
   '012_session_devices.sql',
-  '013_invite_onboarding.sql'
+  '013_invite_onboarding.sql',
+  '014_refresh_token_grace.sql',
+  '015_messages_visible_chat_created_index.sql'
 ];
 
 export async function runMigrations(): Promise<void> {

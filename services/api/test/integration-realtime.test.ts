@@ -427,4 +427,59 @@ describe('[integration] realtime observability', { skip: SKIP }, () => {
     await closeSocket(senderSocket);
     await closeSocket(receiverSocket);
   });
+
+  test('reconnected sockets still receive message.new events from their member chats without rejoining manually', async () => {
+    const { authHeaders, cleanup, registerUser } = await import('./helpers.js');
+    await cleanup();
+
+    const sender = await registerUser(app, 'socket_reconnect_sender');
+    const receiver = await registerUser(app, 'socket_reconnect_receiver');
+
+    const initialReceiverSocket = createClient(baseUrl, {
+      path: '/socket.io/',
+      transports: ['polling'],
+      auth: { token: receiver.accessToken },
+      reconnection: false,
+      forceNew: true
+    });
+    await waitForSocketConnect(initialReceiverSocket);
+    await closeSocket(initialReceiverSocket);
+
+    const reconnectedReceiverSocket = createClient(baseUrl, {
+      path: '/socket.io/',
+      transports: ['polling'],
+      auth: { token: receiver.accessToken },
+      reconnection: false,
+      forceNew: true
+    });
+    await waitForSocketConnect(reconnectedReceiverSocket);
+    await new Promise((resolve) => setTimeout(resolve, 75));
+
+    const senderChats = await app.inject({
+      method: 'GET',
+      url: '/api/v1/chats',
+      headers: authHeaders(sender.accessToken)
+    });
+    const chatId = JSON.parse(senderChats.payload).find((chat: any) => chat.name === 'General').id as string;
+    const clientMessageId = 'reconnect-room-regression-001';
+
+    const messageNew = waitForSocketEvent(reconnectedReceiverSocket, 'message.new', (event: any) => (
+      event?.payload?.chatId === chatId &&
+      event?.payload?.clientMessageId === clientMessageId
+    ), 1_500);
+
+    const send = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${chatId}/messages`,
+      headers: authHeaders(sender.accessToken),
+      payload: {
+        content: 'reconnect room regression check',
+        clientMessageId
+      }
+    });
+    assert.equal(send.statusCode, 200);
+
+    await messageNew;
+    await closeSocket(reconnectedReceiverSocket);
+  });
 });

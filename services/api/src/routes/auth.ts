@@ -33,6 +33,7 @@ import { getRegistrationMode } from '../utils/settings.js';
 
 const SHARED_GENERAL_CHAT_ID = '00000000-0000-0000-0000-000000000001';
 const SHARED_GENERAL_SYSTEM_KEY = 'general';
+const REFRESH_ROTATION_GRACE_MS = 5_000;
 const AUTH_RATE_LIMITS = {
   register: {
     windowMs: 15 * 60_000,
@@ -50,6 +51,29 @@ const AUTH_RATE_LIMITS = {
     error: 'Too many password reset attempts. Try again in a few minutes.'
   }
 } as const;
+
+const rotatedRefreshTokenCache = new Map<string, { refreshToken: string; expiresAt: number }>();
+
+function cacheRotatedRefreshToken(oldHash: string, refreshToken: string): void {
+  const expiresAt = Date.now() + REFRESH_ROTATION_GRACE_MS;
+  rotatedRefreshTokenCache.set(oldHash, { refreshToken, expiresAt });
+
+  for (const [hash, entry] of rotatedRefreshTokenCache.entries()) {
+    if (entry.expiresAt <= Date.now()) {
+      rotatedRefreshTokenCache.delete(hash);
+    }
+  }
+}
+
+function getCachedRotatedRefreshToken(oldHash: string): string | null {
+  const entry = rotatedRefreshTokenCache.get(oldHash);
+  if (!entry) return null;
+  if (entry.expiresAt <= Date.now()) {
+    rotatedRefreshTokenCache.delete(oldHash);
+    return null;
+  }
+  return entry.refreshToken;
+}
 
 async function ensureSharedGeneralChannel(client: PoolClient): Promise<string> {
   await client.query(
@@ -284,11 +308,12 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     let userId = '';
     let sessionId = '';
     let newRefreshToken = '';
+    let reusedRefreshToken = false;
 
     try {
       await client.query('BEGIN');
 
-      const tokenRes = await client.query(
+      let tokenRes = await client.query(
         `SELECT id, user_id, device_label, app_context, has_push_token
          FROM refresh_tokens
          WHERE token_hash = $1
@@ -296,6 +321,20 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
          FOR UPDATE`,
         [oldHash]
       );
+      if (!tokenRes.rowCount) {
+        tokenRes = await client.query(
+          `SELECT id, user_id, device_label, app_context, has_push_token
+           FROM refresh_tokens
+           WHERE rotated_to_token_hash = $1
+             AND rotated_at IS NOT NULL
+             AND rotated_at > NOW() - ($2 * INTERVAL '1 millisecond')
+             AND expires_at > NOW()
+           FOR UPDATE`,
+          [oldHash, REFRESH_ROTATION_GRACE_MS]
+        );
+        reusedRefreshToken = Boolean(tokenRes.rowCount);
+      }
+
       if (!tokenRes.rowCount) {
         await client.query('ROLLBACK');
         return reply.status(401).send({ error: 'Invalid or expired refresh token' });
@@ -322,33 +361,63 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         return reply.status(403).send({ error: 'Account unavailable' });
       }
 
-      newRefreshToken = createOpaqueToken();
-      const newHash = hashToken(newRefreshToken);
-      const expiresAt = refreshExpiryDate();
       const metadata = mergeSessionMetadata(getSessionMetadataFromRequest(request), {
         deviceLabel: tokenRow.device_label,
         appContext: tokenRow.app_context,
         hasPushToken: tokenRow.has_push_token
       });
 
-      await client.query(
-        `UPDATE refresh_tokens
-         SET token_hash = $1,
-             expires_at = $2,
-             last_used_at = NOW(),
-             device_label = $3,
-             app_context = $4,
-             has_push_token = $5
-         WHERE id = $6`,
-        [
-          newHash,
-          expiresAt.toISOString(),
-          metadata.deviceLabel,
-          metadata.appContext,
-          metadata.hasPushToken,
-          tokenRow.id
-        ]
-      );
+      if (reusedRefreshToken) {
+        const cachedRefreshToken = getCachedRotatedRefreshToken(oldHash);
+        if (!cachedRefreshToken) {
+          await client.query('ROLLBACK');
+          return reply.status(401).send({ error: 'Invalid or expired refresh token' });
+        }
+
+        newRefreshToken = cachedRefreshToken;
+        await client.query(
+          `UPDATE refresh_tokens
+           SET last_used_at = NOW(),
+               device_label = $1,
+               app_context = $2,
+               has_push_token = $3
+           WHERE id = $4`,
+          [
+            metadata.deviceLabel,
+            metadata.appContext,
+            metadata.hasPushToken,
+            tokenRow.id
+          ]
+        );
+      } else {
+        newRefreshToken = createOpaqueToken();
+        const newHash = hashToken(newRefreshToken);
+        const expiresAt = refreshExpiryDate();
+
+        await client.query(
+          `UPDATE refresh_tokens
+           SET token_hash = $1,
+               expires_at = $2,
+               last_used_at = NOW(),
+               device_label = $3,
+               app_context = $4,
+               has_push_token = $5,
+               rotated_at = NOW(),
+               rotated_to_token_hash = $6
+           WHERE id = $7`,
+          [
+            newHash,
+            expiresAt.toISOString(),
+            metadata.deviceLabel,
+            metadata.appContext,
+            metadata.hasPushToken,
+            oldHash,
+            tokenRow.id
+          ]
+        );
+        cacheRotatedRefreshToken(oldHash, newRefreshToken);
+      }
+
       await client.query('COMMIT');
     } catch (error) {
       await client.query('ROLLBACK');
@@ -375,7 +444,16 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     const parsed = RefreshRequestSchema.safeParse(request.body);
     if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() });
 
-    await pool.query('DELETE FROM refresh_tokens WHERE token_hash = $1', [hashToken(parsed.data.refreshToken)]);
+    await pool.query(
+      `DELETE FROM refresh_tokens
+       WHERE token_hash = $1
+          OR (
+            rotated_to_token_hash = $1
+            AND rotated_at IS NOT NULL
+            AND rotated_at > NOW() - ($2 * INTERVAL '1 millisecond')
+          )`,
+      [hashToken(parsed.data.refreshToken), REFRESH_ROTATION_GRACE_MS]
+    );
     return reply.status(204).send();
   });
 

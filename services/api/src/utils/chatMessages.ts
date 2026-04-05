@@ -115,10 +115,23 @@ export async function sendChatMessage(options: SendChatMessageOptions) {
   if (!deduped) {
     options.beforeBroadcast?.();
 
-    options.io.to(`chat:${options.chatId}`).emit('message.new', {
-      type: 'message.new',
-      payload: message
-    });
+    try {
+      options.io.to(`chat:${options.chatId}`).emit('message.new', {
+        type: 'message.new',
+        payload: message
+      });
+    } catch (error) {
+      options.log.error(
+        {
+          error,
+          chatId: options.chatId,
+          senderUserId: options.senderUserId,
+          clientMessageId: options.clientMessageId
+        },
+        'message persisted but realtime broadcast failed'
+      );
+    }
+
     void sendPushForNewMessage(options.log, options.chatId, options.senderUserId, message);
   }
 

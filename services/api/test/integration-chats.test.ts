@@ -662,6 +662,62 @@ describe('[integration] message idempotency', { skip: SKIP }, () => {
     assert.equal(ackEvents[1].data.payload.clientMessageId, clientMessageId);
   });
 
+  test('REST send still acknowledges the sender when room broadcast throws after persistence', async () => {
+    const { pool, registerUser } = await import('./helpers.js');
+    const originalTo = app.io.to.bind(app.io);
+    const sender = await registerUser(app, 'hank_broadcast_failure');
+
+    const senderChats = await app.inject({
+      method: 'GET',
+      url: '/api/v1/chats',
+      headers: { authorization: `Bearer ${sender.accessToken}` }
+    });
+    const chatId = JSON.parse(senderChats.payload)[0].id;
+    const startIdx = emitted.length;
+    const clientMessageId = 'broadcast-failure-001';
+
+    app.io.to = ((room: string) => {
+      const target = originalTo(room);
+      return {
+        emit(event: string, data: unknown) {
+          if (room === `chat:${chatId}` && event === 'message.new') {
+            throw new Error('simulated emit failure');
+          }
+          target.emit(event, data);
+        }
+      };
+    }) as typeof app.io.to;
+
+    try {
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/v1/chats/${chatId}/messages`,
+        headers: { authorization: `Bearer ${sender.accessToken}` },
+        payload: { content: 'persist despite emit failure', clientMessageId }
+      });
+
+      assert.equal(response.statusCode, 200, 'saved messages should still return success when realtime broadcast fails');
+      const body = JSON.parse(response.payload);
+      assert.equal(body.message.clientMessageId, clientMessageId);
+
+      const ackEvents = emitted.slice(startIdx).filter((event: any) => event.event === 'message.ack');
+      assert.equal(ackEvents.length, 1, 'sender should still receive a message.ack');
+      assert.equal(ackEvents[0].data.payload.clientMessageId, clientMessageId);
+
+      const persisted = await pool.query(
+        `SELECT id
+         FROM messages
+         WHERE chat_id = $1
+           AND sender_id = $2
+           AND client_message_id = $3`,
+        [chatId, sender.user.id, clientMessageId]
+      );
+      assert.equal(persisted.rowCount, 1, 'message should remain persisted even when broadcast fails');
+    } finally {
+      app.io.to = originalTo;
+    }
+  });
+
   test('REST send reflects the latest display name and avatar metadata', async () => {
     const { pool, registerUser } = await import('./helpers.js');
     const sender = await registerUser(app, 'rest_profile_sender');
@@ -763,6 +819,21 @@ describe('[integration] message idempotency', { skip: SKIP }, () => {
       1,
       'exactly one request should create the message'
     );
+  });
+
+  test('migrations include a partial visible-message chat ordering index', async () => {
+    const { pool } = await import('./helpers.js');
+
+    const result = await pool.query(
+      `SELECT indexname, indexdef
+       FROM pg_indexes
+       WHERE schemaname = 'public'
+         AND tablename = 'messages'
+         AND indexdef ILIKE '%(chat_id, created_at DESC)%'
+         AND indexdef ILIKE '%WHERE hidden_by_moderation = false%'`
+    );
+
+    assert.ok(result.rowCount >= 1, 'expected a partial messages(chat_id, created_at DESC) index for visible messages');
   });
 });
 

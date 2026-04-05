@@ -56,8 +56,8 @@ describe('[integration] refresh token rotation', { skip: SKIP, concurrency: fals
     await helpers.cleanup();
   });
 
-  test('old refresh token is rejected after rotation', async () => {
-    const { registerUser } = await import('./helpers.js');
+  test('old refresh token is rejected after the grace window expires', async () => {
+    const { pool, registerUser } = await import('./helpers.js');
     const user = await registerUser(app, 'rotate_user');
 
     // Use the original refresh token to get a rotated pair
@@ -69,6 +69,13 @@ describe('[integration] refresh token rotation', { skip: SKIP, concurrency: fals
     assert.equal(refreshRes.statusCode, 200);
     const rotated = JSON.parse(refreshRes.payload);
     assert.notEqual(rotated.refreshToken, user.refreshToken, 'server must issue a new token');
+
+    await pool.query(
+      `UPDATE refresh_tokens
+       SET rotated_at = NOW() - INTERVAL '10 seconds'
+       WHERE user_id = $1`,
+      [user.user.id]
+    );
 
     // Replay the OLD token — must fail
     const replayRes = await app.inject({
@@ -166,7 +173,7 @@ describe('[integration] refresh token rotation', { skip: SKIP, concurrency: fals
     assert.equal(oldRefreshReplay.statusCode, 401, 'old sessions must be invalidated after reset');
   });
 
-  test('concurrent refresh replay allows only one successful rotation', async () => {
+  test('concurrent refresh replay returns the same rotated token during the grace window', async () => {
     const { registerUser } = await import('./helpers.js');
     const user = await registerUser(app, 'rotate_race');
 
@@ -183,9 +190,17 @@ describe('[integration] refresh token rotation', { skip: SKIP, concurrency: fals
       })
     ]);
 
-    const statusCodes = [first.statusCode, second.statusCode];
-    assert.equal(statusCodes.filter((c) => c === 200).length, 1, 'exactly one request should rotate successfully');
-    assert.equal(statusCodes.filter((c) => c === 401).length, 1, 'the replayed concurrent request must be rejected');
+    assert.equal(first.statusCode, 200, 'first concurrent refresh should succeed');
+    assert.equal(second.statusCode, 200, 'second concurrent refresh should reuse the rotated token during grace');
+
+    const firstBody = JSON.parse(first.payload);
+    const secondBody = JSON.parse(second.payload);
+    assert.equal(
+      firstBody.refreshToken,
+      secondBody.refreshToken,
+      'concurrent refreshes should converge on the same replacement token'
+    );
+    assert.notEqual(firstBody.refreshToken, user.refreshToken, 'replacement token should still rotate away from the original');
   });
 
   test('logout invalidates refresh token', async () => {
