@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import {
+  AuthUserSchema,
   ChangePasswordRequestSchema,
   DeviceNotificationSettingsSchema,
   GetDeviceNotificationSettingsQuerySchema,
@@ -18,6 +19,8 @@ import {
   UpdateProfileRequestSchema
 } from '@penthouse/contracts';
 import { pool } from '../db/pool.js';
+import { touchLastSeen } from '../utils/activity.js';
+import { formatValidationError } from '../utils/error-responses.js';
 import { hashPassword, verifyPassword, createRecoveryCode } from '../utils/security.js';
 import { createAuthResponse, getSessionMetadataFromRequest, issueRecoveryCode, listSessionsForUser, touchCurrentSessionPushState } from '../utils/sessions.js';
 import { getUserById, listMembers, mapAuthUser, mapMeResponse, mapMemberDetail, mapMemberSummary } from '../utils/users.js';
@@ -71,16 +74,62 @@ function mapDeviceNotificationSettings(row: DeviceNotificationSettingsRow) {
   });
 }
 
+async function updateCurrentProfile(userId: string, data: {
+  displayName?: string;
+  bio?: string | null;
+  timezone?: string | null;
+  avatarUploadId?: string | null;
+}) {
+  const assignments: string[] = [];
+  const values: unknown[] = [];
+
+  if (Object.prototype.hasOwnProperty.call(data, 'displayName')) {
+    assignments.push(`display_name = $${values.length + 1}`);
+    values.push(data.displayName);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(data, 'bio')) {
+    assignments.push(`bio = $${values.length + 1}`);
+    values.push(data.bio ?? null);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(data, 'timezone')) {
+    assignments.push(`timezone = $${values.length + 1}`);
+    values.push(data.timezone ?? null);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(data, 'avatarUploadId')) {
+    assignments.push(`avatar_media_id = $${values.length + 1}`);
+    values.push(data.avatarUploadId ?? null);
+  }
+
+  if (!assignments.length) {
+    return null;
+  }
+
+  values.push(userId);
+
+  await pool.query(
+    `UPDATE users
+     SET ${assignments.join(', ')}
+     WHERE id = $${values.length}`,
+    values
+  );
+
+  return getUserById(pool, userId);
+}
+
 export async function registerMemberRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/v1/me', { preHandler: [app.authenticate] }, async (request, reply) => {
     const user = await getUserById(pool, request.user.userId);
     if (!user) return reply.status(401).send({ error: 'Invalid user session' });
+    touchLastSeen(pool, request.user.userId, request.log);
     return MeResponseSchema.parse(mapMeResponse(user));
   });
 
   app.patch('/api/v1/me/profile', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
     const parsed = UpdateProfileRequestSchema.safeParse(request.body);
-    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() });
+    if (!parsed.success) return reply.status(400).send({ error: formatValidationError(parsed.error) });
 
     if (Object.prototype.hasOwnProperty.call(parsed.data, 'avatarUploadId')) {
       const avatarCheck = await validateAvatarOwnership(request.user.userId, parsed.data.avatarUploadId ?? null);
@@ -89,45 +138,38 @@ export async function registerMemberRoutes(app: FastifyInstance): Promise<void> 
       }
     }
 
-    const assignments: string[] = [];
-    const values: unknown[] = [];
-
-    if (Object.prototype.hasOwnProperty.call(parsed.data, 'displayName')) {
-      assignments.push(`display_name = $${values.length + 1}`);
-      values.push(parsed.data.displayName);
-    }
-
-    if (Object.prototype.hasOwnProperty.call(parsed.data, 'bio')) {
-      assignments.push(`bio = $${values.length + 1}`);
-      values.push(parsed.data.bio ?? null);
-    }
-
-    if (Object.prototype.hasOwnProperty.call(parsed.data, 'avatarUploadId')) {
-      assignments.push(`avatar_media_id = $${values.length + 1}`);
-      values.push(parsed.data.avatarUploadId ?? null);
-    }
-
-    if (!assignments.length) {
+    const updated = await updateCurrentProfile(request.user.userId, parsed.data);
+    if (!updated) {
       return reply.status(400).send({ error: 'No recognized profile fields were provided' });
     }
 
-    values.push(request.user.userId);
-
-    await pool.query(
-      `UPDATE users
-       SET ${assignments.join(', ')}
-       WHERE id = $${values.length}`,
-      values
-    );
-
-    const updated = await getUserById(pool, request.user.userId);
-    if (!updated) return reply.status(401).send({ error: 'Invalid user session' });
+    touchLastSeen(pool, request.user.userId, request.log);
     return MeResponseSchema.parse(mapMeResponse(updated));
+  });
+
+  app.patch('/api/v1/auth/me', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
+    const parsed = UpdateProfileRequestSchema.safeParse(request.body);
+    if (!parsed.success) return reply.status(400).send({ error: formatValidationError(parsed.error) });
+
+    if (Object.prototype.hasOwnProperty.call(parsed.data, 'avatarUploadId')) {
+      const avatarCheck = await validateAvatarOwnership(request.user.userId, parsed.data.avatarUploadId ?? null);
+      if (avatarCheck && !avatarCheck.ok) {
+        return reply.status(400).send({ error: avatarCheck.error });
+      }
+    }
+
+    const updated = await updateCurrentProfile(request.user.userId, parsed.data);
+    if (!updated) {
+      return reply.status(400).send({ error: 'No recognized profile fields were provided' });
+    }
+
+    touchLastSeen(pool, request.user.userId, request.log);
+    return AuthUserSchema.parse(mapAuthUser(updated));
   });
 
   app.post('/api/v1/me/password', { preHandler: [app.authenticate] }, async (request, reply) => {
     const parsed = ChangePasswordRequestSchema.safeParse(request.body);
-    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() });
+    if (!parsed.success) return reply.status(400).send({ error: formatValidationError(parsed.error) });
 
     const user = await getUserById(pool, request.user.userId);
     if (!user?.password_hash) return reply.status(401).send({ error: 'Invalid user session' });
@@ -214,7 +256,7 @@ export async function registerMemberRoutes(app: FastifyInstance): Promise<void> 
 
   app.post('/api/v1/me/test-notice/ack', { preHandler: [app.authenticate] }, async (request, reply) => {
     const parsed = TestNoticeAckRequestSchema.safeParse(request.body);
-    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() });
+    if (!parsed.success) return reply.status(400).send({ error: formatValidationError(parsed.error) });
 
     if (parsed.data.version !== env.TEST_ACCOUNT_NOTICE_VERSION) {
       return reply.status(400).send({
@@ -251,7 +293,7 @@ export async function registerMemberRoutes(app: FastifyInstance): Promise<void> 
 
   app.put('/api/v1/me/device-tokens', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
     const parsed = RegisterDeviceTokenRequestSchema.safeParse(request.body);
-    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() });
+    if (!parsed.success) return reply.status(400).send({ error: formatValidationError(parsed.error) });
 
     const client = await pool.connect();
     let result;
@@ -343,7 +385,7 @@ export async function registerMemberRoutes(app: FastifyInstance): Promise<void> 
 
   app.delete('/api/v1/me/device-tokens', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
     const parsed = UnregisterDeviceTokenRequestSchema.safeParse(request.body);
-    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() });
+    if (!parsed.success) return reply.status(400).send({ error: formatValidationError(parsed.error) });
 
     await pool.query(
       'DELETE FROM device_tokens WHERE token = $1 AND user_id = $2',
@@ -357,7 +399,7 @@ export async function registerMemberRoutes(app: FastifyInstance): Promise<void> 
 
   app.get('/api/v1/me/device-notification-settings', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
     const parsed = GetDeviceNotificationSettingsQuerySchema.safeParse(request.query);
-    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() });
+    if (!parsed.success) return reply.status(400).send({ error: formatValidationError(parsed.error) });
 
     const result = await pool.query<DeviceNotificationSettingsRow>(
       `SELECT token, notifications_enabled, previews_enabled, quiet_hours_enabled,
@@ -376,7 +418,7 @@ export async function registerMemberRoutes(app: FastifyInstance): Promise<void> 
 
   app.put('/api/v1/me/device-notification-settings', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
     const parsed = UpdateDeviceNotificationSettingsRequestSchema.safeParse(request.body);
-    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() });
+    if (!parsed.success) return reply.status(400).send({ error: formatValidationError(parsed.error) });
 
     const quietHoursStartMinute = parsed.data.quietHoursEnabled ? parsed.data.quietHoursStartMinute : null;
     const quietHoursEndMinute = parsed.data.quietHoursEnabled ? parsed.data.quietHoursEndMinute : null;
@@ -416,6 +458,7 @@ export async function registerMemberRoutes(app: FastifyInstance): Promise<void> 
   app.get('/api/v1/members', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request) => {
     const q = String((request.query as { q?: string })?.q ?? '');
     const rows = await listMembers(pool, q, false);
+    touchLastSeen(pool, request.user.userId, request.log);
     return rows.map((row) => MemberSummarySchema.parse(mapMemberSummary(row)));
   });
 
@@ -426,6 +469,7 @@ export async function registerMemberRoutes(app: FastifyInstance): Promise<void> 
       return reply.status(404).send({ error: 'Member not found' });
     }
 
+    touchLastSeen(pool, request.user.userId, request.log);
     return MemberDetailSchema.parse(mapMemberDetail(user));
   });
 }

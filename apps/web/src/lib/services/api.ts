@@ -11,7 +11,11 @@ import type {
 	ChatSummary,
 	Message,
 	SendMessageRequest,
-	SendMessageResponse
+	SendMessageResponse,
+	MemberDetail,
+	UserSearchResponse,
+	ListUsersResponse,
+	UpdateProfileRequest
 } from '@penthouse/contracts';
 import { sessionStore } from '$stores/session.svelte';
 
@@ -79,6 +83,12 @@ export const auth = {
 export const chats = {
 	list: () => request<ChatSummary[]>('/api/v1/chats'),
 
+	createDm: (memberId: string) =>
+		request<{ id: string }>('/api/v1/chats/dm', {
+			method: 'POST',
+			body: JSON.stringify({ memberId })
+		}),
+
 	messages: (chatId: string, params?: { before?: string; limit?: number }) => {
 		const qs = new URLSearchParams();
 		if (params?.before) qs.set('before', params.before);
@@ -95,6 +105,32 @@ export const chats = {
 
 	markRead: (chatId: string) =>
 		request<void>(`/api/v1/chats/${chatId}/read`, { method: 'POST' })
+};
+
+// Users (Tier 1)
+export const users = {
+	search: (q: string, limit?: number) => {
+		const qs = new URLSearchParams({ q });
+		if (limit) qs.set('limit', String(limit));
+		return request<UserSearchResponse>(`/api/v1/users/search?${qs}`);
+	},
+
+	list: (params?: { offset?: number; limit?: number }) => {
+		const qs = new URLSearchParams();
+		if (params?.offset !== undefined) qs.set('offset', String(params.offset));
+		if (params?.limit !== undefined) qs.set('limit', String(params.limit));
+		const query = qs.toString() ? `?${qs}` : '';
+		return request<ListUsersResponse>(`/api/v1/users${query}`);
+	},
+
+	getProfile: (userId: string) =>
+		request<MemberDetail>(`/api/v1/users/${userId}`),
+
+	updateProfile: (body: UpdateProfileRequest) =>
+		request<AuthResponse>('/api/v1/auth/me', {
+			method: 'PATCH',
+			body: JSON.stringify(body)
+		})
 };
 
 export { ApiError };

@@ -27,6 +27,8 @@ const TEXT_MIME_TYPES = new Set([
   'text/plain',
   'text/xml'
 ]);
+const GIF_PROVIDER_CACHE_TTL_MS = 60 * 60 * 1000;
+const gifProviderCache = new Map<string, { expiresAt: number; data: unknown }>();
 
 function safeOriginalFileName(fileName: string): string {
   const base = path.basename(fileName || 'attachment');
@@ -70,6 +72,12 @@ function classifyUpload(fileName: string, mimeType: string): MediaKind | null {
 }
 
 async function fetchJsonWithCache(url: string): Promise<unknown> {
+  const now = Date.now();
+  const cached = gifProviderCache.get(url);
+  if (cached && cached.expiresAt > now) {
+    return cached.data;
+  }
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8_000);
 
@@ -94,7 +102,16 @@ async function fetchJsonWithCache(url: string): Promise<unknown> {
     throw new Error(`Upstream responded ${response.status}`);
   }
 
-  return response.json();
+  const data = await response.json();
+  gifProviderCache.set(url, {
+    expiresAt: now + GIF_PROVIDER_CACHE_TTL_MS,
+    data
+  });
+  return data;
+}
+
+function clearGifProviderCache(): void {
+  gifProviderCache.clear();
 }
 
 function extractGiphyResults(json: any): ReturnType<typeof GifSearchResponseSchema.parse>['results'] {
@@ -214,16 +231,22 @@ function extractKlipyResults(json: any): ReturnType<typeof GifSearchResponseSche
   return results;
 }
 
-async function fetchGifProvider(provider: GifProvider, mode: 'trending' | 'search', query?: string) {
+function normalizeLimit(raw: unknown, fallback: number, max: number): number {
+  const parsed = Number.parseInt(String(raw ?? ''), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return Math.min(parsed, max);
+}
+
+async function fetchGifProvider(provider: GifProvider, mode: 'trending' | 'search', query?: string, limit = 30) {
   if (provider === 'giphy') {
     if (!env.GIPHY_API_KEY) {
       throw new Error('GIPHY not configured');
     }
 
-    const limit = 30;
+    const cappedLimit = normalizeLimit(limit, 30, 30);
     const url = mode === 'trending'
-      ? `https://api.giphy.com/v1/gifs/trending?api_key=${encodeURIComponent(env.GIPHY_API_KEY)}&limit=${limit}&rating=pg-13`
-      : `https://api.giphy.com/v1/gifs/search?api_key=${encodeURIComponent(env.GIPHY_API_KEY)}&q=${encodeURIComponent(query || '')}&limit=${limit}&rating=pg-13`;
+      ? `https://api.giphy.com/v1/gifs/trending?api_key=${encodeURIComponent(env.GIPHY_API_KEY)}&limit=${cappedLimit}&rating=pg-13`
+      : `https://api.giphy.com/v1/gifs/search?api_key=${encodeURIComponent(env.GIPHY_API_KEY)}&q=${encodeURIComponent(query || '')}&limit=${cappedLimit}&rating=pg-13`;
     return extractGiphyResults(await fetchJsonWithCache(url));
   }
 
@@ -231,15 +254,18 @@ async function fetchGifProvider(provider: GifProvider, mode: 'trending' | 'searc
     throw new Error('Klipy not configured');
   }
 
+  const cappedLimit = normalizeLimit(limit, 30, 30);
   const url = mode === 'trending'
-    ? `https://api.klipy.com/v2/featured?key=${encodeURIComponent(env.KLIPY_API_KEY)}&limit=30`
-    : `https://api.klipy.com/v2/search?key=${encodeURIComponent(env.KLIPY_API_KEY)}&q=${encodeURIComponent(query || '')}&limit=30`;
+    ? `https://api.klipy.com/v2/featured?key=${encodeURIComponent(env.KLIPY_API_KEY)}&limit=${cappedLimit}`
+    : `https://api.klipy.com/v2/search?key=${encodeURIComponent(env.KLIPY_API_KEY)}&q=${encodeURIComponent(query || '')}&limit=${cappedLimit}`;
   return extractKlipyResults(await fetchJsonWithCache(url));
 }
 
 export const __testables = {
   classifyUpload,
+  clearGifProviderCache,
   extractKlipyResults,
+  fetchGifProvider,
   fetchJsonWithCache
 };
 
@@ -303,15 +329,17 @@ export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
 
   app.get('/api/v1/gifs/:provider/trending', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
     const { provider: rawProvider } = request.params as { provider: string };
+    const { limit: rawLimit } = request.query as { limit?: string | number };
     const provider = GifProviderSchema.safeParse(rawProvider);
     if (!provider.success) {
       return reply.status(404).send({ error: 'Unknown GIF provider' });
     }
 
     try {
+      const limit = normalizeLimit(rawLimit, 30, 30);
       return GifSearchResponseSchema.parse({
         provider: provider.data,
-        results: await fetchGifProvider(provider.data, 'trending')
+        results: await fetchGifProvider(provider.data, 'trending', undefined, limit)
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to fetch GIFs';
@@ -328,7 +356,7 @@ export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
 
   app.get('/api/v1/gifs/:provider/search', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
     const { provider: rawProvider } = request.params as { provider: string };
-    const { q } = request.query as { q?: string };
+    const { q, limit: rawLimit } = request.query as { q?: string; limit?: string | number };
     const provider = GifProviderSchema.safeParse(rawProvider);
     if (!provider.success) {
       return reply.status(404).send({ error: 'Unknown GIF provider' });
@@ -338,9 +366,44 @@ export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
     }
 
     try {
+      const limit = normalizeLimit(rawLimit, 30, 30);
       return GifSearchResponseSchema.parse({
         provider: provider.data,
-        results: await fetchGifProvider(provider.data, 'search', q.trim())
+        results: await fetchGifProvider(provider.data, 'search', q.trim(), limit)
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to search GIFs';
+      const statusCode = /not configured/i.test(message) ? 503 : 502;
+      const publicError = /not configured/i.test(message)
+        ? message
+        : provider.data === 'klipy'
+          ? 'Klipy temporarily unavailable'
+          : 'Failed to search GIFs';
+      request.log.warn({ provider: provider.data, error: message }, 'gif provider search failed');
+      return reply.status(statusCode).send({ error: publicError });
+    }
+  });
+
+  app.get('/api/v1/gifs/search', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
+    const {
+      q,
+      provider: rawProvider = 'giphy',
+      limit: rawLimit
+    } = request.query as { q?: string; provider?: string; limit?: string | number };
+
+    const provider = GifProviderSchema.safeParse(rawProvider);
+    if (!provider.success) {
+      return reply.status(404).send({ error: 'Unknown GIF provider' });
+    }
+    if (!q?.trim()) {
+      return reply.status(400).send({ error: 'Search query required' });
+    }
+
+    try {
+      const limit = normalizeLimit(rawLimit, 20, 20);
+      return GifSearchResponseSchema.parse({
+        provider: provider.data,
+        results: await fetchGifProvider(provider.data, 'search', q.trim(), limit)
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to search GIFs';

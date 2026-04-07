@@ -21,7 +21,10 @@ const migrations = [
   '012_session_devices.sql',
   '013_invite_onboarding.sql',
   '014_refresh_token_grace.sql',
-  '015_messages_visible_chat_created_index.sql'
+  '015_messages_visible_chat_created_index.sql',
+  '016_user_timezone.sql',
+  '017_user_last_seen.sql',
+  '018_chat_member_preference_timestamps.sql'
 ];
 
 export async function runMigrations(): Promise<void> {

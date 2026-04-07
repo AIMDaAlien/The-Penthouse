@@ -237,21 +237,12 @@ describe('[integration] realtime observability', { skip: SKIP }, () => {
     await closeSocket(socket);
   });
 
-  test('marks a backgrounded user offline after 10 seconds and back online on foreground', async () => {
+  test('sends boolean presence sync on connect and broadcasts client-driven presence changes', async () => {
     const { cleanup, registerUser } = await import('./helpers.js');
     await cleanup();
 
     const actor = await registerUser(app, 'presence_actor');
     const observer = await registerUser(app, 'presence_observer');
-
-    const observerSocket = createClient(baseUrl, {
-      path: '/socket.io/',
-      transports: ['polling'],
-      auth: { token: observer.accessToken },
-      reconnection: false,
-      forceNew: true
-    });
-    await waitForSocketConnect(observerSocket);
 
     const actorSocket = createClient(baseUrl, {
       path: '/socket.io/',
@@ -262,24 +253,83 @@ describe('[integration] realtime observability', { skip: SKIP }, () => {
     });
     await waitForSocketConnect(actorSocket);
 
-    await waitForSocketEvent(observerSocket, 'presence.update', (event: any) => (
-      event?.payload?.userId === actor.user.id && event?.payload?.status === 'online'
+    const syncedObserverSocket = createClient(baseUrl, {
+      path: '/socket.io/',
+      transports: ['polling'],
+      auth: { token: observer.accessToken },
+      reconnection: false,
+      forceNew: true,
+      autoConnect: false
+    });
+
+    const presenceSync = waitForSocketEvent<Record<string, boolean>>(
+      syncedObserverSocket,
+      'presence.sync',
+      (event) => event?.[actor.user.id] === true && event?.[observer.user.id] === true,
+      1_500
+    );
+    syncedObserverSocket.connect();
+    await waitForSocketConnect(syncedObserverSocket);
+
+    const syncPayload = await presenceSync;
+    assert.equal(syncPayload[actor.user.id], true);
+    assert.equal(syncPayload[observer.user.id], true);
+
+    actorSocket.emit('presence.update', { online: false });
+
+    await waitForSocketEvent(syncedObserverSocket, 'presence.update', (event: any) => (
+      event?.userId === actor.user.id &&
+      event?.online === false &&
+      typeof event?.timestamp === 'string'
     ), 1_500);
 
-    actorSocket.emit('app.state', { active: false });
+    actorSocket.emit('presence.update', { online: true });
 
-    await waitForSocketEvent(observerSocket, 'presence.update', (event: any) => (
-      event?.payload?.userId === actor.user.id && event?.payload?.status === 'offline'
-    ), 12_000);
+    await waitForSocketEvent(syncedObserverSocket, 'presence.update', (event: any) => (
+      event?.userId === actor.user.id &&
+      event?.online === true &&
+      typeof event?.timestamp === 'string'
+    ), 1_500);
 
-    actorSocket.emit('app.state', { active: true });
-
-    await waitForSocketEvent(observerSocket, 'presence.update', (event: any) => (
-      event?.payload?.userId === actor.user.id && event?.payload?.status === 'online'
+    const disconnected = waitForSocketEvent(syncedObserverSocket, 'presence.update', (event: any) => (
+      event?.userId === actor.user.id &&
+      event?.online === false &&
+      typeof event?.timestamp === 'string'
     ), 1_500);
 
     await closeSocket(actorSocket);
-    await closeSocket(observerSocket);
+    await disconnected;
+    await closeSocket(syncedObserverSocket);
+  });
+
+  test('GET /api/v1/presence returns the current boolean presence snapshot', async () => {
+    const { authHeaders, cleanup, registerUser } = await import('./helpers.js');
+    await cleanup();
+
+    const onlineUser = await registerUser(app, 'presence_route_online');
+    const offlineUser = await registerUser(app, 'presence_route_offline');
+
+    const onlineSocket = createClient(baseUrl, {
+      path: '/socket.io/',
+      transports: ['polling'],
+      auth: { token: onlineUser.accessToken },
+      reconnection: false,
+      forceNew: true
+    });
+    await waitForSocketConnect(onlineSocket);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/v1/presence',
+      headers: authHeaders(offlineUser.accessToken)
+    });
+    assert.equal(response.statusCode, 200);
+
+    const snapshot = JSON.parse(response.payload) as Record<string, boolean>;
+    assert.equal(snapshot[onlineUser.user.id], true);
+    assert.equal(snapshot[offlineUser.user.id], false);
+
+    await closeSocket(onlineSocket);
   });
 
   test('replays active typing state to a member who joins after typing has started', async () => {

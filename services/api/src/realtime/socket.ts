@@ -1,8 +1,14 @@
 import type { FastifyInstance } from 'fastify';
 import { Server } from 'socket.io';
 import { pool } from '../db/pool.js';
-import { ClientMessageSendEventSchema } from '@penthouse/contracts';
+import {
+  ClientMessageSendEventSchema,
+  ClientPresenceUpdateEventSchema,
+  ServerPresenceUpdateEventSchema
+} from '@penthouse/contracts';
 import { env } from '../config/env.js';
+import { touchLastSeen } from '../utils/activity.js';
+import { buildPresenceSnapshot, setSocketPresence } from '../utils/presence.js';
 import { avatarUrlFromFileName, getUserById, requiresTestNoticeAck } from '../utils/users.js';
 import { getChatSendState } from '../utils/chats.js';
 import { sendChatMessage } from '../utils/chatMessages.js';
@@ -89,7 +95,6 @@ export function initRealtime(app: FastifyInstance): Server {
     }
   });
 
-  const onlineUsers = new Map<string, Set<string>>();
   const inactivePresenceTimers = new Map<string, ReturnType<typeof setTimeout>>();
   const typingByChat = new Map<string, Map<string, { displayName: string; avatarUrl: string | null; timeout: ReturnType<typeof setTimeout> }>>();
 
@@ -98,8 +103,12 @@ export function initRealtime(app: FastifyInstance): Server {
   let socketDisconnections = 0;
   let socketAuthFailures = 0;
 
-  function emitPresenceStatus(userId: string, status: 'online' | 'offline'): void {
-    io.emit('presence.update', { type: 'presence.update', payload: { userId, status } });
+  function emitPresenceStatus(userId: string, online: boolean): void {
+    io.emit('presence.update', ServerPresenceUpdateEventSchema.parse({
+      userId,
+      online,
+      timestamp: new Date().toISOString()
+    }));
   }
 
   function clearInactivePresenceTimer(socketId: string): void {
@@ -113,14 +122,9 @@ export function initRealtime(app: FastifyInstance): Server {
     const userId = socket.data.userId;
     if (!userId) return;
     clearInactivePresenceTimer(socket.id);
-    const sockets = onlineUsers.get(userId) ?? new Set<string>();
-    const wasOffline = sockets.size === 0;
-    if (!sockets.has(socket.id)) {
-      sockets.add(socket.id);
-      onlineUsers.set(userId, sockets);
-    }
-    if (wasOffline) {
-      emitPresenceStatus(userId, 'online');
+    const transition = setSocketPresence(userId, socket.id, true);
+    if (transition.becameOnline) {
+      emitPresenceStatus(userId, true);
     }
   }
 
@@ -160,13 +164,10 @@ export function initRealtime(app: FastifyInstance): Server {
     const userId = socket.data.userId;
     if (!userId) return;
     clearInactivePresenceTimer(socket.id);
-    const sockets = onlineUsers.get(userId);
-    if (!sockets?.has(socket.id)) return;
-    sockets.delete(socket.id);
     clearTypingStateForUser(userId);
-    if (sockets.size === 0) {
-      onlineUsers.delete(userId);
-      emitPresenceStatus(userId, 'offline');
+    const transition = setSocketPresence(userId, socket.id, false);
+    if (transition.becameOffline) {
+      emitPresenceStatus(userId, false);
     }
   }
 
@@ -408,9 +409,39 @@ export function initRealtime(app: FastifyInstance): Server {
       app.log.warn({ error, userId, socketId: socket.id }, 'failed to join member chats');
     });
     markSocketOnline(socket);
-    socket.emit('presence.sync', {
-      type: 'presence.sync',
-      payload: { onlineUserIds: Array.from(onlineUsers.keys()) }
+    void buildPresenceSnapshot(pool)
+      .then((snapshot) => {
+        socket.emit('presence.sync', snapshot);
+      })
+      .catch((error) => {
+        app.log.warn({ error, userId, socketId: socket.id }, 'failed to build presence snapshot');
+      });
+
+    socket.on('presence.update', (payload: unknown) => {
+      const candidate = payload && typeof payload === 'object' ? payload as object : {};
+      const parsed = ClientPresenceUpdateEventSchema.safeParse({
+        type: 'presence.update',
+        ...candidate
+      });
+      if (!parsed.success) return;
+
+      const { online } = parsed.data;
+      app.log.info(
+        {
+          userId,
+          socketId: socket.id,
+          online
+        },
+        'socket presence updated'
+      );
+
+      if (online) {
+        markSocketOnline(socket);
+        return;
+      }
+
+      clearTypingStateForUser(userId);
+      markSocketOffline(socket);
     });
 
     socket.on('app.state', (payload: unknown) => {
@@ -485,7 +516,8 @@ export function initRealtime(app: FastifyInstance): Server {
     });
 
     socket.on('message.send', async (payload: unknown) => {
-      const parsed = ClientMessageSendEventSchema.safeParse({ type: 'message.send', ...(payload as object) });
+      const candidate = payload && typeof payload === 'object' ? payload as object : {};
+      const parsed = ClientMessageSendEventSchema.safeParse({ type: 'message.send', ...candidate });
       if (!parsed.success) return;
 
       const event = parsed.data;
@@ -516,6 +548,7 @@ export function initRealtime(app: FastifyInstance): Server {
           },
           'socket message handled'
         );
+        touchLastSeen(pool, userId, app.log);
       } catch (error) {
         app.log.error({ error, userId, socketId: socket.id, chatId: event.chatId }, 'socket message failed');
       }
@@ -533,15 +566,7 @@ export function initRealtime(app: FastifyInstance): Server {
         },
         'socket disconnected'
       );
-      const userSockets = onlineUsers.get(userId);
-      clearInactivePresenceTimer(socket.id);
-      clearTypingStateForUser(userId);
-      if (!userSockets) return;
-      userSockets.delete(socket.id);
-      if (userSockets.size === 0) {
-        onlineUsers.delete(userId);
-        emitPresenceStatus(userId, 'offline');
-      }
+      markSocketOffline(socket);
     });
   });
 

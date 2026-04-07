@@ -38,8 +38,8 @@
  * The above values will be the same _even if_ different values for `ENVIRONMENT` or `PUBLIC_BASE_URL` are set at runtime, as they are statically replaced in your code with their build time values.
  */
 declare module '$env/static/private' {
-	export const NoDefaultCurrentDirectoryInExePath: string;
-	export const CLAUDE_CODE_ENTRYPOINT: string;
+	export const npm_config_save_dev: string;
+	export const ANTIGRAVITY_AGENT: string;
 	export const TERM_PROGRAM: string;
 	export const NODE: string;
 	export const INIT_CWD: string;
@@ -55,21 +55,22 @@ declare module '$env/static/private' {
 	export const ANDROID_SDK_ROOT: string;
 	export const ZDOTDIR: string;
 	export const MallocNanoZone: string;
+	export const npm_package_optional: string;
 	export const COLOR: string;
-	export const VIPSHOME: string;
 	export const npm_config_noproxy: string;
 	export const npm_config_local_prefix: string;
-	export const GIT_EDITOR: string;
 	export const USER: string;
 	export const POWERSHELL_TELEMETRY_OPTOUT: string;
 	export const COMMAND_MODE: string;
 	export const npm_config_globalconfig: string;
 	export const HOMEBREW_NO_ANALYTICS: string;
-	export const CLAUDE_CODE_SSE_PORT: string;
+	export const npm_package_peer: string;
 	export const SSH_AUTH_SOCK: string;
 	export const VSCODE_PROFILE_INITIALIZED: string;
 	export const __CF_USER_TEXT_ENCODING: string;
 	export const npm_execpath: string;
+	export const PAGER: string;
+	export const npm_package_integrity: string;
 	export const PATH: string;
 	export const npm_package_json: string;
 	export const _: string;
@@ -81,29 +82,27 @@ declare module '$env/static/private' {
 	export const PWD: string;
 	export const npm_lifecycle_event: string;
 	export const EDITOR: string;
-	export const OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE: string;
 	export const npm_package_name: string;
 	export const LANG: string;
-	export const PYTHONSTARTUP: string;
 	export const npm_config_npm_version: string;
 	export const VSCODE_GIT_ASKPASS_EXTRA_ARGS: string;
 	export const XPC_FLAGS: string;
+	export const npm_package_dev: string;
 	export const npm_config_node_gyp: string;
 	export const npm_package_version: string;
 	export const XPC_SERVICE_NAME: string;
 	export const VSCODE_INJECTION: string;
 	export const ANTIGRAVITY_CLI_ALIAS: string;
+	export const npm_package_resolved: string;
 	export const SHLVL: string;
 	export const HOME: string;
 	export const VSCODE_GIT_ASKPASS_MAIN: string;
-	export const CLAUDE_CODE_EXECPATH: string;
-	export const PYTHON_BASIC_REPL: string;
 	export const HOMEBREW_PREFIX: string;
+	export const npm_package_dev_optional: string;
 	export const npm_config_cache: string;
 	export const LOGNAME: string;
 	export const npm_lifecycle_script: string;
 	export const VSCODE_GIT_IPC_HANDLE: string;
-	export const COREPACK_ENABLE_AUTO_PIN: string;
 	export const BUN_INSTALL: string;
 	export const npm_config_user_agent: string;
 	export const VSCODE_GIT_ASKPASS_NODE: string;
@@ -111,7 +110,6 @@ declare module '$env/static/private' {
 	export const INFOPATH: string;
 	export const HOMEBREW_CELLAR: string;
 	export const OSLogRateLimit: string;
-	export const CLAUDECODE: string;
 	export const npm_node_execpath: string;
 	export const npm_config_prefix: string;
 	export const COLORTERM: string;
@@ -153,6 +151,7 @@ declare module '$env/static/private' {
 declare module '$env/static/public' {
 	export const PUBLIC_API_URL: string;
 	export const PUBLIC_SOCKET_URL: string;
+	export const PUBLIC_ALTCHA_API_URL: string;
 }
 
 /**
@@ -202,8 +201,8 @@ declare module '$env/static/public' {
  */
 declare module '$env/dynamic/private' {
 	export const env: {
-		NoDefaultCurrentDirectoryInExePath: string;
-		CLAUDE_CODE_ENTRYPOINT: string;
+		npm_config_save_dev: string;
+		ANTIGRAVITY_AGENT: string;
 		TERM_PROGRAM: string;
 		NODE: string;
 		INIT_CWD: string;
@@ -219,21 +218,22 @@ declare module '$env/dynamic/private' {
 		ANDROID_SDK_ROOT: string;
 		ZDOTDIR: string;
 		MallocNanoZone: string;
+		npm_package_optional: string;
 		COLOR: string;
-		VIPSHOME: string;
 		npm_config_noproxy: string;
 		npm_config_local_prefix: string;
-		GIT_EDITOR: string;
 		USER: string;
 		POWERSHELL_TELEMETRY_OPTOUT: string;
 		COMMAND_MODE: string;
 		npm_config_globalconfig: string;
 		HOMEBREW_NO_ANALYTICS: string;
-		CLAUDE_CODE_SSE_PORT: string;
+		npm_package_peer: string;
 		SSH_AUTH_SOCK: string;
 		VSCODE_PROFILE_INITIALIZED: string;
 		__CF_USER_TEXT_ENCODING: string;
 		npm_execpath: string;
+		PAGER: string;
+		npm_package_integrity: string;
 		PATH: string;
 		npm_package_json: string;
 		_: string;
@@ -245,29 +245,27 @@ declare module '$env/dynamic/private' {
 		PWD: string;
 		npm_lifecycle_event: string;
 		EDITOR: string;
-		OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE: string;
 		npm_package_name: string;
 		LANG: string;
-		PYTHONSTARTUP: string;
 		npm_config_npm_version: string;
 		VSCODE_GIT_ASKPASS_EXTRA_ARGS: string;
 		XPC_FLAGS: string;
+		npm_package_dev: string;
 		npm_config_node_gyp: string;
 		npm_package_version: string;
 		XPC_SERVICE_NAME: string;
 		VSCODE_INJECTION: string;
 		ANTIGRAVITY_CLI_ALIAS: string;
+		npm_package_resolved: string;
 		SHLVL: string;
 		HOME: string;
 		VSCODE_GIT_ASKPASS_MAIN: string;
-		CLAUDE_CODE_EXECPATH: string;
-		PYTHON_BASIC_REPL: string;
 		HOMEBREW_PREFIX: string;
+		npm_package_dev_optional: string;
 		npm_config_cache: string;
 		LOGNAME: string;
 		npm_lifecycle_script: string;
 		VSCODE_GIT_IPC_HANDLE: string;
-		COREPACK_ENABLE_AUTO_PIN: string;
 		BUN_INSTALL: string;
 		npm_config_user_agent: string;
 		VSCODE_GIT_ASKPASS_NODE: string;
@@ -275,7 +273,6 @@ declare module '$env/dynamic/private' {
 		INFOPATH: string;
 		HOMEBREW_CELLAR: string;
 		OSLogRateLimit: string;
-		CLAUDECODE: string;
 		npm_node_execpath: string;
 		npm_config_prefix: string;
 		COLORTERM: string;
@@ -336,6 +333,7 @@ declare module '$env/dynamic/public' {
 	export const env: {
 		PUBLIC_API_URL: string;
 		PUBLIC_SOCKET_URL: string;
+		PUBLIC_ALTCHA_API_URL: string;
 		[key: `PUBLIC_${string}`]: string | undefined;
 	}
 }

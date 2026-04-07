@@ -6,13 +6,17 @@ export const AUTH_CONSTRAINTS = {
   displayNameMin: 1,
   displayNameMax: 40,
   bioMax: 160,
+  timezoneMax: 50,
   passwordMin: 10,
   passwordMax: 128,
+  captchaTokenMin: 1,
+  captchaTokenMax: 2048,
   inviteCodeMin: 6,
   inviteCodeMax: 64,
   recoveryCodeLength: 16,
   testNoticeVersionMin: 1,
-  testNoticeVersionMax: 64
+  testNoticeVersionMax: 64,
+  userSearchQueryMax: 100
 } as const;
 
 const USERNAME_PATTERN = /^[a-z0-9._-]+$/;
@@ -58,6 +62,11 @@ const InviteCodeSchema = z
   .max(AUTH_CONSTRAINTS.inviteCodeMax)
   .transform(normalizeInviteCode);
 
+const CaptchaTokenSchema = z
+  .string()
+  .min(AUTH_CONSTRAINTS.captchaTokenMin)
+  .max(AUTH_CONSTRAINTS.captchaTokenMax);
+
 const TestNoticeVersionSchema = z
   .string()
   .trim()
@@ -90,10 +99,20 @@ const RecoveryCodeSchema = z
 
 export const RegisterRequestSchema = z.object({
   username: UsernameSchema,
+  displayName: DisplayNameSchema.optional(),
   password: PasswordCreationSchema,
   inviteCode: InviteCodeSchema,
+  captchaToken: CaptchaTokenSchema,
   acceptTestNotice: z.literal(true),
   testNoticeVersion: TestNoticeVersionSchema
+});
+
+export const AltchaChallengeSchema = z.object({
+  algorithm: z.enum(['SHA-1', 'SHA-256', 'SHA-512']),
+  challenge: z.string().min(1),
+  maxnumber: z.number().int().positive().optional(),
+  salt: z.string().min(1),
+  signature: z.string().min(1)
 });
 
 export const LoginRequestSchema = z.object({
@@ -126,6 +145,7 @@ export const AuthUserSchema = z.object({
   username: z.string(),
   displayName: z.string(),
   avatarUrl: z.string().nullable(),
+  timezone: z.string().max(AUTH_CONSTRAINTS.timezoneMax).nullable().optional(),
   role: UserRoleSchema,
   mustChangePassword: z.boolean(),
   mustAcceptTestNotice: z.boolean(),
@@ -149,6 +169,7 @@ export const UpdateProfileRequestSchema = z
   .object({
     displayName: DisplayNameSchema.optional(),
     bio: BioSchema.nullable().optional(),
+    timezone: z.string().max(AUTH_CONSTRAINTS.timezoneMax).nullable().optional(),
     avatarUploadId: z.string().uuid().nullable().optional()
   })
   .refine((value) => Object.keys(value).length > 0, {
@@ -264,7 +285,8 @@ export const ChatPreferencesRequestSchema = z.object({
 
 export const ChatPreferencesResponseSchema = z.object({
   chatId: z.string(),
-  notificationsMuted: z.boolean()
+  notificationsMuted: z.boolean(),
+  updatedAt: z.string()
 });
 
 export const MemberSummarySchema = z.object({
@@ -275,7 +297,31 @@ export const MemberSummarySchema = z.object({
 });
 
 export const MemberDetailSchema = MemberSummarySchema.extend({
-  bio: z.string().nullable()
+  bio: z.string().nullable(),
+  timezone: z.string().max(AUTH_CONSTRAINTS.timezoneMax).nullable().optional(),
+  lastSeenAt: z.string().nullable().optional()
+});
+
+// Tier 1: User search and directory schemas
+export const UserSearchRequestSchema = z.object({
+  q: z.string().min(1).max(AUTH_CONSTRAINTS.userSearchQueryMax),
+  limit: z.number().int().min(1).max(50).default(20).optional()
+});
+
+export const UserSearchResponseSchema = z.object({
+  results: z.array(MemberDetailSchema)
+});
+
+export const ListUsersRequestSchema = z.object({
+  offset: z.number().int().nonnegative().default(0).optional(),
+  limit: z.number().int().min(1).max(50).default(20).optional()
+});
+
+export const ListUsersResponseSchema = z.object({
+  users: z.array(MemberDetailSchema),
+  total: z.number().int().nonnegative(),
+  offset: z.number().int().nonnegative(),
+  limit: z.number().int().nonnegative()
 });
 
 export const AdminMemberSummarySchema = MemberDetailSchema.extend({
@@ -485,6 +531,7 @@ export const AdminTempPasswordResponseSchema = z.object({
 });
 
 export type RegisterRequest = z.infer<typeof RegisterRequestSchema>;
+export type AltchaChallenge = z.infer<typeof AltchaChallengeSchema>;
 export type LoginRequest = z.infer<typeof LoginRequestSchema>;
 export type RefreshRequest = z.infer<typeof RefreshRequestSchema>;
 export type PasswordResetRequest = z.infer<typeof PasswordResetRequestSchema>;
@@ -538,3 +585,9 @@ export type CreateInviteRequest = z.infer<typeof CreateInviteRequestSchema>;
 export type RegistrationModeResponse = z.infer<typeof RegistrationModeResponseSchema>;
 export type UpdateRegistrationModeRequest = z.infer<typeof UpdateRegistrationModeRequestSchema>;
 export type AuthConfigResponse = z.infer<typeof AuthConfigResponseSchema>;
+
+// Tier 1: User search and directory types
+export type UserSearchRequest = z.infer<typeof UserSearchRequestSchema>;
+export type UserSearchResponse = z.infer<typeof UserSearchResponseSchema>;
+export type ListUsersRequest = z.infer<typeof ListUsersRequestSchema>;
+export type ListUsersResponse = z.infer<typeof ListUsersResponseSchema>;

@@ -30,7 +30,7 @@ const options = {
   service_worker_options: void 0,
   server_error_boundaries: false,
   templates: {
-    app: ({ head, body, assets, nonce, env }) => '<!doctype html>\n<html lang="en">\n	<head>\n		<meta charset="utf-8" />\n		<meta name="viewport" content="width=device-width, initial-scale=1" />\n		<meta name="text-scale" content="scale" />\n		' + head + '\n	</head>\n	<body data-sveltekit-preload-data="hover">\n		<div style="display: contents">' + body + "</div>\n	</body>\n</html>\n",
+    app: ({ head, body, assets, nonce, env }) => '<!doctype html>\n<html lang="en">\n	<head>\n		<meta charset="utf-8" />\n		<meta name="viewport" content="width=device-width, initial-scale=1" />\n		<meta name="mobile-web-app-capable" content="yes" />\n		<meta name="apple-mobile-web-app-capable" content="yes" />\n		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />\n		<meta name="theme-color" content="#12121C" />\n		<link rel="preconnect" href="https://fonts.googleapis.com" />\n		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />\n		<!-- Gelasio: logo/display serif (elegant, refined) -->\n		<!-- Ubuntu: UI body font -->\n		<!-- JetBrains Mono: settings/code -->\n		<link\n			href="https://fonts.googleapis.com/css2?family=Gelasio:wght@400;500;600;700&family=Ubuntu:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap"\n			rel="stylesheet"\n		/>\n		' + head + '\n	</head>\n	<body data-sveltekit-preload-data="off">\n		<div style="display: contents">' + body + "</div>\n	</body>\n</html>\n",
     error: ({ status, message }) => '<!doctype html>\n<html lang="en">\n	<head>\n		<meta charset="utf-8" />\n		<title>' + message + `</title>
 
 		<style>
@@ -102,7 +102,7 @@ const options = {
 		<div class="error">
 			<span class="status">` + status + '</span>\n			<div class="message">\n				<h1>' + message + "</h1>\n			</div>\n		</div>\n	</body>\n</html>\n"
   },
-  version_hash: "1xuznf8"
+  version_hash: "qj8egu"
 };
 async function get_hooks() {
   let handle;

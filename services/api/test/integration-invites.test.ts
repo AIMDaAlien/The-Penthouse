@@ -63,7 +63,7 @@ describe('[integration] invite management', { skip: SKIP, concurrency: false }, 
   });
 
   test('register succeeds with a newly created invite', async () => {
-    const { registerUser, authHeaders } = await import('./helpers.js');
+    const { registerUser, authHeaders, createCaptchaToken } = await import('./helpers.js');
     const admin = await registerUser(app, 'reg_inv_admin');
     await promoteAdmin('reg_inv_admin');
 
@@ -82,6 +82,7 @@ describe('[integration] invite management', { skip: SKIP, concurrency: false }, 
         username: 'invited_user',
         password: 'supersecurepassword',
         inviteCode: invite.code,
+        captchaToken: await createCaptchaToken(),
         acceptTestNotice: true,
         testNoticeVersion: 'alpha-v1'
       }
@@ -90,7 +91,7 @@ describe('[integration] invite management', { skip: SKIP, concurrency: false }, 
   });
 
   test('revoked invite fails at registration', async () => {
-    const { registerUser, authHeaders } = await import('./helpers.js');
+    const { registerUser, authHeaders, createCaptchaToken } = await import('./helpers.js');
     const admin = await registerUser(app, 'revoke_inv_admin');
     await promoteAdmin('revoke_inv_admin');
 
@@ -116,6 +117,7 @@ describe('[integration] invite management', { skip: SKIP, concurrency: false }, 
         username: 'revoked_user',
         password: 'supersecurepassword',
         inviteCode: invite.code,
+        captchaToken: await createCaptchaToken(),
         acceptTestNotice: true,
         testNoticeVersion: 'alpha-v1'
       }
@@ -124,7 +126,7 @@ describe('[integration] invite management', { skip: SKIP, concurrency: false }, 
   });
 
   test('exhausted invite fails at registration', async () => {
-    const { registerUser, authHeaders } = await import('./helpers.js');
+    const { registerUser, authHeaders, createCaptchaToken } = await import('./helpers.js');
     const admin = await registerUser(app, 'exhaust_inv_admin');
     await promoteAdmin('exhaust_inv_admin');
 
@@ -144,6 +146,7 @@ describe('[integration] invite management', { skip: SKIP, concurrency: false }, 
         username: 'exhaust_first',
         password: 'supersecurepassword',
         inviteCode: invite.code,
+        captchaToken: await createCaptchaToken(),
         acceptTestNotice: true,
         testNoticeVersion: 'alpha-v1'
       }
@@ -158,6 +161,7 @@ describe('[integration] invite management', { skip: SKIP, concurrency: false }, 
         username: 'exhaust_second',
         password: 'supersecurepassword',
         inviteCode: invite.code,
+        captchaToken: await createCaptchaToken(),
         acceptTestNotice: true,
         testNoticeVersion: 'alpha-v1'
       }
@@ -166,7 +170,7 @@ describe('[integration] invite management', { skip: SKIP, concurrency: false }, 
   });
 
   test('expired invite fails at registration', async () => {
-    const { registerUser, authHeaders, pool } = await import('./helpers.js');
+    const { registerUser, authHeaders, createCaptchaToken, pool } = await import('./helpers.js');
     const admin = await registerUser(app, 'expire_inv_admin');
     await promoteAdmin('expire_inv_admin');
 
@@ -193,6 +197,7 @@ describe('[integration] invite management', { skip: SKIP, concurrency: false }, 
         username: 'expired_user',
         password: 'supersecurepassword',
         inviteCode: invite.code,
+        captchaToken: await createCaptchaToken(),
         acceptTestNotice: true,
         testNoticeVersion: 'alpha-v1'
       }
@@ -201,7 +206,7 @@ describe('[integration] invite management', { skip: SKIP, concurrency: false }, 
   });
 
   test('closed registration mode rejects even with a valid invite', async () => {
-    const { registerUser, authHeaders, pool } = await import('./helpers.js');
+    const { registerUser, authHeaders, createCaptchaToken, pool } = await import('./helpers.js');
     const admin = await registerUser(app, 'closed_admin');
     await promoteAdmin('closed_admin');
 
@@ -221,6 +226,7 @@ describe('[integration] invite management', { skip: SKIP, concurrency: false }, 
         username: 'closed_user',
         password: 'supersecurepassword',
         inviteCode: 'PENTHOUSE-ALPHA',
+        captchaToken: await createCaptchaToken(),
         acceptTestNotice: true,
         testNoticeVersion: 'alpha-v1'
       }
@@ -304,11 +310,19 @@ describe('[integration] invite management', { skip: SKIP, concurrency: false }, 
   });
 
   test('create invite with valid expiresAt succeeds', async () => {
+    const { createCaptchaToken } = await import('./helpers.js');
     // Register and promote admin
     const regResult = await app.inject({
       method: 'POST',
       url: '/api/v1/auth/register',
-      payload: { username: 'expires-admin', password: 'TestPassword123!', inviteCode: 'PENTHOUSE-ALPHA', acceptTestNotice: true, testNoticeVersion: 'alpha-v1' }
+      payload: {
+        username: 'expires-admin',
+        password: 'TestPassword123!',
+        inviteCode: 'PENTHOUSE-ALPHA',
+        captchaToken: await createCaptchaToken(),
+        acceptTestNotice: true,
+        testNoticeVersion: 'alpha-v1'
+      }
     });
     const { accessToken } = JSON.parse(regResult.payload);
     await promoteAdmin('expires-admin');
@@ -326,10 +340,18 @@ describe('[integration] invite management', { skip: SKIP, concurrency: false }, 
   });
 
   test('create invite with malformed expiresAt returns 400', async () => {
+    const { createCaptchaToken } = await import('./helpers.js');
     const regResult = await app.inject({
       method: 'POST',
       url: '/api/v1/auth/register',
-      payload: { username: 'malformed-admin', password: 'TestPassword123!', inviteCode: 'PENTHOUSE-ALPHA', acceptTestNotice: true, testNoticeVersion: 'alpha-v1' }
+      payload: {
+        username: 'malformed-admin',
+        password: 'TestPassword123!',
+        inviteCode: 'PENTHOUSE-ALPHA',
+        captchaToken: await createCaptchaToken(),
+        acceptTestNotice: true,
+        testNoticeVersion: 'alpha-v1'
+      }
     });
     const { accessToken } = JSON.parse(regResult.payload);
     await promoteAdmin('malformed-admin');
@@ -341,13 +363,22 @@ describe('[integration] invite management', { skip: SKIP, concurrency: false }, 
       payload: { label: 'bad-date', expiresAt: 'not-a-date' }
     });
     assert.equal(result.statusCode, 400);
+    assert.equal(JSON.parse(result.payload).error, 'expiresAt must be a valid ISO 8601 datetime');
   });
 
   test('create invite with past expiresAt returns 400', async () => {
+    const { createCaptchaToken } = await import('./helpers.js');
     const regResult = await app.inject({
       method: 'POST',
       url: '/api/v1/auth/register',
-      payload: { username: 'past-admin', password: 'TestPassword123!', inviteCode: 'PENTHOUSE-ALPHA', acceptTestNotice: true, testNoticeVersion: 'alpha-v1' }
+      payload: {
+        username: 'past-admin',
+        password: 'TestPassword123!',
+        inviteCode: 'PENTHOUSE-ALPHA',
+        captchaToken: await createCaptchaToken(),
+        acceptTestNotice: true,
+        testNoticeVersion: 'alpha-v1'
+      }
     });
     const { accessToken } = JSON.parse(regResult.payload);
     await promoteAdmin('past-admin');
@@ -361,15 +392,23 @@ describe('[integration] invite management', { skip: SKIP, concurrency: false }, 
     });
     assert.equal(result.statusCode, 400);
     const body = JSON.parse(result.payload);
-    assert.ok(body.error);
+    assert.equal(body.error, 'expiresAt must be in the future');
   });
 
   test('closed registration mode reflected in public auth config', async () => {
+    const { createCaptchaToken } = await import('./helpers.js');
     // Register admin and switch to closed
     const regResult = await app.inject({
       method: 'POST',
       url: '/api/v1/auth/register',
-      payload: { username: 'config-admin', password: 'TestPassword123!', inviteCode: 'PENTHOUSE-ALPHA', acceptTestNotice: true, testNoticeVersion: 'alpha-v1' }
+      payload: {
+        username: 'config-admin',
+        password: 'TestPassword123!',
+        inviteCode: 'PENTHOUSE-ALPHA',
+        captchaToken: await createCaptchaToken(),
+        acceptTestNotice: true,
+        testNoticeVersion: 'alpha-v1'
+      }
     });
     const { accessToken } = JSON.parse(regResult.payload);
     await promoteAdmin('config-admin');

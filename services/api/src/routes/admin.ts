@@ -25,6 +25,7 @@ import {
 } from '../utils/users.js';
 import { toAdminMessage, toMemberMessage } from '../utils/messages.js';
 import { listAdminChatSummaries } from '../utils/chats.js';
+import { formatValidationError } from '../utils/error-responses.js';
 import {
   getBackupDiagnostics,
   getBuildRuntimeDiagnostics,
@@ -35,7 +36,7 @@ import {
 
 function ensureAdmin(request: any, reply: any) {
   if (request.user.role !== 'admin') {
-    return reply.status(403).send({ error: 'Admin only' });
+    return reply.status(403).send({ error: `You don't have permission to perform this action` });
   }
   return null;
 }
@@ -248,7 +249,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     if (forbidden) return forbidden;
 
     const parsed = CreateInviteRequestSchema.safeParse(request.body);
-    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() });
+    if (!parsed.success) return reply.status(400).send({ error: formatValidationError(parsed.error) });
 
     const code = createInviteCode();
     const { label, maxUses, expiresAt } = parsed.data;
@@ -313,7 +314,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     if (forbidden) return forbidden;
 
     const parsed = UpdateRegistrationModeRequestSchema.safeParse(request.body);
-    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() });
+    if (!parsed.success) return reply.status(400).send({ error: formatValidationError(parsed.error) });
 
     await setRegistrationMode(pool, parsed.data.registrationMode);
     return RegistrationModeResponseSchema.parse({ registrationMode: parsed.data.registrationMode });
@@ -605,7 +606,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
 
     const { messageId } = request.params as { messageId: string };
     const parsed = AdminModerateMessageRequestSchema.safeParse(request.body ?? {});
-    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() });
+    if (!parsed.success) return reply.status(400).send({ error: formatValidationError(parsed.error) });
 
     const result = await setMessageModerationState(messageId, request.user.userId, 'hide', parsed.data.reason);
     if ('error' in result) {
@@ -643,7 +644,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
 
     const { messageId } = request.params as { messageId: string };
     const parsed = AdminModerateMessageRequestSchema.safeParse(request.body ?? {});
-    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() });
+    if (!parsed.success) return reply.status(400).send({ error: formatValidationError(parsed.error) });
 
     const result = await setMessageModerationState(messageId, request.user.userId, 'unhide', parsed.data.reason);
     if ('error' in result) {

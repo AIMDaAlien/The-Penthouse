@@ -5,6 +5,7 @@
 	import { chats } from '$services/api';
 	import { sessionStore } from '$stores/session.svelte';
 	import { socketStore } from '$stores/socket.svelte';
+	import Avatar from '$lib/components/Avatar.svelte';
 	import type { Message } from '@penthouse/contracts';
 
 	// ─── State ────────────────────────────────────────────────────────────────
@@ -13,16 +14,48 @@
 	const chatId = $derived(page.params.id ?? '');
 	const currentUserId = $derived(sessionStore.current?.user.id ?? '');
 
+	// Connection status
+	const connectionStatus = $derived(socketStore.state);
+	const statusDot = $derived.by(() => {
+		switch (connectionStatus) {
+			case 'connected':
+				return '🟢';
+			case 'connecting':
+				return '🟡';
+			case 'degraded':
+				return '🟡';
+			case 'failed':
+				return '🔴';
+			default:
+				return '⚪';
+		}
+	});
+
 	type PendingMessage = Message & { pending: true };
 	type ChatMessage = Message | PendingMessage;
 
 	let messages = $state<ChatMessage[]>([]);
 	let chatName = $state('');
+	let counterpartMemberId = $state<string | null>(null);
+	let counterpartAvatarUrl = $state<string | null>(null);
 	let loading = $state(true);
 	let error = $state('');
 	let inputText = $state('');
 	let sending = $state(false);
 	let scrollEl = $state<HTMLDivElement | null>(null);
+
+	// Typing indicators
+	let typingUserIds = $state<Set<string>>(new Set());
+	let typingTimeoutId: NodeJS.Timeout | null = null;
+
+	// Pagination
+	let loadingOlder = $state(false);
+	let hasMoreMessages = $state(true);
+	let oldestMessageId = $state<string | null>(null);
+	let lastScrollCheckTime = 0;
+
+	// Presence
+	let userPresenceMap = $state<Map<string, boolean>>(new Map());
 
 	// ─── Helpers ──────────────────────────────────────────────────────────────
 
@@ -48,6 +81,17 @@
 		return m.senderDisplayName ?? m.senderUsername ?? 'Unknown';
 	}
 
+	function getTypingLabel(): string {
+		if (typingUserIds.size === 0) return '';
+		// This is a simplified version - in a real implementation,
+		// we'd map userIds to display names from the message history or a user map
+		// For now, just show a generic "typing..." indicator
+		if (typingUserIds.size === 1) {
+			return 'Someone is typing...';
+		}
+		return `${typingUserIds.size} people are typing...`;
+	}
+
 	async function scrollToBottom(smooth = false) {
 		await tick();
 		if (scrollEl) {
@@ -55,16 +99,74 @@
 		}
 	}
 
+	async function loadOlderMessages() {
+		if (loadingOlder || !hasMoreMessages || !oldestMessageId) return;
+
+		loadingOlder = true;
+		try {
+			const older = await chats.messages(chatId, { before: oldestMessageId, limit: 20 });
+			if (older.length === 0) {
+				hasMoreMessages = false;
+			} else {
+				// Save scroll height before prepending
+				const previousScrollHeight = scrollEl?.scrollHeight || 0;
+				// Prepend older messages
+				messages = [...older, ...messages];
+				oldestMessageId = older[0]?.id ?? oldestMessageId;
+				// Restore scroll position to maintain visual position
+				await tick();
+				if (scrollEl) {
+					const newScrollHeight = scrollEl.scrollHeight;
+					const scrollDifference = newScrollHeight - previousScrollHeight;
+					scrollEl.scrollTop += scrollDifference;
+				}
+			}
+		} catch (err: unknown) {
+			console.error('Failed to load older messages:', err);
+		} finally {
+			loadingOlder = false;
+		}
+	}
+
+	function handleScroll() {
+		const now = Date.now();
+		// Debounce scroll check to avoid excessive calls
+		if (now - lastScrollCheckTime < 300) return;
+		lastScrollCheckTime = now;
+
+		if (!scrollEl) return;
+
+		// Check if scrolled to top
+		if (scrollEl.scrollTop < 100) {
+			loadOlderMessages();
+		}
+
+		// Check if scrolled to bottom
+		const isAtBottom = scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight < 100;
+		if (isAtBottom) {
+			chats.markRead(chatId).catch(() => {});
+		}
+	}
+
 	// ─── Load messages ────────────────────────────────────────────────────────
 
 	onMount(async () => {
 		try {
-			const [msgList] = await Promise.all([
+			const [msgList, chatList] = await Promise.all([
 				chats.messages(chatId),
+				chats.list(),
 				chats.markRead(chatId).catch(() => {}) // non-fatal
 			]);
 			messages = msgList;
+			oldestMessageId = msgList.length > 0 ? msgList[0].id : null;
 			chatName = page.url.searchParams.get('name') ?? 'Chat';
+
+			// Find this chat in the list to get counterpart info for DMs
+			const chatSummary = chatList.find(c => c.id === chatId);
+			if (chatSummary?.type === 'dm' && chatSummary?.counterpartMemberId) {
+				counterpartMemberId = chatSummary.counterpartMemberId;
+				counterpartAvatarUrl = chatSummary.counterpartAvatarUrl ?? null;
+			}
 		} catch (err: unknown) {
 			error = err instanceof Error ? err.message : 'Failed to load messages.';
 		} finally {
@@ -111,12 +213,44 @@
 			}
 		}
 
+		function onTypingUpdate(payload: { userId: string; typing: boolean }) {
+			if (payload.typing && payload.userId !== currentUserId) {
+				typingUserIds.add(payload.userId);
+				// Clear existing timeout for this user
+				if (typingTimeoutId) clearTimeout(typingTimeoutId);
+				// Auto-remove after 4 seconds of no typing update
+				typingTimeoutId = setTimeout(() => {
+					typingUserIds.delete(payload.userId);
+					typingUserIds = typingUserIds; // trigger reactivity
+				}, 4000);
+			} else {
+				typingUserIds.delete(payload.userId);
+				typingUserIds = typingUserIds; // trigger reactivity
+			}
+		}
+
+		function onPresenceUpdate(payload: { userId: string; online: boolean }) {
+			userPresenceMap.set(payload.userId, payload.online);
+			userPresenceMap = userPresenceMap; // trigger reactivity
+		}
+
+		function onPresenceSync(payload: { [userId: string]: boolean }) {
+			userPresenceMap = new Map(Object.entries(payload));
+		}
+
 		socket.on('message.new', onMessageNew);
 		socket.on('message.ack', onMessageAck);
+		socket.on('typing.update', onTypingUpdate);
+		socket.on('presence.update', onPresenceUpdate);
+		socket.on('presence.sync', onPresenceSync);
 
 		return () => {
 			socket.off('message.new', onMessageNew);
 			socket.off('message.ack', onMessageAck);
+			socket.off('typing.update', onTypingUpdate);
+			socket.off('presence.update', onPresenceUpdate);
+			socket.off('presence.sync', onPresenceSync);
+			if (typingTimeoutId) clearTimeout(typingTimeoutId);
 		};
 	});
 
@@ -172,7 +306,31 @@
 		if (e.key === 'Enter' && !e.shiftKey) {
 			e.preventDefault();
 			handleSend();
+			emitTypingStop();
+		} else {
+			emitTypingStart();
 		}
+	}
+
+	let typingStartTime = 0;
+
+	function emitTypingStart() {
+		const socket = socketStore.instance;
+		if (!socket) return;
+
+		const now = Date.now();
+		// Only emit every 1 second to avoid spam
+		if (now - typingStartTime < 1000) return;
+		typingStartTime = now;
+
+		socket.emit('typing.start', { chatId });
+	}
+
+	function emitTypingStop() {
+		const socket = socketStore.instance;
+		if (!socket) return;
+		socket.emit('typing.stop', { chatId });
+		typingStartTime = 0;
 	}
 </script>
 
@@ -182,13 +340,32 @@
 		<button class="back-btn" onclick={() => goto('/')} aria-label="Back to chat list">
 			←
 		</button>
-		<h2 class="thread-name">{chatName}</h2>
+		{#if counterpartMemberId}
+			<Avatar
+				userId={counterpartMemberId}
+				displayName={chatName}
+				avatarUrl={counterpartAvatarUrl}
+				size="sm"
+				showPresence={true}
+			/>
+		{/if}
+		<div class="header-content">
+			<h2 class="thread-name">{chatName}</h2>
+			{#if typingUserIds.size > 0}
+				<span class="typing-indicator">{getTypingLabel()}</span>
+			{/if}
+		</div>
+		<div class="connection-status">
+			<span class="status-dot">{statusDot}</span>
+		</div>
 	</header>
 
 	<!-- Messages -->
-	<div class="messages-scroll" bind:this={scrollEl}>
+	<div class="messages-scroll" bind:this={scrollEl} onscroll={handleScroll}>
 		{#if loading}
 			<div class="state-msg">Loading...</div>
+		{:else if loadingOlder}
+			<div class="state-msg">Loading older messages...</div>
 		{:else if error && messages.length === 0}
 			<div class="state-msg error">{error}</div>
 		{:else if messages.length === 0}
@@ -287,14 +464,45 @@
 		border-radius: var(--radius-sm);
 	}
 
+	.header-content {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+
 	.thread-name {
 		font-size: var(--text-base);
 		font-weight: 600;
 		color: var(--color-text-primary);
-		flex: 1;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
+		margin: 0;
+	}
+
+	.typing-indicator {
+		font-size: var(--text-xs);
+		color: var(--color-text-secondary);
+		font-style: italic;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.connection-status {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 24px;
+		height: 24px;
+		font-size: 0.875rem;
+		flex-shrink: 0;
+	}
+
+	.connection-status .status-dot {
+		display: inline-block;
 	}
 
 	/* ── Messages ── */

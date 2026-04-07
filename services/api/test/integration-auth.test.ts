@@ -56,6 +56,45 @@ describe('[integration] refresh token rotation', { skip: SKIP, concurrency: fals
     await helpers.cleanup();
   });
 
+  test('altcha challenge endpoint returns a fresh challenge', async () => {
+    const getChallenge = await app.inject({
+      method: 'GET',
+      url: '/api/v1/altcha'
+    });
+    assert.equal(getChallenge.statusCode, 200);
+    assert.equal(getChallenge.headers['cache-control'], 'no-store');
+    const first = JSON.parse(getChallenge.payload);
+    assert.equal(typeof first.challenge, 'string');
+    assert.equal(typeof first.salt, 'string');
+    assert.equal(typeof first.signature, 'string');
+
+    const postChallenge = await app.inject({
+      method: 'POST',
+      url: '/api/v1/altcha'
+    });
+    assert.equal(postChallenge.statusCode, 200);
+    const second = JSON.parse(postChallenge.payload);
+    assert.notEqual(first.challenge, second.challenge);
+  });
+
+  test('register rejects an invalid altcha payload', async () => {
+    const registerRes = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/register',
+      payload: {
+        username: 'captcha_fail_user',
+        password: 'supersecurepassword',
+        inviteCode: 'PENTHOUSE-ALPHA',
+        captchaToken: 'not-valid-base64',
+        acceptTestNotice: true,
+        testNoticeVersion: 'alpha-v1'
+      }
+    });
+
+    assert.equal(registerRes.statusCode, 400);
+    assert.equal(JSON.parse(registerRes.payload).error, 'Captcha verification failed. Please try again.');
+  });
+
   test('old refresh token is rejected after the grace window expires', async () => {
     const { pool, registerUser } = await import('./helpers.js');
     const user = await registerUser(app, 'rotate_user');
@@ -95,6 +134,7 @@ describe('[integration] refresh token rotation', { skip: SKIP, concurrency: fals
   });
 
   test('register normalizes username and invite code, then login accepts trimmed mixed-case username', async () => {
+    const { createCaptchaToken } = await import('./helpers.js');
     const registerRes = await app.inject({
       method: 'POST',
       url: '/api/v1/auth/register',
@@ -102,6 +142,7 @@ describe('[integration] refresh token rotation', { skip: SKIP, concurrency: fals
         username: '  Aim.Test  ',
         password: 'supersecurepassword',
         inviteCode: ' penthouse-alpha ',
+        captchaToken: await createCaptchaToken(),
         acceptTestNotice: true,
         testNoticeVersion: 'alpha-v1'
       }
@@ -273,6 +314,7 @@ describe('[integration] auth rate limiting', { skip: SKIP, concurrency: false },
   });
 
   test('registration is rate limited after repeated attempts from the same IP', async () => {
+    const { createCaptchaToken } = await import('./helpers.js');
     for (let attempt = 0; attempt < 5; attempt += 1) {
       const response = await app.inject({
         method: 'POST',
@@ -281,6 +323,7 @@ describe('[integration] auth rate limiting', { skip: SKIP, concurrency: false },
           username: `rate_limit_register_${attempt}`,
           password: 'supersecurepassword',
           inviteCode: 'PENTHOUSE-ALPHA',
+          captchaToken: await createCaptchaToken(),
           acceptTestNotice: true,
           testNoticeVersion: 'alpha-v1'
         }
@@ -295,6 +338,7 @@ describe('[integration] auth rate limiting', { skip: SKIP, concurrency: false },
         username: 'rate_limit_register_blocked',
         password: 'supersecurepassword',
         inviteCode: 'PENTHOUSE-ALPHA',
+        captchaToken: await createCaptchaToken(),
         acceptTestNotice: true,
         testNoticeVersion: 'alpha-v1'
       }
@@ -787,7 +831,7 @@ describe('[integration] admin user management', { skip: SKIP, concurrency: false
   });
 
   test('admin ban blocks login and keeps the username reserved', async () => {
-    const { authHeaders, cleanup, registerUser } = await import('./helpers.js');
+    const { authHeaders, cleanup, createCaptchaToken, registerUser } = await import('./helpers.js');
     await cleanup();
 
     const admin = await registerUser(app, 'owner_ban');
@@ -818,6 +862,7 @@ describe('[integration] admin user management', { skip: SKIP, concurrency: false
           username: 'ban_target',
           password: 'supersecurepassword',
           inviteCode: 'PENTHOUSE-ALPHA',
+          captchaToken: await createCaptchaToken(),
           acceptTestNotice: true,
           testNoticeVersion: 'alpha-v1'
         }
@@ -854,6 +899,7 @@ describe('[integration] test notice acknowledgement', { skip: SKIP, concurrency:
   });
 
   test('register rejects stale acknowledgement version', async () => {
+    const { createCaptchaToken } = await import('./helpers.js');
     await withTestNoticeVersion('alpha-v2', async () => {
       const registerRes = await app.inject({
         method: 'POST',
@@ -862,6 +908,7 @@ describe('[integration] test notice acknowledgement', { skip: SKIP, concurrency:
           username: 'stale_notice_user',
           password: 'supersecurepassword',
           inviteCode: 'PENTHOUSE-ALPHA',
+          captchaToken: await createCaptchaToken(),
           acceptTestNotice: true,
           testNoticeVersion: 'alpha-v1'
         }

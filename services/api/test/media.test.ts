@@ -78,6 +78,30 @@ test('[media] extractKlipyResults throws on unsupported provider shape instead o
   );
 });
 
+test('[media] fetchJsonWithCache caches the same provider URL for one hour', async () => {
+  const originalFetch = globalThis.fetch;
+  let fetchCalls = 0;
+  __testables.clearGifProviderCache();
+
+  globalThis.fetch = (async () => {
+    fetchCalls++;
+    return new Response(JSON.stringify({ ok: true, fetchCalls }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' }
+    });
+  }) as typeof globalThis.fetch;
+
+  try {
+    const first = await __testables.fetchJsonWithCache('https://gif-provider.test/search?q=cat');
+    const second = await __testables.fetchJsonWithCache('https://gif-provider.test/search?q=cat');
+    assert.deepEqual(second, first);
+    assert.equal(fetchCalls, 1);
+  } finally {
+    __testables.clearGifProviderCache();
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('[helpers] destructive test helpers refuse non-test databases', () => {
   const original = process.env.DATABASE_URL;
   process.env.DATABASE_URL = 'postgresql://penthouse:penthouse@localhost:5432/penthouse';

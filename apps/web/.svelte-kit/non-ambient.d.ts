@@ -29,17 +29,20 @@ declare module "$app/types" {
 	type MatcherParam<M> = M extends (param : string) => param is (infer U extends string) ? U : string;
 
 	export interface AppTypes {
-		RouteId(): "/" | "/auth" | "/chat" | "/chat/[id]";
+		RouteId(): "/" | "/auth" | "/chat" | "/chat/[id]" | "/users" | "/users/[id]";
 		RouteParams(): {
-			"/chat/[id]": { id: string }
+			"/chat/[id]": { id: string };
+			"/users/[id]": { id: string }
 		};
 		LayoutParams(): {
 			"/": { id?: string };
 			"/auth": Record<string, never>;
 			"/chat": { id?: string };
-			"/chat/[id]": { id: string }
+			"/chat/[id]": { id: string };
+			"/users": { id?: string };
+			"/users/[id]": { id: string }
 		};
-		Pathname(): "/" | "/auth" | `/chat/${string}` & {};
+		Pathname(): "/" | "/auth" | `/chat/${string}` & {} | "/users" | `/users/${string}` & {};
 		ResolvedPathname(): `${"" | `/${string}`}${ReturnType<AppTypes['Pathname']>}`;
 		Asset(): "/robots.txt" | string & {};
 	}

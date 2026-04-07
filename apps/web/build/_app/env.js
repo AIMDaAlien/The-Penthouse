@@ -1,1 +1,1 @@
-export const env={"PUBLIC_API_URL":"http://localhost:3000","PUBLIC_SOCKET_URL":"http://localhost:3000"}
+export const env={"PUBLIC_API_URL":"http://localhost:3000","PUBLIC_SOCKET_URL":"http://localhost:3000","PUBLIC_ALTCHA_API_URL":"http://localhost:3000/api/v1/altcha"}

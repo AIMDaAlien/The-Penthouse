@@ -179,7 +179,8 @@ test('[schema] chat preferences request requires notificationsMuted', () => {
 
   const good = ChatPreferencesResponseSchema.safeParse({
     chatId: 'chat-uuid-1234',
-    notificationsMuted: true
+    notificationsMuted: true,
+    updatedAt: new Date().toISOString()
   });
   assert.equal(good.success, true);
 });

@@ -1,7 +1,10 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
+	import { onMount } from 'svelte';
 	import { sessionStore } from '$stores/session.svelte';
+	import { socketStore } from '$stores/socket.svelte';
+	import { presenceStore } from '$stores/presence.svelte';
 
 	let { children } = $props();
 
@@ -13,6 +16,47 @@
 		}
 		if (sessionStore.isAuthenticated && isAuthRoute) {
 			goto('/');
+		}
+	});
+
+	const connectionStatus = $derived(socketStore.state);
+	const statusLabel = $derived.by(() => {
+		switch (connectionStatus) {
+			case 'connected':
+				return 'Connected';
+			case 'connecting':
+				return 'Connecting...';
+			case 'degraded':
+				return 'Reconnecting...';
+			case 'failed':
+				return 'Offline';
+			case 'idle':
+				return 'Idle';
+			default:
+				return 'Unknown';
+		}
+	});
+	const statusDot = $derived.by(() => {
+		switch (connectionStatus) {
+			case 'connected':
+				return '🟢';
+			case 'connecting':
+				return '🟡';
+			case 'degraded':
+				return '🟡';
+			case 'failed':
+				return '🔴';
+			case 'idle':
+				return '⚪';
+			default:
+				return '⚪';
+		}
+	});
+
+	// Initialize presence socket listeners when connected
+	$effect(() => {
+		if (connectionStatus === 'connected') {
+			presenceStore.initializeSocketListeners();
 		}
 	});
 </script>
@@ -52,8 +96,8 @@
 		/* ── Typography ── */
 		/* UI body: Ubuntu (falls back to system sans) */
 		--font-sans:    'Ubuntu', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-		/* Display/logo: Playfair Display (serif, high-contrast) */
-		--font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
+		/* Display/logo: Gelasio (elegant refined serif) */
+		--font-display: 'Gelasio', Georgia, 'Times New Roman', serif;
 		/* Settings/code: JetBrains Mono */
 		--font-mono:    'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
 
@@ -175,4 +219,5 @@
 			transition-duration: 0.01ms !important;
 		}
 	}
+
 </style>

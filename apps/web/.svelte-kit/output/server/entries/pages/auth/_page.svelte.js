@@ -1,4 +1,4 @@
-import { a as attr_class, b as attr, e as escape_html } from "../../../chunks/root.js";
+import { b as attr_class, a as attr, e as escape_html } from "../../../chunks/root.js";
 import "@sveltejs/kit/internal";
 import "../../../chunks/exports.js";
 import "../../../chunks/utils.js";

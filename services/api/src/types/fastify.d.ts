@@ -14,6 +14,7 @@ declare module '@fastify/jwt' {
       username: string;
       displayName: string;
       avatarUrl: string | null;
+      timezone?: string | null;
       role: UserRole;
       status: UserStatus;
       mustChangePassword: boolean;

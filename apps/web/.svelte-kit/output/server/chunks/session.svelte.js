@@ -36,4 +36,7 @@ function createSessionStore() {
     clear
   };
 }
-createSessionStore();
+const sessionStore = createSessionStore();
+export {
+  sessionStore as s
+};

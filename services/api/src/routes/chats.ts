@@ -10,7 +10,9 @@ import {
   SendMessageResponseSchema
 } from '@penthouse/contracts';
 import { pool } from '../db/pool.js';
+import { touchLastSeen } from '../utils/activity.js';
 import { sendChatMessage } from '../utils/chatMessages.js';
+import { formatValidationError } from '../utils/error-responses.js';
 import { toMemberMessage } from '../utils/messages.js';
 import { getUserById } from '../utils/users.js';
 import {
@@ -19,6 +21,8 @@ import {
   listChatSummariesForUser,
   orderDirectChatParticipants
 } from '../utils/chats.js';
+
+const NOT_A_CHAT_MEMBER_ERROR = 'You are not a member of this chat';
 
 function joinUserSocketsToChat(app: FastifyInstance, chatId: string, userIds: string[]): void {
   const io = app.io as
@@ -40,6 +44,32 @@ function joinUserSocketsToChat(app: FastifyInstance, chatId: string, userIds: st
 async function ensureMembership(userId: string, chatId: string): Promise<boolean> {
   const res = await pool.query('SELECT 1 FROM chat_members WHERE user_id = $1 AND chat_id = $2', [userId, chatId]);
   return Boolean(res.rowCount);
+}
+
+type ChatPreferencesRow = {
+  chat_id: string;
+  notifications_muted: boolean;
+  notifications_muted_updated_at: string | Date;
+};
+
+function toChatPreferencesResponse(row: ChatPreferencesRow) {
+  return ChatPreferencesResponseSchema.parse({
+    chatId: row.chat_id,
+    notificationsMuted: Boolean(row.notifications_muted),
+    updatedAt: new Date(row.notifications_muted_updated_at).toISOString()
+  });
+}
+
+async function getChatPreferencesForUser(userId: string, chatId: string): Promise<ChatPreferencesRow | null> {
+  const result = await pool.query(
+    `SELECT chat_id, notifications_muted, notifications_muted_updated_at
+     FROM chat_members
+     WHERE chat_id = $1 AND user_id = $2`,
+    [chatId, userId]
+  );
+
+  if (!result.rowCount) return null;
+  return result.rows[0] as ChatPreferencesRow;
 }
 
 async function markChatRead(chatId: string, userId: string): Promise<{
@@ -119,13 +149,15 @@ async function markChatRead(chatId: string, userId: string): Promise<{
 
 export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/v1/chats', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request) => {
-    return listChatSummariesForUser(pool, request.user.userId);
+    const summaries = await listChatSummariesForUser(pool, request.user.userId);
+    touchLastSeen(pool, request.user.userId, request.log);
+    return summaries;
   });
 
   app.post('/api/v1/chats/dm', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
     const userId = request.user.userId;
     const parsed = CreateDirectChatRequestSchema.safeParse(request.body ?? {});
-    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() });
+    if (!parsed.success) return reply.status(400).send({ error: formatValidationError(parsed.error) });
 
     if (parsed.data.memberId === userId) {
       return reply.status(409).send({ error: 'Cannot message yourself' });
@@ -227,7 +259,7 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
     const { cursor, limit = '30' } = request.query as { cursor?: string; limit?: string };
 
     const isMember = await ensureMembership(userId, chatId);
-    if (!isMember) return reply.status(403).send({ error: 'Forbidden' });
+    if (!isMember) return reply.status(403).send({ error: NOT_A_CHAT_MEMBER_ERROR });
 
     const safeLimit = Math.max(1, Math.min(100, Number.parseInt(limit, 10) || 30));
 
@@ -273,6 +305,7 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
 
     const values = cursor ? [chatId, cursor, safeLimit] : [chatId, safeLimit];
     const rows = await pool.query(query, values);
+    touchLastSeen(pool, request.user.userId, request.log);
 
     return rows.rows.map((m: any) => MessageSchema.parse(toMemberMessage(m)));
   });
@@ -286,10 +319,10 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
       chatId: params.chatId
     });
 
-    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() });
+    if (!parsed.success) return reply.status(400).send({ error: formatValidationError(parsed.error) });
 
     const sendState = await getChatSendState(pool, userId, parsed.data.chatId);
-    if (!sendState.isMember) return reply.status(403).send({ error: 'Forbidden' });
+    if (!sendState.isMember) return reply.status(403).send({ error: NOT_A_CHAT_MEMBER_ERROR });
     if (sendState.isReadOnly) return reply.status(409).send({ error: 'Direct message is unavailable' });
 
     try {
@@ -311,39 +344,49 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  app.patch('/api/v1/chats/:chatId/preferences', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
+  app.get('/api/v1/chats/:chatId/preferences', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
+    const userId = request.user.userId;
+    const { chatId } = request.params as { chatId: string };
+
+    const preferences = await getChatPreferencesForUser(userId, chatId);
+    if (!preferences) {
+      return reply.status(403).send({ error: NOT_A_CHAT_MEMBER_ERROR });
+    }
+
+    return reply.send(toChatPreferencesResponse(preferences));
+  });
+
+  const saveChatPreferences = async (request: any, reply: any) => {
     const userId = request.user.userId;
     const { chatId } = request.params as { chatId: string };
     const parsed = ChatPreferencesRequestSchema.safeParse(request.body ?? {});
-    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() });
+    if (!parsed.success) return reply.status(400).send({ error: formatValidationError(parsed.error) });
 
     const result = await pool.query(
       `UPDATE chat_members
-       SET notifications_muted = $1
+       SET notifications_muted = $1,
+           notifications_muted_updated_at = NOW()
        WHERE chat_id = $2 AND user_id = $3
-       RETURNING chat_id, notifications_muted`,
+       RETURNING chat_id, notifications_muted, notifications_muted_updated_at`,
       [parsed.data.notificationsMuted, chatId, userId]
     );
 
     if (!result.rowCount) {
-      return reply.status(403).send({ error: 'Forbidden' });
+      return reply.status(403).send({ error: NOT_A_CHAT_MEMBER_ERROR });
     }
 
-    const row = result.rows[0] as { chat_id: string; notifications_muted: boolean };
-    return reply.send(
-      ChatPreferencesResponseSchema.parse({
-        chatId: row.chat_id,
-        notificationsMuted: Boolean(row.notifications_muted)
-      })
-    );
-  });
+    return reply.send(toChatPreferencesResponse(result.rows[0] as ChatPreferencesRow));
+  };
+
+  app.post('/api/v1/chats/:chatId/preferences', { preHandler: [app.authenticate, app.requireFullAccess] }, saveChatPreferences);
+  app.patch('/api/v1/chats/:chatId/preferences', { preHandler: [app.authenticate, app.requireFullAccess] }, saveChatPreferences);
 
   app.post('/api/v1/chats/:chatId/read', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
     const userId = request.user.userId;
     const { chatId } = request.params as { chatId: string };
 
     const isMember = await ensureMembership(userId, chatId);
-    if (!isMember) return reply.status(403).send({ error: 'Forbidden' });
+    if (!isMember) return reply.status(403).send({ error: NOT_A_CHAT_MEMBER_ERROR });
 
     try {
       const result = await markChatRead(chatId, userId);
@@ -380,7 +423,7 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
       );
     } catch (error: any) {
       if (error?.message === 'Forbidden') {
-        return reply.status(403).send({ error: 'Forbidden' });
+        return reply.status(403).send({ error: NOT_A_CHAT_MEMBER_ERROR });
       }
       request.log.error({ error, chatId, userId }, 'failed to mark chat read');
       return reply.status(500).send({ error: 'Failed to mark chat read' });

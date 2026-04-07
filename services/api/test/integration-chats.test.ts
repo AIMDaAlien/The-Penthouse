@@ -42,6 +42,7 @@ describe('[integration] chat authorization', { skip: SKIP }, () => {
       headers: { authorization: `Bearer ${bob.accessToken}` }
     });
     assert.equal(bobRead.statusCode, 403, 'non-member must be forbidden from reading');
+    assert.equal(JSON.parse(bobRead.payload).error, 'You are not a member of this chat');
   });
 
   test('non-member cannot send message to a foreign chat', async () => {
@@ -62,6 +63,7 @@ describe('[integration] chat authorization', { skip: SKIP }, () => {
       }
     });
     assert.equal(daveSend.statusCode, 403, 'non-member must be forbidden from sending');
+    assert.equal(JSON.parse(daveSend.payload).error, 'You are not a member of this chat');
   });
 
   test('unauthenticated request is rejected with 401', async () => {
@@ -365,6 +367,7 @@ describe('[integration] direct messages', { skip: SKIP }, () => {
       payload: { memberId: alice.user.id }
     });
     assert.equal(selfRes.statusCode, 409);
+    assert.equal(JSON.parse(selfRes.payload).error, 'Cannot message yourself');
 
     const removedRes = await app.inject({
       method: 'POST',
@@ -373,6 +376,7 @@ describe('[integration] direct messages', { skip: SKIP }, () => {
       payload: { memberId: removed.user.id }
     });
     assert.equal(removedRes.statusCode, 409);
+    assert.equal(JSON.parse(removedRes.payload).error, 'Member account is not active');
 
     const bannedRes = await app.inject({
       method: 'POST',
@@ -381,6 +385,7 @@ describe('[integration] direct messages', { skip: SKIP }, () => {
       payload: { memberId: banned.user.id }
     });
     assert.equal(bannedRes.statusCode, 409);
+    assert.equal(JSON.parse(bannedRes.payload).error, 'Member account is not active');
 
     const malformedRes = await app.inject({
       method: 'POST',
@@ -389,9 +394,10 @@ describe('[integration] direct messages', { skip: SKIP }, () => {
       payload: { memberId: 'not-a-uuid' }
     });
     assert.equal(malformedRes.statusCode, 400);
+    assert.equal(JSON.parse(malformedRes.payload).error, 'Member ID must be a valid ID');
   });
 
-  test('patching DM preferences only updates the caller membership row', async () => {
+  test('posting DM preferences updates only the caller membership row and returns a timestamp', async () => {
     const { registerUser, authHeaders, pool } = await import('./helpers.js');
     const alice = await registerUser(app, 'dm_pref_alice');
     const bob = await registerUser(app, 'dm_pref_bob');
@@ -405,19 +411,19 @@ describe('[integration] direct messages', { skip: SKIP }, () => {
     const chatId = JSON.parse(created.payload).id as string;
 
     const patched = await app.inject({
-      method: 'PATCH',
+      method: 'POST',
       url: `/api/v1/chats/${chatId}/preferences`,
       headers: authHeaders(alice.accessToken),
       payload: { notificationsMuted: true }
     });
     assert.equal(patched.statusCode, 200);
-    assert.deepEqual(JSON.parse(patched.payload), {
-      chatId,
-      notificationsMuted: true
-    });
+    const patchedBody = JSON.parse(patched.payload);
+    assert.equal(patchedBody.chatId, chatId);
+    assert.equal(patchedBody.notificationsMuted, true);
+    assert.ok(typeof patchedBody.updatedAt === 'string' && patchedBody.updatedAt.length > 0);
 
     const rows = await pool.query(
-      `SELECT user_id, notifications_muted
+      `SELECT user_id, notifications_muted, notifications_muted_updated_at
        FROM chat_members
        WHERE chat_id = $1
        ORDER BY user_id`,
@@ -427,6 +433,8 @@ describe('[integration] direct messages', { skip: SKIP }, () => {
     const membershipByUser = Object.fromEntries(rows.rows.map((row) => [row.user_id, row.notifications_muted]));
     assert.equal(membershipByUser[alice.user.id], true);
     assert.equal(membershipByUser[bob.user.id], false);
+    const aliceMembership = rows.rows.find((row) => row.user_id === alice.user.id);
+    assert.ok(aliceMembership?.notifications_muted_updated_at);
 
     const [aliceChats, bobChats] = await Promise.all([
       app.inject({ method: 'GET', url: '/api/v1/chats', headers: authHeaders(alice.accessToken) }),
@@ -436,6 +444,36 @@ describe('[integration] direct messages', { skip: SKIP }, () => {
     const bobDm = JSON.parse(bobChats.payload).find((chat: any) => chat.id === chatId);
     assert.equal(aliceDm.notificationsMuted, true);
     assert.equal(bobDm.notificationsMuted, false);
+  });
+
+  test('getting DM preferences returns the current mute state for that member', async () => {
+    const { registerUser, authHeaders } = await import('./helpers.js');
+    const alice = await registerUser(app, 'dm_pref_get_alice');
+    const bob = await registerUser(app, 'dm_pref_get_bob');
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/v1/chats/dm',
+      headers: authHeaders(alice.accessToken),
+      payload: { memberId: bob.user.id }
+    });
+    const chatId = JSON.parse(created.payload).id as string;
+
+    const updated = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/chats/${chatId}/preferences`,
+      headers: authHeaders(bob.accessToken),
+      payload: { notificationsMuted: true }
+    });
+    assert.equal(updated.statusCode, 200);
+
+    const fetched = await app.inject({
+      method: 'GET',
+      url: `/api/v1/chats/${chatId}/preferences`,
+      headers: authHeaders(bob.accessToken)
+    });
+    assert.equal(fetched.statusCode, 200);
+    assert.deepEqual(JSON.parse(fetched.payload), JSON.parse(updated.payload));
   });
 
   test('muted DMs still update unread counts for the muted recipient', async () => {
@@ -825,12 +863,16 @@ describe('[integration] message idempotency', { skip: SKIP }, () => {
     const { pool } = await import('./helpers.js');
 
     const result = await pool.query(
-      `SELECT indexname, indexdef
-       FROM pg_indexes
-       WHERE schemaname = 'public'
-         AND tablename = 'messages'
-         AND indexdef ILIKE '%(chat_id, created_at DESC)%'
-         AND indexdef ILIKE '%WHERE hidden_by_moderation = false%'`
+      `SELECT pg_get_indexdef(i.indexrelid) AS indexdef,
+              pg_get_expr(i.indpred, i.indrelid) AS predicate
+       FROM pg_index i
+       JOIN pg_class idx ON idx.oid = i.indexrelid
+       JOIN pg_class tbl ON tbl.oid = i.indrelid
+       JOIN pg_namespace ns ON ns.oid = tbl.relnamespace
+       WHERE ns.nspname = 'public'
+         AND tbl.relname = 'messages'
+         AND pg_get_indexdef(i.indexrelid) ILIKE '%(chat_id, created_at DESC)%'
+         AND COALESCE(pg_get_expr(i.indpred, i.indrelid), '') ILIKE '%hidden_by_moderation = false%'`
     );
 
     assert.ok(result.rowCount >= 1, 'expected a partial messages(chat_id, created_at DESC) index for visible messages');

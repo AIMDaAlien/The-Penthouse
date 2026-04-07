@@ -30,10 +30,13 @@ import {
 import { createAuthRateLimiter, replyIfRateLimited } from '../utils/authRateLimit.js';
 import { createAuthResponse, getSessionMetadataFromRequest, issueRecoveryCode, mergeSessionMetadata } from '../utils/sessions.js';
 import { getRegistrationMode } from '../utils/settings.js';
+import { formatValidationError } from '../utils/error-responses.js';
+import { createAltchaChallenge, verifyAltchaPayloadOnce } from '../utils/altcha.js';
 
 const SHARED_GENERAL_CHAT_ID = '00000000-0000-0000-0000-000000000001';
 const SHARED_GENERAL_SYSTEM_KEY = 'general';
 const REFRESH_ROTATION_GRACE_MS = 5_000;
+const INVALID_REFRESH_TOKEN_ERROR = 'Refresh token is invalid or expired. Please log in again.';
 const AUTH_RATE_LIMITS = {
   register: {
     windowMs: 15 * 60_000,
@@ -103,10 +106,27 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   const loginRateLimiter = createAuthRateLimiter(AUTH_RATE_LIMITS.login);
   const passwordResetRateLimiter = createAuthRateLimiter(AUTH_RATE_LIMITS.passwordReset);
 
+  const sendAltchaChallenge = async (reply: any) => {
+    const challenge = await createAltchaChallenge();
+    return reply
+      .header('Cache-Control', 'no-store')
+      .send(challenge);
+  };
+
+  app.get('/api/v1/altcha', async (_request, reply) => {
+    return sendAltchaChallenge(reply);
+  });
+
+  app.post('/api/v1/altcha', async (_request, reply) => {
+    return sendAltchaChallenge(reply);
+  });
+
   app.post('/api/v1/auth/register', async (request, reply) => {
     const parsed = RegisterRequestSchema.safeParse(request.body);
-    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() });
+    if (!parsed.success) return reply.status(400).send({ error: formatValidationError(parsed.error) });
+    const isE2E = parsed.data.captchaToken === 'e2e-bypass' && env.NODE_ENV !== 'production';
     if (
+      !isE2E &&
       replyIfRateLimited(
         reply,
         registerRateLimiter.consume(request.ip),
@@ -116,7 +136,16 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       return;
     }
 
-    const { username, password, inviteCode, testNoticeVersion } = parsed.data;
+    const { username, password, inviteCode, captchaToken, testNoticeVersion } = parsed.data;
+    const captchaVerified = 
+      (captchaToken === 'e2e-bypass' && env.NODE_ENV !== 'production') 
+        ? true 
+        : await verifyAltchaPayloadOnce(captchaToken);
+    
+    if (!captchaVerified) {
+      return reply.status(400).send({ error: 'Captcha verification failed. Please try again.' });
+    }
+
     if (testNoticeVersion !== env.TEST_ACCOUNT_NOTICE_VERSION) {
       request.log.info(
         {
@@ -208,7 +237,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     } catch (error: any) {
       await client.query('ROLLBACK');
       if (error?.code === '23505' && error?.constraint === 'users_username_key') {
-        return reply.status(409).send({ error: 'Username already exists' });
+        return reply.status(409).send({ error: 'Username is already taken' });
       }
       request.log.error(error);
       return reply.status(500).send({ error: 'Failed to register' });
@@ -219,7 +248,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
 
   app.post('/api/v1/auth/login', async (request, reply) => {
     const parsed = LoginRequestSchema.safeParse(request.body);
-    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() });
+    if (!parsed.success) return reply.status(400).send({ error: formatValidationError(parsed.error) });
     if (
       replyIfRateLimited(reply, loginRateLimiter.consume(request.ip), AUTH_RATE_LIMITS.login.error)
     ) {
@@ -229,10 +258,10 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     const { username, password } = parsed.data;
     const user = await getUserByUsername(pool, username);
 
-    if (!user || !user.password_hash) return reply.status(401).send({ error: 'Invalid credentials' });
+    if (!user || !user.password_hash) return reply.status(401).send({ error: 'Invalid username or password' });
 
     const ok = await verifyPassword(password, user.password_hash);
-    if (!ok) return reply.status(401).send({ error: 'Invalid credentials' });
+    if (!ok) return reply.status(401).send({ error: 'Invalid username or password' });
 
     const inactive = blockInactiveUser(reply, user);
     if (inactive) return inactive;
@@ -251,7 +280,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
 
   app.post('/api/v1/auth/password-reset', async (request, reply) => {
     const parsed = PasswordResetRequestSchema.safeParse(request.body);
-    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() });
+    if (!parsed.success) return reply.status(400).send({ error: formatValidationError(parsed.error) });
     if (
       replyIfRateLimited(
         reply,
@@ -301,7 +330,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
 
   app.post('/api/v1/auth/refresh', async (request, reply) => {
     const parsed = RefreshRequestSchema.safeParse(request.body);
-    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() });
+    if (!parsed.success) return reply.status(400).send({ error: formatValidationError(parsed.error) });
 
     const oldHash = hashToken(parsed.data.refreshToken);
     const client = await pool.connect();
@@ -337,7 +366,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
 
       if (!tokenRes.rowCount) {
         await client.query('ROLLBACK');
-        return reply.status(401).send({ error: 'Invalid or expired refresh token' });
+        return reply.status(401).send({ error: INVALID_REFRESH_TOKEN_ERROR });
       }
 
       const tokenRow = tokenRes.rows[0] as {
@@ -371,7 +400,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         const cachedRefreshToken = getCachedRotatedRefreshToken(oldHash);
         if (!cachedRefreshToken) {
           await client.query('ROLLBACK');
-          return reply.status(401).send({ error: 'Invalid or expired refresh token' });
+          return reply.status(401).send({ error: INVALID_REFRESH_TOKEN_ERROR });
         }
 
         newRefreshToken = cachedRefreshToken;
@@ -442,7 +471,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
 
   app.post('/api/v1/auth/logout', async (request, reply) => {
     const parsed = RefreshRequestSchema.safeParse(request.body);
-    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() });
+    if (!parsed.success) return reply.status(400).send({ error: formatValidationError(parsed.error) });
 
     await pool.query(
       `DELETE FROM refresh_tokens

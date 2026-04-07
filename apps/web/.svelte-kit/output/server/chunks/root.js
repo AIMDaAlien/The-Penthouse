@@ -2716,6 +2716,12 @@ function attr_class(value, hash, directives) {
   var result = to_class(value, hash, directives);
   return result ? ` class="${escape_html(result, true)}"` : "";
 }
+function ensure_array_like(array_like_or_iterator) {
+  if (array_like_or_iterator) {
+    return array_like_or_iterator.length !== void 0 ? array_like_or_iterator : Array.from(array_like_or_iterator);
+  }
+  return [];
+}
 function once(get_value) {
   let value = (
     /** @type {V} */
@@ -3966,12 +3972,15 @@ function Root($$renderer, $$props) {
 }
 const root = asClassComponent(Root);
 export {
-  attr_class as a,
-  attr as b,
+  attr as a,
+  attr_class as b,
+  ensure_array_like as c,
+  derived as d,
   escape_html as e,
+  safe_not_equal as f,
   getContext as g,
   head as h,
   noop as n,
   root as r,
-  safe_not_equal as s
+  ssr_context as s
 };

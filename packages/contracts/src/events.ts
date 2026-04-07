@@ -21,6 +21,11 @@ export const ClientTypingStopEventSchema = z.object({
   chatId: z.string()
 });
 
+export const ClientPresenceUpdateEventSchema = z.object({
+  type: z.literal('presence.update'),
+  online: z.boolean()
+});
+
 export const ClientMessageSendEventSchema = z.object({
   type: z.literal('message.send'),
   chatId: z.string(),
@@ -78,19 +83,12 @@ export const ServerTypingUpdateEventSchema = z.object({
 });
 
 export const ServerPresenceUpdateEventSchema = z.object({
-  type: z.literal('presence.update'),
-  payload: z.object({
-    userId: z.string(),
-    status: z.enum(['online', 'offline'])
-  })
+  userId: z.string(),
+  online: z.boolean(),
+  timestamp: z.string()
 });
 
-export const ServerPresenceSyncEventSchema = z.object({
-  type: z.literal('presence.sync'),
-  payload: z.object({
-    onlineUserIds: z.array(z.string())
-  })
-});
+export const ServerPresenceSyncEventSchema = z.record(z.string(), z.boolean());
 
 export const ServerChatSyncRequiredEventSchema = z.object({
   type: z.literal('chat.sync_required'),
@@ -100,4 +98,7 @@ export const ServerChatSyncRequiredEventSchema = z.object({
   })
 });
 
+export type ClientPresenceUpdateEvent = z.infer<typeof ClientPresenceUpdateEventSchema>;
 export type ClientMessageSendEvent = z.infer<typeof ClientMessageSendEventSchema>;
+export type ServerPresenceUpdateEvent = z.infer<typeof ServerPresenceUpdateEventSchema>;
+export type ServerPresenceSyncEvent = z.infer<typeof ServerPresenceSyncEventSchema>;
