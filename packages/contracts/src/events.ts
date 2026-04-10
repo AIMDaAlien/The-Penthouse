@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { MessageMetadataSchema, MessageSchema, MessageTypeSchema, ModerationActionSchema } from './api.js';
+import { MessageMetadataSchema, MessageSchema, MessageTypeSchema, ModerationActionSchema, PollDataSchema } from './api.js';
 
 export const ClientJoinChatEventSchema = z.object({
   type: z.literal('chat.join'),
@@ -32,6 +32,7 @@ export const ClientMessageSendEventSchema = z.object({
   content: z.string().min(1).max(4000),
   messageType: MessageTypeSchema.optional().default('text'),
   metadata: MessageMetadataSchema.nullable().optional(),
+  replyToMessageId: z.string().uuid().optional(),
   clientMessageId: z.string().min(8).max(128)
 });
 
@@ -71,6 +72,54 @@ export const ServerMessageReadEventSchema = z.object({
   })
 });
 
+export const ServerPollVotedEventSchema = z.object({
+  type: z.literal('poll.voted'),
+  payload: z.object({
+    chatId: z.string(),
+    pollId: z.string().uuid(),
+    poll: PollDataSchema
+  })
+});
+
+export const ServerReactionAddEventSchema = z.object({
+  type: z.literal('reaction.add'),
+  payload: z.object({
+    chatId: z.string(),
+    messageId: z.string(),
+    userId: z.string(),
+    emoji: z.string(),
+    createdAt: z.string()
+  })
+});
+
+export const ServerReactionRemoveEventSchema = z.object({
+  type: z.literal('reaction.remove'),
+  payload: z.object({
+    chatId: z.string(),
+    messageId: z.string(),
+    userId: z.string(),
+    emoji: z.string()
+  })
+});
+
+export const ServerMessagePinnedEventSchema = z.object({
+  type: z.literal('message.pinned'),
+  payload: z.object({
+    chatId: z.string(),
+    messageId: z.string(),
+    pinnedByUserId: z.string(),
+    pinnedAt: z.string()
+  })
+});
+
+export const ServerMessageUnpinnedEventSchema = z.object({
+  type: z.literal('message.unpinned'),
+  payload: z.object({
+    chatId: z.string(),
+    messageId: z.string()
+  })
+});
+
 export const ServerTypingUpdateEventSchema = z.object({
   type: z.literal('typing.update'),
   payload: z.object({
@@ -102,3 +151,8 @@ export type ClientPresenceUpdateEvent = z.infer<typeof ClientPresenceUpdateEvent
 export type ClientMessageSendEvent = z.infer<typeof ClientMessageSendEventSchema>;
 export type ServerPresenceUpdateEvent = z.infer<typeof ServerPresenceUpdateEventSchema>;
 export type ServerPresenceSyncEvent = z.infer<typeof ServerPresenceSyncEventSchema>;
+export type ServerPollVotedEvent = z.infer<typeof ServerPollVotedEventSchema>;
+export type ServerReactionAddEvent = z.infer<typeof ServerReactionAddEventSchema>;
+export type ServerReactionRemoveEvent = z.infer<typeof ServerReactionRemoveEventSchema>;
+export type ServerMessagePinnedEvent = z.infer<typeof ServerMessagePinnedEventSchema>;
+export type ServerMessageUnpinnedEvent = z.infer<typeof ServerMessageUnpinnedEventSchema>;
