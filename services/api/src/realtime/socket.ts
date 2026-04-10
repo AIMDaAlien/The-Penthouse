@@ -534,6 +534,7 @@ export function initRealtime(app: FastifyInstance): Server {
           clientMessageId: event.clientMessageId,
           messageType: event.messageType ?? 'text',
           metadata: event.metadata ?? null,
+          replyToMessageId: event.replyToMessageId,
           beforeBroadcast: () => {
             clearTypingState(event.chatId, userId);
           }

@@ -1,6 +1,5 @@
 import type { FastifyInstance } from 'fastify';
 import { access } from 'node:fs/promises';
-import { randomUUID } from 'node:crypto';
 import {
   AdminModerateMessageRequestSchema,
   AdminInviteResponseSchema,
@@ -11,8 +10,7 @@ import {
   AdminMemberSummarySchema,
   AdminMessageSchema,
   AdminOperatorSummarySchema,
-  AdminTempPasswordResponseSchema,
-  type ModerationAction
+  AdminTempPasswordResponseSchema
 } from '@penthouse/contracts';
 import { pool } from '../db/pool.js';
 import { env } from '../config/env.js';
@@ -23,7 +21,7 @@ import {
   listMembers,
   mapAdminMemberSummary
 } from '../utils/users.js';
-import { toAdminMessage, toMemberMessage } from '../utils/messages.js';
+import { toAdminMessage } from '../utils/messages.js';
 import { listAdminChatSummaries } from '../utils/chats.js';
 import { formatValidationError } from '../utils/error-responses.js';
 import {
@@ -33,6 +31,12 @@ import {
   getPushRuntimeDiagnostics,
   getUploadDiagnostics
 } from '../utils/operatorDiagnostics.js';
+import { loadGroupedReactionsForMessageIds } from '../utils/messageHydration.js';
+import {
+  loadAdminMessageById,
+  loadMemberMessageById,
+  setMessageModerationState
+} from '../utils/messageModeration.js';
 
 function ensureAdmin(request: any, reply: any) {
   if (request.user.role !== 'admin') {
@@ -112,104 +116,6 @@ function getRealtimeDiagnostics(app: FastifyInstance) {
     connectedUsers: connectedUsers.size,
     activeChatRooms
   };
-}
-
-async function loadAdminMessageById(messageId: string) {
-  const result = await pool.query(
-    `SELECT m.id, m.chat_id, m.sender_id, u.username AS sender_username, u.display_name AS sender_display_name,
-            u.status AS sender_status, media.storage_key AS avatar_storage_key, m.content, m.message_type, m.metadata,
-            m.created_at, m.client_message_id, m.hidden_by_moderation, m.moderation_action, m.moderation_reason,
-            m.moderation_updated_at, m.moderation_actor_user_id, actor.username AS moderation_actor_username,
-            actor.display_name AS moderation_actor_display_name
-     FROM messages m
-     JOIN users u ON u.id = m.sender_id
-     LEFT JOIN media_uploads media ON media.id = u.avatar_media_id
-     LEFT JOIN users actor ON actor.id = m.moderation_actor_user_id
-     WHERE m.id = $1`,
-    [messageId]
-  );
-
-  return result.rows[0] ? toAdminMessage(result.rows[0] as any) : null;
-}
-
-async function loadMemberMessageById(messageId: string) {
-  const result = await pool.query(
-    `SELECT m.id, m.chat_id, m.sender_id, u.username AS sender_username, u.display_name AS sender_display_name,
-            u.status AS sender_status, media.storage_key AS avatar_storage_key, m.content, m.message_type, m.metadata,
-            m.created_at, m.client_message_id, m.hidden_by_moderation,
-            seen.seen_at
-     FROM messages m
-     JOIN users u ON u.id = m.sender_id
-     LEFT JOIN media_uploads media ON media.id = u.avatar_media_id
-     LEFT JOIN LATERAL (
-       SELECT MAX(cm_seen.last_read_at) AS seen_at
-       FROM chat_members cm_seen
-       JOIN users u_seen ON u_seen.id = cm_seen.user_id
-       WHERE cm_seen.chat_id = m.chat_id
-         AND cm_seen.user_id <> m.sender_id
-         AND u_seen.status = 'active'
-     ) seen ON TRUE
-     WHERE m.id = $1`,
-    [messageId]
-  );
-
-  return result.rows[0] ? toMemberMessage(result.rows[0] as any) : null;
-}
-
-async function setMessageModerationState(messageId: string, actorUserId: string, action: ModerationAction, reason: string) {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-
-    const existing = await client.query(
-      `SELECT id, chat_id, hidden_by_moderation
-       FROM messages
-       WHERE id = $1
-       FOR UPDATE`,
-      [messageId]
-    );
-
-    const row = existing.rows[0] as { id: string; chat_id: string; hidden_by_moderation: boolean } | undefined;
-    if (!row) {
-      await client.query('ROLLBACK');
-      return { error: 'Message not found' as const };
-    }
-
-    if (action === 'hide' && row.hidden_by_moderation) {
-      await client.query('ROLLBACK');
-      return { error: 'Message is already hidden' as const };
-    }
-
-    if (action === 'unhide' && !row.hidden_by_moderation) {
-      await client.query('ROLLBACK');
-      return { error: 'Message is already visible' as const };
-    }
-
-    await client.query(
-      `UPDATE messages
-       SET hidden_by_moderation = $1,
-           moderation_action = $2,
-           moderation_reason = $3,
-           moderation_actor_user_id = $4,
-           moderation_updated_at = NOW()
-       WHERE id = $5`,
-      [action === 'hide', action, reason, actorUserId, messageId]
-    );
-
-    await client.query(
-      `INSERT INTO message_moderation_events(id, message_id, action, actor_user_id, reason)
-       VALUES($1, $2, $3, $4, $5)`,
-      [randomUUID(), messageId, action, actorUserId, reason]
-    );
-
-    await client.query('COMMIT');
-    return { chatId: row.chat_id };
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
 }
 
 function forbidSelfOrAdminAction(request: any, reply: any, target: Awaited<ReturnType<typeof loadTargetMember>>) {
@@ -569,7 +475,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     const query = cursor
       ? `SELECT m.id, m.chat_id, m.sender_id, u.username AS sender_username, u.display_name AS sender_display_name,
                 u.status AS sender_status, media.storage_key AS avatar_storage_key,
-                m.content, m.message_type, m.metadata, m.created_at, m.client_message_id,
+                m.content, m.message_type, m.metadata, m.reply_to_snapshot, m.created_at, m.client_message_id,
                 m.hidden_by_moderation, m.moderation_action, m.moderation_reason, m.moderation_updated_at,
                 m.moderation_actor_user_id, actor.username AS moderation_actor_username,
                 actor.display_name AS moderation_actor_display_name
@@ -582,7 +488,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
          LIMIT $3`
       : `SELECT m.id, m.chat_id, m.sender_id, u.username AS sender_username, u.display_name AS sender_display_name,
                 u.status AS sender_status, media.storage_key AS avatar_storage_key,
-                m.content, m.message_type, m.metadata, m.created_at, m.client_message_id,
+                m.content, m.message_type, m.metadata, m.reply_to_snapshot, m.created_at, m.client_message_id,
                 m.hidden_by_moderation, m.moderation_action, m.moderation_reason, m.moderation_updated_at,
                 m.moderation_actor_user_id, actor.username AS moderation_actor_username,
                 actor.display_name AS moderation_actor_display_name
@@ -596,8 +502,15 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
 
     const values = cursor ? [chatId, cursor, safeLimit] : [chatId, safeLimit];
     const rows = await pool.query(query, values);
+    const messages = rows.rows.map((row: any) => AdminMessageSchema.parse(toAdminMessage(row)));
+    const groupedReactions = await loadGroupedReactionsForMessageIds(pool, messages.map((message) => message.id));
 
-    return rows.rows.map((row: any) => AdminMessageSchema.parse(toAdminMessage(row)));
+    return messages.map((message) =>
+      AdminMessageSchema.parse({
+        ...message,
+        ...(groupedReactions.has(message.id) ? { reactions: groupedReactions.get(message.id) } : {})
+      })
+    );
   });
 
   app.post('/api/v1/admin/messages/:messageId/hide', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {

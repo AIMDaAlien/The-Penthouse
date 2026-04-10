@@ -478,6 +478,70 @@ describe('[integration] realtime observability', { skip: SKIP }, () => {
     await closeSocket(receiverSocket);
   });
 
+  test('chat read marks broadcast message.read to connected chat members', async () => {
+    const { authHeaders, cleanup, registerUser } = await import('./helpers.js');
+    await cleanup();
+
+    const sender = await registerUser(app, 'socket_read_sender');
+    const reader = await registerUser(app, 'socket_read_reader');
+
+    const senderSocket = createClient(baseUrl, {
+      path: '/socket.io/',
+      transports: ['polling'],
+      auth: { token: sender.accessToken },
+      reconnection: false,
+      forceNew: true
+    });
+    await waitForSocketConnect(senderSocket);
+
+    const readerSocket = createClient(baseUrl, {
+      path: '/socket.io/',
+      transports: ['polling'],
+      auth: { token: reader.accessToken },
+      reconnection: false,
+      forceNew: true
+    });
+    await waitForSocketConnect(readerSocket);
+
+    const send = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${GENERAL_CHAT_ID}/messages`,
+      headers: authHeaders(sender.accessToken),
+      payload: {
+        content: 'socket read receipt broadcast',
+        clientMessageId: 'socket-read-receipt-001'
+      }
+    });
+    assert.equal(send.statusCode, 200);
+    const sentMessageId = JSON.parse(send.payload).message.id as string;
+
+    const readEvent = waitForSocketEvent(senderSocket, 'message.read', (event: any) => (
+      event?.payload?.chatId === GENERAL_CHAT_ID &&
+      event?.payload?.readerUserId === reader.user.id &&
+      event?.payload?.seenThroughMessageId === sentMessageId &&
+      typeof event?.payload?.seenAt === 'string'
+    ), 1_500);
+
+    const markRead = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${GENERAL_CHAT_ID}/read`,
+      headers: authHeaders(reader.accessToken),
+      payload: {
+        throughMessageId: sentMessageId
+      }
+    });
+    assert.equal(markRead.statusCode, 200);
+
+    const payload = await readEvent;
+    assert.equal(payload.type, 'message.read');
+    assert.equal(payload.payload.chatId, GENERAL_CHAT_ID);
+    assert.equal(payload.payload.readerUserId, reader.user.id);
+    assert.equal(payload.payload.seenThroughMessageId, sentMessageId);
+
+    await closeSocket(senderSocket);
+    await closeSocket(readerSocket);
+  });
+
   test('reconnected sockets still receive message.new events from their member chats without rejoining manually', async () => {
     const { authHeaders, cleanup, registerUser } = await import('./helpers.js');
     await cleanup();
@@ -531,5 +595,219 @@ describe('[integration] realtime observability', { skip: SKIP }, () => {
 
     await messageNew;
     await closeSocket(reconnectedReceiverSocket);
+  });
+
+  test('poll votes broadcast poll.voted to connected chat members', async () => {
+    const { authHeaders, cleanup, registerUser } = await import('./helpers.js');
+    await cleanup();
+
+    const creator = await registerUser(app, 'socket_poll_creator');
+    const voter = await registerUser(app, 'socket_poll_voter');
+
+    const creatorSocket = createClient(baseUrl, {
+      path: '/socket.io/',
+      transports: ['polling'],
+      auth: { token: creator.accessToken },
+      reconnection: false,
+      forceNew: true
+    });
+    await waitForSocketConnect(creatorSocket);
+
+    const voterSocket = createClient(baseUrl, {
+      path: '/socket.io/',
+      transports: ['polling'],
+      auth: { token: voter.accessToken },
+      reconnection: false,
+      forceNew: true
+    });
+    await waitForSocketConnect(voterSocket);
+
+    const created = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${GENERAL_CHAT_ID}/polls`,
+      headers: authHeaders(creator.accessToken),
+      payload: {
+        question: 'Best rooftop snack?',
+        options: ['Fries', 'Wings']
+      }
+    });
+    assert.equal(created.statusCode, 200);
+    const pollId = JSON.parse(created.payload).message.metadata.id as string;
+
+    const voteEvent = waitForSocketEvent(creatorSocket, 'poll.voted', (event: any) => (
+      event?.payload?.chatId === GENERAL_CHAT_ID &&
+      event?.payload?.pollId === pollId &&
+      Array.isArray(event?.payload?.poll?.options?.[1]?.voterIds) &&
+      event.payload.poll.options[1].voterIds.includes(voter.user.id)
+    ), 1_500);
+
+    const voted = await app.inject({
+      method: 'POST',
+      url: `/api/v1/polls/${pollId}/vote`,
+      headers: authHeaders(voter.accessToken),
+      payload: {
+        optionIndex: 1
+      }
+    });
+    assert.equal(voted.statusCode, 200);
+
+    const payload = await voteEvent;
+    assert.equal(payload.type, 'poll.voted');
+    assert.equal(payload.payload.chatId, GENERAL_CHAT_ID);
+    assert.equal(payload.payload.pollId, pollId);
+    assert.ok(payload.payload.poll.options[1].voterIds.includes(voter.user.id));
+
+    await closeSocket(creatorSocket);
+    await closeSocket(voterSocket);
+  });
+
+  test('message reactions broadcast reaction.add and reaction.remove to connected chat members', async () => {
+    const { authHeaders, cleanup, registerUser } = await import('./helpers.js');
+    await cleanup();
+
+    const sender = await registerUser(app, 'socket_reaction_sender');
+    const reactor = await registerUser(app, 'socket_reaction_user');
+
+    const senderSocket = createClient(baseUrl, {
+      path: '/socket.io/',
+      transports: ['polling'],
+      auth: { token: sender.accessToken },
+      reconnection: false,
+      forceNew: true
+    });
+    await waitForSocketConnect(senderSocket);
+
+    const reactorSocket = createClient(baseUrl, {
+      path: '/socket.io/',
+      transports: ['polling'],
+      auth: { token: reactor.accessToken },
+      reconnection: false,
+      forceNew: true
+    });
+    await waitForSocketConnect(reactorSocket);
+
+    const sent = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${GENERAL_CHAT_ID}/messages`,
+      headers: authHeaders(sender.accessToken),
+      payload: {
+        content: 'socket reaction target',
+        clientMessageId: 'socket-reaction-target-001'
+      }
+    });
+    assert.equal(sent.statusCode, 200);
+    const messageId = JSON.parse(sent.payload).message.id as string;
+
+    const addEventPromise = waitForSocketEvent(senderSocket, 'reaction.add', (event: any) => (
+      event?.payload?.chatId === GENERAL_CHAT_ID &&
+      event?.payload?.messageId === messageId &&
+      event?.payload?.userId === reactor.user.id &&
+      event?.payload?.emoji === '🔥'
+    ), 1_500);
+
+    const addRes = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${GENERAL_CHAT_ID}/messages/${messageId}/reactions`,
+      headers: authHeaders(reactor.accessToken),
+      payload: {
+        emoji: '🔥'
+      }
+    });
+    assert.equal(addRes.statusCode, 200);
+
+    const addEvent = await addEventPromise;
+    assert.equal(addEvent.type, 'reaction.add');
+
+    const removeEventPromise = waitForSocketEvent(senderSocket, 'reaction.remove', (event: any) => (
+      event?.payload?.chatId === GENERAL_CHAT_ID &&
+      event?.payload?.messageId === messageId &&
+      event?.payload?.userId === reactor.user.id &&
+      event?.payload?.emoji === '🔥'
+    ), 1_500);
+
+    const removeRes = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/chats/${GENERAL_CHAT_ID}/messages/${messageId}/reactions/%F0%9F%94%A5`,
+      headers: authHeaders(reactor.accessToken)
+    });
+    assert.equal(removeRes.statusCode, 204);
+
+    const removeEvent = await removeEventPromise;
+    assert.equal(removeEvent.type, 'reaction.remove');
+
+    await closeSocket(senderSocket);
+    await closeSocket(reactorSocket);
+  });
+
+  test('pin lifecycle broadcasts message.pinned and message.unpinned to connected chat members', async () => {
+    const { authHeaders, cleanup, registerUser } = await import('./helpers.js');
+    await cleanup();
+
+    const sender = await registerUser(app, 'socket_pin_sender');
+    const pinner = await registerUser(app, 'socket_pin_user');
+
+    const senderSocket = createClient(baseUrl, {
+      path: '/socket.io/',
+      transports: ['polling'],
+      auth: { token: sender.accessToken },
+      reconnection: false,
+      forceNew: true
+    });
+    await waitForSocketConnect(senderSocket);
+
+    const pinnerSocket = createClient(baseUrl, {
+      path: '/socket.io/',
+      transports: ['polling'],
+      auth: { token: pinner.accessToken },
+      reconnection: false,
+      forceNew: true
+    });
+    await waitForSocketConnect(pinnerSocket);
+
+    const sent = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${GENERAL_CHAT_ID}/messages`,
+      headers: authHeaders(sender.accessToken),
+      payload: {
+        content: 'socket pin target',
+        clientMessageId: 'socket-pin-target-001'
+      }
+    });
+    assert.equal(sent.statusCode, 200);
+    const messageId = JSON.parse(sent.payload).message.id as string;
+
+    const pinEventPromise = waitForSocketEvent(senderSocket, 'message.pinned', (event: any) => (
+      event?.payload?.chatId === GENERAL_CHAT_ID &&
+      event?.payload?.messageId === messageId &&
+      event?.payload?.pinnedByUserId === pinner.user.id
+    ), 1_500);
+
+    const pinRes = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${GENERAL_CHAT_ID}/messages/${messageId}/pin`,
+      headers: authHeaders(pinner.accessToken)
+    });
+    assert.equal(pinRes.statusCode, 200);
+
+    const pinEvent = await pinEventPromise;
+    assert.equal(pinEvent.type, 'message.pinned');
+
+    const unpinEventPromise = waitForSocketEvent(senderSocket, 'message.unpinned', (event: any) => (
+      event?.payload?.chatId === GENERAL_CHAT_ID &&
+      event?.payload?.messageId === messageId
+    ), 1_500);
+
+    const unpinRes = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/chats/${GENERAL_CHAT_ID}/messages/${messageId}/pin`,
+      headers: authHeaders(pinner.accessToken)
+    });
+    assert.equal(unpinRes.statusCode, 204);
+
+    const unpinEvent = await unpinEventPromise;
+    assert.equal(unpinEvent.type, 'message.unpinned');
+
+    await closeSocket(senderSocket);
+    await closeSocket(pinnerSocket);
   });
 });

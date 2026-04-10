@@ -24,7 +24,11 @@ const migrations = [
   '015_messages_visible_chat_created_index.sql',
   '016_user_timezone.sql',
   '017_user_last_seen.sql',
-  '018_chat_member_preference_timestamps.sql'
+  '018_chat_member_preference_timestamps.sql',
+  '019_chat_member_last_read_message.sql',
+  '020_polls.sql',
+  '021_poll_message_type.sql',
+  '022_message_reactions_replies_pins.sql'
 ];
 
 export async function runMigrations(): Promise<void> {

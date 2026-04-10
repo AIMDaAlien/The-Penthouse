@@ -263,6 +263,258 @@ describe('[integration] shared General channel', { skip: SKIP }, () => {
   });
 });
 
+describe('[integration] chat read receipts', { skip: SKIP }, () => {
+  let app: any;
+  let emitted: Array<{ room: string | null; event: string; data: any }>;
+
+  before(async () => {
+    process.env.JWT_SECRET ??= 'integration-test-jwt-secret-long-enough';
+    const helpers = await import('./helpers.js');
+    await helpers.migrate();
+    await helpers.cleanup();
+    const result = await helpers.buildTestApp();
+    app = result.app;
+    emitted = result.emitted;
+  });
+
+  after(async () => {
+    await app?.close();
+    const helpers = await import('./helpers.js');
+    await helpers.cleanup();
+  });
+
+  test('mark read emits message.read and hydrates sender read receipts', async () => {
+    const { authHeaders, registerUser } = await import('./helpers.js');
+    const sender = await registerUser(app, 'receipt_sender');
+    const reader = await registerUser(app, 'receipt_reader');
+
+    const senderChats = await app.inject({
+      method: 'GET',
+      url: '/api/v1/chats',
+      headers: authHeaders(sender.accessToken)
+    });
+    const generalChatId = JSON.parse(senderChats.payload).find((chat: any) => chat.name === 'General').id as string;
+
+    const send = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${generalChatId}/messages`,
+      headers: authHeaders(sender.accessToken),
+      payload: {
+        content: 'receipt hydration test',
+        clientMessageId: 'receipt-hydration-001'
+      }
+    });
+    assert.equal(send.statusCode, 200);
+    const sentMessage = JSON.parse(send.payload).message;
+
+    const startIdx = emitted.length;
+    const markRead = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${generalChatId}/read`,
+      headers: authHeaders(reader.accessToken),
+      payload: {
+        throughMessageId: sentMessage.id
+      }
+    });
+    assert.equal(markRead.statusCode, 200);
+    const markReadBody = JSON.parse(markRead.payload);
+    assert.equal(markReadBody.seenThroughMessageId, sentMessage.id);
+
+    const readEvent = emitted
+      .slice(startIdx)
+      .find((entry) => entry.room === `chat:${generalChatId}` && entry.event === 'message.read');
+    assert.ok(readEvent, 'marking a chat read should emit message.read');
+    assert.deepEqual(readEvent.data, {
+      type: 'message.read',
+      payload: {
+        chatId: generalChatId,
+        readerUserId: reader.user.id,
+        seenAt: markReadBody.lastReadAt,
+        seenThroughMessageId: sentMessage.id
+      }
+    });
+
+    const senderHistory = await app.inject({
+      method: 'GET',
+      url: `/api/v1/chats/${generalChatId}/messages`,
+      headers: authHeaders(sender.accessToken)
+    });
+    assert.equal(senderHistory.statusCode, 200);
+
+    const hydratedMessage = JSON.parse(senderHistory.payload).find((message: any) => message.id === sentMessage.id);
+    assert.ok(hydratedMessage.seenAt, 'sender history should expose seenAt once another member reads');
+    assert.deepEqual(hydratedMessage.readReceipts, [
+      {
+        userId: reader.user.id,
+        readAt: markReadBody.lastReadAt
+      }
+    ]);
+  });
+
+  test('messages newer than the explicit read marker remain unseen', async () => {
+    const { authHeaders, registerUser } = await import('./helpers.js');
+    const sender = await registerUser(app, 'receipt_precise_sender');
+    const reader = await registerUser(app, 'receipt_precise_reader');
+
+    const senderChats = await app.inject({
+      method: 'GET',
+      url: '/api/v1/chats',
+      headers: authHeaders(sender.accessToken)
+    });
+    const generalChatId = JSON.parse(senderChats.payload).find((chat: any) => chat.name === 'General').id as string;
+
+    const firstSend = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${generalChatId}/messages`,
+      headers: authHeaders(sender.accessToken),
+      payload: {
+        content: 'first precise receipt message',
+        clientMessageId: 'receipt-precise-001'
+      }
+    });
+    const secondSend = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${generalChatId}/messages`,
+      headers: authHeaders(sender.accessToken),
+      payload: {
+        content: 'second precise receipt message',
+        clientMessageId: 'receipt-precise-002'
+      }
+    });
+    assert.equal(firstSend.statusCode, 200);
+    assert.equal(secondSend.statusCode, 200);
+
+    const firstMessage = JSON.parse(firstSend.payload).message;
+    const secondMessage = JSON.parse(secondSend.payload).message;
+
+    const markRead = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${generalChatId}/read`,
+      headers: authHeaders(reader.accessToken),
+      payload: {
+        throughMessageId: firstMessage.id
+      }
+    });
+    assert.equal(markRead.statusCode, 200);
+
+    const senderHistory = await app.inject({
+      method: 'GET',
+      url: `/api/v1/chats/${generalChatId}/messages`,
+      headers: authHeaders(sender.accessToken)
+    });
+    assert.equal(senderHistory.statusCode, 200);
+
+    const messages = JSON.parse(senderHistory.payload);
+    const hydratedFirst = messages.find((message: any) => message.id === firstMessage.id);
+    const hydratedSecond = messages.find((message: any) => message.id === secondMessage.id);
+    assert.ok(hydratedFirst.seenAt, 'explicitly read message should show seenAt');
+    assert.deepEqual(hydratedFirst.readReceipts?.map((receipt: any) => receipt.userId), [reader.user.id]);
+    assert.equal(hydratedSecond.seenAt, null, 'newer messages should stay unseen');
+    assert.equal(hydratedSecond.readReceipts, undefined, 'newer messages should not expose readReceipts');
+  });
+
+  test('message history accepts the web before cursor parameter', async () => {
+    const { authHeaders, registerUser } = await import('./helpers.js');
+    const sender = await registerUser(app, 'receipt_before_sender');
+
+    const senderChats = await app.inject({
+      method: 'GET',
+      url: '/api/v1/chats',
+      headers: authHeaders(sender.accessToken)
+    });
+    const generalChatId = JSON.parse(senderChats.payload).find((chat: any) => chat.name === 'General').id as string;
+
+    const firstSend = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${generalChatId}/messages`,
+      headers: authHeaders(sender.accessToken),
+      payload: {
+        content: 'before cursor one',
+        clientMessageId: 'before-cursor-001'
+      }
+    });
+    const secondSend = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${generalChatId}/messages`,
+      headers: authHeaders(sender.accessToken),
+      payload: {
+        content: 'before cursor two',
+        clientMessageId: 'before-cursor-002'
+      }
+    });
+    assert.equal(firstSend.statusCode, 200);
+    assert.equal(secondSend.statusCode, 200);
+
+    const secondMessage = JSON.parse(secondSend.payload).message;
+    const paged = await app.inject({
+      method: 'GET',
+      url: `/api/v1/chats/${generalChatId}/messages?before=${secondMessage.id}&limit=20`,
+      headers: authHeaders(sender.accessToken)
+    });
+    assert.equal(paged.statusCode, 200);
+
+    const pageMessages = JSON.parse(paged.payload);
+    assert.ok(pageMessages.some((message: any) => message.content === 'before cursor one'));
+    assert.ok(pageMessages.every((message: any) => message.id !== secondMessage.id));
+  });
+
+  test('members/read lists chat read state and rejects non-members', async () => {
+    const { authHeaders, createPrivateChannelForUser, registerUser } = await import('./helpers.js');
+    const alice = await registerUser(app, 'receipt_state_alice');
+    const bob = await registerUser(app, 'receipt_state_bob');
+    const outsider = await registerUser(app, 'receipt_state_outsider');
+
+    const aliceChats = await app.inject({
+      method: 'GET',
+      url: '/api/v1/chats',
+      headers: authHeaders(alice.accessToken)
+    });
+    const generalChatId = JSON.parse(aliceChats.payload).find((chat: any) => chat.name === 'General').id as string;
+
+    const send = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${generalChatId}/messages`,
+      headers: authHeaders(alice.accessToken),
+      payload: {
+        content: 'read-state marker source',
+        clientMessageId: 'read-state-marker-001'
+      }
+    });
+    assert.equal(send.statusCode, 200);
+    const sentMessageId = JSON.parse(send.payload).message.id as string;
+
+    const markRead = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${generalChatId}/read`,
+      headers: authHeaders(bob.accessToken),
+      payload: {
+        throughMessageId: sentMessageId
+      }
+    });
+    assert.equal(markRead.statusCode, 200);
+
+    const readStates = await app.inject({
+      method: 'GET',
+      url: `/api/v1/chats/${generalChatId}/members/read`,
+      headers: authHeaders(alice.accessToken)
+    });
+    assert.equal(readStates.statusCode, 200);
+    const body = JSON.parse(readStates.payload);
+    const bobState = body.find((state: any) => state.userId === bob.user.id);
+    assert.equal(bobState.seenThroughMessageId, sentMessageId);
+    assert.ok(bobState.lastReadAt, 'member read state should expose lastReadAt after marking read');
+
+    const privateChatId = await createPrivateChannelForUser(alice.user.id, 'Receipt State Private');
+    const outsiderRead = await app.inject({
+      method: 'GET',
+      url: `/api/v1/chats/${privateChatId}/members/read`,
+      headers: authHeaders(outsider.accessToken)
+    });
+    assert.equal(outsiderRead.statusCode, 403);
+    assert.equal(JSON.parse(outsiderRead.payload).error, 'You are not a member of this chat');
+  });
+});
+
 describe('[integration] direct messages', { skip: SKIP }, () => {
   let app: any;
   let roomJoins: Array<{ sourceRoom: string; targetRoom: string }>;
@@ -574,6 +826,248 @@ describe('[integration] direct messages', { skip: SKIP }, () => {
   });
 });
 
+describe('[integration] self chats', { skip: SKIP }, () => {
+  let app: any;
+  let roomJoins: Array<{ sourceRoom: string; targetRoom: string }>;
+
+  before(async () => {
+    process.env.JWT_SECRET ??= 'integration-test-jwt-secret-long-enough';
+    const helpers = await import('./helpers.js');
+    await helpers.migrate();
+    await helpers.cleanup();
+    const result = await helpers.buildTestApp();
+    app = result.app;
+    roomJoins = result.roomJoins;
+  });
+
+  after(async () => {
+    await app?.close();
+    const helpers = await import('./helpers.js');
+    await helpers.cleanup();
+  });
+
+  test('POST /api/v1/chats/self is idempotent and returns a writable self DM summary', async () => {
+    const { authHeaders, pool, registerUser } = await import('./helpers.js');
+    const user = await registerUser(app, 'notes_owner');
+
+    const first = await app.inject({
+      method: 'POST',
+      url: '/api/v1/chats/self',
+      headers: authHeaders(user.accessToken)
+    });
+    const second = await app.inject({
+      method: 'POST',
+      url: '/api/v1/chats/self',
+      headers: authHeaders(user.accessToken)
+    });
+
+    assert.equal(first.statusCode, 200);
+    assert.equal(second.statusCode, 200);
+
+    const firstBody = JSON.parse(first.payload);
+    const secondBody = JSON.parse(second.payload);
+    assert.equal(firstBody.id, secondBody.id, 'self chat should be reused');
+    assert.equal(firstBody.type, 'dm');
+    assert.equal(firstBody.name, 'Notes');
+    assert.equal(firstBody.notificationsMuted, false);
+    assert.equal(firstBody.counterpartMemberId, undefined);
+
+    const targetRoom = `chat:${firstBody.id}`;
+    assert.ok(
+      roomJoins.some((join) => join.sourceRoom === `user:${user.user.id}` && join.targetRoom === targetRoom),
+      'self chat should join the caller sockets to the chat room'
+    );
+
+    const send = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${firstBody.id}/messages`,
+      headers: authHeaders(user.accessToken),
+      payload: {
+        content: 'note to self',
+        clientMessageId: 'self-chat-note-001'
+      }
+    });
+    assert.equal(send.statusCode, 200, 'self chats should remain writable');
+
+    const chats = await app.inject({
+      method: 'GET',
+      url: '/api/v1/chats',
+      headers: authHeaders(user.accessToken)
+    });
+    const summaries = JSON.parse(chats.payload);
+    assert.equal(summaries.filter((chat: any) => chat.id === firstBody.id).length, 1, 'self chat should appear once in the list');
+
+    const membership = await pool.query(
+      `SELECT COUNT(*)::int AS member_count
+       FROM chat_members
+       WHERE chat_id = $1`,
+      [firstBody.id]
+    );
+    assert.equal(membership.rows[0].member_count, 1);
+
+    const directLink = await pool.query('SELECT 1 FROM direct_chats WHERE chat_id = $1', [firstBody.id]);
+    assert.equal(directLink.rowCount, 0, 'self chat should not create a direct_chats row');
+  });
+});
+
+describe('[integration] polls', { skip: SKIP }, () => {
+  let app: any;
+  let emitted: Array<{ room: string | null; event: string; data: any }>;
+
+  before(async () => {
+    process.env.JWT_SECRET ??= 'integration-test-jwt-secret-long-enough';
+    const helpers = await import('./helpers.js');
+    await helpers.migrate();
+    await helpers.cleanup();
+    const result = await helpers.buildTestApp();
+    app = result.app;
+    emitted = result.emitted;
+  });
+
+  after(async () => {
+    await app?.close();
+    const helpers = await import('./helpers.js');
+    await helpers.cleanup();
+  });
+
+  test('creating a poll persists a poll message and broadcasts message.new', async () => {
+    const { authHeaders, pool, registerUser } = await import('./helpers.js');
+    const sender = await registerUser(app, 'poll_sender');
+
+    const senderChats = await app.inject({
+      method: 'GET',
+      url: '/api/v1/chats',
+      headers: authHeaders(sender.accessToken)
+    });
+    const generalChatId = JSON.parse(senderChats.payload).find((chat: any) => chat.name === 'General').id as string;
+
+    const startIdx = emitted.length;
+    const created = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${generalChatId}/polls`,
+      headers: authHeaders(sender.accessToken),
+      payload: {
+        question: 'Best rooftop snack?',
+        options: ['Fries', 'Wings', 'Nachos']
+      }
+    });
+
+    assert.equal(created.statusCode, 200);
+    const body = JSON.parse(created.payload);
+    assert.equal(body.deduped, false);
+    assert.equal(body.message.type, 'poll');
+    assert.equal(body.message.content, 'Best rooftop snack?');
+    assert.equal(body.message.metadata.question, 'Best rooftop snack?');
+    assert.equal(body.message.metadata.options.length, 3);
+    assert.equal(body.message.metadata.createdByUserId, sender.user.id);
+
+    const pollRow = await pool.query(
+      `SELECT id
+       FROM polls
+       WHERE message_id = $1`,
+      [body.message.id]
+    );
+    assert.equal(pollRow.rowCount, 1, 'poll row should be persisted for the poll message');
+
+    const pollOptions = await pool.query(
+      `SELECT option_index, option_text
+       FROM poll_options
+       WHERE poll_id = $1
+       ORDER BY option_index ASC`,
+      [body.message.metadata.id]
+    );
+    assert.equal(pollOptions.rowCount, 3);
+    assert.deepEqual(
+      pollOptions.rows.map((row) => row.option_text),
+      ['Fries', 'Wings', 'Nachos']
+    );
+
+    const event = emitted
+      .slice(startIdx)
+      .find((entry) => entry.room === `chat:${generalChatId}` && entry.event === 'message.new');
+    assert.ok(event, 'creating a poll should broadcast message.new');
+    assert.equal(event.data.type, 'message.new');
+    assert.equal(event.data.payload.type, 'poll');
+    assert.equal(event.data.payload.metadata.id, body.message.metadata.id);
+  });
+
+  test('voting on a poll updates metadata and broadcasts poll.voted', async () => {
+    const { authHeaders, registerUser } = await import('./helpers.js');
+    const sender = await registerUser(app, 'poll_vote_sender');
+    const voter = await registerUser(app, 'poll_vote_reader');
+
+    const senderChats = await app.inject({
+      method: 'GET',
+      url: '/api/v1/chats',
+      headers: authHeaders(sender.accessToken)
+    });
+    const generalChatId = JSON.parse(senderChats.payload).find((chat: any) => chat.name === 'General').id as string;
+
+    const created = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${generalChatId}/polls`,
+      headers: authHeaders(sender.accessToken),
+      payload: {
+        question: 'Best rooftop snack?',
+        options: ['Fries', 'Wings']
+      }
+    });
+    assert.equal(created.statusCode, 200);
+    const pollMessage = JSON.parse(created.payload).message;
+    const pollId = pollMessage.metadata.id as string;
+
+    const startIdx = emitted.length;
+    const voted = await app.inject({
+      method: 'POST',
+      url: `/api/v1/polls/${pollId}/vote`,
+      headers: authHeaders(voter.accessToken),
+      payload: {
+        optionIndex: 1
+      }
+    });
+    assert.equal(voted.statusCode, 200);
+
+    const poll = JSON.parse(voted.payload);
+    assert.equal(poll.id, pollId);
+    assert.deepEqual(poll.options[1].voterIds, [voter.user.id]);
+
+    const voteEvent = emitted
+      .slice(startIdx)
+      .find((entry) => entry.room === `chat:${generalChatId}` && entry.event === 'poll.voted');
+    assert.ok(voteEvent, 'voting should broadcast poll.voted');
+    assert.deepEqual(voteEvent.data, {
+      type: 'poll.voted',
+      payload: {
+        chatId: generalChatId,
+        pollId,
+        poll
+      }
+    });
+
+    const history = await app.inject({
+      method: 'GET',
+      url: `/api/v1/chats/${generalChatId}/messages`,
+      headers: authHeaders(sender.accessToken)
+    });
+    assert.equal(history.statusCode, 200);
+
+    const hydratedPollMessage = JSON.parse(history.payload).find((message: any) => message.id === pollMessage.id);
+    assert.ok(hydratedPollMessage, 'poll message should remain in message history');
+    assert.deepEqual(hydratedPollMessage.metadata.options[1].voterIds, [voter.user.id]);
+
+    const conflictingVote = await app.inject({
+      method: 'POST',
+      url: `/api/v1/polls/${pollId}/vote`,
+      headers: authHeaders(voter.accessToken),
+      payload: {
+        optionIndex: 0
+      }
+    });
+    assert.equal(conflictingVote.statusCode, 409, 'single-select polls should reject a second distinct vote');
+    assert.equal(JSON.parse(conflictingVote.payload).error, 'You have already voted on this poll');
+  });
+});
+
 describe('[integration] message idempotency', { skip: SKIP }, () => {
   let app: any;
   let emitted: any[];
@@ -876,6 +1370,528 @@ describe('[integration] message idempotency', { skip: SKIP }, () => {
     );
 
     assert.ok(result.rowCount >= 1, 'expected a partial messages(chat_id, created_at DESC) index for visible messages');
+  });
+});
+
+describe('[integration] wave b message interactions', { skip: SKIP }, () => {
+  let app: any;
+  let emitted: Array<{ room: string | null; event: string; data: any }>;
+
+  before(async () => {
+    process.env.JWT_SECRET ??= 'integration-test-jwt-secret-long-enough';
+    const helpers = await import('./helpers.js');
+    await helpers.migrate();
+    await helpers.cleanup();
+    const result = await helpers.buildTestApp();
+    app = result.app;
+    emitted = result.emitted;
+  });
+
+  after(async () => {
+    await app?.close();
+    const helpers = await import('./helpers.js');
+    await helpers.cleanup();
+  });
+
+  test('message reactions are idempotent, grouped in history, and removable', async () => {
+    const { authHeaders, cleanup, registerUser } = await import('./helpers.js');
+    await cleanup();
+
+    const alice = await registerUser(app, 'reaction_alice');
+    const bob = await registerUser(app, 'reaction_bob');
+
+    const aliceChats = await app.inject({
+      method: 'GET',
+      url: '/api/v1/chats',
+      headers: authHeaders(alice.accessToken)
+    });
+    const generalChatId = JSON.parse(aliceChats.payload).find((chat: any) => chat.name === 'General').id as string;
+
+    const sent = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${generalChatId}/messages`,
+      headers: authHeaders(alice.accessToken),
+      payload: {
+        content: 'react to this',
+        clientMessageId: 'wave-b-reaction-001'
+      }
+    });
+    assert.equal(sent.statusCode, 200);
+    const messageId = JSON.parse(sent.payload).message.id as string;
+
+    const startIdx = emitted.length;
+    const firstReaction = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${generalChatId}/messages/${messageId}/reactions`,
+      headers: authHeaders(bob.accessToken),
+      payload: { emoji: '🔥' }
+    });
+    assert.equal(firstReaction.statusCode, 200);
+    assert.deepEqual(JSON.parse(firstReaction.payload), [{ emoji: '🔥', userIds: [bob.user.id] }]);
+
+    const duplicateReaction = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${generalChatId}/messages/${messageId}/reactions`,
+      headers: authHeaders(bob.accessToken),
+      payload: { emoji: '🔥' }
+    });
+    assert.equal(duplicateReaction.statusCode, 200);
+
+    const aliceReaction = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${generalChatId}/messages/${messageId}/reactions`,
+      headers: authHeaders(alice.accessToken),
+      payload: { emoji: '🔥' }
+    });
+    assert.equal(aliceReaction.statusCode, 200);
+    assert.deepEqual(JSON.parse(aliceReaction.payload), [{ emoji: '🔥', userIds: [bob.user.id, alice.user.id] }]);
+
+    const addEvents = emitted
+      .slice(startIdx)
+      .filter((entry) => entry.room === `chat:${generalChatId}` && entry.event === 'reaction.add');
+    assert.equal(addEvents.length, 2, 'duplicate reactions must not rebroadcast');
+
+    const history = await app.inject({
+      method: 'GET',
+      url: `/api/v1/chats/${generalChatId}/messages`,
+      headers: authHeaders(alice.accessToken)
+    });
+    assert.equal(history.statusCode, 200);
+    const hydrated = JSON.parse(history.payload).find((message: any) => message.id === messageId);
+    assert.deepEqual(hydrated.reactions, [{ emoji: '🔥', userIds: [bob.user.id, alice.user.id] }]);
+
+    const remove = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/chats/${generalChatId}/messages/${messageId}/reactions/%F0%9F%94%A5`,
+      headers: authHeaders(bob.accessToken)
+    });
+    assert.equal(remove.statusCode, 204);
+
+    const removeEvent = emitted
+      .slice(startIdx)
+      .find((entry) => entry.room === `chat:${generalChatId}` && entry.event === 'reaction.remove');
+    assert.ok(removeEvent, 'reaction removal should broadcast');
+    assert.deepEqual((removeEvent?.data as any)?.payload, {
+      chatId: generalChatId,
+      messageId,
+      userId: bob.user.id,
+      emoji: '🔥'
+    });
+  });
+
+  test('new reaction, pin, and delete routes reject non-members and foreign deletions', async () => {
+    const { authHeaders, cleanup, createPrivateChannelForUser, registerUser } = await import('./helpers.js');
+    await cleanup();
+
+    const owner = await registerUser(app, 'waveb_owner');
+    const member = await registerUser(app, 'waveb_member');
+    const outsider = await registerUser(app, 'waveb_outsider');
+
+    const privateChatId = await createPrivateChannelForUser(owner.user.id, 'Wave B Private');
+    await (await import('./helpers.js')).pool.query(
+      'INSERT INTO chat_members(chat_id, user_id) VALUES($1, $2)',
+      [privateChatId, member.user.id]
+    );
+
+    const sent = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${privateChatId}/messages`,
+      headers: authHeaders(owner.accessToken),
+      payload: {
+        content: 'private wave b target',
+        clientMessageId: 'wave-b-private-target-001'
+      }
+    });
+    assert.equal(sent.statusCode, 200);
+    const messageId = JSON.parse(sent.payload).message.id as string;
+
+    const nonMemberAddReaction = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${privateChatId}/messages/${messageId}/reactions`,
+      headers: authHeaders(outsider.accessToken),
+      payload: { emoji: '🔥' }
+    });
+    assert.equal(nonMemberAddReaction.statusCode, 403);
+
+    const ownerReaction = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${privateChatId}/messages/${messageId}/reactions`,
+      headers: authHeaders(owner.accessToken),
+      payload: { emoji: '🔥' }
+    });
+    assert.equal(ownerReaction.statusCode, 200);
+
+    const nonMemberDeleteReaction = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/chats/${privateChatId}/messages/${messageId}/reactions/%F0%9F%94%A5`,
+      headers: authHeaders(outsider.accessToken)
+    });
+    assert.equal(nonMemberDeleteReaction.statusCode, 403);
+
+    const foreignDeleteReaction = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/chats/${privateChatId}/messages/${messageId}/reactions/%F0%9F%94%A5`,
+      headers: authHeaders(member.accessToken)
+    });
+    assert.equal(foreignDeleteReaction.statusCode, 403);
+    assert.equal(JSON.parse(foreignDeleteReaction.payload).error, `You don't have permission to perform this action`);
+
+    const nonMemberPin = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${privateChatId}/messages/${messageId}/pin`,
+      headers: authHeaders(outsider.accessToken)
+    });
+    assert.equal(nonMemberPin.statusCode, 403);
+
+    const pinRes = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${privateChatId}/messages/${messageId}/pin`,
+      headers: authHeaders(owner.accessToken)
+    });
+    assert.equal(pinRes.statusCode, 200);
+
+    const nonMemberUnpin = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/chats/${privateChatId}/messages/${messageId}/pin`,
+      headers: authHeaders(outsider.accessToken)
+    });
+    assert.equal(nonMemberUnpin.statusCode, 403);
+
+    const nonMemberDeleteMessage = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/chats/${privateChatId}/messages/${messageId}`,
+      headers: authHeaders(outsider.accessToken)
+    });
+    assert.equal(nonMemberDeleteMessage.statusCode, 403);
+
+    const foreignDeleteMessage = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/chats/${privateChatId}/messages/${messageId}`,
+      headers: authHeaders(member.accessToken)
+    });
+    assert.equal(foreignDeleteMessage.statusCode, 403);
+    assert.equal(JSON.parse(foreignDeleteMessage.payload).error, `You don't have permission to perform this action`);
+  });
+
+  test('reply snapshots survive deletion of the source message', async () => {
+    const { authHeaders, cleanup, registerUser } = await import('./helpers.js');
+    await cleanup();
+
+    const alice = await registerUser(app, 'reply_alice');
+    const bob = await registerUser(app, 'reply_bob');
+
+    const chats = await app.inject({
+      method: 'GET',
+      url: '/api/v1/chats',
+      headers: authHeaders(alice.accessToken)
+    });
+    const generalChatId = JSON.parse(chats.payload).find((chat: any) => chat.name === 'General').id as string;
+
+    const original = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${generalChatId}/messages`,
+      headers: authHeaders(alice.accessToken),
+      payload: {
+        content: 'Original rooftop take',
+        clientMessageId: 'wave-b-reply-origin-001'
+      }
+    });
+    assert.equal(original.statusCode, 200);
+    const originalBody = JSON.parse(original.payload);
+
+    const replySend = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${generalChatId}/messages`,
+      headers: authHeaders(bob.accessToken),
+      payload: {
+        content: 'Replying to that take',
+        replyToMessageId: originalBody.message.id,
+        clientMessageId: 'wave-b-reply-send-001'
+      }
+    });
+    assert.equal(replySend.statusCode, 200);
+    const replyBody = JSON.parse(replySend.payload);
+    assert.deepEqual(replyBody.message.replyTo, {
+      id: originalBody.message.id,
+      content: 'Original rooftop take',
+      senderDisplayName: 'reply_alice'
+    });
+
+    const history = await app.inject({
+      method: 'GET',
+      url: `/api/v1/chats/${generalChatId}/messages`,
+      headers: authHeaders(alice.accessToken)
+    });
+    assert.equal(history.statusCode, 200);
+    const replyMessage = JSON.parse(history.payload).find((message: any) => message.id === replyBody.message.id);
+    assert.deepEqual(replyMessage.replyTo, {
+      id: originalBody.message.id,
+      content: 'Original rooftop take',
+      senderDisplayName: 'reply_alice'
+    });
+
+    const deleteOriginal = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/chats/${generalChatId}/messages/${originalBody.message.id}`,
+      headers: authHeaders(alice.accessToken)
+    });
+    assert.equal(deleteOriginal.statusCode, 204);
+
+    const afterSourceDelete = await app.inject({
+      method: 'GET',
+      url: `/api/v1/chats/${generalChatId}/messages`,
+      headers: authHeaders(alice.accessToken)
+    });
+    assert.equal(afterSourceDelete.statusCode, 200);
+    const replyAfterSourceDelete = JSON.parse(afterSourceDelete.payload).find((message: any) => message.id === replyBody.message.id);
+    assert.deepEqual(replyAfterSourceDelete.replyTo, {
+      id: originalBody.message.id,
+      content: 'Original rooftop take',
+      senderDisplayName: 'reply_alice'
+    });
+  });
+
+  test('own-message deletion emits the moderation tombstone', async () => {
+    const { authHeaders, cleanup, registerUser } = await import('./helpers.js');
+    await cleanup();
+
+    const alice = await registerUser(app, 'delete_reply_alice');
+    const bob = await registerUser(app, 'delete_reply_bob');
+
+    const chats = await app.inject({
+      method: 'GET',
+      url: '/api/v1/chats',
+      headers: authHeaders(alice.accessToken)
+    });
+    const generalChatId = JSON.parse(chats.payload).find((chat: any) => chat.name === 'General').id as string;
+
+    const replySend = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${generalChatId}/messages`,
+      headers: authHeaders(bob.accessToken),
+      payload: {
+        content: 'Delete me',
+        clientMessageId: 'wave-b-reply-delete-001'
+      }
+    });
+    assert.equal(replySend.statusCode, 200);
+    const replyBody = JSON.parse(replySend.payload);
+
+    const startIdx = emitted.length;
+    const deleted = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/chats/${generalChatId}/messages/${replyBody.message.id}`,
+      headers: authHeaders(bob.accessToken)
+    });
+    assert.equal(deleted.statusCode, 204);
+
+    const moderationEvent = emitted
+      .slice(startIdx)
+      .find((entry) => entry.room === `chat:${generalChatId}` && entry.event === 'message.moderated');
+    assert.ok(moderationEvent, 'own-message deletion should reuse message.moderated');
+    assert.equal((moderationEvent?.data as any)?.payload?.action, 'hide');
+    assert.equal((moderationEvent?.data as any)?.payload?.message?.hidden, true);
+
+    const afterDelete = await app.inject({
+      method: 'GET',
+      url: `/api/v1/chats/${generalChatId}/messages`,
+      headers: authHeaders(alice.accessToken)
+    });
+    const deletedMessage = JSON.parse(afterDelete.payload).find((message: any) => message.id === replyBody.message.id);
+    assert.equal(deletedMessage.hidden, true);
+    assert.equal(deletedMessage.content, 'Message removed by moderation.');
+  });
+
+  test('pins preserve snapshots, broadcast events, and enforce a maximum of five per chat', async () => {
+    const { authHeaders, cleanup, registerUser } = await import('./helpers.js');
+    await cleanup();
+
+    const alice = await registerUser(app, 'pin_alice');
+    const bob = await registerUser(app, 'pin_bob');
+
+    const chats = await app.inject({
+      method: 'GET',
+      url: '/api/v1/chats',
+      headers: authHeaders(alice.accessToken)
+    });
+    const generalChatId = JSON.parse(chats.payload).find((chat: any) => chat.name === 'General').id as string;
+
+    const messageIds: string[] = [];
+    for (let index = 0; index < 6; index += 1) {
+      const sent = await app.inject({
+        method: 'POST',
+        url: `/api/v1/chats/${generalChatId}/messages`,
+        headers: authHeaders(alice.accessToken),
+        payload: {
+          content: `pin candidate ${index + 1}`,
+          clientMessageId: `wave-b-pin-${index + 1}`
+        }
+      });
+      assert.equal(sent.statusCode, 200);
+      messageIds.push(JSON.parse(sent.payload).message.id as string);
+    }
+
+    const startIdx = emitted.length;
+    for (const messageId of messageIds.slice(0, 5)) {
+      const pinRes = await app.inject({
+        method: 'POST',
+        url: `/api/v1/chats/${generalChatId}/messages/${messageId}/pin`,
+        headers: authHeaders(bob.accessToken)
+      });
+      assert.equal(pinRes.statusCode, 200);
+    }
+
+    const sixthPin = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${generalChatId}/messages/${messageIds[5]}/pin`,
+      headers: authHeaders(bob.accessToken)
+    });
+    assert.equal(sixthPin.statusCode, 422);
+    assert.equal(JSON.parse(sixthPin.payload).error, 'This chat already has the maximum of 5 pinned messages');
+
+    const listPins = await app.inject({
+      method: 'GET',
+      url: `/api/v1/chats/${generalChatId}/pins`,
+      headers: authHeaders(alice.accessToken)
+    });
+    assert.equal(listPins.statusCode, 200);
+    const pins = JSON.parse(listPins.payload);
+    assert.equal(pins.length, 5);
+    assert.equal(pins[0].chatId, generalChatId);
+
+    const deletedSource = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/chats/${generalChatId}/messages/${messageIds[0]}`,
+      headers: authHeaders(alice.accessToken)
+    });
+    assert.equal(deletedSource.statusCode, 204);
+
+    const pinsAfterDelete = await app.inject({
+      method: 'GET',
+      url: `/api/v1/chats/${generalChatId}/pins`,
+      headers: authHeaders(alice.accessToken)
+    });
+    const pinnedSnapshot = JSON.parse(pinsAfterDelete.payload).find((pin: any) => pin.messageId === messageIds[0]);
+    assert.equal(pinnedSnapshot.content, 'pin candidate 1', 'pin list should keep the original snapshot content');
+
+    const unpin = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/chats/${generalChatId}/messages/${messageIds[0]}/pin`,
+      headers: authHeaders(bob.accessToken)
+    });
+    assert.equal(unpin.statusCode, 204);
+
+    const pinEvents = emitted
+      .slice(startIdx)
+      .filter((entry) => entry.room === `chat:${generalChatId}` && entry.event === 'message.pinned');
+    const unpinEvent = emitted
+      .slice(startIdx)
+      .find((entry) => entry.room === `chat:${generalChatId}` && entry.event === 'message.unpinned');
+    assert.equal(pinEvents.length, 5);
+    assert.ok(unpinEvent, 'unpinning should broadcast message.unpinned');
+  });
+
+  test('frontend pin compatibility routes add and remove pins', async () => {
+    const { authHeaders, cleanup, registerUser } = await import('./helpers.js');
+    await cleanup();
+
+    const alice = await registerUser(app, 'compat_pin_alice');
+    const bob = await registerUser(app, 'compat_pin_bob');
+
+    const chats = await app.inject({
+      method: 'GET',
+      url: '/api/v1/chats',
+      headers: authHeaders(alice.accessToken)
+    });
+    const generalChatId = JSON.parse(chats.payload).find((chat: any) => chat.name === 'General').id as string;
+
+    const sent = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${generalChatId}/messages`,
+      headers: authHeaders(alice.accessToken),
+      payload: {
+        content: 'compat pin candidate',
+        clientMessageId: 'compat-pin-001'
+      }
+    });
+    assert.equal(sent.statusCode, 200);
+    const messageId = JSON.parse(sent.payload).message.id as string;
+
+    const pinRes = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${generalChatId}/pins`,
+      headers: authHeaders(bob.accessToken),
+      payload: {
+        messageId
+      }
+    });
+    assert.equal(pinRes.statusCode, 200);
+    assert.equal(JSON.parse(pinRes.payload).messageId, messageId);
+
+    const listPinned = await app.inject({
+      method: 'GET',
+      url: `/api/v1/chats/${generalChatId}/pins`,
+      headers: authHeaders(alice.accessToken)
+    });
+    assert.equal(listPinned.statusCode, 200);
+    assert.ok(JSON.parse(listPinned.payload).some((pin: any) => pin.messageId === messageId));
+
+    const unpinRes = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/chats/${generalChatId}/pins/${messageId}`,
+      headers: authHeaders(bob.accessToken)
+    });
+    assert.equal(unpinRes.statusCode, 204);
+
+    const afterUnpin = await app.inject({
+      method: 'GET',
+      url: `/api/v1/chats/${generalChatId}/pins`,
+      headers: authHeaders(alice.accessToken)
+    });
+    assert.equal(afterUnpin.statusCode, 200);
+    assert.ok(!JSON.parse(afterUnpin.payload).some((pin: any) => pin.messageId === messageId));
+  });
+
+  test('admins can delete another member message through the member delete route', async () => {
+    const { authHeaders, cleanup, registerUser } = await import('./helpers.js');
+    const { env } = await import('../src/config/env.js');
+    await cleanup();
+
+    const originalBootstrap = env.ADMIN_BOOTSTRAP_USERNAME;
+    env.ADMIN_BOOTSTRAP_USERNAME = 'delete_admin';
+
+    try {
+      const admin = await registerUser(app, 'delete_admin');
+      const member = await registerUser(app, 'delete_target');
+
+      const chats = await app.inject({
+        method: 'GET',
+        url: '/api/v1/chats',
+        headers: authHeaders(member.accessToken)
+      });
+      const generalChatId = JSON.parse(chats.payload).find((chat: any) => chat.name === 'General').id as string;
+
+      const sent = await app.inject({
+        method: 'POST',
+        url: `/api/v1/chats/${generalChatId}/messages`,
+        headers: authHeaders(member.accessToken),
+        payload: {
+          content: 'admin delete route target',
+          clientMessageId: 'wave-b-admin-delete-001'
+        }
+      });
+      assert.equal(sent.statusCode, 200);
+      const messageId = JSON.parse(sent.payload).message.id as string;
+
+      const deleted = await app.inject({
+        method: 'DELETE',
+        url: `/api/v1/chats/${generalChatId}/messages/${messageId}`,
+        headers: authHeaders(admin.accessToken)
+      });
+      assert.equal(deleted.statusCode, 204);
+    } finally {
+      env.ADMIN_BOOTSTRAP_USERNAME = originalBootstrap;
+    }
   });
 });
 

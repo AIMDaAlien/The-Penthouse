@@ -344,6 +344,12 @@ export const MessageReadReceiptSchema = z.object({
   readAt: z.string()
 });
 
+export const ChatMemberReadStateSchema = z.object({
+  userId: z.string(),
+  lastReadAt: z.string().nullable(),
+  seenThroughMessageId: z.string().nullable().optional()
+});
+
 export const MemberSummarySchema = z.object({
   id: z.string(),
   username: z.string(),
@@ -460,6 +466,10 @@ export const MarkChatReadResponseSchema = z.object({
   unreadCount: z.number().int().nonnegative(),
   lastReadAt: z.string().nullable(),
   seenThroughMessageId: z.string().nullable().optional()
+});
+
+export const PinMessageRequestSchema = z.object({
+  messageId: z.string().uuid()
 });
 
 export const UploadResponseSchema = z.object({
@@ -646,6 +656,7 @@ export type VotePollRequest = z.infer<typeof VotePollRequestSchema>;
 export type ChatPreferencesRequest = z.infer<typeof ChatPreferencesRequestSchema>;
 export type ChatPreferencesResponse = z.infer<typeof ChatPreferencesResponseSchema>;
 export type MessageReadReceipt = z.infer<typeof MessageReadReceiptSchema>;
+export type ChatMemberReadState = z.infer<typeof ChatMemberReadStateSchema>;
 export type MemberSummary = z.infer<typeof MemberSummarySchema>;
 export type MemberDetail = z.infer<typeof MemberDetailSchema>;
 export type AdminMemberSummary = z.infer<typeof AdminMemberSummarySchema>;
@@ -659,6 +670,7 @@ export type AddReactionRequest = z.infer<typeof AddReactionRequestSchema>;
 export type PinnedMessage = z.infer<typeof PinnedMessageSchema>;
 export type MarkChatReadRequest = z.infer<typeof MarkChatReadRequestSchema>;
 export type MarkChatReadResponse = z.infer<typeof MarkChatReadResponseSchema>;
+export type PinMessageRequest = z.infer<typeof PinMessageRequestSchema>;
 export type UploadResponse = z.infer<typeof UploadResponseSchema>;
 export type GifResult = z.infer<typeof GifResultSchema>;
 export type GifSearchResponse = z.infer<typeof GifSearchResponseSchema>;

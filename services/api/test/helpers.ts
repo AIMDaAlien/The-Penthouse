@@ -71,6 +71,9 @@ export async function cleanup() {
   resetAltchaReplayState();
   const client = await pool.connect();
   try {
+    await client.query('DELETE FROM poll_votes');
+    await client.query('DELETE FROM poll_options');
+    await client.query('DELETE FROM polls');
     await client.query('DELETE FROM messages');
     await client.query('DELETE FROM device_tokens');
     await client.query('DELETE FROM chat_members');
