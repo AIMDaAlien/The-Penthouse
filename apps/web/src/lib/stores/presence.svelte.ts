@@ -49,8 +49,9 @@ function createPresenceStore() {
 
 		// Update individual user's presence
 		socket.on('presence.update', (payload: { userId: string; online: boolean }) => {
-			userPresenceMap.set(payload.userId, payload.online);
-			userPresenceMap = userPresenceMap; // trigger reactivity
+			const nextMap = new Map(userPresenceMap);
+			nextMap.set(payload.userId, payload.online);
+			userPresenceMap = nextMap; // trigger reactivity
 		});
 	}
 

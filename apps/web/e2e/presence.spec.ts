@@ -17,13 +17,15 @@ test.describe('Presence Indicators', () => {
     // Give it a moment to connect
     await expect(connectedIndicator).toBeVisible({ timeout: 10000 }).catch(() => {});
     
-    // Go to user directory
+    // Go to user directory and search for ourselves
     await page.goto('/users');
+    await page.getByPlaceholder(/search/i).fill(username);
+    await page.keyboard.press('Enter');
     
     // Wait for our own presence avatar
     // Look for our specific user row
     const userRow = page.locator('.user-card, .chat-row', { hasText: new RegExp(username, 'i') }).first();
-    const presenceDot = userRow.locator('.status-dot');
+    const presenceDot = userRow.locator('.status-dot.online');
     
     // Initial: User A avatar with green dot (online)
     await expect(presenceDot).toBeVisible({ timeout: 5000 });
@@ -58,19 +60,17 @@ test.describe('Presence Indicators', () => {
     const usernameB = `u_b_${Date.now()}`;
     await registerUser(pageB, usernameB);
     
-    // Tab A sees Tab B as online
-    await pageA.goto('/users');
+    await pageA.getByRole('button', { name: 'New message' }).click();
     await pageA.getByPlaceholder(/search/i).fill(usernameB);
     
     const rowForB = pageA.locator('.user-card, .chat-row', { hasText: new RegExp(usernameB, 'i') }).first();
-    await expect(rowForB.locator('.status-dot')).toBeVisible({ timeout: 10000 });
+    await expect(rowForB.locator('.status-dot.online')).toBeVisible({ timeout: 10000 });
     
-    // Tab B sees Tab A as online
-    await pageB.goto('/users');
+    await pageB.getByRole('button', { name: 'New message' }).click();
     await pageB.getByPlaceholder(/search/i).fill(usernameA);
     
     const rowForA = pageB.locator('.user-card, .chat-row', { hasText: new RegExp(usernameA, 'i') }).first();
-    await expect(rowForA.locator('.status-dot')).toBeVisible({ timeout: 10000 });
+    await expect(rowForA.locator('.status-dot.online')).toBeVisible({ timeout: 10000 });
     
     // Go to chat list
     await pageA.goto('/');
@@ -79,8 +79,7 @@ test.describe('Presence Indicators', () => {
     // eslint-disable-next-line playwright/no-wait-for-timeout
     await pageB.waitForTimeout(65000);
     
-    // Tab A should see B offline
-    await pageA.goto('/users');
+    await pageA.getByRole('button', { name: 'New message' }).click();
     await pageA.getByPlaceholder(/search/i).fill(usernameB);
     await expect(rowForB.locator('.status-dot.online')).toBeHidden({ timeout: 10000 });
     
@@ -104,8 +103,7 @@ test.describe('Presence Indicators', () => {
     const usernameB = `u_cl_b_${Date.now()}`;
     await registerUser(pageB, usernameB);
     
-    // Start DM
-    await pageA.goto('/users');
+    await pageA.getByRole('button', { name: 'New message' }).click();
     await pageA.getByPlaceholder(/search/i).fill(usernameB);
     await pageA.locator('.user-card, .chat-row', { hasText: new RegExp(usernameB, 'i') }).first().click();
     
@@ -147,8 +145,7 @@ test.describe('Presence Indicators', () => {
     const usernameB = `u_hd_b_${Date.now()}`;
     await registerUser(pageB, usernameB);
     
-    // Start DM
-    await pageB.goto('/users');
+    await pageB.getByRole('button', { name: 'New message' }).click();
     await pageB.getByPlaceholder(/search/i).fill(usernameA);
     await pageB.locator('.user-card, .chat-row', { hasText: new RegExp(usernameA, 'i') }).first().click();
     await pageB.getByPlaceholder(/message/i).fill('hello context');
@@ -180,8 +177,7 @@ test.describe('Presence Indicators', () => {
     const usernameB = `u_rld_b_${Date.now()}`;
     await registerUser(pageB, usernameB);
     
-    // Tab A sees Tab B
-    await pageA.goto('/users');
+    await pageA.getByRole('button', { name: 'New message' }).click();
     await pageA.getByPlaceholder(/search/i).fill(usernameB);
     const rowForB = pageA.locator('.user-card, .chat-row', { hasText: new RegExp(usernameB, 'i') }).first();
     await expect(rowForB.locator('.status-dot.online')).toBeVisible({ timeout: 5000 });
@@ -189,15 +185,13 @@ test.describe('Presence Indicators', () => {
     // Refresh page A
     await pageA.reload();
     
-    // B watches A in DM Search
-    await pageB.goto('/users');
+    await pageB.getByRole('button', { name: 'New message' }).click();
     await pageB.getByPlaceholder(/search/i).fill(usernameA);
     const rowForA = pageB.locator('.user-card, .chat-row', { hasText: new RegExp(usernameA, 'i') }).first();
     
     await expect(rowForA.locator('.status-dot.online')).toBeVisible({ timeout: 15000 });
     
-    // A should see B online again
-    await pageA.goto('/users');
+    await pageA.getByRole('button', { name: 'New message' }).click();
     await pageA.getByPlaceholder(/search/i).fill(usernameB);
     const rowForA_B = pageA.locator('.user-card, .chat-row', { hasText: new RegExp(usernameB, 'i') }).first();
     await expect(rowForA_B.locator('.status-dot.online')).toBeVisible({ timeout: 10000 });
@@ -224,7 +218,7 @@ test.describe('Presence Indicators', () => {
     await registerUser(pageB, usernameB);
     await registerUser(pageC, usernameC);
     
-    await pageA.goto('/users');
+    await pageA.getByRole('button', { name: 'New message' }).click();
     await pageA.getByPlaceholder(/search/i).fill(`u_grp`); // Should match all users
     
     const rowForB = pageA.locator('.user-card, .chat-row', { hasText: new RegExp(usernameB, 'i') }).first();
@@ -258,7 +252,7 @@ test.describe('Presence Indicators', () => {
     await registerUser(pageB, usernameB);
     
     // In DM Search modal
-    await pageA.getByRole('button', { name: /✏️|New Chat/i }).first().click();
+    await pageA.getByRole('button', { name: 'New message' }).first().click();
     await pageA.getByPlaceholder(/search/i).fill(usernameB);
     const rowForB = pageA.locator('.user-card, .chat-row', { hasText: new RegExp(usernameB, 'i') }).first();
     

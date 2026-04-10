@@ -1,8 +1,13 @@
 import { sveltekit } from '@sveltejs/kit/vite';
 import { SvelteKitPWA } from '@vite-pwa/sveltekit';
-import { defineConfig } from 'vite';
+import { defineConfig, configDefaults } from 'vitest/config';
 
 export default defineConfig({
+	test: {
+		// Extend defaults so dist/, .svelte-kit/, etc. stay excluded too
+		exclude: [...configDefaults.exclude, 'e2e/**'],
+		passWithNoTests: true
+	},
 	plugins: [
 		sveltekit(),
 		SvelteKitPWA({

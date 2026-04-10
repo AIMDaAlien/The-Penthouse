@@ -24,6 +24,13 @@ This vault is the "what we built and why" map for people joining the project lat
 13. [[13 - MVP Stability Plan v2]]
 14. [[14 - Opencode Handoff]] (historical snapshot)
 
+### PWA rebuild (v2.1 — current branch)
+
+15. [[15 - PWA Rebuild]] — why the frontend was rebuilt as a PWA and what the baseline covers
+16. [[16 - Wave A - Live Chat on the PWA]] — typing indicators, presence, read receipts, GIF, muting
+17. [[17 - Wave B - Rich Messaging]] — reactions, reply/quote, delete, pins, icon refresh
+18. [[18 - Wave C - Community Features]] — slash commands, polls, note to self
+
 ## Source docs in repo
 
 - [[../START_HERE|Start Here (non-engineer guide)]]
@@ -122,6 +129,16 @@ This vault is the "what we built and why" map for people joining the project lat
   - frosted glass periwinkle palette coherent with mobile app CSS variables
   - glassmorphic cards, atmospheric background, mobile-first responsive
   - copy updated to singular first-person voice for staged single-tester rollout
+
+## PWA rebuild status (as of 2026-04-09)
+
+The `pwa` branch is the active development branch. The Vue + Capacitor app on `main` is the current public release. The PWA is in pre-alpha.
+
+- PWA baseline is complete and testable in a browser
+- Wave A is complete (typing, presence, read receipts, GIF, muting)
+- Wave B is complete (reactions, reply/quote, delete, pins, UI polish)
+- Wave C is complete (slash commands, polls, note to self)
+- Remaining Wave B items still to build: image attachments, markdown rendering, message editing
 
 ## Current blockers
 

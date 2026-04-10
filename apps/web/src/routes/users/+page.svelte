@@ -2,6 +2,8 @@
 	import { goto } from '$app/navigation';
 	import { users } from '$services/api';
 	import type { MemberDetail } from '@penthouse/contracts';
+	import Icon from '$lib/components/Icon.svelte';
+	import Avatar from '$lib/components/Avatar.svelte';
 
 	let searchQuery = $state('');
 	let results = $state<MemberDetail[]>([]);
@@ -107,7 +109,7 @@
 	<!-- Header -->
 	<header class="users-header">
 		<button class="back-btn" onclick={() => goto('/')} aria-label="Back to chat list">
-			←
+			<Icon name="arrow-left" size={20} />
 		</button>
 		<h1 class="users-title">Find People</h1>
 	</header>
@@ -150,14 +152,13 @@
 				<div class="results-header">Found {results.length} user{results.length !== 1 ? 's' : ''}</div>
 				{#each results as user (user.id)}
 					<button class="user-card" onclick={() => goToProfile(user.id)}>
-						<div class="user-avatar">
-							{#if user.avatarUrl}
-								<img src={user.avatarUrl} alt={user.displayName} />
-							{:else}
-								<div class="avatar-placeholder">{user.displayName.charAt(0).toUpperCase()}</div>
-							{/if}
-							<div class="status-dot" class:online={getStatusColor(user.lastSeenAt) === 'online'} class:away={getStatusColor(user.lastSeenAt) === 'away'} class:offline={getStatusColor(user.lastSeenAt) === 'offline'}></div>
-						</div>
+						<Avatar
+							userId={user.id}
+							displayName={user.displayName}
+							avatarUrl={user.avatarUrl ?? null}
+							size="md"
+							showPresence={getStatusColor(user.lastSeenAt) === 'online'}
+						/>
 						<div class="user-info">
 							<div class="user-name">{user.displayName}</div>
 							<div class="user-meta">@{user.username}</div>
@@ -171,7 +172,7 @@
 								{/if}
 							</div>
 						</div>
-						<div class="chevron">→</div>
+						<div class="chevron"><Icon name="chevron-right" size={16} /></div>
 					</button>
 				{/each}
 			{/if}
@@ -185,14 +186,13 @@
 				</div>
 				{#each allUsers as user (user.id)}
 					<button class="user-card" onclick={() => goToProfile(user.id)}>
-						<div class="user-avatar">
-							{#if user.avatarUrl}
-								<img src={user.avatarUrl} alt={user.displayName} />
-							{:else}
-								<div class="avatar-placeholder">{user.displayName.charAt(0).toUpperCase()}</div>
-							{/if}
-							<div class="status-dot" class:online={getStatusColor(user.lastSeenAt) === 'online'} class:away={getStatusColor(user.lastSeenAt) === 'away'} class:offline={getStatusColor(user.lastSeenAt) === 'offline'}></div>
-						</div>
+						<Avatar
+							userId={user.id}
+							displayName={user.displayName}
+							avatarUrl={user.avatarUrl ?? null}
+							size="md"
+							showPresence={getStatusColor(user.lastSeenAt) === 'online'}
+						/>
 						<div class="user-info">
 							<div class="user-name">{user.displayName}</div>
 							<div class="user-meta">@{user.username}</div>
@@ -206,18 +206,18 @@
 								{/if}
 							</div>
 						</div>
-						<div class="chevron">→</div>
+						<div class="chevron"><Icon name="chevron-right" size={16} /></div>
 					</button>
 				{/each}
 
 				<!-- Pagination -->
 				<div class="pagination">
-					<button class="pagination-btn" onclick={previousPage} disabled={offset === 0}>
-						← Previous
+					<button class="pagination-btn icon-btn" onclick={previousPage} disabled={offset === 0} aria-label="Previous page">
+						<Icon name="arrow-left" size={16} />
 					</button>
 					<span class="pagination-info">Page {Math.floor(offset / limit) + 1}</span>
-					<button class="pagination-btn" onclick={nextPage} disabled={offset + limit >= total}>
-						Next →
+					<button class="pagination-btn icon-btn" onclick={nextPage} disabled={offset + limit >= total} aria-label="Next page">
+						<Icon name="chevron-right" size={16} />
 					</button>
 				</div>
 			{/if}
@@ -246,14 +246,23 @@
 	}
 
 	.back-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 36px;
+		height: 36px;
 		background: none;
 		border: none;
 		color: var(--color-accent);
-		font-size: var(--text-xl);
-		padding: var(--space-2);
-		line-height: 1;
-		border-radius: var(--radius-sm);
+		padding: 0;
+		border-radius: var(--radius-lg);
 		cursor: pointer;
+		flex-shrink: 0;
+		transition: background 0.15s;
+	}
+
+	.back-btn:hover {
+		background: var(--color-accent-dim);
 	}
 
 	.users-title {
@@ -300,9 +309,12 @@
 		background: var(--color-accent);
 		color: #000;
 		border: none;
-		font-size: var(--text-base);
+		display: flex;
+		align-items: center;
+		justify-content: center;
 		cursor: pointer;
 		transition: opacity 0.15s;
+		flex-shrink: 0;
 	}
 
 	.search-btn:disabled {
@@ -371,56 +383,6 @@
 		border-color: var(--color-border-solid);
 	}
 
-	.user-avatar {
-		position: relative;
-		flex-shrink: 0;
-		width: 48px;
-		height: 48px;
-		border-radius: var(--radius-full);
-		overflow: hidden;
-		background: var(--color-bg);
-	}
-
-	.user-avatar img {
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
-	}
-
-	.avatar-placeholder {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 100%;
-		height: 100%;
-		background: linear-gradient(135deg, var(--color-accent), rgba(119, 119, 194, 0.5));
-		color: #000;
-		font-weight: 600;
-		font-size: var(--text-sm);
-	}
-
-	.status-dot {
-		position: absolute;
-		bottom: 0;
-		right: 0;
-		width: 12px;
-		height: 12px;
-		border-radius: var(--radius-full);
-		border: 2px solid var(--color-surface);
-	}
-
-	.status-dot.online {
-		background: var(--color-success);
-	}
-
-	.status-dot.away {
-		background: #fbbf24;
-	}
-
-	.status-dot.offline {
-		background: var(--color-text-secondary);
-	}
-
 	.user-info {
 		flex: 1;
 		min-width: 0;
@@ -467,8 +429,9 @@
 
 	.chevron {
 		flex-shrink: 0;
+		display: flex;
+		align-items: center;
 		color: var(--color-text-secondary);
-		font-size: var(--text-sm);
 		transition: color 0.15s;
 	}
 
@@ -496,6 +459,15 @@
 		font-size: var(--text-xs);
 		cursor: pointer;
 		transition: background 0.15s;
+	}
+
+	.pagination-btn.icon-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 36px;
+		height: 36px;
+		padding: 0;
 	}
 
 	.pagination-btn:not(:disabled):hover {

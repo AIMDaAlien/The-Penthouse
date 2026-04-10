@@ -5,6 +5,8 @@
 	import { sessionStore } from '$stores/session.svelte';
 	import type { MemberDetail } from '@penthouse/contracts';
 	import { onMount } from 'svelte';
+	import Icon from '$lib/components/Icon.svelte';
+	import Avatar from '$lib/components/Avatar.svelte';
 
 	const userId = $derived(page.params.id ?? '');
 	const isOwnProfile = $derived(sessionStore.current?.user.id === userId);
@@ -109,7 +111,7 @@
 	<!-- Header -->
 	<header class="profile-header">
 		<button class="back-btn" onclick={() => goto('/users')} aria-label="Back to users">
-			←
+			<Icon name="arrow-left" size={20} />
 		</button>
 		<h1 class="profile-title">Profile</h1>
 		{#if isOwnProfile && !isEditing}
@@ -120,7 +122,7 @@
 				}}
 				aria-label="Edit profile"
 			>
-				✎
+				<Icon name="edit" size={16} />
 			</button>
 		{/if}
 	</header>
@@ -134,12 +136,14 @@
 		{:else if user}
 			<div class="profile-card">
 				<!-- Avatar -->
-				<div class="avatar-large">
-					{#if user.avatarUrl}
-						<img src={user.avatarUrl} alt={user.displayName} />
-					{:else}
-						<div class="avatar-placeholder">{user.displayName.charAt(0).toUpperCase()}</div>
-					{/if}
+				<div class="avatar-large-wrap">
+					<Avatar
+						userId={user.id}
+						displayName={user.displayName}
+						avatarUrl={user.avatarUrl ?? null}
+						size="lg"
+						showPresence={false}
+					/>
 				</div>
 
 				<!-- Status -->
@@ -230,7 +234,7 @@
 								disabled={messagingInProgress}
 								aria-label="Start a direct message"
 							>
-								{messagingInProgress ? 'Starting...' : '💬 Message'}
+								{messagingInProgress ? 'Starting...' : 'Message'}
 							</button>
 						{/if}
 
@@ -265,14 +269,23 @@
 	}
 
 	.back-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 36px;
+		height: 36px;
 		background: none;
 		border: none;
 		color: var(--color-accent);
-		font-size: var(--text-xl);
-		padding: var(--space-2);
-		line-height: 1;
-		border-radius: var(--radius-sm);
+		padding: 0;
+		border-radius: var(--radius-lg);
 		cursor: pointer;
+		flex-shrink: 0;
+		transition: background 0.15s;
+	}
+
+	.back-btn:hover {
+		background: var(--color-accent-dim);
 	}
 
 	.profile-title {
@@ -327,31 +340,16 @@
 		max-width: 400px;
 	}
 
-	.avatar-large {
-		width: 120px;
-		height: 120px;
-		border-radius: var(--radius-full);
-		overflow: hidden;
-		margin: 0 auto var(--space-4);
-		background: var(--color-surface);
-		flex-shrink: 0;
-	}
-
-	.avatar-large img {
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
-	}
-
-	.avatar-placeholder {
+	.avatar-large-wrap {
 		display: flex;
-		align-items: center;
 		justify-content: center;
-		width: 100%;
-		height: 100%;
-		background: linear-gradient(135deg, var(--color-accent), rgba(119, 119, 194, 0.5));
-		color: #000;
-		font-weight: 600;
+		margin-bottom: var(--space-4);
+	}
+
+	/* Force large size — Avatar component sizes use CSS vars */
+	:global(.avatar-large-wrap .avatar) {
+		width: 96px;
+		height: 96px;
 		font-size: 2rem;
 	}
 

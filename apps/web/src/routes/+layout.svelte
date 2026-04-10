@@ -1,10 +1,12 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	import { goto, onNavigate } from '$app/navigation';
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
 	import { sessionStore } from '$stores/session.svelte';
 	import { socketStore } from '$stores/socket.svelte';
 	import { presenceStore } from '$stores/presence.svelte';
+	import { readReceiptsStore } from '$stores/readReceipts.svelte';
+	import BottomNav from '$lib/components/BottomNav.svelte';
 
 	let { children } = $props();
 
@@ -54,6 +56,32 @@
 	});
 
 	// Initialize presence socket listeners when connected
+
+	// View transitions — slide/fade between pages
+	onNavigate((navigation) => {
+		if (!document.startViewTransition) return;
+		return new Promise((resolve) => {
+			document.startViewTransition(async () => {
+				resolve();
+				await navigation.complete;
+			});
+		});
+	});
+
+	// Show bottom tab nav only on top-level tab pages
+	const showBottomNav = $derived(
+		sessionStore.isAuthenticated &&
+		(page.url.pathname === '/' ||
+		 page.url.pathname === '/users' ||
+		 page.url.pathname === '/settings')
+	);
+
+	// Initialize read receipts socket listeners when connected
+	$effect(() => {
+		if (connectionStatus === 'connected') {
+			readReceiptsStore.initializeSocketListeners();
+		}
+	});
 	$effect(() => {
 		if (connectionStatus === 'connected') {
 			presenceStore.initializeSocketListeners();
@@ -67,6 +95,10 @@
 </svelte:head>
 
 {@render children()}
+
+{#if showBottomNav}
+	<BottomNav />
+{/if}
 
 <style>
 	/* ── Reset ── */
@@ -150,7 +182,8 @@
 	:global(html, body) {
 		height: 100%;
 		width: 100%;
-		overflow: hidden;
+		/* No overflow:hidden here — chat list and other pages need window scroll.
+		   The chat thread page manages its own scroll inside .thread-shell. */
 	}
 
 	:global(body) {
@@ -212,11 +245,38 @@
 		font-size: var(--text-sm);
 	}
 
+	/* ── Nav height token ── */
+	:global(:root) {
+		--nav-height: 64px;
+	}
+
+	/* ── View transitions ── */
+	:global(::view-transition-old(root)) {
+		animation: 160ms ease both vt-out;
+	}
+
+	:global(::view-transition-new(root)) {
+		animation: 260ms cubic-bezier(0.34, 1.56, 0.64, 1) both vt-in;
+	}
+
+	@keyframes vt-out {
+		to { opacity: 0; transform: translateY(-5px); }
+	}
+
+	@keyframes vt-in {
+		from { opacity: 0; transform: translateY(8px); }
+	}
+
 	/* ── Reduced motion ── */
 	@media (prefers-reduced-motion: reduce) {
 		:global(*) {
 			animation-duration: 0.01ms !important;
 			transition-duration: 0.01ms !important;
+		}
+
+		:global(::view-transition-old(root)),
+		:global(::view-transition-new(root)) {
+			animation: none !important;
 		}
 	}
 
