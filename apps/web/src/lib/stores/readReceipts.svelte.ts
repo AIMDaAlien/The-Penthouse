@@ -18,6 +18,9 @@ function createReadReceiptsStore() {
 		const socket = socketStore.instance;
 		if (!socket) return;
 
+		// Remove prior listener before re-registering to prevent stacking.
+		socket.off('message.read');
+
 		// Backend wraps realtime events: { type: 'message.read', payload: {...} }
 		socket.on('message.read', (envelope: { type: string; payload: { chatId: string; readerUserId: string; seenAt: string; seenThroughMessageId: string | null } }) => {
 			const { chatId, readerUserId, seenAt, seenThroughMessageId } = envelope.payload;

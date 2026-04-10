@@ -63,7 +63,7 @@
 
 <div
 	class="overlay"
-	onclick={() => !submitting && onClose()}
+	onclick={(e) => { if (e.target === e.currentTarget && !submitting) onClose(); }}
 	onkeydown={(e) => e.key === 'Escape' && !submitting && onClose()}
 	role="dialog"
 	aria-modal="true"
@@ -72,10 +72,7 @@
 >
 	<div
 		class="sheet"
-		onclick={(e) => e.stopPropagation()}
-		onkeydown={(e) => e.stopPropagation()}
 		role="document"
-		tabindex="-1"
 	>
 		<div class="sheet-handle"></div>
 

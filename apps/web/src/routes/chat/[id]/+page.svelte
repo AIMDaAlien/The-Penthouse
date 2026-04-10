@@ -434,6 +434,11 @@
 	onDestroy(() => {
 		// mark read on exit (best-effort)
 		chats.markRead(chatId).catch(() => {});
+		// clear long-press timer if user navigates away mid-press
+		if (longPressTimer) {
+			clearTimeout(longPressTimer);
+			longPressTimer = null;
+		}
 	});
 
 	// ─── Send ─────────────────────────────────────────────────────────────────

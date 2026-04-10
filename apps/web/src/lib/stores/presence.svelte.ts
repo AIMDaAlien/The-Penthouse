@@ -42,6 +42,11 @@ function createPresenceStore() {
 		const socket = socketStore.instance;
 		if (!socket) return;
 
+		// Remove any prior listeners before re-registering to prevent stacking
+		// across socket reconnects or store re-initialization.
+		socket.off('presence.sync');
+		socket.off('presence.update');
+
 		// Initialize presence from sync event (all users' status)
 		socket.on('presence.sync', (payload: { [userId: string]: boolean }) => {
 			userPresenceMap = new Map(Object.entries(payload));

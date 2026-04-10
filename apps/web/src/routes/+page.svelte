@@ -354,14 +354,14 @@
 {#if contextMenuChat}
 	<div
 		class="overlay"
-		onclick={() => (contextMenuChat = null)}
+		onclick={(e) => { if (e.target === e.currentTarget) contextMenuChat = null; }}
 		onkeydown={(e) => e.key === 'Escape' && (contextMenuChat = null)}
 		role="dialog"
 		aria-modal="true"
 		aria-label="Chat options"
 		tabindex="-1"
 	>
-		<div class="bottom-sheet" onclick={(e) => e.stopPropagation()} role="document">
+		<div class="bottom-sheet" role="document">
 			<div class="sheet-handle"></div>
 			<div class="sheet-header">
 				<p class="sheet-title">{contextMenuChat.name ?? 'Direct message'}</p>
@@ -381,14 +381,14 @@
 {#if showNewDmModal}
 	<div
 		class="overlay"
-		onclick={handleCloseDmModal}
+		onclick={(e) => { if (e.target === e.currentTarget) handleCloseDmModal(); }}
 		onkeydown={(e) => e.key === 'Escape' && handleCloseDmModal()}
 		role="dialog"
 		aria-modal="true"
 		aria-labelledby="dm-modal-title"
 		tabindex="-1"
 	>
-		<div class="bottom-sheet" onclick={(e) => e.stopPropagation()} role="document">
+		<div class="bottom-sheet" role="document">
 			<div class="sheet-handle"></div>
 			<div class="sheet-header">
 				<p class="sheet-title" id="dm-modal-title">New message</p>

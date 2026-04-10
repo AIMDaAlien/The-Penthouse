@@ -77,8 +77,16 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<div class="modal-overlay" onclick={onClose} role="dialog" aria-modal="true" aria-label="User profile">
-	<div class="modal-card" onclick={(e) => e.stopPropagation()}>
+<div
+	class="modal-overlay"
+	onclick={(e) => { if (e.target === e.currentTarget) onClose?.(); }}
+	onkeydown={(e) => e.key === 'Escape' && onClose?.()}
+	role="dialog"
+	aria-modal="true"
+	aria-label="User profile"
+	tabindex="-1"
+>
+	<div class="modal-card">
 		<!-- Banner -->
 		<div class="banner" style="background: {bannerGradient()}">
 			<button class="close-btn" onclick={onClose} aria-label="Close">

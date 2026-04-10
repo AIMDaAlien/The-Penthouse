@@ -17,12 +17,14 @@
 		lg: 'avatar-lg'
 	};
 
-	const initials = (displayName || '')
-		.split(' ')
-		.map((n: string) => n[0])
-		.join('')
-		.toUpperCase()
-		.slice(0, 2);
+	const initials = $derived(
+		(displayName || '')
+			.split(' ')
+			.map((n: string) => n[0])
+			.join('')
+			.toUpperCase()
+			.slice(0, 2)
+	);
 
 	const isOnline = $derived(presenceStore.userPresenceMap.get(userId) ?? false);
 </script>
