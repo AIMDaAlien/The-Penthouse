@@ -20,6 +20,7 @@ import {
 import { pool } from '../db/pool.js';
 import { touchLastSeen } from '../utils/activity.js';
 import { REPLY_TARGET_NOT_FOUND_ERROR, loadPersistedMessageById, sendChatMessage } from '../utils/chatMessages.js';
+import { createAuthRateLimiter, replyIfRateLimited } from '../utils/authRateLimit.js';
 import { formatValidationError } from '../utils/error-responses.js';
 import { hydrateMessageReadReceipts, listChatMemberReadStates, markChatRead } from '../utils/messageReads.js';
 import { hydrateMessageReactions, loadGroupedReactionsForMessageIds, toPinnedMessage } from '../utils/messageHydration.js';
@@ -56,6 +57,28 @@ const MessageHistoryQuerySchema = z.object({
   before: z.string().uuid().optional(),
   limit: z.string().optional()
 });
+const CHAT_ROUTE_RATE_LIMITS = {
+  reactions: {
+    windowMs: 60_000,
+    maxRequests: 30,
+    error: 'Too many reaction updates. Try again in a minute.'
+  },
+  pollVotes: {
+    windowMs: 60_000,
+    maxRequests: 10,
+    error: 'Too many poll votes. Try again in a minute.'
+  },
+  pins: {
+    windowMs: 60_000,
+    maxRequests: 20,
+    error: 'Too many pin updates. Try again in a minute.'
+  },
+  readMarks: {
+    windowMs: 60_000,
+    maxRequests: 60,
+    error: 'Too many read updates. Try again in a minute.'
+  }
+} as const;
 
 function joinUserSocketsToChat(app: FastifyInstance, chatId: string, userIds: string[]): void {
   const io = app.io as
@@ -322,6 +345,11 @@ async function resolveOrCreateSelfChat(userId: string): Promise<string> {
 }
 
 export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
+  const reactionRateLimiter = createAuthRateLimiter(CHAT_ROUTE_RATE_LIMITS.reactions);
+  const pollVoteRateLimiter = createAuthRateLimiter(CHAT_ROUTE_RATE_LIMITS.pollVotes);
+  const pinRateLimiter = createAuthRateLimiter(CHAT_ROUTE_RATE_LIMITS.pins);
+  const readMarkRateLimiter = createAuthRateLimiter(CHAT_ROUTE_RATE_LIMITS.readMarks);
+
   app.get('/api/v1/chats', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request) => {
     const summaries = await listChatSummariesForUser(pool, request.user.userId);
     touchLastSeen(pool, request.user.userId, request.log);
@@ -567,6 +595,15 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
 
     const isMember = await ensureMembership(userId, chatId);
     if (!isMember) return reply.status(403).send({ error: NOT_A_CHAT_MEMBER_ERROR });
+    if (
+      replyIfRateLimited(
+        reply,
+        reactionRateLimiter.consume(userId),
+        CHAT_ROUTE_RATE_LIMITS.reactions.error
+      )
+    ) {
+      return;
+    }
 
     const messageContext = await getChatMessageContext(chatId, messageId);
     if (!messageContext || messageContext.hidden_by_moderation || messageContext.sender_status !== 'active') {
@@ -606,6 +643,15 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
 
     const isMember = await ensureMembership(userId, chatId);
     if (!isMember) return reply.status(403).send({ error: NOT_A_CHAT_MEMBER_ERROR });
+    if (
+      replyIfRateLimited(
+        reply,
+        reactionRateLimiter.consume(userId),
+        CHAT_ROUTE_RATE_LIMITS.reactions.error
+      )
+    ) {
+      return;
+    }
 
     const messageContext = await getChatMessageContext(chatId, messageId);
     if (!messageContext || messageContext.hidden_by_moderation || messageContext.sender_status !== 'active') {
@@ -709,6 +755,15 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
     const params = ChatMessageParamsSchema.safeParse(request.params ?? {});
     if (!params.success) return reply.status(400).send({ error: formatValidationError(params.error) });
     const { chatId, messageId } = params.data;
+    if (
+      replyIfRateLimited(
+        reply,
+        pinRateLimiter.consume(request.user.userId),
+        CHAT_ROUTE_RATE_LIMITS.pins.error
+      )
+    ) {
+      return;
+    }
     return pinMessageForChat(app, request, reply, chatId, messageId);
   });
 
@@ -716,6 +771,15 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
     const params = ChatMessageParamsSchema.safeParse(request.params ?? {});
     if (!params.success) return reply.status(400).send({ error: formatValidationError(params.error) });
     const { chatId, messageId } = params.data;
+    if (
+      replyIfRateLimited(
+        reply,
+        pinRateLimiter.consume(request.user.userId),
+        CHAT_ROUTE_RATE_LIMITS.pins.error
+      )
+    ) {
+      return;
+    }
     return unpinMessageForChat(app, request, reply, chatId, messageId);
   });
 
@@ -725,6 +789,15 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
     const { chatId } = params.data;
     const parsed = PinMessageRequestSchema.safeParse(request.body ?? {});
     if (!parsed.success) return reply.status(400).send({ error: formatValidationError(parsed.error) });
+    if (
+      replyIfRateLimited(
+        reply,
+        pinRateLimiter.consume(request.user.userId),
+        CHAT_ROUTE_RATE_LIMITS.pins.error
+      )
+    ) {
+      return;
+    }
 
     return pinMessageForChat(app, request, reply, chatId, parsed.data.messageId);
   });
@@ -733,6 +806,15 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
     const params = ChatMessageParamsSchema.safeParse(request.params ?? {});
     if (!params.success) return reply.status(400).send({ error: formatValidationError(params.error) });
     const { chatId, messageId } = params.data;
+    if (
+      replyIfRateLimited(
+        reply,
+        pinRateLimiter.consume(request.user.userId),
+        CHAT_ROUTE_RATE_LIMITS.pins.error
+      )
+    ) {
+      return;
+    }
     return unpinMessageForChat(app, request, reply, chatId, messageId);
   });
 
@@ -831,6 +913,16 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
       if (!context.isMember) {
         await client.query('ROLLBACK');
         return reply.status(403).send({ error: NOT_A_CHAT_MEMBER_ERROR });
+      }
+      if (
+        replyIfRateLimited(
+          reply,
+          pollVoteRateLimiter.consume(userId),
+          CHAT_ROUTE_RATE_LIMITS.pollVotes.error
+        )
+      ) {
+        await client.query('ROLLBACK');
+        return;
       }
       if (context.expiresAt && new Date(context.expiresAt) <= new Date()) {
         await client.query('ROLLBACK');
@@ -939,6 +1031,15 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
 
     const isMember = await ensureMembership(userId, chatId);
     if (!isMember) return reply.status(403).send({ error: NOT_A_CHAT_MEMBER_ERROR });
+    if (
+      replyIfRateLimited(
+        reply,
+        readMarkRateLimiter.consume(userId),
+        CHAT_ROUTE_RATE_LIMITS.readMarks.error
+      )
+    ) {
+      return;
+    }
 
     const client = await pool.connect();
     try {

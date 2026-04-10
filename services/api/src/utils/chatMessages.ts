@@ -27,7 +27,7 @@ type SendChatMessageOptions = {
   beforeBroadcast?: () => void;
 };
 
-export const REPLY_TARGET_NOT_FOUND_ERROR = 'Reply target not found';
+export const REPLY_TARGET_NOT_FOUND_ERROR = 'Replied-to message not found';
 
 type PersistedMessageRow = {
   id: string;

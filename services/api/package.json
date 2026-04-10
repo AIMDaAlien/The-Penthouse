@@ -9,7 +9,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "tsx --test --test-concurrency=1 ./test/altcha.test.ts ./test/auth.test.ts ./test/auth-rate-limit.test.ts ./test/chats.test.ts ./test/contracts-smoke.test.ts ./test/error-responses.test.ts ./test/health.test.ts ./test/media.test.ts ./test/operator-diagnostics.test.ts ./test/push-contracts.test.ts",
     "test:integration": "tsx --test --test-concurrency=1 ./test/integration-auth.test.ts && tsx --test --test-concurrency=1 ./test/integration-users.test.ts && tsx --test --test-concurrency=1 ./test/integration-invites.test.ts && tsx --test --test-concurrency=1 ./test/integration-chats.test.ts && tsx --test --test-concurrency=1 ./test/integration-media.test.ts && tsx --test --test-concurrency=1 ./test/integration-moderation.test.ts && tsx --test --test-concurrency=1 ./test/integration-push.test.ts && tsx --test --test-concurrency=1 ./test/integration-realtime.test.ts",
-    "migrate": "tsx src/db/migrate.ts"
+    "migrate": "tsx src/db/migrate.ts",
+    "db:migrate": "tsx src/db/migrate.ts"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.1",

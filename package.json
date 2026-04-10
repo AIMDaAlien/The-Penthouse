@@ -10,6 +10,8 @@
     "packages/*"
   ],
   "scripts": {
+    "db:start": "docker compose -f infra/docker-compose.yml up -d",
+    "db:stop": "docker compose -f infra/docker-compose.yml down",
     "typecheck": "npm run --workspaces --if-present typecheck",
     "lint": "npm run --workspaces --if-present lint",
     "test": "npm run --workspaces --if-present test",

@@ -50,7 +50,7 @@ export function toMemberMessage(row: BaseMessageRow): Message {
     createdAt: new Date(row.created_at).toISOString(),
     clientMessageId: row.client_message_id ?? undefined,
     seenAt: row.seen_at ? new Date(row.seen_at).toISOString() : null,
-    reactions: hidden ? undefined : row.reactions,
+    reactions: hidden ? undefined : (row.reactions ?? []),
     hidden
   };
 }

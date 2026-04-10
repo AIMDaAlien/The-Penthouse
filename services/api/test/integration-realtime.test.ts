@@ -542,6 +542,71 @@ describe('[integration] realtime observability', { skip: SKIP }, () => {
     await closeSocket(readerSocket);
   });
 
+  test('disconnecting from an active chat marks the latest message as read', async () => {
+    const { authHeaders, cleanup, registerUser } = await import('./helpers.js');
+    await cleanup();
+
+    const sender = await registerUser(app, 'socket_disconnect_read_sender');
+    const reader = await registerUser(app, 'socket_disconnect_read_reader');
+
+    const senderSocket = createClient(baseUrl, {
+      path: '/socket.io/',
+      transports: ['polling'],
+      auth: { token: sender.accessToken },
+      reconnection: false,
+      forceNew: true
+    });
+    await waitForSocketConnect(senderSocket);
+
+    const readerSocket = createClient(baseUrl, {
+      path: '/socket.io/',
+      transports: ['polling'],
+      auth: { token: reader.accessToken },
+      reconnection: false,
+      forceNew: true
+    });
+    await waitForSocketConnect(readerSocket);
+
+    await new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('Timed out waiting for chat.join ack')), 1_500);
+      readerSocket.emit('chat.join', { chatId: GENERAL_CHAT_ID }, (response: { ok: boolean; error?: string }) => {
+        clearTimeout(timeout);
+        if (!response?.ok) {
+          reject(new Error(response?.error ?? 'chat.join failed'));
+          return;
+        }
+        resolve();
+      });
+    });
+
+    const send = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${GENERAL_CHAT_ID}/messages`,
+      headers: authHeaders(sender.accessToken),
+      payload: {
+        content: 'disconnect read mark',
+        clientMessageId: 'socket-disconnect-read-001'
+      }
+    });
+    assert.equal(send.statusCode, 200);
+    const sentMessageId = JSON.parse(send.payload).message.id as string;
+
+    const readEvent = waitForSocketEvent(senderSocket, 'message.read', (event: any) => (
+      event?.payload?.chatId === GENERAL_CHAT_ID &&
+      event?.payload?.readerUserId === reader.user.id &&
+      event?.payload?.seenThroughMessageId === sentMessageId &&
+      typeof event?.payload?.seenAt === 'string'
+    ), 1_500);
+
+    await closeSocket(readerSocket);
+
+    const payload = await readEvent;
+    assert.equal(payload.type, 'message.read');
+    assert.equal(payload.payload.seenThroughMessageId, sentMessageId);
+
+    await closeSocket(senderSocket);
+  });
+
   test('reconnected sockets still receive message.new events from their member chats without rejoining manually', async () => {
     const { authHeaders, cleanup, registerUser } = await import('./helpers.js');
     await cleanup();

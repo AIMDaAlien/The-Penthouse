@@ -513,6 +513,47 @@ describe('[integration] chat read receipts', { skip: SKIP }, () => {
     assert.equal(outsiderRead.statusCode, 403);
     assert.equal(JSON.parse(outsiderRead.payload).error, 'You are not a member of this chat');
   });
+
+  test('read marks are rate limited per user', async () => {
+    const { authHeaders, registerUser } = await import('./helpers.js');
+    const sender = await registerUser(app, 'receipt_limit_sender');
+    const reader = await registerUser(app, 'receipt_limit_reader');
+
+    const senderChats = await app.inject({
+      method: 'GET',
+      url: '/api/v1/chats',
+      headers: authHeaders(sender.accessToken)
+    });
+    const generalChatId = JSON.parse(senderChats.payload).find((chat: any) => chat.name === 'General').id as string;
+
+    const send = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${generalChatId}/messages`,
+      headers: authHeaders(sender.accessToken),
+      payload: {
+        content: 'read rate limit marker',
+        clientMessageId: 'read-rate-limit-marker-001'
+      }
+    });
+    assert.equal(send.statusCode, 200);
+
+    for (let attempt = 0; attempt < 60; attempt += 1) {
+      const marked = await app.inject({
+        method: 'POST',
+        url: `/api/v1/chats/${generalChatId}/read`,
+        headers: authHeaders(reader.accessToken)
+      });
+      assert.equal(marked.statusCode, 200);
+    }
+
+    const limited = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${generalChatId}/read`,
+      headers: authHeaders(reader.accessToken)
+    });
+    assert.equal(limited.statusCode, 429);
+    assert.equal(JSON.parse(limited.payload).error, 'Too many read updates. Try again in a minute.');
+  });
 });
 
 describe('[integration] direct messages', { skip: SKIP }, () => {
@@ -960,6 +1001,8 @@ describe('[integration] polls', { skip: SKIP }, () => {
     assert.equal(body.message.metadata.question, 'Best rooftop snack?');
     assert.equal(body.message.metadata.options.length, 3);
     assert.equal(body.message.metadata.createdByUserId, sender.user.id);
+    assert.deepEqual(body.message.reactions, []);
+    assert.equal(body.message.replyTo, null);
 
     const pollRow = await pool.query(
       `SELECT id
@@ -989,6 +1032,8 @@ describe('[integration] polls', { skip: SKIP }, () => {
     assert.equal(event.data.type, 'message.new');
     assert.equal(event.data.payload.type, 'poll');
     assert.equal(event.data.payload.metadata.id, body.message.metadata.id);
+    assert.deepEqual(event.data.payload.reactions, []);
+    assert.equal(event.data.payload.replyTo, null);
   });
 
   test('voting on a poll updates metadata and broadcasts poll.voted', async () => {
@@ -1065,6 +1110,63 @@ describe('[integration] polls', { skip: SKIP }, () => {
     });
     assert.equal(conflictingVote.statusCode, 409, 'single-select polls should reject a second distinct vote');
     assert.equal(JSON.parse(conflictingVote.payload).error, 'You have already voted on this poll');
+  });
+
+  test('repeat votes for the same option are idempotent and eventually rate limited', async () => {
+    const { authHeaders, registerUser } = await import('./helpers.js');
+    const sender = await registerUser(app, 'poll_repeat_sender');
+    const voter = await registerUser(app, 'poll_repeat_voter');
+
+    const senderChats = await app.inject({
+      method: 'GET',
+      url: '/api/v1/chats',
+      headers: authHeaders(sender.accessToken)
+    });
+    const generalChatId = JSON.parse(senderChats.payload).find((chat: any) => chat.name === 'General').id as string;
+
+    const created = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${generalChatId}/polls`,
+      headers: authHeaders(sender.accessToken),
+      payload: {
+        question: 'Repeat vote check?',
+        options: ['Yes', 'Still yes'],
+        multiSelect: true
+      }
+    });
+    assert.equal(created.statusCode, 200);
+    const pollId = JSON.parse(created.payload).message.metadata.id as string;
+
+    const startIdx = emitted.length;
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const vote = await app.inject({
+        method: 'POST',
+        url: `/api/v1/polls/${pollId}/vote`,
+        headers: authHeaders(voter.accessToken),
+        payload: {
+          optionIndex: 0
+        }
+      });
+      assert.equal(vote.statusCode, 200);
+      const poll = JSON.parse(vote.payload);
+      assert.deepEqual(poll.options[0].voterIds, [voter.user.id]);
+    }
+
+    const voteEvents = emitted
+      .slice(startIdx)
+      .filter((entry) => entry.room === `chat:${generalChatId}` && entry.event === 'poll.voted');
+    assert.equal(voteEvents.length, 1, 'repeat votes for the same option must not rebroadcast');
+
+    const limited = await app.inject({
+      method: 'POST',
+      url: `/api/v1/polls/${pollId}/vote`,
+      headers: authHeaders(voter.accessToken),
+      payload: {
+        optionIndex: 0
+      }
+    });
+    assert.equal(limited.statusCode, 429);
+    assert.equal(JSON.parse(limited.payload).error, 'Too many poll votes. Try again in a minute.');
   });
 });
 
@@ -1308,6 +1410,41 @@ describe('[integration] message idempotency', { skip: SKIP }, () => {
     assert.equal(body.message.senderAvatarUrl, `/uploads/${encodeURIComponent(storageKey)}`);
   });
 
+  test('REST send returns hydrated empty fields for new messages', async () => {
+    const { registerUser } = await import('./helpers.js');
+    const sender = await registerUser(app, 'rest_hydrated_sender');
+
+    const senderChats = await app.inject({
+      method: 'GET',
+      url: '/api/v1/chats',
+      headers: { authorization: `Bearer ${sender.accessToken}` }
+    });
+    const chatId = JSON.parse(senderChats.payload)[0].id;
+    const startIdx = emitted.length;
+
+    const sent = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${chatId}/messages`,
+      headers: { authorization: `Bearer ${sender.accessToken}` },
+      payload: {
+        content: 'hydrated empty fields',
+        clientMessageId: 'rest-hydrated-empty-001'
+      }
+    });
+    assert.equal(sent.statusCode, 200);
+
+    const body = JSON.parse(sent.payload);
+    assert.deepEqual(body.message.reactions, []);
+    assert.equal(body.message.replyTo, null);
+
+    const event = emitted
+      .slice(startIdx)
+      .find((entry: any) => entry.room === `chat:${chatId}` && entry.event === 'message.new');
+    assert.ok(event, 'sending a message should broadcast message.new');
+    assert.deepEqual(event.data.payload.reactions, []);
+    assert.equal(event.data.payload.replyTo, null);
+  });
+
   test('concurrent duplicate sends do not crash and resolve to one message id', async () => {
     const { registerUser } = await import('./helpers.js');
     const iris = await registerUser(app, 'iris_race');
@@ -1521,6 +1658,54 @@ describe('[integration] wave b message interactions', { skip: SKIP }, () => {
     });
   });
 
+  test('reaction updates are rate limited per user', async () => {
+    const { authHeaders, cleanup, registerUser } = await import('./helpers.js');
+    await cleanup();
+
+    const alice = await registerUser(app, 'reaction_limit_alice');
+    const bob = await registerUser(app, 'reaction_limit_bob');
+
+    const chats = await app.inject({
+      method: 'GET',
+      url: '/api/v1/chats',
+      headers: authHeaders(alice.accessToken)
+    });
+    const generalChatId = JSON.parse(chats.payload).find((chat: any) => chat.name === 'General').id as string;
+
+    const sent = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${generalChatId}/messages`,
+      headers: authHeaders(alice.accessToken),
+      payload: {
+        content: 'reaction rate limit target',
+        clientMessageId: 'wave-b-reaction-limit-001'
+      }
+    });
+    assert.equal(sent.statusCode, 200);
+    const messageId = JSON.parse(sent.payload).message.id as string;
+
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      const response = await app.inject({
+        method: attempt % 2 === 0 ? 'POST' : 'DELETE',
+        url: attempt % 2 === 0
+          ? `/api/v1/chats/${generalChatId}/messages/${messageId}/reactions`
+          : `/api/v1/chats/${generalChatId}/messages/${messageId}/reactions/%F0%9F%94%A5`,
+        headers: authHeaders(bob.accessToken),
+        payload: attempt % 2 === 0 ? { emoji: '🔥' } : undefined
+      });
+      assert.ok([200, 204].includes(response.statusCode), `attempt ${attempt + 1} should not be rate limited`);
+    }
+
+    const limited = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${generalChatId}/messages/${messageId}/reactions`,
+      headers: authHeaders(bob.accessToken),
+      payload: { emoji: '🔥' }
+    });
+    assert.equal(limited.statusCode, 429);
+    assert.equal(JSON.parse(limited.payload).error, 'Too many reaction updates. Try again in a minute.');
+  });
+
   test('new reaction, pin, and delete routes reject non-members and foreign deletions', async () => {
     const { authHeaders, cleanup, createPrivateChannelForUser, registerUser } = await import('./helpers.js');
     await cleanup();
@@ -1690,6 +1875,35 @@ describe('[integration] wave b message interactions', { skip: SKIP }, () => {
       id: originalBody.message.id,
       content: 'Original rooftop take',
       senderDisplayName: 'reply_alice'
+    });
+  });
+
+  test('missing reply targets fail gracefully with a 404', async () => {
+    const { authHeaders, cleanup, registerUser } = await import('./helpers.js');
+    await cleanup();
+
+    const alice = await registerUser(app, 'reply_missing_alice');
+
+    const chats = await app.inject({
+      method: 'GET',
+      url: '/api/v1/chats',
+      headers: authHeaders(alice.accessToken)
+    });
+    const generalChatId = JSON.parse(chats.payload).find((chat: any) => chat.name === 'General').id as string;
+
+    const send = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${generalChatId}/messages`,
+      headers: authHeaders(alice.accessToken),
+      payload: {
+        content: 'Reply target missing',
+        replyToMessageId: randomUUID(),
+        clientMessageId: 'wave-b-reply-missing-001'
+      }
+    });
+    assert.equal(send.statusCode, 404);
+    assert.deepEqual(JSON.parse(send.payload), {
+      error: 'Replied-to message not found'
     });
   });
 
@@ -1868,7 +2082,14 @@ describe('[integration] wave b message interactions', { skip: SKIP }, () => {
       }
     });
     assert.equal(pinRes.statusCode, 200);
-    assert.equal(JSON.parse(pinRes.payload).messageId, messageId);
+    const pinBody = JSON.parse(pinRes.payload);
+    assert.equal(pinBody.messageId, messageId);
+
+    const pinEvent = emitted
+      .find((entry) => entry.room === `chat:${generalChatId}` && entry.event === 'message.pinned' && entry.data?.payload?.messageId === messageId);
+    assert.ok(pinEvent, 'compatibility pin route should emit message.pinned');
+    assert.equal(pinEvent?.data?.payload?.pinnedByUserId, bob.user.id);
+    assert.equal(typeof pinEvent?.data?.payload?.pinnedAt, 'string');
 
     const listPinned = await app.inject({
       method: 'GET',
@@ -1892,6 +2113,52 @@ describe('[integration] wave b message interactions', { skip: SKIP }, () => {
     });
     assert.equal(afterUnpin.statusCode, 200);
     assert.ok(!JSON.parse(afterUnpin.payload).some((pin: any) => pin.messageId === messageId));
+  });
+
+  test('pin updates are rate limited per user', async () => {
+    const { authHeaders, cleanup, registerUser } = await import('./helpers.js');
+    await cleanup();
+
+    const alice = await registerUser(app, 'pin_limit_alice');
+    const bob = await registerUser(app, 'pin_limit_bob');
+
+    const chats = await app.inject({
+      method: 'GET',
+      url: '/api/v1/chats',
+      headers: authHeaders(alice.accessToken)
+    });
+    const generalChatId = JSON.parse(chats.payload).find((chat: any) => chat.name === 'General').id as string;
+
+    const sent = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${generalChatId}/messages`,
+      headers: authHeaders(alice.accessToken),
+      payload: {
+        content: 'pin rate limit target',
+        clientMessageId: 'wave-b-pin-limit-001'
+      }
+    });
+    assert.equal(sent.statusCode, 200);
+    const messageId = JSON.parse(sent.payload).message.id as string;
+
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const response = await app.inject({
+        method: attempt % 2 === 0 ? 'POST' : 'DELETE',
+        url: attempt % 2 === 0
+          ? `/api/v1/chats/${generalChatId}/messages/${messageId}/pin`
+          : `/api/v1/chats/${generalChatId}/messages/${messageId}/pin`,
+        headers: authHeaders(bob.accessToken)
+      });
+      assert.ok([200, 204].includes(response.statusCode), `attempt ${attempt + 1} should not be rate limited`);
+    }
+
+    const limited = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${generalChatId}/messages/${messageId}/pin`,
+      headers: authHeaders(bob.accessToken)
+    });
+    assert.equal(limited.statusCode, 429);
+    assert.equal(JSON.parse(limited.payload).error, 'Too many pin updates. Try again in a minute.');
   });
 
   test('admins can delete another member message through the member delete route', async () => {

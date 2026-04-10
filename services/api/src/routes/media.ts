@@ -29,6 +29,7 @@ const TEXT_MIME_TYPES = new Set([
 ]);
 const GIF_PROVIDER_CACHE_TTL_MS = 60 * 60 * 1000;
 const GIF_PROVIDER_CACHE_MAX_ENTRIES = 200;
+const GIF_PROVIDER_NOT_CONFIGURED_ERROR = 'GIF provider not configured';
 const gifProviderCache = new Map<string, { expiresAt: number; data: unknown }>();
 
 function pruneGifProviderCache(now = Date.now()): void {
@@ -268,7 +269,7 @@ async function fetchGifProvider(provider: GifProvider, mode: 'trending' | 'searc
   }
 
   if (!env.KLIPY_API_KEY) {
-    throw new Error('Klipy not configured');
+    throw new Error(GIF_PROVIDER_NOT_CONFIGURED_ERROR);
   }
 
   const cappedLimit = normalizeLimit(limit, 30, 30);

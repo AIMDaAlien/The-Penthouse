@@ -9,6 +9,7 @@ import {
 import { env } from '../config/env.js';
 import { touchLastSeen } from '../utils/activity.js';
 import { buildPresenceSnapshot, setSocketPresence } from '../utils/presence.js';
+import { markChatRead } from '../utils/messageReads.js';
 import { avatarUrlFromFileName, getUserById, requiresTestNoticeAck } from '../utils/users.js';
 import { getChatSendState } from '../utils/chats.js';
 import { sendChatMessage } from '../utils/chatMessages.js';
@@ -29,7 +30,7 @@ function activeChatRoom(chatId: string): string {
 
 const PRESENCE_INACTIVE_TIMEOUT_MS = 10_000;
 const TYPING_TTL_MS = 6_000;
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function parseAllowedOrigins(): Set<string> {
   const allowed = new Set(
@@ -239,6 +240,64 @@ export function initRealtime(app: FastifyInstance): Server {
     }
   }
 
+  async function persistReadMarksForActiveChats(socket: { data: { userId?: string; activeChatIds?: Set<string> } }): Promise<void> {
+    const userId = socket.data.userId;
+    const activeChatIds = Array.from(socket.data.activeChatIds ?? []);
+    if (!userId || activeChatIds.length === 0) return;
+
+    const client = await pool.connect();
+    const readEvents: Array<{ chatId: string; seenAt: string | null; seenThroughMessageId: string | null }> = [];
+
+    try {
+      await client.query('BEGIN');
+
+      for (const chatId of activeChatIds) {
+        try {
+          const result = await markChatRead(client, chatId, userId);
+          if (result.advanced) {
+            readEvents.push({
+              chatId,
+              seenAt: result.lastReadAt,
+              seenThroughMessageId: result.seenThroughMessageId
+            });
+          }
+        } catch (error) {
+          if (error instanceof Error && error.message === 'Forbidden') {
+            continue;
+          }
+          throw error;
+        }
+      }
+
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      app.log.warn(
+        {
+          error,
+          userId,
+          activeChatIds
+        },
+        'failed to persist read marks for active chats on disconnect'
+      );
+      return;
+    } finally {
+      client.release();
+    }
+
+    for (const event of readEvents) {
+      io.to(`chat:${event.chatId}`).emit('message.read', {
+        type: 'message.read',
+        payload: {
+          chatId: event.chatId,
+          readerUserId: userId,
+          seenAt: event.seenAt,
+          seenThroughMessageId: event.seenThroughMessageId
+        }
+      });
+    }
+  }
+
   io.engine.on('initial_headers', (_headers, req) => {
     app.log.info(
       {
@@ -359,6 +418,7 @@ export function initRealtime(app: FastifyInstance): Server {
       socket.data.displayName = user.display_name;
       socket.data.avatarUrl = avatarUrlFromFileName(user.avatar_storage_key);
       socket.data.appActive = true;
+      socket.data.activeChatIds = new Set<string>();
       next();
     } catch (error) {
       socketAuthFailures++;
@@ -480,6 +540,7 @@ export function initRealtime(app: FastifyInstance): Server {
         return;
       }
       socket.join(activeChatRoom(chatId));
+      (socket.data.activeChatIds as Set<string>).add(chatId);
       app.log.info(
         {
           userId,
@@ -496,6 +557,7 @@ export function initRealtime(app: FastifyInstance): Server {
       const chatId = String((payload as any)?.chatId || '');
       if (!chatId || !isUuid(chatId)) return;
       socket.leave(activeChatRoom(chatId));
+      (socket.data.activeChatIds as Set<string>).delete(chatId);
       app.log.info(
         {
           userId,
@@ -562,6 +624,7 @@ export function initRealtime(app: FastifyInstance): Server {
     });
 
     socket.on('disconnect', (reason) => {
+      void persistReadMarksForActiveChats(socket);
       socketDisconnections++;
       app.log.info(
         {

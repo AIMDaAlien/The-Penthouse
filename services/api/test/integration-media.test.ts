@@ -10,6 +10,7 @@ describe('[integration] gif search', { skip: SKIP }, () => {
   let clearGifProviderCache: typeof import('../src/routes/media.js').__testables.clearGifProviderCache;
   let originalFetch: typeof globalThis.fetch;
   let originalGiphyApiKey = '';
+  let originalKlipyApiKey = '';
 
   before(async () => {
     process.env.JWT_SECRET ??= 'integration-test-jwt-secret-long-enough';
@@ -25,12 +26,14 @@ describe('[integration] gif search', { skip: SKIP }, () => {
     clearGifProviderCache();
     originalFetch = globalThis.fetch;
     originalGiphyApiKey = env.GIPHY_API_KEY;
+    originalKlipyApiKey = env.KLIPY_API_KEY;
   });
 
   afterEach(async () => {
     clearGifProviderCache();
     globalThis.fetch = originalFetch;
     env.GIPHY_API_KEY = originalGiphyApiKey;
+    env.KLIPY_API_KEY = originalKlipyApiKey;
     await app?.close();
     app = null;
   });
@@ -102,5 +105,21 @@ describe('[integration] gif search', { skip: SKIP }, () => {
     });
     assert.equal(second.statusCode, 200);
     assert.equal(fetchCalls, 1);
+  });
+
+  test('GET /api/v1/gifs/search returns a graceful 503 when Klipy is not configured', async () => {
+    const user = await helpers.registerUser(app, 'gif_klipy_disabled_user');
+    env.KLIPY_API_KEY = '';
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/v1/gifs/search?q=cat&provider=klipy&limit=1',
+      headers: helpers.authHeaders(user.accessToken)
+    });
+
+    assert.equal(response.statusCode, 503);
+    assert.deepEqual(JSON.parse(response.payload), {
+      error: 'GIF provider not configured'
+    });
   });
 });
