@@ -29,6 +29,7 @@ function activeChatRoom(chatId: string): string {
 
 const PRESENCE_INACTIVE_TIMEOUT_MS = 10_000;
 const TYPING_TTL_MS = 6_000;
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function parseAllowedOrigins(): Set<string> {
   const allowed = new Set(
@@ -63,6 +64,10 @@ function isAllowedSocketOrigin(allowedOrigins: Set<string>, origin?: string | st
 
 function requestTransport(req: any): string {
   return String(req?._query?.transport ?? req?._query?.EIO ?? 'unknown');
+}
+
+function isUuid(value: string): boolean {
+  return UUID_REGEX.test(value);
 }
 
 export function initRealtime(app: FastifyInstance): Server {
@@ -466,7 +471,7 @@ export function initRealtime(app: FastifyInstance): Server {
 
     socket.on('chat.join', async (payload: unknown, ack?: (response: { ok: boolean; chatId: string; error?: string }) => void) => {
       const chatId = String((payload as any)?.chatId || '');
-      if (!chatId) {
+      if (!chatId || !isUuid(chatId)) {
         ack?.({ ok: false, chatId, error: 'invalid_chat' });
         return;
       }
@@ -489,7 +494,7 @@ export function initRealtime(app: FastifyInstance): Server {
 
     socket.on('chat.leave', (payload: unknown) => {
       const chatId = String((payload as any)?.chatId || '');
-      if (!chatId) return;
+      if (!chatId || !isUuid(chatId)) return;
       socket.leave(activeChatRoom(chatId));
       app.log.info(
         {
@@ -503,14 +508,14 @@ export function initRealtime(app: FastifyInstance): Server {
 
     socket.on('typing.start', async (payload: unknown) => {
       const chatId = String((payload as any)?.chatId || '');
-      if (!chatId) return;
+      if (!chatId || !isUuid(chatId)) return;
       if (!(await isMember(userId, chatId))) return;
       setTypingActive(chatId, userId, socket.data.displayName as string, (socket.data.avatarUrl as string | null) ?? null);
     });
 
     socket.on('typing.stop', async (payload: unknown) => {
       const chatId = String((payload as any)?.chatId || '');
-      if (!chatId) return;
+      if (!chatId || !isUuid(chatId)) return;
       if (!(await isMember(userId, chatId))) return;
       clearTypingState(chatId, userId);
     });
@@ -521,6 +526,7 @@ export function initRealtime(app: FastifyInstance): Server {
       if (!parsed.success) return;
 
       const event = parsed.data;
+      if (!isUuid(event.chatId)) return;
       const sendState = await getChatSendState(pool, userId, event.chatId);
       if (!sendState.isMember || sendState.isReadOnly) return;
 

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
 import {
   AddReactionRequestSchema,
   ChatMemberReadStateSchema,
@@ -35,6 +36,26 @@ import {
 } from '../utils/chats.js';
 
 const NOT_A_CHAT_MEMBER_ERROR = 'You are not a member of this chat';
+const ChatIdParamsSchema = z.object({
+  chatId: z.string().uuid()
+});
+const ChatMessageParamsSchema = z.object({
+  chatId: z.string().uuid(),
+  messageId: z.string().uuid()
+});
+const ChatReactionParamsSchema = z.object({
+  chatId: z.string().uuid(),
+  messageId: z.string().uuid(),
+  emoji: z.string().min(1).max(8)
+});
+const PollVoteParamsSchema = z.object({
+  pollId: z.string().uuid()
+});
+const MessageHistoryQuerySchema = z.object({
+  cursor: z.string().uuid().optional(),
+  before: z.string().uuid().optional(),
+  limit: z.string().optional()
+});
 
 function joinUserSocketsToChat(app: FastifyInstance, chatId: string, userIds: string[]): void {
   const io = app.io as
@@ -425,8 +446,13 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
 
   app.get('/api/v1/chats/:chatId/messages', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
     const userId = request.user.userId;
-    const { chatId } = request.params as { chatId: string };
-    const { cursor, before, limit = '30' } = request.query as { cursor?: string; before?: string; limit?: string };
+    const params = ChatIdParamsSchema.safeParse(request.params ?? {});
+    if (!params.success) return reply.status(400).send({ error: formatValidationError(params.error) });
+    const parsedQuery = MessageHistoryQuerySchema.safeParse(request.query ?? {});
+    if (!parsedQuery.success) return reply.status(400).send({ error: formatValidationError(parsedQuery.error) });
+
+    const { chatId } = params.data;
+    const { cursor, before, limit = '30' } = parsedQuery.data;
 
     const isMember = await ensureMembership(userId, chatId);
     if (!isMember) return reply.status(403).send({ error: NOT_A_CHAT_MEMBER_ERROR });
@@ -494,11 +520,12 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
 
   app.post('/api/v1/chats/:chatId/messages', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
     const userId = request.user.userId;
-    const params = request.params as { chatId: string };
+    const params = ChatIdParamsSchema.safeParse(request.params ?? {});
+    if (!params.success) return reply.status(400).send({ error: formatValidationError(params.error) });
 
     const parsed = SendMessageRequestSchema.safeParse({
       ...(request.body as object),
-      chatId: params.chatId
+      chatId: params.data.chatId
     });
 
     if (!parsed.success) return reply.status(400).send({ error: formatValidationError(parsed.error) });
@@ -532,7 +559,9 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
 
   app.post('/api/v1/chats/:chatId/messages/:messageId/reactions', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
     const userId = request.user.userId;
-    const { chatId, messageId } = request.params as { chatId: string; messageId: string };
+    const params = ChatMessageParamsSchema.safeParse(request.params ?? {});
+    if (!params.success) return reply.status(400).send({ error: formatValidationError(params.error) });
+    const { chatId, messageId } = params.data;
     const parsed = AddReactionRequestSchema.safeParse(request.body ?? {});
     if (!parsed.success) return reply.status(400).send({ error: formatValidationError(parsed.error) });
 
@@ -571,7 +600,9 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
 
   app.delete('/api/v1/chats/:chatId/messages/:messageId/reactions/:emoji', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
     const userId = request.user.userId;
-    const { chatId, messageId, emoji } = request.params as { chatId: string; messageId: string; emoji: string };
+    const params = ChatReactionParamsSchema.safeParse(request.params ?? {});
+    if (!params.success) return reply.status(400).send({ error: formatValidationError(params.error) });
+    const { chatId, messageId, emoji } = params.data;
 
     const isMember = await ensureMembership(userId, chatId);
     if (!isMember) return reply.status(403).send({ error: NOT_A_CHAT_MEMBER_ERROR });
@@ -620,7 +651,9 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.delete('/api/v1/chats/:chatId/messages/:messageId', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
-    const { chatId, messageId } = request.params as { chatId: string; messageId: string };
+    const params = ChatMessageParamsSchema.safeParse(request.params ?? {});
+    if (!params.success) return reply.status(400).send({ error: formatValidationError(params.error) });
+    const { chatId, messageId } = params.data;
     const isMember = await ensureMembership(request.user.userId, chatId);
     const messageContext = await getChatMessageContext(chatId, messageId);
 
@@ -663,7 +696,9 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get('/api/v1/chats/:chatId/pins', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
-    const { chatId } = request.params as { chatId: string };
+    const params = ChatIdParamsSchema.safeParse(request.params ?? {});
+    if (!params.success) return reply.status(400).send({ error: formatValidationError(params.error) });
+    const { chatId } = params.data;
     const isMember = await ensureMembership(request.user.userId, chatId);
     if (!isMember) return reply.status(403).send({ error: NOT_A_CHAT_MEMBER_ERROR });
 
@@ -671,17 +706,23 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.post('/api/v1/chats/:chatId/messages/:messageId/pin', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
-    const { chatId, messageId } = request.params as { chatId: string; messageId: string };
+    const params = ChatMessageParamsSchema.safeParse(request.params ?? {});
+    if (!params.success) return reply.status(400).send({ error: formatValidationError(params.error) });
+    const { chatId, messageId } = params.data;
     return pinMessageForChat(app, request, reply, chatId, messageId);
   });
 
   app.delete('/api/v1/chats/:chatId/messages/:messageId/pin', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
-    const { chatId, messageId } = request.params as { chatId: string; messageId: string };
+    const params = ChatMessageParamsSchema.safeParse(request.params ?? {});
+    if (!params.success) return reply.status(400).send({ error: formatValidationError(params.error) });
+    const { chatId, messageId } = params.data;
     return unpinMessageForChat(app, request, reply, chatId, messageId);
   });
 
   app.post('/api/v1/chats/:chatId/pins', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
-    const { chatId } = request.params as { chatId: string };
+    const params = ChatIdParamsSchema.safeParse(request.params ?? {});
+    if (!params.success) return reply.status(400).send({ error: formatValidationError(params.error) });
+    const { chatId } = params.data;
     const parsed = PinMessageRequestSchema.safeParse(request.body ?? {});
     if (!parsed.success) return reply.status(400).send({ error: formatValidationError(parsed.error) });
 
@@ -689,13 +730,17 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.delete('/api/v1/chats/:chatId/pins/:messageId', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
-    const { chatId, messageId } = request.params as { chatId: string; messageId: string };
+    const params = ChatMessageParamsSchema.safeParse(request.params ?? {});
+    if (!params.success) return reply.status(400).send({ error: formatValidationError(params.error) });
+    const { chatId, messageId } = params.data;
     return unpinMessageForChat(app, request, reply, chatId, messageId);
   });
 
   app.post('/api/v1/chats/:chatId/polls', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
     const userId = request.user.userId;
-    const { chatId } = request.params as { chatId: string };
+    const params = ChatIdParamsSchema.safeParse(request.params ?? {});
+    if (!params.success) return reply.status(400).send({ error: formatValidationError(params.error) });
+    const { chatId } = params.data;
     const parsed = CreatePollRequestSchema.safeParse(request.body ?? {});
     if (!parsed.success) return reply.status(400).send({ error: formatValidationError(parsed.error) });
 
@@ -768,7 +813,9 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
 
   app.post('/api/v1/polls/:pollId/vote', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
     const userId = request.user.userId;
-    const { pollId } = request.params as { pollId: string };
+    const params = PollVoteParamsSchema.safeParse(request.params ?? {});
+    if (!params.success) return reply.status(400).send({ error: formatValidationError(params.error) });
+    const { pollId } = params.data;
     const parsed = VotePollRequestSchema.safeParse(request.body ?? {});
     if (!parsed.success) return reply.status(400).send({ error: formatValidationError(parsed.error) });
 
@@ -843,7 +890,9 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
 
   app.get('/api/v1/chats/:chatId/preferences', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
     const userId = request.user.userId;
-    const { chatId } = request.params as { chatId: string };
+    const params = ChatIdParamsSchema.safeParse(request.params ?? {});
+    if (!params.success) return reply.status(400).send({ error: formatValidationError(params.error) });
+    const { chatId } = params.data;
 
     const preferences = await getChatPreferencesForUser(userId, chatId);
     if (!preferences) {
@@ -855,7 +904,9 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
 
   const saveChatPreferences = async (request: any, reply: any) => {
     const userId = request.user.userId;
-    const { chatId } = request.params as { chatId: string };
+    const params = ChatIdParamsSchema.safeParse(request.params ?? {});
+    if (!params.success) return reply.status(400).send({ error: formatValidationError(params.error) });
+    const { chatId } = params.data;
     const parsed = ChatPreferencesRequestSchema.safeParse(request.body ?? {});
     if (!parsed.success) return reply.status(400).send({ error: formatValidationError(parsed.error) });
 
@@ -880,7 +931,9 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
 
   app.post('/api/v1/chats/:chatId/read', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
     const userId = request.user.userId;
-    const { chatId } = request.params as { chatId: string };
+    const params = ChatIdParamsSchema.safeParse(request.params ?? {});
+    if (!params.success) return reply.status(400).send({ error: formatValidationError(params.error) });
+    const { chatId } = params.data;
     const parsed = MarkChatReadRequestSchema.safeParse(request.body ?? {});
     if (!parsed.success) return reply.status(400).send({ error: formatValidationError(parsed.error) });
 
@@ -937,7 +990,9 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get('/api/v1/chats/:chatId/members/read', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
-    const { chatId } = request.params as { chatId: string };
+    const params = ChatIdParamsSchema.safeParse(request.params ?? {});
+    if (!params.success) return reply.status(400).send({ error: formatValidationError(params.error) });
+    const { chatId } = params.data;
     const isMember = await ensureMembership(request.user.userId, chatId);
     if (!isMember) return reply.status(403).send({ error: NOT_A_CHAT_MEMBER_ERROR });
 

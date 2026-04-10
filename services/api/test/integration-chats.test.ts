@@ -1393,6 +1393,48 @@ describe('[integration] wave b message interactions', { skip: SKIP }, () => {
     await helpers.cleanup();
   });
 
+  test('new chat routes reject malformed UUID params with readable 400 errors', async () => {
+    const { authHeaders, registerUser } = await import('./helpers.js');
+    const alice = await registerUser(app, 'uuid_guard_alice');
+
+    const malformedReaction = await app.inject({
+      method: 'POST',
+      url: '/api/v1/chats/not-a-uuid/messages/still-not-a-uuid/reactions',
+      headers: authHeaders(alice.accessToken),
+      payload: { emoji: '🔥' }
+    });
+    assert.equal(malformedReaction.statusCode, 400);
+    assert.equal(typeof JSON.parse(malformedReaction.payload).error, 'string');
+
+    const malformedPin = await app.inject({
+      method: 'POST',
+      url: '/api/v1/chats/not-a-uuid/pins',
+      headers: authHeaders(alice.accessToken),
+      payload: {
+        messageId: '11111111-1111-4111-8111-111111111111'
+      }
+    });
+    assert.equal(malformedPin.statusCode, 400);
+    assert.equal(typeof JSON.parse(malformedPin.payload).error, 'string');
+
+    const malformedMembersRead = await app.inject({
+      method: 'GET',
+      url: '/api/v1/chats/not-a-uuid/members/read',
+      headers: authHeaders(alice.accessToken)
+    });
+    assert.equal(malformedMembersRead.statusCode, 400);
+    assert.equal(typeof JSON.parse(malformedMembersRead.payload).error, 'string');
+
+    const malformedPollVote = await app.inject({
+      method: 'POST',
+      url: '/api/v1/polls/not-a-uuid/vote',
+      headers: authHeaders(alice.accessToken),
+      payload: { optionIndex: 0 }
+    });
+    assert.equal(malformedPollVote.statusCode, 400);
+    assert.equal(typeof JSON.parse(malformedPollVote.payload).error, 'string');
+  });
+
   test('message reactions are idempotent, grouped in history, and removable', async () => {
     const { authHeaders, cleanup, registerUser } = await import('./helpers.js');
     await cleanup();

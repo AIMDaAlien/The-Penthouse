@@ -28,7 +28,22 @@ const TEXT_MIME_TYPES = new Set([
   'text/xml'
 ]);
 const GIF_PROVIDER_CACHE_TTL_MS = 60 * 60 * 1000;
+const GIF_PROVIDER_CACHE_MAX_ENTRIES = 200;
 const gifProviderCache = new Map<string, { expiresAt: number; data: unknown }>();
+
+function pruneGifProviderCache(now = Date.now()): void {
+  for (const [key, entry] of gifProviderCache.entries()) {
+    if (entry.expiresAt <= now) {
+      gifProviderCache.delete(key);
+    }
+  }
+
+  while (gifProviderCache.size > GIF_PROVIDER_CACHE_MAX_ENTRIES) {
+    const oldestKey = gifProviderCache.keys().next().value;
+    if (!oldestKey) break;
+    gifProviderCache.delete(oldestKey);
+  }
+}
 
 function safeOriginalFileName(fileName: string): string {
   const base = path.basename(fileName || 'attachment');
@@ -73,6 +88,7 @@ function classifyUpload(fileName: string, mimeType: string): MediaKind | null {
 
 async function fetchJsonWithCache(url: string): Promise<unknown> {
   const now = Date.now();
+  pruneGifProviderCache(now);
   const cached = gifProviderCache.get(url);
   if (cached && cached.expiresAt > now) {
     return cached.data;
@@ -107,6 +123,7 @@ async function fetchJsonWithCache(url: string): Promise<unknown> {
     expiresAt: now + GIF_PROVIDER_CACHE_TTL_MS,
     data
   });
+  pruneGifProviderCache(now);
   return data;
 }
 
@@ -266,7 +283,9 @@ export const __testables = {
   clearGifProviderCache,
   extractKlipyResults,
   fetchGifProvider,
-  fetchJsonWithCache
+  fetchJsonWithCache,
+  pruneGifProviderCache,
+  gifProviderCacheSize: () => gifProviderCache.size
 };
 
 export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {

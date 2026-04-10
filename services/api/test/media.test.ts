@@ -102,6 +102,29 @@ test('[media] fetchJsonWithCache caches the same provider URL for one hour', asy
   }
 });
 
+test('[media] fetchJsonWithCache prunes old entries so the provider cache stays bounded', async () => {
+  const originalFetch = globalThis.fetch;
+  __testables.clearGifProviderCache();
+
+  globalThis.fetch = (async (url: string | URL | Request) => (
+    new Response(JSON.stringify({ ok: true, url: String(url) }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' }
+    })
+  )) as typeof globalThis.fetch;
+
+  try {
+    for (let index = 0; index < 205; index += 1) {
+      await __testables.fetchJsonWithCache(`https://gif-provider.test/search?q=query-${index}`);
+    }
+
+    assert.ok(__testables.gifProviderCacheSize() <= 200, 'cache should evict old entries past the cap');
+  } finally {
+    __testables.clearGifProviderCache();
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('[helpers] destructive test helpers refuse non-test databases', () => {
   const original = process.env.DATABASE_URL;
   process.env.DATABASE_URL = 'postgresql://penthouse:penthouse@localhost:5432/penthouse';
