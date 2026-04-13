@@ -66,20 +66,20 @@ test.describe('Auth — Login', () => {
     const u = `badpw_${Date.now()}`;
     await registerUser(page, u);
     await page.goto('/auth');
-    await page.getByRole('button', { name: 'Sign in' }).click();
+    await page.locator('.mode-tabs').getByRole('button', { name: 'Sign in' }).click();
     await page.getByLabel('Username').fill(u);
     await page.getByLabel('Password', { exact: true }).fill('WrongPassword@99');
-    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+    await page.locator('button[type="submit"]').click();
     await expect(page.locator('.error, [role="alert"]')).toBeVisible({ timeout: 8000 });
     await expect(page).not.toHaveURL('/');
   });
 
   test('login with unknown username shows error', async ({ page }) => {
     await page.goto('/auth');
-    await page.getByRole('button', { name: 'Sign in' }).click();
+    await page.locator('.mode-tabs').getByRole('button', { name: 'Sign in' }).click();
     await page.getByLabel('Username').fill(`nobody_${Date.now()}`);
     await page.getByLabel('Password', { exact: true }).fill(pw);
-    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+    await page.locator('button[type="submit"]').click();
     await expect(page.locator('.error, [role="alert"]')).toBeVisible({ timeout: 8000 });
   });
 

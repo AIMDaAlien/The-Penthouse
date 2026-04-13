@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Penthouse - Desktop Responsive Concepts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gelasio:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Ubuntu:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-color: #12121C;
+    --surface-color: #1E1E2D;
+    --accent-color: #7777C2;
+    --accent-dark: #5a5a9e;
+    --accent-bright: #9B9BEE;
+    --text-primary: #E2E2EC;
+    --text-secondary: #8C8CC5;
+    --danger-color: #ff8ca6;
+    --success-color: #34d399;
+    --border-solid: rgba(140, 140, 197, 0.2);
+
+    --font-display: 'Gelasio', serif;
+    --font-body: 'Ubuntu', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+
+    --radius-sm: 6px;
+    --radius-md: 12px;
+    --radius-lg: 20px;
+    --radius-xl: 24px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background-color: #0A0A10; /* Slightly darker than app bg to differentiate the page */
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    padding: 2rem;
+    overflow-x: hidden;
+  }
+
+  h1, h2 { font-family: var(--font-display); font-weight: 500; }
+  .intro-text { color: var(--text-secondary); font-family: var(--font-mono); font-size: 0.8rem; margin-top: 1rem; margin-bottom: 3rem; max-width: 800px; }
+
+  .concept-section { margin-bottom: 6rem; }
+  .concept-header { margin-bottom: 1.5rem; }
+  .concept-title { font-size: 1.8rem; color: var(--accent-hover); margin-bottom: 0.5rem; }
+  .concept-desc { color: var(--text-secondary); font-size: 0.9rem; max-width: 800px; }
+
+  /* App Container Simulator */
+  .desktop-app-container {
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-solid);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    position: relative;
+    height: 700px; /* Fixed height to simulate a desktop viewport */
+    width: 100%;
+    /* Allow resizing to test responsiveness */
+    resize: horizontal;
+    min-width: 320px;
+    max-width: 100%;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+    display: flex;
+  }
+
+  /* Scrollbars */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(140, 140, 197, 0.2); border-radius: 10px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(140, 140, 197, 0.4); }
+
+  /* ========================================== */
+  /* SHARED SETTLED COMPONENTS                  */
+  /* ========================================== */
+
+  /* Chat List Pane */
+  .pane-chat-list {
+    width: 360px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border-solid);
+    background: var(--bg-color);
+    transition: width 0.3s ease;
+  }
+  .pane-chat-list-header {
+    padding: 24px 20px 12px;
+    font-family: var(--font-display);
+    font-size: 1.5rem;
+    border-bottom: 1px solid rgba(140, 140, 197, 0.05);
+  }
+  .chat-list-scroll { flex: 1; overflow-y: auto; padding: 12px 0; }
+
+  /* Settled Chat Row: Wider Avatar Gap (16px), Ultra Minimal Active */
+  .chat-row {
+    display: flex; align-items: center; padding: 12px 16px; gap: 16px;
+    cursor: pointer; transition: background-color 0.2s ease;
+    border-bottom: 1px solid rgba(140, 140, 197, 0.05);
+  }
+  .chat-row:hover { background-color: rgba(30, 30, 45, 0.5); }
+  .chat-row.active { background-color: rgba(119, 119, 194, 0.03); }
+  .chat-row:last-child { border-bottom: none; }
+  
+  .avatar {
+    width: 48px; height: 48px; border-radius: 50%; background-color: var(--accent-color);
+    color: white; display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-body); font-size: 1.2rem; flex-shrink: 0; position: relative;
+  }
+  .chat-content { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; }
+  .chat-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+  .chat-name { font-family: var(--font-body); font-weight: 500; font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chat-time { font-family: var(--font-body); font-size: 0.7rem; color: var(--text-secondary); flex-shrink: 0; margin-left: 8px; border-radius: 4px; background: rgba(140, 140, 197, 0.1); padding: 2px 6px; }
+  .chat-footer { display: flex; justify-content: space-between; align-items: center; }
+  .chat-preview { color: var(--text-secondary); font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: var(--font-body); flex: 1; text-align: right; font-weight: 300; }
+  .unread-dot { width: 8px; height: 8px; background-color: var(--accent-color); border-radius: 50%; flex-shrink: 0; margin-left: 8px; }
+
+  /* Pane DM Thread */
+  .pane-dm-thread {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    background: var(--bg-color);
+    min-width: 0;
+  }
+  
+  .chat-header-bar {
+    display: flex; align-items: center; padding: 16px 24px;
+    border-bottom: 1px solid var(--border-solid);
+    background: rgba(18, 18, 28, 0.8); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    z-index: 10;
+  }
+  .back-btn { display: none; color: var(--text-secondary); margin-right: 16px; font-family: var(--font-mono); cursor: pointer; font-size: 1.2rem; }
+  .chat-header-avatar { width: 36px; height: 36px; border-radius: 50%; background-color: var(--accent-color); color: white; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; margin-right: 16px; cursor: pointer; transition: transform 0.2s; }
+  .chat-header-avatar:hover { transform: scale(1.05); }
+  .chat-header-name { font-family: var(--font-body); font-weight: 500; font-size: 1.1rem; color: var(--text-primary); flex: 1; }
+  .chat-header-actions { color: var(--text-secondary); font-size: 1.2rem; cursor: pointer; }
+
+  /* Responsive Constraints: The constrained central column for messages */
+  .message-container-constrained {
+    width: 100%;
+    max-width: 720px; /* Strict line lengths */
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    padding: 1.5rem 2rem;
+    gap: 2.5rem;
+  }
+
+  .message-scroll-area {
+    flex: 1;
+    overflow-y: auto;
+    position: relative;
+  }
+
+  /* Settled Message Bubbles */
+  .message-group { display: flex; flex-direction: column; gap: 4px; max-width: 85%; }
+  .msg-sent { align-self: flex-end; align-items: flex-end; }
+  .msg-received { align-self: flex-start; align-items: flex-start; }
+
+  .bubble {
+    padding: 12px 18px; font-size: 0.95rem; line-height: 1.5;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    border-radius: var(--radius-lg);
+  }
+  .msg-sent .bubble { background: linear-gradient(135deg, rgba(160, 160, 240, 0.9) 0%, rgba(130, 130, 215, 0.9) 100%); color: #12121C; }
+  .msg-received .bubble { background: rgba(40, 40, 58, 0.6); border: 1px solid rgba(140, 140, 197, 0.15); color: var(--text-primary); }
+
+  .msg-sent .bubble:first-child:not(:last-child) { border-bottom-right-radius: 4px; }
+  .msg-sent .bubble:not(:first-child):not(:last-child) { border-top-right-radius: 4px; border-bottom-right-radius: 4px; }
+  .msg-sent .bubble:last-child:not(:first-child) { border-top-right-radius: 4px; }
+
+  .msg-received .bubble:first-child:not(:last-child) { border-bottom-left-radius: 4px; }
+  .msg-received .bubble:not(:first-child):not(:last-child) { border-top-left-radius: 4px; border-bottom-left-radius: 4px; }
+  .msg-received .bubble:last-child:not(:first-child) { border-top-left-radius: 4px; }
+
+  .msg-time { font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-secondary); margin-top: 4px; opacity: 0.4; padding: 0 4px; }
+
+  /* Date Divider: Double Track Faded Edges */
+  .date-divider { display: flex; align-items: center; text-align: left; margin: 1rem 0; width: 100%; justify-content: center;}
+  .date-divider::before, .date-divider::after { 
+    content: ''; height: 4px; border-top: 1px solid var(--border-solid); border-bottom: 1px solid var(--border-solid); 
+    mask-image: linear-gradient(to right, transparent, black); -webkit-mask-image: linear-gradient(to right, transparent, black); 
+  }
+  .date-divider::before { width: 40px; }
+  .date-divider::after { flex: 1; mask-image: linear-gradient(to left, transparent, black); -webkit-mask-image: linear-gradient(to left, transparent, black); }
+  .date-text { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.15em; color: var(--text-secondary); padding: 0 1rem; }
+
+  /* Composer */
+  .composer-area {
+    padding: 16px 24px;
+    background: rgba(18, 18, 28, 0.95);
+    border-top: 1px solid var(--border-solid);
+    display: flex;
+    justify-content: center;
+  }
+  .composer-inner {
+    width: 100%; max-width: 720px;
+    display: flex; align-items: center; gap: 16px;
+  }
+  .composer-input {
+    flex: 1; background: rgba(140, 140, 197, 0.08); border: 1px solid rgba(140, 140, 197, 0.2);
+    border-radius: var(--radius-xl); padding: 14px 20px; color: var(--text-primary);
+    font-family: var(--font-body); font-size: 0.95rem; outline: none; transition: border-color 0.2s;
+  }
+  .composer-input:focus { border-color: var(--accent-color); }
+  .send-btn { width: 44px; height: 44px; border-radius: 50%; background: var(--accent-bright); display: flex; align-items: center; justify-content: center; color: #12121C; font-weight: bold; cursor: pointer; transition: transform 0.2s; }
+  .send-btn:hover { transform: scale(1.05); }
+
+  /* Background blops for glassy effect */
+  .bg-blob-1 { position: absolute; top: 10%; left: 10%; width: 300px; height: 300px; background: var(--accent-color); border-radius: 50%; opacity: 0.1; filter: blur(60px); z-index: 0; pointer-events: none; }
+  .bg-blob-2 { position: absolute; bottom: 20%; right: 10%; width: 250px; height: 250px; background: var(--accent-bright); border-radius: 50%; opacity: 0.08; filter: blur(60px); z-index: 0; pointer-events: none; }
+
+  /* ========================================== */
+  /* EMPTY DM THREAD (DEEP DEPTH OF FIELD)      */
+  /* ========================================== */
+  .view-empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10; background: var(--bg-color); }
+  .watermark-container { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 100%; display: flex; justify-content: center; pointer-events: none; opacity: 0.05; filter: blur(0px); transition: all 1.8s cubic-bezier(0.2, 0.8, 0.2, 1); }
+  .empty-initials { font-family: var(--font-display); font-size: clamp(120px, 15vw, 240px); color: var(--accent-color); margin: 0; user-select: none; }
+  .empty-content-group { display: flex; flex-direction: column; align-items: center; position: relative; z-index: 2; margin-top: 140px; transition: opacity 0.8s ease; }
+  .empty-name { font-family: var(--font-display); font-size: 22px; color: var(--text-primary); margin-bottom: 0.5rem; }
+  .empty-prompt { font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-secondary); cursor: pointer; padding: 10px 20px; border-radius: var(--radius-sm); border: 1px solid transparent; transition: all 0.2s ease; }
+  .empty-prompt:hover { color: var(--text-primary); background: rgba(119, 119, 194, 0.1); border-color: rgba(119, 119, 194, 0.2); }
+
+  .view-chat { position: absolute; inset: 0; display: flex; flex-direction: column; z-index: 5; opacity: 0; pointer-events: none; transition: all 1.8s cubic-bezier(0.2, 0.8, 0.2, 1); transform: scale(1.05); filter: blur(15px); }
+  
+  /* The Transition State */
+  .pane-dm-thread.is-chat .view-empty { pointer-events: none; }
+  .pane-dm-thread.is-chat .watermark-container { transform: translate(-50%, -50%) scale(0.85); opacity: 0; filter: blur(25px); }
+  .pane-dm-thread.is-chat .empty-content-group { opacity: 0; }
+  .pane-dm-thread.is-chat .view-chat { opacity: 1; pointer-events: auto; transform: scale(1); filter: blur(0); z-index: 15; }
+
+  /* Reset Demo Button */
+  .reset-demo { position: absolute; top: 16px; right: 24px; background: rgba(0,0,0,0.6); color: white; border: 1px solid var(--border-solid); padding: 6px 12px; border-radius: 12px; font-size: 0.7rem; font-family: var(--font-mono); cursor: pointer; z-index: 20; opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+  .pane-dm-thread.is-chat .reset-demo { opacity: 1; pointer-events: auto; transition-delay: 1.5s; }
+
+
+  /* ========================================== */
+  /* PROFILE CARD MODAL                         */
+  /* ========================================== */
+  .profile-modal-overlay {
+    position: absolute; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center; z-index: 100;
+    opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
+  }
+  .profile-modal-overlay.active { opacity: 1; pointer-events: auto; }
+  
+  .profile-card {
+    background: linear-gradient(180deg, rgba(119, 119, 194, 0.05) 0%, var(--surface-color) 40%, #161622 100%);
+    border: 1px solid rgba(119, 119, 194, 0.2); border-radius: var(--radius-xl);
+    width: 100%; max-width: 340px; box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+    display: flex; flex-direction: column; align-items: center; text-align: center; padding: 8px;
+    transform: translateY(20px) scale(0.95); transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .profile-modal-overlay.active .profile-card { transform: translateY(0) scale(1); }
+
+  .profile-banner { width: 100%; height: 120px; border-radius: var(--radius-md); background-color: var(--accent-dark); }
+  .profile-content { padding: 0 1.5rem 1.5rem 1.5rem; display: flex; flex-direction: column; align-items: center; width: 100%; }
+  .profile-avatar { width: 88px; height: 88px; border-radius: 50%; background-color: #1a1a25; padding: 4px; margin-top: -44px; margin-bottom: 1rem; z-index: 2; position: relative; }
+  .profile-avatar-inner { width: 100%; height: 100%; border-radius: 50%; background-color: var(--accent-color); color: white; display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-size: 2rem; }
+  .profile-status { position: absolute; bottom: 4px; right: 4px; width: 18px; height: 18px; background-color: var(--danger-color); border: 3px solid #1a1a25; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+  .profile-status::after { content: ''; width: 8px; height: 2px; background-color: white; border-radius: 1px; }
+  .profile-name { font-family: var(--font-display); font-size: 24px; color: var(--text-primary); margin-bottom: 4px; }
+  .profile-username { font-family: var(--font-mono); font-size: 14px; color: var(--text-secondary); margin-bottom: 1rem; }
+  .profile-joined { font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 1.5rem; }
+  
+  .btn-outline { width: 100%; background: transparent; border: 1px solid var(--accent-color); color: var(--accent-color); padding: 12px 24px; border-radius: var(--radius-lg); font-family: var(--font-body); font-weight: 500; font-size: 0.95rem; cursor: pointer; transition: all 0.2s ease; }
+  .btn-outline:hover { background: rgba(119, 119, 194, 0.1); color: var(--accent-hover); border-color: var(--accent-hover); }
+  .close-modal { position: absolute; top: 16px; right: 16px; width: 32px; height: 32px; background: rgba(0,0,0,0.5); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; cursor: pointer; border: none; font-size: 1.2rem; }
+
+  /* ========================================== */
+  /* RESPONSIVE LAYOUT OPTIONS                  */
+  /* ========================================== */
+
+  /* OPTION A: Editorial Split (Master-Detail) */
+  /* Handled by base flex layout. Left fixed, right fluid. */
+  
+  /* OPTION B: The Triptych */
+  .triptych-nav {
+    width: 80px; flex-shrink: 0; background: rgba(18, 18, 28, 0.5); border-right: 1px solid var(--border-solid);
+    display: flex; flex-direction: column; align-items: center; padding: 24px 0; gap: 24px;
+  }
+  .nav-item { width: 48px; height: 48px; border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; color: var(--text-secondary); cursor: pointer; transition: all 0.2s; font-family: var(--font-mono); font-size: 0.8rem; border: 1px solid transparent; }
+  .nav-item:hover { background: rgba(140,140,197,0.1); color: var(--text-primary); }
+  .nav-item.active { background: rgba(119, 119, 194, 0.1); color: var(--accent-bright); border-color: rgba(119, 119, 194, 0.3); }
+
+  /* OPTION C: Floating Monolith */
+  .monolith-wrapper {
+    width: 100%; height: 800px; background: #0A0A10; display: flex; align-items: center; justify-content: center;
+    background-image: radial-gradient(circle at 50% 0%, rgba(119, 119, 194, 0.05) 0%, transparent 70%);
+  }
+  .monolith-app {
+    width: 1100px; max-width: 95%; height: 720px;
+    background: var(--bg-color); border: 1px solid rgba(140, 140, 197, 0.15); border-radius: 24px;
+    box-shadow: 0 32px 80px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.05);
+    display: flex; overflow: hidden;
+  }
+
+  /* Responsive Queries for App Container */
+  @media (max-width: 768px) {
+    /* Collapse to mobile view */
+    .desktop-app-container .pane-chat-list { width: 100%; border-right: none; }
+    .desktop-app-container.viewing-thread .pane-chat-list { display: none; }
+    .desktop-app-container:not(.viewing-thread) .pane-dm-thread { display: none; }
+    .back-btn { display: block; }
+    .triptych-nav { display: none; }
+  }
+
+</style>
+</head>
+<body>
+
+  <h1>The Penthouse &mdash; Desktop Architecture</h1>
+  <p class="intro-text">
+    Scaling luxury chat to desktop means enforcing strict reading widths and leveraging generous whitespace. 
+    Below are three distinct architectural approaches for desktop scaling. The UI uses all settled styles: 
+    Wider Avatar Gap, Glassy Bubbles (Spatial Gap only), Bright Periwinkle, Faded Double Track Dividers, 
+    Deep Depth of Field transitions, and the Floating Inner Banner Profile Card.
+    <br><br>
+    <em>Note: You can use the bottom-right corner of the containers to resize them horizontally and test fluidity.</em>
+  </p>
+
+  <!-- ================================================================= -->
+  <!-- OPTION A: THE EDITORIAL SPLIT                                     -->
+  <!-- ================================================================= -->
+  <section class="concept-section">
+    <div class="concept-header">
+      <h2 class="concept-title">Option A: The Editorial Split (Master-Detail)</h2>
+      <p class="concept-desc">The standard elevated. A fixed chat list pane on the left, and a fluid reading pane on the right. The chat thread is strictly constrained to 720px in the center, wrapped in luxurious whitespace on wide monitors.</p>
+    </div>
+
+    <div class="desktop-app-container" id="app-option-a">
+      
+      <!-- Left Pane: Chat List -->
+      <div class="pane-chat-list">
+        <div class="pane-chat-list-header">Messages</div>
+        <div class="chat-list-scroll">
+          <div class="chat-row active" onclick="openThread('thread-a')">
+            <div class="avatar">AK</div>
+            <div class="chat-content">
+              <div class="chat-header"><div class="chat-name">Arthur Kensington</div><div class="chat-time">11:47 PM</div></div>
+              <div class="chat-footer"><div class="chat-preview">The reservation is confirmed.</div></div>
+            </div>
+          </div>
+          <div class="chat-row">
+            <div class="avatar">EJ</div>
+            <div class="chat-content">
+              <div class="chat-header"><div class="chat-name">Eleanor James</div><div class="chat-time">Yesterday</div></div>
+              <div class="chat-footer"><div class="chat-preview" style="color: var(--text-primary); font-weight: 500;">Are we still on for the gallery?</div><div class="unread-dot"></div></div>
+            </div>
+          </div>
+          <div class="chat-row">
+            <div class="avatar">MR</div>
+            <div class="chat-content">
+              <div class="chat-header"><div class="chat-name">Marcus Reed</div><div class="chat-time">Tue</div></div>
+              <div class="chat-footer"><div class="chat-preview">I'll send the files shortly.</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Pane: DM Thread -->
+      <div class="pane-dm-thread" id="thread-a">
+        <div class="view-empty">
+          <div class="watermark-container"><div class="empty-initials">AK</div></div>
+          <div class="empty-content-group">
+            <div class="empty-name">Arthur Kensington</div>
+            <div class="empty-prompt" onclick="startTransition('thread-a')">Start the conversation</div>
+          </div>
+        </div>
+
+        <div class="view-chat">
+          <div class="bg-blob-1"></div><div class="bg-blob-2"></div>
+          <div class="chat-header-bar">
+            <div class="back-btn" onclick="closeThread('app-option-a')">‹</div>
+            <div class="chat-header-avatar" onclick="openProfile('profile-a')">AK</div>
+            <div class="chat-header-name">Arthur Kensington</div>
+            <div class="chat-header-actions">⋮</div>
+          </div>
+          
+          <div class="message-scroll-area">
+            <div class="message-container-constrained">
+              
+              <div class="date-divider"><span class="date-text">thursday</span></div>
+
+              <div class="message-group msg-received">
+                <div class="bubble">I just reviewed the plans.</div>
+                <div class="bubble">Everything looks perfectly in order. Shall we proceed?</div>
+                <div class="msg-time">09:12 AM</div>
+              </div>
+              <div class="message-group msg-sent">
+                <div class="bubble">Excellent. I'll send the draft over.</div>
+                <div class="msg-time">09:14 AM</div>
+              </div>
+              
+            </div>
+          </div>
+          
+          <div class="composer-area">
+            <div class="composer-inner">
+              <input type="text" class="composer-input" placeholder="Message @arthurk..." readonly>
+              <div class="send-btn">↑</div>
+            </div>
+          </div>
+          <button class="reset-demo" onclick="resetTransition('thread-a')">Reset Chat</button>
+        </div>
+      </div>
+
+      <!-- Profile Modal (Settled Style) -->
+      <div class="profile-modal-overlay" id="profile-a" onclick="closeProfile('profile-a', event)">
+        <div class="profile-card" onclick="event.stopPropagation()">
+          <button class="close-modal" onclick="closeProfile('profile-a', event)">×</button>
+          <div class="profile-banner" style="background-color: var(--accent-color);"></div> <!-- Solid color default -->
+          <div class="profile-content">
+            <div class="profile-avatar">
+              <div class="profile-avatar-inner">AK</div>
+              <div class="profile-status"></div>
+            </div>
+            <div class="profile-name">Arthur Kensington</div>
+            <div class="profile-username">@arthurk</div>
+            <div class="profile-joined">member since jan 2025</div>
+            <button class="btn-outline">Send message</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ================================================================= -->
+  <!-- OPTION B: THE TRIPTYCH                                            -->
+  <!-- ================================================================= -->
+  <section class="concept-section">
+    <div class="concept-header">
+      <h2 class="concept-title">Option B: The Triptych (Three-Column Focus)</h2>
+      <p class="concept-desc">Introduces a sleek, dark system navigation spine on the far left. Excellent if the app relies on switching between Chat, Member Directory, and Settings frequently without losing context.</p>
+    </div>
+
+    <div class="desktop-app-container" id="app-option-b">
+      
+      <!-- System Nav Pane -->
+      <div class="triptych-nav">
+        <div class="nav-item active">CHT</div>
+        <div class="nav-item">DIR</div>
+        <div class="nav-item">SET</div>
+      </div>
+
+      <!-- Left Pane: Chat List -->
+      <div class="pane-chat-list">
+        <div class="pane-chat-list-header">Messages</div>
+        <div class="chat-list-scroll">
+          <div class="chat-row active" onclick="openThread('thread-b')">
+            <div class="avatar">EJ</div>
+            <div class="chat-content">
+              <div class="chat-header"><div class="chat-name">Eleanor James</div><div class="chat-time">11:47 PM</div></div>
+              <div class="chat-footer"><div class="chat-preview">The gallery opens at 8.</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Pane: DM Thread -->
+      <div class="pane-dm-thread" id="thread-b">
+        <div class="view-empty">
+          <div class="watermark-container"><div class="empty-initials">EJ</div></div>
+          <div class="empty-content-group">
+            <div class="empty-name">Eleanor James</div>
+            <div class="empty-prompt" onclick="startTransition('thread-b')">Start the conversation</div>
+          </div>
+        </div>
+
+        <div class="view-chat">
+          <div class="bg-blob-1"></div><div class="bg-blob-2"></div>
+          <div class="chat-header-bar">
+            <div class="back-btn" onclick="closeThread('app-option-b')">‹</div>
+            <div class="chat-header-avatar" onclick="openProfile('profile-b')">EJ</div>
+            <div class="chat-header-name">Eleanor James</div>
+            <div class="chat-header-actions">⋮</div>
+          </div>
+          
+          <div class="message-scroll-area">
+            <div class="message-container-constrained">
+              <div class="date-divider"><span class="date-text">thursday</span></div>
+              <div class="message-group msg-received">
+                <div class="bubble">I just reviewed the plans.</div>
+                <div class="bubble">Everything looks perfectly in order. Shall we proceed?</div>
+                <div class="msg-time">09:12 AM</div>
+              </div>
+              <div class="message-group msg-sent">
+                <div class="bubble">Excellent. I'll send the draft over.</div>
+                <div class="msg-time">09:14 AM</div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="composer-area">
+            <div class="composer-inner">
+              <input type="text" class="composer-input" placeholder="Message @eleanorj..." readonly>
+              <div class="send-btn">↑</div>
+            </div>
+          </div>
+          <button class="reset-demo" onclick="resetTransition('thread-b')">Reset Chat</button>
+        </div>
+      </div>
+
+      <!-- Profile Modal -->
+      <div class="profile-modal-overlay" id="profile-b" onclick="closeProfile('profile-b', event)">
+        <div class="profile-card" onclick="event.stopPropagation()">
+          <button class="close-modal" onclick="closeProfile('profile-b', event)">×</button>
+          <!-- Using a CSS gradient to simulate a user uploaded art banner -->
+          <div class="profile-banner" style="background-image: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);"></div>
+          <div class="profile-content">
+            <div class="profile-avatar">
+              <div class="profile-avatar-inner" style="background-color: #3d3d5c;">EJ</div>
+              <div class="profile-status"></div>
+            </div>
+            <div class="profile-name">Eleanor James</div>
+            <div class="profile-username">@eleanorj</div>
+            <div class="profile-joined">member since feb 2025</div>
+            <button class="btn-outline">Send message</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ================================================================= -->
+  <!-- OPTION C: THE FLOATING MONOLITH                                   -->
+  <!-- ================================================================= -->
+  <section class="concept-section">
+    <div class="concept-header">
+      <h2 class="concept-title">Option C: The Floating Monolith (App-in-App)</h2>
+      <p class="concept-desc">Highly controlled intimacy. The browser window itself is treated as a void. The app sits in the center as a fixed-proportion object, completely immune to ultra-wide stretching.</p>
+    </div>
+
+    <div class="monolith-wrapper">
+      <div class="monolith-app desktop-app-container" id="app-option-c" style="resize: none; height: 100%;">
+        
+        <!-- Left Pane: Chat List -->
+        <div class="pane-chat-list">
+          <div class="pane-chat-list-header">Messages</div>
+          <div class="chat-list-scroll">
+            <div class="chat-row active" onclick="openThread('thread-c')">
+              <div class="avatar">MR</div>
+              <div class="chat-content">
+                <div class="chat-header"><div class="chat-name">Marcus Reed</div><div class="chat-time">11:47 PM</div></div>
+                <div class="chat-footer"><div class="chat-preview">Are we still on for the gallery?</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Pane: DM Thread -->
+        <div class="pane-dm-thread" id="thread-c">
+          <div class="view-empty">
+            <div class="watermark-container"><div class="empty-initials">MR</div></div>
+            <div class="empty-content-group">
+              <div class="empty-name">Marcus Reed</div>
+              <div class="empty-prompt" onclick="startTransition('thread-c')">Start the conversation</div>
+            </div>
+          </div>
+
+          <div class="view-chat">
+            <div class="bg-blob-1"></div><div class="bg-blob-2"></div>
+            <div class="chat-header-bar">
+              <div class="back-btn" onclick="closeThread('app-option-c')">‹</div>
+              <div class="chat-header-avatar" onclick="openProfile('profile-c')">MR</div>
+              <div class="chat-header-name">Marcus Reed</div>
+              <div class="chat-header-actions">⋮</div>
+            </div>
+            
+            <div class="message-scroll-area">
+              <div class="message-container-constrained">
+                <div class="date-divider"><span class="date-text">thursday</span></div>
+                <div class="message-group msg-received">
+                  <div class="bubble">I just reviewed the plans.</div>
+                  <div class="bubble">Everything looks perfectly in order. Shall we proceed?</div>
+                  <div class="msg-time">09:12 AM</div>
+                </div>
+                <div class="message-group msg-sent">
+                  <div class="bubble">Excellent. I'll send the draft over.</div>
+                  <div class="msg-time">09:14 AM</div>
+                </div>
+              </div>
+            </div>
+            
+            <div class="composer-area">
+              <div class="composer-inner">
+                <input type="text" class="composer-input" placeholder="Message @marcusr..." readonly>
+                <div class="send-btn">↑</div>
+              </div>
+            </div>
+            <button class="reset-demo" onclick="resetTransition('thread-c')">Reset Chat</button>
+          </div>
+        </div>
+
+        <!-- Profile Modal -->
+        <div class="profile-modal-overlay" id="profile-c" onclick="closeProfile('profile-c', event)">
+          <div class="profile-card" onclick="event.stopPropagation()">
+            <button class="close-modal" onclick="closeProfile('profile-c', event)">×</button>
+            <div class="profile-banner" style="background-color: #2b2b40;"></div> <!-- Solid color default -->
+            <div class="profile-content">
+              <div class="profile-avatar">
+                <div class="profile-avatar-inner" style="background-color: #52527a;">MR</div>
+                <div class="profile-status"></div>
+              </div>
+              <div class="profile-name">Marcus Reed</div>
+              <div class="profile-username">@marcusr</div>
+              <div class="profile-joined">member since dec 2024</div>
+              <button class="btn-outline">Send message</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <script>
+    // DM Transition Handling
+    function startTransition(id) {
+      const thread = document.getElementById(id);
+      if (thread && !thread.classList.contains('is-chat')) {
+        thread.classList.add('is-chat');
+        
+        // Emulate mobile layout switching
+        const appContainer = thread.closest('.desktop-app-container');
+        if (window.innerWidth <= 768) {
+          appContainer.classList.add('viewing-thread');
+        }
+      }
+    }
+
+    function resetTransition(id) {
+      const thread = document.getElementById(id);
+      if (thread) {
+        thread.classList.remove('is-chat');
+      }
+    }
+
+    // Profile Modal Handling
+    function openProfile(id) {
+      const modal = document.getElementById(id);
+      if(modal) modal.classList.add('active');
+    }
+
+    function closeProfile(id, event) {
+      if(event) event.stopPropagation();
+      const modal = document.getElementById(id);
+      if(modal) modal.classList.remove('active');
+    }
+
+    // Mobile Back Button Simulation
+    function closeThread(appId) {
+      const appContainer = document.getElementById(appId);
+      if (appContainer) {
+        appContainer.classList.remove('viewing-thread');
+      }
+    }
+  </script>
+</body>
+</html>

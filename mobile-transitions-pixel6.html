@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Penthouse - Pixel 6 Pro & Cinematic Transitions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gelasio:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Ubuntu:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-color: #08080C;
+    --surface-dark: #12121A;
+    --accent-color: #7777C2;
+    --accent-bright: #9595D2;
+    --text-primary: #F0F0F5;
+    --text-secondary: #8E8EAA;
+    --text-muted: #5A5A72;
+    --border-solid: rgba(255, 255, 255, 0.05);
+    
+    --font-display: 'Gelasio', serif;
+    --font-body: 'Ubuntu', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background-color: #000;
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+    padding: 3rem;
+  }
+
+  .header { text-align: center; margin-bottom: 4rem; }
+  .header h1 { font-family: var(--font-display); font-size: 2.5rem; font-weight: 500; }
+  .header p { color: var(--text-secondary); font-family: var(--font-mono); font-size: 0.85rem; max-width: 600px; margin: 1rem auto; line-height: 1.6; }
+
+  .showcase-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+    gap: 4rem;
+    justify-items: center;
+    max-width: 1600px;
+    margin: 0 auto;
+  }
+
+  /* ========================================== */
+  /* PIXEL 6 PRO DEVICE WRAPPER                 */
+  /* ========================================== */
+  /* Logical resolution: 412x892 or 412x915. Let's use 412x892 */
+  .device-frame {
+    width: 412px; height: 892px;
+    background: var(--bg-color);
+    border-radius: 42px; /* Pixel corners */
+    border: 12px solid #1A1A1A;
+    box-shadow: 0 40px 100px rgba(0,0,0,0.8), inset 0 0 0 1px rgba(255,255,255,0.05);
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* For container transitions */
+    perspective: 1500px; /* For 3D flips */
+  }
+
+  .concept-badge {
+    position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
+    background: var(--accent-color); color: #000; padding: 4px 16px;
+    font-family: var(--font-mono); font-size: 0.7rem; font-weight: 700;
+    border-bottom-left-radius: 12px; border-bottom-right-radius: 12px; z-index: 100;
+  }
+
+  .status-bar {
+    height: 40px; display: flex; justify-content: space-between; align-items: center;
+    padding: 0 24px; font-family: var(--font-body); font-size: 0.8rem; font-weight: 500;
+    flex-shrink: 0; z-index: 50; position: relative; color: var(--text-primary);
+  }
+
+  /* SVG Icons */
+  .icon-svg { display: inline-block; width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* ========================================== */
+  /* VIEW CONTAINERS & BASE TRANSITIONS         */
+  /* ========================================== */
+  
+  .view-container {
+    position: absolute; top: 40px; left: 0; right: 0; bottom: 0;
+    display: flex; flex-direction: column;
+    /* Default Transition states */
+    opacity: 1; pointer-events: auto; visibility: visible;
+    transform-origin: center center;
+    background: var(--bg-color);
+  }
+  
+  /* Initial state for Thread View */
+  .view-thread { pointer-events: none; visibility: hidden; opacity: 0; z-index: 10; }
+
+  /* ========================================== */
+  /* VIEW 1: CHAT LIST                          */
+  /* ========================================== */
+  
+  /* High DPI typographic scale: smaller base fonts, refined spacing */
+  .chat-list-header { padding: 12px 20px 24px; position: relative; z-index: 5; }
+  .page-title { font-size: 1.8rem; font-weight: 500; margin-bottom: 16px; letter-spacing: 0.01em; }
+  
+  .segment-control { display: flex; background: var(--surface-dark); border-radius: 12px; padding: 3px; }
+  .segment-btn { flex: 1; text-align: center; padding: 8px; font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-secondary); cursor: pointer; border-radius: 9px; transition: all 0.2s; }
+  .segment-btn.active { background: rgba(255,255,255,0.06); color: var(--text-primary); box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+
+  .chat-scroll { flex: 1; overflow-y: auto; padding-bottom: 100px; position: relative; z-index: 1; }
+
+  .chat-row {
+    display: flex; align-items: center; gap: 14px; padding: 16px 20px;
+    cursor: pointer; transition: background 0.2s; position: relative;
+  }
+  .chat-row:hover, .chat-row:active { background: rgba(255,255,255,0.03); }
+  
+  /* High DPI avatars (smaller) */
+  .avatar { width: 44px; height: 44px; border-radius: 50%; background: var(--surface-dark); color: var(--text-primary); display: flex; align-items: center; justify-content: center; font-size: 1.1rem; font-weight: 500; flex-shrink: 0; border: 1px solid var(--border-solid); }
+  
+  .chat-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .chat-row-top { display: flex; justify-content: space-between; align-items: baseline; }
+  
+  /* High DPI text sizing */
+  .chat-name { font-size: 1rem; font-weight: 400; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color 0.3s; }
+  .chat-time { font-family: var(--font-mono); font-size: 0.65rem; color: var(--text-muted); transition: color 0.3s; }
+  .chat-row-bottom { display: flex; justify-content: space-between; align-items: center; }
+  .chat-preview { font-size: 0.85rem; color: var(--text-muted); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 12px; transition: color 0.3s; }
+  
+  /* Unread States and Indicators */
+  .chat-row.unread .chat-name { color: var(--text-primary); font-weight: 600; }
+  .chat-row.unread .chat-time { color: var(--accent-bright); }
+  .chat-row.unread .chat-preview { color: var(--text-primary); font-weight: 500; }
+  .chat-row.unread .avatar { background: var(--accent-color); color: #000; border-color: transparent; }
+  
+  .unread-dot { width: 8px; height: 8px; background: var(--accent-bright); border-radius: 50%; flex-shrink: 0; box-shadow: 0 0 10px rgba(149,149,210,0.5); transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s; }
+  .chat-row:not(.unread) .unread-dot { transform: scale(0); opacity: 0; }
+
+  /* Elegant Thin Glass Navbar */
+  .floating-nav {
+    position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); width: 260px;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 16px; border-radius: 30px;
+    background: rgba(18, 18, 26, 0.65);
+    backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+    border: 0.5px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 20px 40px rgba(0,0,0,0.6); z-index: 100;
+  }
+  .nav-item { padding: 8px; color: var(--text-secondary); cursor: pointer; transition: color 0.2s; display: flex; align-items: center; justify-content: center; border-radius: 50%; }
+  .nav-item.active, .nav-item:hover { color: var(--text-primary); background: rgba(255,255,255,0.05); }
+
+  /* ========================================== */
+  /* VIEW 2: DM THREAD                          */
+  /* ========================================== */
+  
+  .thread-header {
+    display: flex; align-items: center; padding: 8px 20px; border-bottom: 0.5px solid var(--border-solid);
+    background: rgba(8, 8, 12, 0.85); backdrop-filter: blur(20px); z-index: 20; gap: 12px;
+  }
+  .btn-icon { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-secondary); border-radius: 50%; transition: background 0.2s; margin-left: -8px; }
+  .btn-icon:hover { background: rgba(255,255,255,0.05); color: var(--text-primary); }
+  .thread-avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--accent-color); display: flex; align-items: center; justify-content: center; font-size: 0.9rem; color: #000; font-weight: 500; }
+  .thread-name { font-size: 1.05rem; font-weight: 500; flex: 1; }
+
+  .thread-scroll { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; position: relative; }
+  .date-divider { display: flex; align-items: center; justify-content: center; gap: 16px; margin: 4px 0; }
+  .date-line { height: 1px; flex: 1; background: var(--border-solid); }
+  .date-text { font-family: var(--font-mono); font-size: 0.65rem; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase; }
+
+  .msg-group { display: flex; flex-direction: column; gap: 2px; max-width: 80%; }
+  .msg-received { align-self: flex-start; }
+  .msg-sent { align-self: flex-end; }
+  
+  .bubble { padding: 12px 16px; font-size: 0.95rem; line-height: 1.4; border-radius: 18px; }
+  .msg-received .bubble { background: var(--surface-dark); border: 0.5px solid rgba(255,255,255,0.04); border-bottom-left-radius: 4px; }
+  .msg-received .bubble + .bubble { border-top-left-radius: 4px; border-bottom-left-radius: 18px; }
+  .msg-sent .bubble { background: var(--accent-bright); color: #000; font-weight: 500; border-bottom-right-radius: 4px; }
+  
+  .timestamp { font-family: var(--font-mono); font-size: 0.65rem; color: var(--text-muted); margin-top: 4px; }
+  .msg-sent .timestamp { text-align: right; }
+
+  .composer-bar { display: flex; align-items: center; gap: 10px; padding: 12px 20px 24px; background: var(--bg-color); border-top: 0.5px solid var(--border-solid); }
+  .toggle-btn { width: 32px; height: 32px; border-radius: 50%; background: var(--surface-dark); display: flex; align-items: center; justify-content: center; color: var(--text-secondary); }
+  .input-pill { flex: 1; height: 40px; border-radius: 20px; border: 0.5px solid rgba(255,255,255,0.1); background: var(--surface-dark); display: flex; align-items: center; padding: 0 16px; }
+  .input-pill input { background: transparent; border: none; outline: none; color: var(--text-primary); font-family: var(--font-body); font-size: 0.95rem; width: 100%; }
+  .send-btn { width: 32px; height: 32px; border-radius: 50%; background: var(--accent-bright); color: #000; display: flex; align-items: center; justify-content: center; }
+
+  /* ========================================== */
+  /* TRANSITION ANIMATIONS (THE CORE UPDATE)    */
+  /* ========================================== */
+  
+  /* 1. Cinematic Depth (Z-Axis push and scale) */
+  .device-frame.t-depth .view-list { transition: transform 0.6s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.6s ease, filter 0.6s ease; }
+  .device-frame.t-depth .view-thread { transition: transform 0.6s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.5s ease, visibility 0s linear 0.6s; transform: translateZ(50px) scale(1.05); }
+  
+  .device-frame.t-depth.show-thread .view-list { transform: translateZ(-100px) scale(0.92); opacity: 0; filter: blur(8px); pointer-events: none; }
+  .device-frame.t-depth.show-thread .view-thread { opacity: 1; visibility: visible; pointer-events: auto; transform: translateZ(0) scale(1); transition: transform 0.6s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.4s ease, visibility 0s; }
+
+  /* 2. Blur Dissolve (Soft cinematic crossfade) */
+  .device-frame.t-blur .view-list { transition: opacity 0.5s ease, filter 0.5s ease; filter: blur(0px); }
+  .device-frame.t-blur .view-thread { transition: opacity 0.5s ease, filter 0.5s ease, visibility 0s linear 0.5s; filter: blur(10px); }
+  
+  .device-frame.t-blur.show-thread .view-list { opacity: 0; filter: blur(10px); pointer-events: none; }
+  .device-frame.t-blur.show-thread .view-thread { opacity: 1; filter: blur(0px); visibility: visible; pointer-events: auto; transition: opacity 0.5s ease, filter 0.5s ease, visibility 0s; }
+
+  /* 3. Spatial Flip (3D Card Flip) */
+  .device-frame.t-flip .view-list { backface-visibility: hidden; transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1); transform: rotateY(0deg); }
+  .device-frame.t-flip .view-thread { backface-visibility: hidden; transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1), visibility 0s linear 0.8s; transform: rotateY(180deg); }
+  
+  .device-frame.t-flip.show-thread .view-list { transform: rotateY(-180deg); pointer-events: none; }
+  .device-frame.t-flip.show-thread .view-thread { transform: rotateY(0deg); visibility: visible; pointer-events: auto; transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1), visibility 0s; }
+
+  /* 4. Shared Axis Z (Material Design Morph expansion) */
+  .device-frame.t-morph .view-list { transition: transform 0.5s cubic-bezier(0.2, 0, 0, 1), opacity 0.4s ease; }
+  .device-frame.t-morph .view-thread { transition: transform 0.5s cubic-bezier(0.2, 0, 0, 1), opacity 0.4s ease, visibility 0s linear 0.5s; transform: translateY(40px) scale(0.98); }
+  
+  .device-frame.t-morph.show-thread .view-list { transform: translateY(-40px) scale(1.02); opacity: 0; pointer-events: none; }
+  .device-frame.t-morph.show-thread .view-thread { opacity: 1; visibility: visible; transform: translateY(0) scale(1); pointer-events: auto; transition: transform 0.5s cubic-bezier(0.2, 0, 0, 1), opacity 0.4s ease, visibility 0s; }
+
+  /* 5. Vertical Stack (iOS Style modal slide up) */
+  .device-frame.t-stack .view-list { transition: transform 0.6s cubic-bezier(0.32, 0.72, 0, 1), filter 0.6s ease; transform-origin: top center; }
+  .device-frame.t-stack .view-thread { transition: transform 0.6s cubic-bezier(0.32, 0.72, 0, 1), visibility 0s linear 0.6s; transform: translateY(100%); z-index: 20; border-top-left-radius: 24px; border-top-right-radius: 24px; box-shadow: 0 -10px 40px rgba(0,0,0,0.8); }
+  
+  .device-frame.t-stack.show-thread .view-list { transform: scale(0.92) translateY(-10px); filter: brightness(0.4); pointer-events: none; }
+  .device-frame.t-stack.show-thread .view-thread { transform: translateY(0); visibility: visible; pointer-events: auto; transition: transform 0.6s cubic-bezier(0.32, 0.72, 0, 1), visibility 0s; border-radius: 0; }
+
+</style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>Pixel 6 Pro & Cinematic Transitions</h1>
+    <p>
+      High-DPI scaling optimized for a 412x892 logical viewport. Emojis replaced with SVGs. <br>
+      <strong>Interaction:</strong> Click the unread "Syndicate" row to trigger the transition. Notice the unread indicator goes off, the bold text reverts to regular, and the color fades when you return to the list view.
+    </p>
+  </div>
+
+  <div class="showcase-grid">
+
+    <!-- CONCEPT 1: Cinematic Depth -->
+    <div class="device-frame t-depth" id="dev-1">
+      <div class="concept-badge">1. Cinematic Depth</div>
+      <div class="status-bar"><span>9:41</span><span><svg class="icon-svg" viewBox="0 0 24 24" style="width:14px; height:14px; margin-right:4px;"><path d="M5 12.55a11 11 0 0 1 14.08 0 M1.42 9a16 16 0 0 1 21.16 0 M8.53 16.11a6 6 0 0 1 6.95 0 M12 20h.01"/></svg><svg class="icon-svg" viewBox="0 0 24 24" style="width:16px; height:16px;"><rect x="2" y="7" width="20" height="10" rx="2" ry="2"/><line x1="22" y1="11" x2="22" y2="13"/></svg></span></div>
+      
+      <!-- List View -->
+      <div class="view-container view-list">
+        <div class="chat-list-header">
+          <h2 class="page-title">Messages</h2>
+          <div class="segment-control"><div class="segment-btn active">Direct</div><div class="segment-btn">Channels</div></div>
+        </div>
+        
+        <div class="chat-scroll">
+          <div class="chat-row">
+            <div class="avatar">EJ</div>
+            <div class="chat-meta">
+              <div class="chat-row-top"><div class="chat-name">Eleanor James</div><div class="chat-time">11:47 PM</div></div>
+              <div class="chat-row-bottom"><div class="chat-preview">Are we still on for the gallery?</div></div>
+            </div>
+          </div>
+          <!-- UNREAD ROW TO INTERACT WITH -->
+          <div class="chat-row unread" onclick="openThread('dev-1', 'MR')">
+            <div class="avatar">MR</div>
+            <div class="chat-meta">
+              <div class="chat-row-top"><div class="chat-name">The Syndicate</div><div class="chat-time">Yesterday</div></div>
+              <div class="chat-row-bottom"><div class="chat-preview">MR: Let's review the draft now.</div><div class="unread-dot"></div></div>
+            </div>
+          </div>
+          <div class="chat-row">
+            <div class="avatar dark">#</div>
+            <div class="chat-meta">
+              <div class="chat-row-top"><div class="chat-name">general</div><div class="chat-time">Tue</div></div>
+              <div class="chat-row-bottom"><div class="chat-preview">AK: I've updated the repository.</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="floating-nav">
+          <div class="nav-item active"><svg class="icon-svg" viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></div>
+          <div class="nav-item"><svg class="icon-svg" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+          <div class="nav-item"><svg class="icon-svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></div>
+        </div>
+      </div>
+
+      <!-- Thread View -->
+      <div class="view-container view-thread">
+        <div class="thread-header">
+          <div class="btn-icon" onclick="closeThread('dev-1')"><svg class="icon-svg" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></div>
+          <div class="thread-avatar">MR</div>
+          <div class="thread-name">The Syndicate</div>
+          <div class="btn-icon"><svg class="icon-svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg></div>
+        </div>
+        <div class="thread-scroll">
+          <div class="date-divider"><div class="date-line"></div><div class="date-text">Yesterday</div><div class="date-line"></div></div>
+          <div class="msg-group msg-received"><div class="bubble">Let's review the draft now.</div><div class="timestamp">10:42 AM</div></div>
+        </div>
+        <div class="composer-bar">
+          <div class="toggle-btn"><svg class="icon-svg" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div>
+          <div class="input-pill"><input type="text" placeholder="Message..."></div>
+          <div class="send-btn"><svg class="icon-svg" style="stroke: #000; width: 16px; height: 16px;" viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></div>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- CONCEPT 2: Blur Dissolve -->
+    <div class="device-frame t-blur" id="dev-2">
+      <div class="concept-badge">2. Blur Dissolve</div>
+      <div class="status-bar"><span>9:41</span><span><svg class="icon-svg" viewBox="0 0 24 24" style="width:14px; height:14px; margin-right:4px;"><path d="M5 12.55a11 11 0 0 1 14.08 0 M1.42 9a16 16 0 0 1 21.16 0 M8.53 16.11a6 6 0 0 1 6.95 0 M12 20h.01"/></svg><svg class="icon-svg" viewBox="0 0 24 24" style="width:16px; height:16px;"><rect x="2" y="7" width="20" height="10" rx="2" ry="2"/><line x1="22" y1="11" x2="22" y2="13"/></svg></span></div>
+      <div class="view-container view-list">
+        <div class="chat-list-header"><h2 class="page-title">Messages</h2><div class="segment-control"><div class="segment-btn active">Direct</div><div class="segment-btn">Channels</div></div></div>
+        <div class="chat-scroll">
+          <div class="chat-row"><div class="avatar">EJ</div><div class="chat-meta"><div class="chat-row-top"><div class="chat-name">Eleanor James</div><div class="chat-time">11:47 PM</div></div><div class="chat-row-bottom"><div class="chat-preview">Are we still on for the gallery?</div></div></div></div>
+          <div class="chat-row unread" onclick="openThread('dev-2', 'MR')"><div class="avatar">MR</div><div class="chat-meta"><div class="chat-row-top"><div class="chat-name">The Syndicate</div><div class="chat-time">Yesterday</div></div><div class="chat-row-bottom"><div class="chat-preview">MR: Let's review the draft now.</div><div class="unread-dot"></div></div></div></div>
+        </div>
+        <div class="floating-nav">
+          <div class="nav-item active"><svg class="icon-svg" viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></div>
+          <div class="nav-item"><svg class="icon-svg" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+          <div class="nav-item"><svg class="icon-svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></div>
+        </div>
+      </div>
+      <div class="view-container view-thread">
+        <div class="thread-header"><div class="btn-icon" onclick="closeThread('dev-2')"><svg class="icon-svg" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></div><div class="thread-avatar">MR</div><div class="thread-name">The Syndicate</div><div class="btn-icon"><svg class="icon-svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg></div></div>
+        <div class="thread-scroll"><div class="date-divider"><div class="date-line"></div><div class="date-text">Yesterday</div><div class="date-line"></div></div><div class="msg-group msg-received"><div class="bubble">Let's review the draft now.</div><div class="timestamp">10:42 AM</div></div></div>
+        <div class="composer-bar"><div class="toggle-btn"><svg class="icon-svg" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div><div class="input-pill"><input type="text" placeholder="Message..."></div><div class="send-btn"><svg class="icon-svg" style="stroke: #000; width: 16px; height: 16px;" viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></div></div>
+      </div>
+    </div>
+
+    <!-- CONCEPT 3: Shared Axis / Material Morph -->
+    <div class="device-frame t-morph" id="dev-3">
+      <div class="concept-badge">3. Morphing Y-Axis</div>
+      <div class="status-bar"><span>9:41</span><span><svg class="icon-svg" viewBox="0 0 24 24" style="width:14px; height:14px; margin-right:4px;"><path d="M5 12.55a11 11 0 0 1 14.08 0 M1.42 9a16 16 0 0 1 21.16 0 M8.53 16.11a6 6 0 0 1 6.95 0 M12 20h.01"/></svg><svg class="icon-svg" viewBox="0 0 24 24" style="width:16px; height:16px;"><rect x="2" y="7" width="20" height="10" rx="2" ry="2"/><line x1="22" y1="11" x2="22" y2="13"/></svg></span></div>
+      <div class="view-container view-list">
+        <div class="chat-list-header"><h2 class="page-title">Messages</h2><div class="segment-control"><div class="segment-btn active">Direct</div><div class="segment-btn">Channels</div></div></div>
+        <div class="chat-scroll">
+          <div class="chat-row"><div class="avatar">EJ</div><div class="chat-meta"><div class="chat-row-top"><div class="chat-name">Eleanor James</div><div class="chat-time">11:47 PM</div></div><div class="chat-row-bottom"><div class="chat-preview">Are we still on for the gallery?</div></div></div></div>
+          <div class="chat-row unread" onclick="openThread('dev-3', 'MR')"><div class="avatar">MR</div><div class="chat-meta"><div class="chat-row-top"><div class="chat-name">The Syndicate</div><div class="chat-time">Yesterday</div></div><div class="chat-row-bottom"><div class="chat-preview">MR: Let's review the draft now.</div><div class="unread-dot"></div></div></div></div>
+        </div>
+        <div class="floating-nav">
+          <div class="nav-item active"><svg class="icon-svg" viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></div>
+          <div class="nav-item"><svg class="icon-svg" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+          <div class="nav-item"><svg class="icon-svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></div>
+        </div>
+      </div>
+      <div class="view-container view-thread">
+        <div class="thread-header"><div class="btn-icon" onclick="closeThread('dev-3')"><svg class="icon-svg" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></div><div class="thread-avatar">MR</div><div class="thread-name">The Syndicate</div><div class="btn-icon"><svg class="icon-svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg></div></div>
+        <div class="thread-scroll"><div class="date-divider"><div class="date-line"></div><div class="date-text">Yesterday</div><div class="date-line"></div></div><div class="msg-group msg-received"><div class="bubble">Let's review the draft now.</div><div class="timestamp">10:42 AM</div></div></div>
+        <div class="composer-bar"><div class="toggle-btn"><svg class="icon-svg" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div><div class="input-pill"><input type="text" placeholder="Message..."></div><div class="send-btn"><svg class="icon-svg" style="stroke: #000; width: 16px; height: 16px;" viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></div></div>
+      </div>
+    </div>
+
+    <!-- CONCEPT 4: Spatial Flip -->
+    <div class="device-frame t-flip" id="dev-4">
+      <div class="concept-badge">4. 3D Spatial Flip</div>
+      <div class="status-bar"><span>9:41</span><span><svg class="icon-svg" viewBox="0 0 24 24" style="width:14px; height:14px; margin-right:4px;"><path d="M5 12.55a11 11 0 0 1 14.08 0 M1.42 9a16 16 0 0 1 21.16 0 M8.53 16.11a6 6 0 0 1 6.95 0 M12 20h.01"/></svg><svg class="icon-svg" viewBox="0 0 24 24" style="width:16px; height:16px;"><rect x="2" y="7" width="20" height="10" rx="2" ry="2"/><line x1="22" y1="11" x2="22" y2="13"/></svg></span></div>
+      <div class="view-container view-list">
+        <div class="chat-list-header"><h2 class="page-title">Messages</h2><div class="segment-control"><div class="segment-btn active">Direct</div><div class="segment-btn">Channels</div></div></div>
+        <div class="chat-scroll">
+          <div class="chat-row"><div class="avatar">EJ</div><div class="chat-meta"><div class="chat-row-top"><div class="chat-name">Eleanor James</div><div class="chat-time">11:47 PM</div></div><div class="chat-row-bottom"><div class="chat-preview">Are we still on for the gallery?</div></div></div></div>
+          <div class="chat-row unread" onclick="openThread('dev-4', 'MR')"><div class="avatar">MR</div><div class="chat-meta"><div class="chat-row-top"><div class="chat-name">The Syndicate</div><div class="chat-time">Yesterday</div></div><div class="chat-row-bottom"><div class="chat-preview">MR: Let's review the draft now.</div><div class="unread-dot"></div></div></div></div>
+        </div>
+        <div class="floating-nav">
+          <div class="nav-item active"><svg class="icon-svg" viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></div>
+          <div class="nav-item"><svg class="icon-svg" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+          <div class="nav-item"><svg class="icon-svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></div>
+        </div>
+      </div>
+      <div class="view-container view-thread" style="background: rgba(18, 18, 26, 1);">
+        <div class="thread-header"><div class="btn-icon" onclick="closeThread('dev-4')"><svg class="icon-svg" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></div><div class="thread-avatar">MR</div><div class="thread-name">The Syndicate</div><div class="btn-icon"><svg class="icon-svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg></div></div>
+        <div class="thread-scroll"><div class="date-divider"><div class="date-line"></div><div class="date-text">Yesterday</div><div class="date-line"></div></div><div class="msg-group msg-received"><div class="bubble">Let's review the draft now.</div><div class="timestamp">10:42 AM</div></div></div>
+        <div class="composer-bar" style="background: transparent;"><div class="toggle-btn"><svg class="icon-svg" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div><div class="input-pill"><input type="text" placeholder="Message..."></div><div class="send-btn"><svg class="icon-svg" style="stroke: #000; width: 16px; height: 16px;" viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></div></div>
+      </div>
+    </div>
+
+    <!-- CONCEPT 5: Vertical Stack -->
+    <div class="device-frame t-stack" id="dev-5">
+      <div class="concept-badge">5. iOS Modal Stack</div>
+      <div class="status-bar"><span>9:41</span><span><svg class="icon-svg" viewBox="0 0 24 24" style="width:14px; height:14px; margin-right:4px;"><path d="M5 12.55a11 11 0 0 1 14.08 0 M1.42 9a16 16 0 0 1 21.16 0 M8.53 16.11a6 6 0 0 1 6.95 0 M12 20h.01"/></svg><svg class="icon-svg" viewBox="0 0 24 24" style="width:16px; height:16px;"><rect x="2" y="7" width="20" height="10" rx="2" ry="2"/><line x1="22" y1="11" x2="22" y2="13"/></svg></span></div>
+      <div class="view-container view-list">
+        <div class="chat-list-header"><h2 class="page-title">Messages</h2><div class="segment-control"><div class="segment-btn active">Direct</div><div class="segment-btn">Channels</div></div></div>
+        <div class="chat-scroll">
+          <div class="chat-row"><div class="avatar">EJ</div><div class="chat-meta"><div class="chat-row-top"><div class="chat-name">Eleanor James</div><div class="chat-time">11:47 PM</div></div><div class="chat-row-bottom"><div class="chat-preview">Are we still on for the gallery?</div></div></div></div>
+          <div class="chat-row unread" onclick="openThread('dev-5', 'MR')"><div class="avatar">MR</div><div class="chat-meta"><div class="chat-row-top"><div class="chat-name">The Syndicate</div><div class="chat-time">Yesterday</div></div><div class="chat-row-bottom"><div class="chat-preview">MR: Let's review the draft now.</div><div class="unread-dot"></div></div></div></div>
+        </div>
+        <div class="floating-nav">
+          <div class="nav-item active"><svg class="icon-svg" viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></div>
+          <div class="nav-item"><svg class="icon-svg" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+          <div class="nav-item"><svg class="icon-svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></div>
+        </div>
+      </div>
+      <div class="view-container view-thread" style="background: rgba(22, 22, 30, 1);">
+        <div class="thread-header" style="background: transparent; border-bottom: none;"><div class="btn-icon" onclick="closeThread('dev-5')"><svg class="icon-svg" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></div><div class="thread-avatar">MR</div><div class="thread-name">The Syndicate</div><div class="btn-icon"><svg class="icon-svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg></div></div>
+        <div class="thread-scroll"><div class="date-divider"><div class="date-line"></div><div class="date-text">Yesterday</div><div class="date-line"></div></div><div class="msg-group msg-received"><div class="bubble">Let's review the draft now.</div><div class="timestamp">10:42 AM</div></div></div>
+        <div class="composer-bar" style="background: transparent;"><div class="toggle-btn"><svg class="icon-svg" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div><div class="input-pill"><input type="text" placeholder="Message..."></div><div class="send-btn"><svg class="icon-svg" style="stroke: #000; width: 16px; height: 16px;" viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></div></div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // Handles opening thread, executing the specific animation style, and marking row as read
+    function openThread(devId, initials) {
+      const device = document.getElementById(devId);
+      
+      // Find the unread row within this specific device
+      const unreadRow = device.querySelector('.chat-row.unread');
+      
+      // Execute transition
+      device.classList.add('show-thread');
+
+      // Logic to mark as read immediately, so when they return it's updated
+      if (unreadRow) {
+        // We delay the class removal slightly so the user doesn't see it change 
+        // *while* they are clicking it, but rather when they come back.
+        setTimeout(() => {
+          unreadRow.classList.remove('unread');
+        }, 300);
+      }
+    }
+    
+    function closeThread(devId) {
+      document.getElementById(devId).classList.remove('show-thread');
+    }
+  </script>
+</body>
+</html>

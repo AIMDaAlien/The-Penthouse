@@ -165,7 +165,7 @@ test.describe('Chat — Navigation & list', () => {
   test('connection status dot is visible', async ({ page }) => {
     const u = `conn_${Date.now()}`;
     await registerUser(page, u);
-    await expect(page.locator('.conn-dot')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.status-dot')).toBeVisible({ timeout: 5000 });
   });
 });
 

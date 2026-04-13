@@ -48,6 +48,15 @@
 		return s.minMet && s.maxOk && s.noLeadingTrail;
 	};
 
+	const canSubmit = $derived(
+		mode === 'login' || (
+			getPasswordValid() &&
+			password === confirmPassword &&
+			acceptedAlphaNotice &&
+			!!captchaToken
+		)
+	);
+
 	const TEST_NOTICE_VERSION = 'alpha-v1';
 
 	function setAltchaFailure(message: string) {
@@ -242,6 +251,7 @@
 			<button
 				class="tab"
 				class:active={mode === 'login'}
+				aria-label="Switch to sign in"
 				onclick={() => { mode = 'login'; resetRegistrationState(); }}
 			>
 				Sign in
@@ -249,6 +259,7 @@
 			<button
 				class="tab"
 				class:active={mode === 'register'}
+				aria-label="Switch to create account"
 				onclick={() => { mode = 'register'; resetRegistrationState(); }}
 			>
 				Create account
@@ -372,7 +383,7 @@
 				<p class="error-msg">{error}</p>
 			{/if}
 
-			<button type="submit" class="submit-btn" disabled={loading}>
+			<button type="submit" class="submit-btn" disabled={loading || !canSubmit}>
 				{loading ? 'Please wait...' : mode === 'login' ? 'Sign in' : 'Create account'}
 			</button>
 		</form>

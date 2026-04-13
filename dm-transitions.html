@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Penthouse - DM Transition Concepts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gelasio:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Ubuntu:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-color: #12121C;
+    --surface-color: #1E1E2D;
+    --accent-color: #7777C2;
+    --accent-dark: #5a5a9e;
+    --accent-bright: #9B9BEE; /* Brighter periwinkle for sent bubbles */
+    --text-primary: #E2E2EC;
+    --text-secondary: #8C8CC5;
+    --border-solid: rgba(140, 140, 197, 0.2);
+
+    --font-display: 'Gelasio', serif;
+    --font-body: 'Ubuntu', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+
+    --radius-sm: 6px;
+    --radius-md: 12px;
+    --radius-lg: 20px;
+    --radius-xl: 24px;
+  }
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    background-color: var(--bg-color);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    padding: 2rem;
+  }
+
+  h1, h2 {
+    font-family: var(--font-display);
+    font-weight: 500;
+  }
+
+  .intro-text {
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    margin-top: 1rem;
+    margin-bottom: 4rem;
+  }
+
+  .concept-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    gap: 3rem;
+  }
+
+  .concept-wrapper {
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-solid);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    height: 600px; /* Taller to show chat properly */
+  }
+
+  .concept-label {
+    position: absolute;
+    top: 0;
+    left: 0;
+    background: var(--surface-color);
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    padding: 4px 8px;
+    border-bottom-right-radius: var(--radius-sm);
+    z-index: 20;
+  }
+
+  .dm-container {
+    flex: 1;
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background-color: var(--bg-color);
+    overflow: hidden;
+  }
+
+  /* ========================================== */
+  /* VIEW: EMPTY STATE                          */
+  /* ========================================== */
+  .view-empty {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+  }
+
+  .watermark-container {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    pointer-events: none;
+    opacity: 0.05;
+    filter: blur(0px);
+  }
+
+  .empty-initials {
+    font-family: var(--font-display);
+    font-size: 180px;
+    color: var(--accent-color);
+    margin: 0;
+    user-select: none;
+  }
+
+  .empty-content-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    z-index: 2;
+    margin-top: 120px;
+  }
+
+  .empty-name {
+    font-family: var(--font-display);
+    font-size: 18px;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+  }
+
+  .empty-prompt {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 8px 16px;
+    border-radius: var(--radius-sm);
+    transition: color 0.2s ease, background 0.2s ease;
+    border: 1px solid transparent;
+  }
+
+  .empty-prompt:hover {
+    color: var(--text-primary);
+    background: rgba(119, 119, 194, 0.1);
+    border-color: rgba(119, 119, 194, 0.2);
+  }
+
+  /* ========================================== */
+  /* VIEW: CHAT STATE                           */
+  /* ========================================== */
+  .view-chat {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    z-index: 5;
+    opacity: 0;
+    pointer-events: none;
+    background: var(--bg-color);
+  }
+
+  /* Chat Header */
+  .chat-header-bar {
+    display: flex;
+    align-items: center;
+    padding: 16px;
+    border-bottom: 1px solid var(--border-solid);
+    background: rgba(18, 18, 28, 0.8);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    z-index: 10;
+  }
+
+  .back-btn {
+    color: var(--text-secondary);
+    margin-right: 16px;
+    font-family: var(--font-mono);
+    cursor: pointer;
+    font-size: 1.2rem;
+  }
+
+  .chat-header-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background-color: var(--accent-color);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-body);
+    font-size: 0.8rem;
+    margin-right: 12px;
+  }
+
+  .chat-header-name {
+    font-family: var(--font-body);
+    font-weight: 500;
+    font-size: 1rem;
+    color: var(--text-primary);
+    flex: 1;
+  }
+
+  /* Chat Messages (Settled Styles) */
+  .message-list {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 1.5rem 1rem;
+    gap: 2.5rem; /* Settled: Spatial gap only */
+    overflow-y: auto;
+    position: relative;
+  }
+
+  .message-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-width: 85%;
+  }
+
+  .msg-sent { align-self: flex-end; align-items: flex-end; }
+  .msg-received { align-self: flex-start; align-items: flex-start; }
+
+  .bubble {
+    padding: 12px 16px;
+    font-size: 0.95rem;
+    line-height: 1.4;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: var(--radius-lg);
+  }
+
+  /* Settled: Brighter Periwinkle for Sent */
+  .msg-sent .bubble {
+    background: linear-gradient(135deg, rgba(160, 160, 240, 0.9) 0%, rgba(130, 130, 215, 0.9) 100%);
+    color: #12121C;
+  }
+  
+  .msg-received .bubble {
+    background: rgba(40, 40, 58, 0.6);
+    border: 1px solid rgba(140, 140, 197, 0.15);
+    color: var(--text-primary);
+  }
+
+  .msg-sent .bubble:first-child:not(:last-child) { border-bottom-right-radius: 4px; }
+  .msg-sent .bubble:not(:first-child):not(:last-child) { border-top-right-radius: 4px; border-bottom-right-radius: 4px; }
+  .msg-sent .bubble:last-child:not(:first-child) { border-top-right-radius: 4px; }
+
+  .msg-received .bubble:first-child:not(:last-child) { border-bottom-left-radius: 4px; }
+  .msg-received .bubble:not(:first-child):not(:last-child) { border-top-left-radius: 4px; border-bottom-left-radius: 4px; }
+  .msg-received .bubble:last-child:not(:first-child) { border-top-left-radius: 4px; }
+
+  .msg-time {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-top: 4px;
+    opacity: 0.4; /* Settled: Low opacity */
+    padding: 0 4px;
+  }
+
+  /* Chat Composer */
+  .composer-area {
+    padding: 12px 16px;
+    border-top: 1px solid var(--border-solid);
+    background: rgba(18, 18, 28, 0.95);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .composer-input {
+    flex: 1;
+    background: rgba(140, 140, 197, 0.08);
+    border: 1px solid rgba(140, 140, 197, 0.2);
+    border-radius: var(--radius-xl);
+    padding: 10px 16px;
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    font-size: 0.9rem;
+  }
+
+  .send-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--accent-bright);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #12121C;
+    font-weight: bold;
+    cursor: pointer;
+  }
+
+  /* Background blops to show off the glassy bubbles */
+  .bg-blob-1 { position: absolute; top: 20%; left: 10%; width: 150px; height: 150px; background: var(--accent-color); border-radius: 50%; opacity: 0.15; filter: blur(40px); z-index: 0; }
+  .bg-blob-2 { position: absolute; bottom: 30%; right: 10%; width: 120px; height: 120px; background: var(--accent-bright); border-radius: 50%; opacity: 0.1; filter: blur(40px); z-index: 0; }
+
+  .chat-elements-wrapper {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+  }
+
+  /* Reset Demo Button */
+  .reset-demo {
+    position: absolute;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.6);
+    color: white;
+    border: 1px solid var(--border-solid);
+    padding: 6px 12px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-family: var(--font-mono);
+    cursor: pointer;
+    z-index: 20;
+    backdrop-filter: blur(4px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+
+  .dm-container.is-chat .reset-demo {
+    opacity: 1;
+    pointer-events: auto;
+    transition-delay: 1.5s; /* Show after transition completes */
+  }
+
+
+  /* ========================================== */
+  /* TRANSITION ANIMATIONS (The Core Request)   */
+  /* ========================================== */
+  
+  /* BASE SETUP FOR TRANSITIONS */
+  .watermark-container, .empty-content-group, .view-chat, 
+  .chat-header-bar, .message-list, .composer-area {
+    transition-property: transform, opacity, filter;
+    will-change: transform, opacity, filter;
+  }
+
+
+  /* ------------------------------------------
+     1. THE SOFT DIFFUSE DROP (Refined V4)
+     Watermark sinks and blurs. Chat fades and slides up.
+  ------------------------------------------ */
+  .c-diffuse-drop .watermark-container { transition-duration: 1.2s; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
+  .c-diffuse-drop .empty-content-group { transition-duration: 0.4s; transition-timing-function: ease; }
+  .c-diffuse-drop .view-chat { transition-duration: 0.8s; transition-timing-function: ease; transition-delay: 0.2s; transform: translateY(20px); }
+
+  .c-diffuse-drop.is-chat .watermark-container { transform: translate(-50%, 60%); opacity: 0; filter: blur(12px); }
+  .c-diffuse-drop.is-chat .empty-content-group { opacity: 0; transform: translateY(10px); }
+  .c-diffuse-drop.is-chat .view-chat { opacity: 1; pointer-events: auto; transform: translateY(0); z-index: 15; }
+
+
+  /* ------------------------------------------
+     2. THE SLOW FLOAT
+     Watermark drifts upward slowly. Chat fades in softly.
+  ------------------------------------------ */
+  .c-slow-float .watermark-container { transition-duration: 1.8s; transition-timing-function: ease-out; }
+  .c-slow-float .empty-content-group { transition-duration: 0.6s; transition-timing-function: ease; }
+  .c-slow-float .view-chat { transition-duration: 1.2s; transition-timing-function: ease; transition-delay: 0.4s; }
+
+  .c-slow-float.is-chat .watermark-container { transform: translate(-50%, -80%) scale(1.1); opacity: 0; filter: blur(8px); }
+  .c-slow-float.is-chat .empty-content-group { opacity: 0; }
+  .c-slow-float.is-chat .view-chat { opacity: 1; pointer-events: auto; z-index: 15; }
+
+
+  /* ------------------------------------------
+     3. THE FOCUS PULL
+     Watermark intensely blurs out. Chat elements scale down into focus.
+  ------------------------------------------ */
+  .c-focus-pull .watermark-container { transition-duration: 1s; transition-timing-function: ease; }
+  .c-focus-pull .empty-content-group { transition-duration: 0.3s; transition-timing-function: ease; }
+  
+  .c-focus-pull .view-chat { transition-duration: 0.8s; transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1); transition-delay: 0.2s; transform: scale(1.05); filter: blur(10px); }
+
+  .c-focus-pull.is-chat .watermark-container { transform: translate(-50%, -50%) scale(0.9); opacity: 0; filter: blur(20px); }
+  .c-focus-pull.is-chat .empty-content-group { opacity: 0; transform: scale(0.95); }
+  .c-focus-pull.is-chat .view-chat { opacity: 1; pointer-events: auto; transform: scale(1); filter: blur(0px); z-index: 15; }
+
+
+  /* ------------------------------------------
+     4. THE SLIDE & REVEAL
+     Watermark slides left. Chat UI slides in from the right.
+  ------------------------------------------ */
+  .c-slide-reveal .watermark-container { transition-duration: 0.9s; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
+  .c-slide-reveal .empty-content-group { transition-duration: 0.4s; transition-timing-function: ease; }
+  
+  .c-slide-reveal .view-chat { transition-duration: 0.8s; transition-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1); transition-delay: 0.1s; transform: translateX(40px); }
+
+  .c-slide-reveal.is-chat .watermark-container { transform: translate(-80%, -50%); opacity: 0; filter: blur(4px); }
+  .c-slide-reveal.is-chat .empty-content-group { opacity: 0; transform: translateX(-20px); }
+  .c-slide-reveal.is-chat .view-chat { opacity: 1; pointer-events: auto; transform: translateX(0); z-index: 15; }
+
+
+  /* ------------------------------------------
+     5. THE SPRING POP
+     Watermark drops out fast. Chat pops up with a slight bounce.
+  ------------------------------------------ */
+  .c-spring-pop .watermark-container { transition-duration: 0.6s; transition-timing-function: cubic-bezier(0.55, 0.085, 0.68, 0.53); } /* Anticipate down */
+  .c-spring-pop .empty-content-group { transition-duration: 0.3s; transition-timing-function: ease; }
+  
+  /* Use a spring-like cubic bezier for the chat entry */
+  .c-spring-pop .view-chat { transition-duration: 0.8s; transition-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1); transition-delay: 0.3s; transform: translateY(60px) scale(0.98); }
+
+  .c-spring-pop.is-chat .watermark-container { transform: translate(-50%, 100%); opacity: 0; }
+  .c-spring-pop.is-chat .empty-content-group { opacity: 0; transform: scale(0.9); }
+  .c-spring-pop.is-chat .view-chat { opacity: 1; pointer-events: auto; transform: translateY(0) scale(1); z-index: 15; }
+
+
+  /* ------------------------------------------
+     6. THE STAGGERED REVEAL
+     Empty state fades. Chat Header, Messages, and Composer fade in sequence.
+  ------------------------------------------ */
+  .c-staggered .watermark-container { transition-duration: 0.8s; transition-timing-function: ease; }
+  .c-staggered .empty-content-group { transition-duration: 0.4s; transition-timing-function: ease; }
+  
+  .c-staggered .view-chat { opacity: 1; } /* Parent visible, children handle opacity */
+  
+  .c-staggered .chat-header-bar { transform: translateY(-10px); opacity: 0; transition-duration: 0.6s; transition-timing-function: ease; }
+  .c-staggered .message-list { transform: translateY(20px); opacity: 0; transition-duration: 0.6s; transition-timing-function: ease; }
+  .c-staggered .composer-area { transform: translateY(20px); opacity: 0; transition-duration: 0.6s; transition-timing-function: ease; }
+
+  .c-staggered.is-chat .watermark-container { transform: translate(-50%, -50%) scale(1.05); opacity: 0; filter: blur(10px); }
+  .c-staggered.is-chat .empty-content-group { opacity: 0; }
+  
+  .c-staggered.is-chat .view-chat { pointer-events: auto; z-index: 15; }
+  .c-staggered.is-chat .chat-header-bar { opacity: 1; transform: translateY(0); transition-delay: 0.3s; }
+  .c-staggered.is-chat .message-list { opacity: 1; transform: translateY(0); transition-delay: 0.5s; }
+  .c-staggered.is-chat .composer-area { opacity: 1; transform: translateY(0); transition-delay: 0.7s; }
+
+</style>
+</head>
+<body>
+
+  <h1>The Penthouse &mdash; DM Transitions (V5)</h1>
+  <p class="intro-text">Doubling down on the Empty State to Chat transition. Showcasing settled Chat UI (Glassy, Spatial Gaps, Brighter Periwinkle). Click "Start the conversation" to trigger.</p>
+
+  <div class="concept-grid">
+    
+    <!-- CONCEPT 1: Soft Diffuse Drop -->
+    <div class="concept-wrapper">
+      <span class="concept-label">1. Soft Diffuse Drop</span>
+      <div class="dm-container c-diffuse-drop" id="dm-1">
+        
+        <div class="view-empty">
+          <div class="watermark-container"><div class="empty-initials">AK</div></div>
+          <div class="empty-content-group">
+            <div class="empty-name">Arthur Kensington</div>
+            <div class="empty-prompt" onclick="startTransition('dm-1')">Start the conversation</div>
+          </div>
+        </div>
+
+        <div class="view-chat">
+          <div class="bg-blob-1"></div><div class="bg-blob-2"></div>
+          <div class="chat-elements-wrapper">
+            <div class="chat-header-bar">
+              <div class="back-btn">‹</div>
+              <div class="chat-header-avatar">AK</div>
+              <div class="chat-header-name">Arthur Kensington</div>
+            </div>
+            
+            <div class="message-list">
+              <div class="message-group msg-received">
+                <div class="bubble">I just reviewed the plans.</div>
+                <div class="bubble">Everything looks perfectly in order.</div>
+                <div class="msg-time">09:12 AM</div>
+              </div>
+              <div class="message-group msg-sent">
+                <div class="bubble">Excellent. I'll send it over.</div>
+                <div class="msg-time">09:14 AM</div>
+              </div>
+            </div>
+            
+            <div class="composer-area">
+              <div class="composer-input">Message @arthurk...</div>
+              <div class="send-btn">↑</div>
+            </div>
+          </div>
+          <button class="reset-demo" onclick="resetTransition('dm-1')">Reset Demo</button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- CONCEPT 2: Slow Float -->
+    <div class="concept-wrapper">
+      <span class="concept-label">2. Slow Float Away</span>
+      <div class="dm-container c-slow-float" id="dm-2">
+        
+        <div class="view-empty">
+          <div class="watermark-container"><div class="empty-initials">AK</div></div>
+          <div class="empty-content-group">
+            <div class="empty-name">Arthur Kensington</div>
+            <div class="empty-prompt" onclick="startTransition('dm-2')">Start the conversation</div>
+          </div>
+        </div>
+
+        <div class="view-chat">
+          <div class="bg-blob-1"></div><div class="bg-blob-2"></div>
+          <div class="chat-elements-wrapper">
+            <div class="chat-header-bar">
+              <div class="back-btn">‹</div>
+              <div class="chat-header-avatar">AK</div>
+              <div class="chat-header-name">Arthur Kensington</div>
+            </div>
+            <div class="message-list">
+              <div class="message-group msg-received">
+                <div class="bubble">I just reviewed the plans.</div>
+                <div class="bubble">Everything looks perfectly in order.</div>
+                <div class="msg-time">09:12 AM</div>
+              </div>
+              <div class="message-group msg-sent">
+                <div class="bubble">Excellent. I'll send it over.</div>
+                <div class="msg-time">09:14 AM</div>
+              </div>
+            </div>
+            <div class="composer-area">
+              <div class="composer-input">Message @arthurk...</div>
+              <div class="send-btn">↑</div>
+            </div>
+          </div>
+          <button class="reset-demo" onclick="resetTransition('dm-2')">Reset Demo</button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- CONCEPT 3: Focus Pull -->
+    <div class="concept-wrapper">
+      <span class="concept-label">3. The Focus Pull</span>
+      <div class="dm-container c-focus-pull" id="dm-3">
+        
+        <div class="view-empty">
+          <div class="watermark-container"><div class="empty-initials">AK</div></div>
+          <div class="empty-content-group">
+            <div class="empty-name">Arthur Kensington</div>
+            <div class="empty-prompt" onclick="startTransition('dm-3')">Start the conversation</div>
+          </div>
+        </div>
+
+        <div class="view-chat">
+          <div class="bg-blob-1"></div><div class="bg-blob-2"></div>
+          <div class="chat-elements-wrapper">
+            <div class="chat-header-bar">
+              <div class="back-btn">‹</div>
+              <div class="chat-header-avatar">AK</div>
+              <div class="chat-header-name">Arthur Kensington</div>
+            </div>
+            <div class="message-list">
+              <div class="message-group msg-received">
+                <div class="bubble">I just reviewed the plans.</div>
+                <div class="bubble">Everything looks perfectly in order.</div>
+                <div class="msg-time">09:12 AM</div>
+              </div>
+              <div class="message-group msg-sent">
+                <div class="bubble">Excellent. I'll send it over.</div>
+                <div class="msg-time">09:14 AM</div>
+              </div>
+            </div>
+            <div class="composer-area">
+              <div class="composer-input">Message @arthurk...</div>
+              <div class="send-btn">↑</div>
+            </div>
+          </div>
+          <button class="reset-demo" onclick="resetTransition('dm-3')">Reset Demo</button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- CONCEPT 4: Slide & Reveal -->
+    <div class="concept-wrapper">
+      <span class="concept-label">4. Slide & Reveal</span>
+      <div class="dm-container c-slide-reveal" id="dm-4">
+        
+        <div class="view-empty">
+          <div class="watermark-container"><div class="empty-initials">AK</div></div>
+          <div class="empty-content-group">
+            <div class="empty-name">Arthur Kensington</div>
+            <div class="empty-prompt" onclick="startTransition('dm-4')">Start the conversation</div>
+          </div>
+        </div>
+
+        <div class="view-chat">
+          <div class="bg-blob-1"></div><div class="bg-blob-2"></div>
+          <div class="chat-elements-wrapper">
+            <div class="chat-header-bar">
+              <div class="back-btn">‹</div>
+              <div class="chat-header-avatar">AK</div>
+              <div class="chat-header-name">Arthur Kensington</div>
+            </div>
+            <div class="message-list">
+              <div class="message-group msg-received">
+                <div class="bubble">I just reviewed the plans.</div>
+                <div class="bubble">Everything looks perfectly in order.</div>
+                <div class="msg-time">09:12 AM</div>
+              </div>
+              <div class="message-group msg-sent">
+                <div class="bubble">Excellent. I'll send it over.</div>
+                <div class="msg-time">09:14 AM</div>
+              </div>
+            </div>
+            <div class="composer-area">
+              <div class="composer-input">Message @arthurk...</div>
+              <div class="send-btn">↑</div>
+            </div>
+          </div>
+          <button class="reset-demo" onclick="resetTransition('dm-4')">Reset Demo</button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- CONCEPT 5: Spring Pop -->
+    <div class="concept-wrapper">
+      <span class="concept-label">5. Spring Pop Entry</span>
+      <div class="dm-container c-spring-pop" id="dm-5">
+        
+        <div class="view-empty">
+          <div class="watermark-container"><div class="empty-initials">AK</div></div>
+          <div class="empty-content-group">
+            <div class="empty-name">Arthur Kensington</div>
+            <div class="empty-prompt" onclick="startTransition('dm-5')">Start the conversation</div>
+          </div>
+        </div>
+
+        <div class="view-chat">
+          <div class="bg-blob-1"></div><div class="bg-blob-2"></div>
+          <div class="chat-elements-wrapper">
+            <div class="chat-header-bar">
+              <div class="back-btn">‹</div>
+              <div class="chat-header-avatar">AK</div>
+              <div class="chat-header-name">Arthur Kensington</div>
+            </div>
+            <div class="message-list">
+              <div class="message-group msg-received">
+                <div class="bubble">I just reviewed the plans.</div>
+                <div class="bubble">Everything looks perfectly in order.</div>
+                <div class="msg-time">09:12 AM</div>
+              </div>
+              <div class="message-group msg-sent">
+                <div class="bubble">Excellent. I'll send it over.</div>
+                <div class="msg-time">09:14 AM</div>
+              </div>
+            </div>
+            <div class="composer-area">
+              <div class="composer-input">Message @arthurk...</div>
+              <div class="send-btn">↑</div>
+            </div>
+          </div>
+          <button class="reset-demo" onclick="resetTransition('dm-5')">Reset Demo</button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- CONCEPT 6: Staggered Reveal -->
+    <div class="concept-wrapper">
+      <span class="concept-label">6. Staggered Entry</span>
+      <div class="dm-container c-staggered" id="dm-6">
+        
+        <div class="view-empty">
+          <div class="watermark-container"><div class="empty-initials">AK</div></div>
+          <div class="empty-content-group">
+            <div class="empty-name">Arthur Kensington</div>
+            <div class="empty-prompt" onclick="startTransition('dm-6')">Start the conversation</div>
+          </div>
+        </div>
+
+        <div class="view-chat">
+          <div class="bg-blob-1"></div><div class="bg-blob-2"></div>
+          <div class="chat-elements-wrapper">
+            <div class="chat-header-bar">
+              <div class="back-btn">‹</div>
+              <div class="chat-header-avatar">AK</div>
+              <div class="chat-header-name">Arthur Kensington</div>
+            </div>
+            <div class="message-list">
+              <div class="message-group msg-received">
+                <div class="bubble">I just reviewed the plans.</div>
+                <div class="bubble">Everything looks perfectly in order.</div>
+                <div class="msg-time">09:12 AM</div>
+              </div>
+              <div class="message-group msg-sent">
+                <div class="bubble">Excellent. I'll send it over.</div>
+                <div class="msg-time">09:14 AM</div>
+              </div>
+            </div>
+            <div class="composer-area">
+              <div class="composer-input">Message @arthurk...</div>
+              <div class="send-btn">↑</div>
+            </div>
+          </div>
+          <button class="reset-demo" onclick="resetTransition('dm-6')">Reset Demo</button>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // Robust Transition Handling
+    function startTransition(id) {
+      const container = document.getElementById(id);
+      if (container && !container.classList.contains('is-chat')) {
+        container.classList.add('is-chat');
+      }
+    }
+
+    function resetTransition(id) {
+      const container = document.getElementById(id);
+      if (container) {
+        // Remove class to trigger CSS reverse transition
+        container.classList.remove('is-chat');
+      }
+    }
+  </script>
+</body>
+</html>

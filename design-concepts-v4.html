@@ -1,0 +1,1208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Penthouse - Design Concepts V4</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gelasio:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Ubuntu:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-color: #12121C;
+    --surface-color: #1E1E2D;
+    --accent-color: #7777C2;
+    --accent-dark: #5a5a9e;
+    --accent-hover: #C6C6E6;
+    --text-primary: #E2E2EC;
+    --text-secondary: #8C8CC5;
+    --danger-color: #ff8ca6;
+    --success-color: #34d399;
+    --border-solid: rgba(140, 140, 197, 0.2);
+
+    --font-display: 'Gelasio', serif;
+    --font-body: 'Ubuntu', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+
+    --radius-sm: 6px;
+    --radius-md: 12px;
+    --radius-lg: 20px;
+    --radius-xl: 24px;
+  }
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    background-color: var(--bg-color);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    padding: 2rem;
+  }
+
+  h1, h2, h3 {
+    font-family: var(--font-display);
+    font-weight: 500;
+  }
+
+  .concept-group {
+    margin-bottom: 6rem;
+  }
+
+  .concept-group-title {
+    font-size: 2rem;
+    color: var(--accent-hover);
+    margin-bottom: 1rem;
+    border-bottom: 1px solid var(--border-solid);
+    padding-bottom: 0.5rem;
+  }
+
+  .concept-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 3rem;
+  }
+
+  .concept-wrapper {
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-solid);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-height: 400px;
+  }
+
+  .concept-label {
+    position: absolute;
+    top: 0;
+    left: 0;
+    background: var(--surface-color);
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    padding: 4px 8px;
+    border-bottom-right-radius: var(--radius-sm);
+    z-index: 10;
+  }
+
+  .mobile-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background-color: var(--bg-color);
+    overflow: hidden;
+  }
+
+  /* ========================================== */
+  /* COMPONENT 1: CHAT LIST ROW                 */
+  /* ========================================== */
+  
+  .chat-list {
+    display: flex;
+    flex-direction: column;
+    padding: 2rem 0;
+  }
+
+  .chat-row {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    border-bottom: 1px solid rgba(140, 140, 197, 0.05); /* Subtle divider */
+  }
+
+  .chat-row:last-child {
+    border-bottom: none;
+  }
+
+  .chat-row:hover {
+    background-color: rgba(30, 30, 45, 0.5);
+  }
+
+  /* Ultra Minimal Active */
+  .chat-row.active {
+    background-color: rgba(119, 119, 194, 0.03);
+  }
+
+  .avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background-color: var(--accent-color);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-body);
+    font-size: 1.2rem;
+    flex-shrink: 0;
+    position: relative;
+  }
+
+  .chat-content {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .chat-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+  }
+
+  .chat-name {
+    font-family: var(--font-body);
+    font-weight: 500;
+    font-size: 1rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Solid time pill */
+  .chat-time {
+    font-family: var(--font-body);
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+    margin-left: 8px;
+    border-radius: 4px;
+    background: rgba(140, 140, 197, 0.1);
+    padding: 2px 6px;
+  }
+
+  .chat-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  /* Right-aligned preview text */
+  .chat-preview {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: var(--font-body);
+    flex: 1;
+    text-align: right;
+    font-weight: 300;
+  }
+
+  .unread-dot {
+    width: 8px;
+    height: 8px;
+    background-color: var(--accent-color);
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-left: 8px;
+  }
+
+  /* Variations (Settled component, just minor spacing differences) */
+  .c1-v1 .chat-row { padding: 12px 16px; gap: 12px; }
+  .c1-v2 .chat-row { padding: 14px 18px; gap: 12px; }
+  .c1-v3 .chat-row { padding: 10px 14px; gap: 12px; }
+  .c1-v4 .chat-row { padding: 16px 20px; gap: 12px; }
+  .c1-v5 .chat-row { padding: 12px 16px; gap: 16px; }
+
+  /* ========================================== */
+  /* COMPONENT 2: MESSAGE BUBBLES               */
+  /* ========================================== */
+  
+  .c2-message-list {
+    display: flex;
+    flex-direction: column;
+    padding: 2rem 1rem;
+    gap: 1.5rem; /* Large gap between different users' groups */
+    overflow-y: auto;
+    position: relative;
+    z-index: 1;
+    height: 100%;
+  }
+
+  .glass-blob-1 { position: absolute; top: 10%; left: -10%; width: 200px; height: 200px; background: var(--accent-color); border-radius: 50%; opacity: 0.15; filter: blur(40px); z-index: 0; pointer-events: none; }
+  .glass-blob-2 { position: absolute; bottom: 10%; right: -10%; width: 180px; height: 180px; background: #9B9BEE; border-radius: 50%; opacity: 0.1; filter: blur(40px); z-index: 0; pointer-events: none; }
+
+  .c2-message-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px; /* Tight grouping for same user */
+    max-width: 85%;
+  }
+
+  .c2-msg-sent { align-self: flex-end; align-items: flex-end; }
+  .c2-msg-received { align-self: flex-start; align-items: flex-start; }
+
+  /* Glassy backdrop for both */
+  .c2-bubble {
+    padding: 12px 16px;
+    font-size: 0.95rem;
+    line-height: 1.4;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: var(--radius-lg);
+  }
+
+  /* Brighter Periwinkle for Sent */
+  .c2-msg-sent .c2-bubble {
+    background: linear-gradient(135deg, rgba(160, 160, 240, 0.9) 0%, rgba(130, 130, 215, 0.9) 100%);
+    color: #12121C;
+  }
+  
+  /* Received */
+  .c2-msg-received .c2-bubble {
+    background: rgba(40, 40, 58, 0.6);
+    border: 1px solid rgba(140, 140, 197, 0.15);
+    color: var(--text-primary);
+  }
+
+  /* Grouping Radii - Sent */
+  .c2-msg-sent .c2-bubble:first-child:not(:last-child) { border-bottom-right-radius: 4px; }
+  .c2-msg-sent .c2-bubble:not(:first-child):not(:last-child) { border-top-right-radius: 4px; border-bottom-right-radius: 4px; }
+  .c2-msg-sent .c2-bubble:last-child:not(:first-child) { border-top-right-radius: 4px; }
+
+  /* Grouping Radii - Received */
+  .c2-msg-received .c2-bubble:first-child:not(:last-child) { border-bottom-left-radius: 4px; }
+  .c2-msg-received .c2-bubble:not(:first-child):not(:last-child) { border-top-left-radius: 4px; border-bottom-left-radius: 4px; }
+  .c2-msg-received .c2-bubble:last-child:not(:first-child) { border-top-left-radius: 4px; }
+
+  .c2-msg-time {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-top: 4px;
+    opacity: 0.4;
+    padding: 0 4px;
+  }
+
+  /* Subtle Dividers */
+  .c2-divider-base {
+    align-self: center;
+    width: 40px;
+    height: 1px;
+    background: rgba(140, 140, 197, 0.2);
+    margin: 0.25rem 0;
+  }
+
+  /* Variations */
+  .c2-v2 .c2-divider-base { background: transparent; width: auto; color: rgba(140, 140, 197, 0.3); font-size: 10px; letter-spacing: 2px; }
+  .c2-v2 .c2-divider-base::after { content: '•••'; }
+  
+  .c2-v3 .c2-divider-base { width: 100px; background: linear-gradient(90deg, transparent, rgba(140, 140, 197, 0.2), transparent); height: 1px; }
+  
+  .c2-v4 .c2-divider-base { width: 60px; background: transparent; border-top: 1px dashed rgba(140, 140, 197, 0.2); }
+  
+  .c2-v5 .c2-divider-base { display: none; } /* Just spatial grouping */
+  .c2-v5 .c2-message-list { gap: 2.5rem; } /* Larger gap instead of line */
+
+
+  /* ========================================== */
+  /* COMPONENT 3: EMPTY DM THREAD               */
+  /* ========================================== */
+  
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    padding: 2rem;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .watermark-container {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    pointer-events: none;
+    opacity: 0.05;
+    filter: blur(0px);
+  }
+
+  .empty-initials {
+    font-family: var(--font-display);
+    font-size: 180px;
+    color: var(--accent-color);
+    margin: 0;
+    user-select: none;
+  }
+
+  .empty-content-group {
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+  }
+
+  .empty-name {
+    font-family: var(--font-display);
+    font-size: 18px;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+  }
+
+  .empty-prompt {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 8px 16px;
+    border-radius: var(--radius-sm);
+    transition: color 0.2s ease, background 0.2s ease;
+  }
+
+  .empty-prompt:hover {
+    color: var(--text-primary);
+    background: rgba(119, 119, 194, 0.1);
+  }
+
+  /* Reliable CSS Transitions for Animations */
+  /* V1: Soft Diffuse Drop */
+  .c3-v1 .watermark-container { transition: transform 1.2s cubic-bezier(0.4, 0, 0.2, 1), opacity 1.2s ease, filter 1.2s ease; }
+  .c3-v1.entering-dm .watermark-container { transform: translate(-50%, 60%); opacity: 0; filter: blur(8px); }
+
+  /* V2: Bouncy Drop */
+  .c3-v2 .watermark-container { transition: transform 1.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 1.2s ease, filter 1.2s ease; }
+  .c3-v2.entering-dm .watermark-container { transform: translate(-50%, 40%); opacity: 0; filter: blur(4px); }
+
+  /* V3: Slow Sink */
+  .c3-v3 .watermark-container { transition: transform 2s ease-out, opacity 1.8s ease, filter 2s ease; }
+  .c3-v3.entering-dm .watermark-container { transform: translate(-50%, 100%); opacity: 0; filter: blur(12px); }
+
+  /* V4: Expand & Dissolve */
+  .c3-v4 .watermark-container { transition: transform 1.5s ease, opacity 1.5s ease, filter 1.5s ease; }
+  .c3-v4.entering-dm .watermark-container { transform: translate(-50%, -50%) scale(1.3); opacity: 0; filter: blur(12px); }
+
+  /* V5: Drift Down-Right */
+  .c3-v5 .watermark-container { transition: transform 1.6s cubic-bezier(0.4, 0, 0.2, 1), opacity 1.4s ease, filter 1.6s ease; }
+  .c3-v5.entering-dm .watermark-container { transform: translate(-20%, 20%); opacity: 0; filter: blur(8px); }
+
+
+  /* ========================================== */
+  /* COMPONENT 4: DATE DIVIDER                  */
+  /* ========================================== */
+  
+  .divider-container {
+    padding: 2rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    position: relative;
+    justify-content: center;
+  }
+
+  .date-divider {
+    display: flex;
+    align-items: center;
+    text-align: left;
+    margin: 1rem 0;
+  }
+
+  .date-divider::before {
+    content: '';
+    width: 24px;
+  }
+
+  .date-divider::after {
+    content: '';
+    flex: 1;
+  }
+
+  .date-text {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--text-secondary);
+    padding: 0 1rem;
+  }
+
+  /* Settled Component variations (Double Track) */
+  /* V1: Base Double Track */
+  .c4-v1 .date-divider::before, .c4-v1 .date-divider::after { height: 4px; border-top: 1px solid var(--border-solid); border-bottom: 1px solid var(--border-solid); }
+
+  /* V2: Narrow Double Track */
+  .c4-v2 .date-divider::before, .c4-v2 .date-divider::after { height: 2px; border-top: 1px solid var(--border-solid); border-bottom: 1px solid var(--border-solid); }
+
+  /* V3: Wide Double Track */
+  .c4-v3 .date-divider::before, .c4-v3 .date-divider::after { height: 6px; border-top: 1px solid var(--border-solid); border-bottom: 1px solid var(--border-solid); }
+
+  /* V4: Faded Edges Double Track */
+  .c4-v4 .date-divider::before { height: 4px; border-top: 1px solid var(--border-solid); border-bottom: 1px solid var(--border-solid); mask-image: linear-gradient(to right, transparent, black); -webkit-mask-image: linear-gradient(to right, transparent, black); }
+  .c4-v4 .date-divider::after { height: 4px; border-top: 1px solid var(--border-solid); border-bottom: 1px solid var(--border-solid); mask-image: linear-gradient(to left, transparent, black); -webkit-mask-image: linear-gradient(to left, transparent, black); }
+
+  /* V5: Dashed Double Track */
+  .c4-v5 .date-divider::before, .c4-v5 .date-divider::after { height: 4px; border-top: 1px dashed var(--border-solid); border-bottom: 1px dashed var(--border-solid); }
+
+
+  /* ========================================== */
+  /* COMPONENT 5: PROFILE CARD WITH BANNER      */
+  /* ========================================== */
+  
+  .modal-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+  }
+
+  /* Settled: Floating Inner Banner + Dramatic Contrast */
+  .profile-card {
+    background: linear-gradient(180deg, rgba(119, 119, 194, 0.05) 0%, var(--surface-color) 40%, #161622 100%);
+    border: 1px solid rgba(119, 119, 194, 0.2);
+    border-radius: var(--radius-xl);
+    width: 100%;
+    max-width: 320px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 8px; /* Inner gap for the floating banner */
+  }
+
+  .profile-banner {
+    width: 100%;
+    height: 110px;
+    border-radius: var(--radius-md);
+    background-size: cover;
+    background-position: center;
+  }
+
+  .profile-content {
+    padding: 0 1.5rem 1.5rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+  }
+
+  .profile-avatar {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background-color: #1a1a25; /* Matches the gradient where it sits */
+    padding: 4px;
+    margin-top: -40px;
+    margin-bottom: 1rem;
+    z-index: 2;
+    position: relative;
+  }
+
+  .profile-avatar-inner {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background-color: var(--accent-color);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-display);
+    font-size: 1.8rem;
+  }
+
+  /* Status badge on avatar */
+  .profile-status {
+    position: absolute;
+    bottom: 4px;
+    right: 4px;
+    width: 16px;
+    height: 16px;
+    background-color: var(--danger-color);
+    border: 3px solid #1a1a25;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .profile-status::after {
+    content: '';
+    width: 6px;
+    height: 2px;
+    background-color: white;
+    border-radius: 1px;
+  }
+
+  .profile-name {
+    font-family: var(--font-display);
+    font-size: 22px;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+  }
+
+  .profile-username {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 1rem;
+  }
+
+  .profile-joined {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    margin-bottom: 1.5rem;
+  }
+
+  .btn-outline {
+    width: 100%;
+    background: transparent;
+    border: 1px solid var(--accent-color);
+    color: var(--accent-color);
+    padding: 12px 24px;
+    border-radius: var(--radius-lg);
+    font-family: var(--font-body);
+    font-weight: 500;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .btn-outline:hover {
+    background: rgba(119, 119, 194, 0.1);
+    color: var(--accent-hover);
+    border-color: var(--accent-hover);
+  }
+
+  /* Variations: Different banner placeholder art */
+  .c5-v1 .profile-banner { background-image: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+  .c5-v2 .profile-banner { background-image: linear-gradient(120deg, #89f7fe 0%, #66a6ff 100%); }
+  .c5-v3 .profile-banner { background-image: linear-gradient(to right, #fa709a 0%, #fee140 100%); }
+  .c5-v4 .profile-banner { background-image: linear-gradient(to right, #434343 0%, black 100%); }
+  .c5-v5 .profile-banner { background-image: linear-gradient(to top, #0ba360 0%, #3cba92 100%); }
+
+</style>
+</head>
+<body>
+
+  <h1>The Penthouse &mdash; Design Concepts V4</h1>
+  <p style="color: var(--text-secondary); font-family: var(--font-mono); font-size: 0.8rem; margin-top: 1rem; margin-bottom: 4rem;">Confirming Settled Styles & Exploring New Behaviors</p>
+
+  <!-- ========================================== -->
+  <!-- COMPONENT 1: CHAT LIST ROW                 -->
+  <!-- ========================================== -->
+  <section class="concept-group">
+    <h2 class="concept-group-title">1. Chat List Row (Settled: Ultra Minimal Active, Subtle Dividers)</h2>
+    <div class="concept-grid">
+      
+      <!-- V1 -->
+      <div class="concept-wrapper c1-v1">
+        <span class="concept-label">1.1 Finalized Style</span>
+        <div class="mobile-container">
+          <div class="chat-list">
+            <div class="chat-row active">
+              <div class="avatar">AK</div>
+              <div class="chat-content">
+                <div class="chat-header">
+                  <div class="chat-name">Arthur Kensington</div>
+                  <div class="chat-time">11:47 PM</div>
+                </div>
+                <div class="chat-footer">
+                  <div class="chat-preview">The reservation is confirmed for eight.</div>
+                </div>
+              </div>
+            </div>
+            <div class="chat-row">
+              <div class="avatar">EJ</div>
+              <div class="chat-content">
+                <div class="chat-header">
+                  <div class="chat-name">Eleanor James</div>
+                  <div class="chat-time">Yesterday</div>
+                </div>
+                <div class="chat-footer">
+                  <div class="chat-preview" style="color: var(--text-primary); font-weight: 500;">Are we still on for the gallery?</div>
+                  <div class="unread-dot"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- V2 -->
+      <div class="concept-wrapper c1-v2">
+        <span class="concept-label">1.2 Alt: Relaxed Padding</span>
+        <div class="mobile-container">
+          <div class="chat-list">
+            <div class="chat-row active">
+              <div class="avatar">MR</div>
+              <div class="chat-content">
+                <div class="chat-header">
+                  <div class="chat-name">Marcus Reed</div>
+                  <div class="chat-time">Tue</div>
+                </div>
+                <div class="chat-footer">
+                  <div class="chat-preview">I'll review the draft shortly.</div>
+                </div>
+              </div>
+            </div>
+            <div class="chat-row">
+              <div class="avatar">CH</div>
+              <div class="chat-content">
+                <div class="chat-header">
+                  <div class="chat-name">Chloe Harris</div>
+                  <div class="chat-time">Mon</div>
+                </div>
+                <div class="chat-footer">
+                  <div class="chat-preview" style="color: var(--text-primary); font-weight: 500;">Can you call me?</div>
+                  <div class="unread-dot"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- V3 -->
+      <div class="concept-wrapper c1-v3">
+        <span class="concept-label">1.3 Alt: Tight Padding</span>
+        <div class="mobile-container">
+          <div class="chat-list">
+            <div class="chat-row active">
+              <div class="avatar">AK</div>
+              <div class="chat-content">
+                <div class="chat-header">
+                  <div class="chat-name">Arthur Kensington</div>
+                  <div class="chat-time">11:47 PM</div>
+                </div>
+                <div class="chat-footer">
+                  <div class="chat-preview">The reservation is confirmed for eight.</div>
+                </div>
+              </div>
+            </div>
+            <div class="chat-row">
+              <div class="avatar">EJ</div>
+              <div class="chat-content">
+                <div class="chat-header">
+                  <div class="chat-name">Eleanor James</div>
+                  <div class="chat-time">Yesterday</div>
+                </div>
+                <div class="chat-footer">
+                  <div class="chat-preview" style="color: var(--text-primary); font-weight: 500;">Are we still on for the gallery?</div>
+                  <div class="unread-dot"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- V4 -->
+      <div class="concept-wrapper c1-v4">
+        <span class="concept-label">1.4 Alt: Spacious Rows</span>
+        <div class="mobile-container">
+          <div class="chat-list">
+            <div class="chat-row active">
+              <div class="avatar">AK</div>
+              <div class="chat-content">
+                <div class="chat-header">
+                  <div class="chat-name">Arthur Kensington</div>
+                  <div class="chat-time">11:47 PM</div>
+                </div>
+                <div class="chat-footer">
+                  <div class="chat-preview">The reservation is confirmed for eight.</div>
+                </div>
+              </div>
+            </div>
+            <div class="chat-row">
+              <div class="avatar">EJ</div>
+              <div class="chat-content">
+                <div class="chat-header">
+                  <div class="chat-name">Eleanor James</div>
+                  <div class="chat-time">Yesterday</div>
+                </div>
+                <div class="chat-footer">
+                  <div class="chat-preview" style="color: var(--text-primary); font-weight: 500;">Are we still on for the gallery?</div>
+                  <div class="unread-dot"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- V5 -->
+      <div class="concept-wrapper c1-v5">
+        <span class="concept-label">1.5 Alt: Wider Avatar Gap</span>
+        <div class="mobile-container">
+          <div class="chat-list">
+            <div class="chat-row active">
+              <div class="avatar">AK</div>
+              <div class="chat-content">
+                <div class="chat-header">
+                  <div class="chat-name">Arthur Kensington</div>
+                  <div class="chat-time">11:47 PM</div>
+                </div>
+                <div class="chat-footer">
+                  <div class="chat-preview">The reservation is confirmed for eight.</div>
+                </div>
+              </div>
+            </div>
+            <div class="chat-row">
+              <div class="avatar">EJ</div>
+              <div class="chat-content">
+                <div class="chat-header">
+                  <div class="chat-name">Eleanor James</div>
+                  <div class="chat-time">Yesterday</div>
+                </div>
+                <div class="chat-footer">
+                  <div class="chat-preview" style="color: var(--text-primary); font-weight: 500;">Are we still on for the gallery?</div>
+                  <div class="unread-dot"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ========================================== -->
+  <!-- COMPONENT 2: MESSAGE BUBBLES               -->
+  <!-- ========================================== -->
+  <section class="concept-group">
+    <h2 class="concept-group-title">2. Message Bubbles (Grouped, Glassy, Brighter Periwinkle, Dividers)</h2>
+    <div class="concept-grid">
+      
+      <!-- V1: Subtle Centered Divider -->
+      <div class="concept-wrapper c2-v1">
+        <span class="concept-label">2.1 Centered Line Divider</span>
+        <div class="mobile-container">
+          <div class="glass-blob-1"></div>
+          <div class="glass-blob-2"></div>
+          <div class="c2-message-list">
+            <div class="c2-message-group c2-msg-received">
+              <div class="c2-bubble">Are we still on for today?</div>
+              <div class="c2-bubble">I have the documents ready.</div>
+              <div class="c2-msg-time">09:12 AM</div>
+            </div>
+            
+            <div class="c2-divider-base"></div>
+            
+            <div class="c2-message-group c2-msg-sent">
+              <div class="c2-bubble">Yes, absolutely.</div>
+              <div class="c2-bubble">Let's meet at the lobby at noon.</div>
+              <div class="c2-msg-time">09:14 AM</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- V2: Dot Divider -->
+      <div class="concept-wrapper c2-v2">
+        <span class="concept-label">2.2 Dot Divider</span>
+        <div class="mobile-container">
+          <div class="glass-blob-1"></div>
+          <div class="glass-blob-2"></div>
+          <div class="c2-message-list">
+            <div class="c2-message-group c2-msg-received">
+              <div class="c2-bubble">Are we still on for today?</div>
+              <div class="c2-bubble">I have the documents ready.</div>
+              <div class="c2-msg-time">09:12 AM</div>
+            </div>
+            
+            <div class="c2-divider-base"></div>
+            
+            <div class="c2-message-group c2-msg-sent">
+              <div class="c2-bubble">Yes, absolutely.</div>
+              <div class="c2-bubble">Let's meet at the lobby at noon.</div>
+              <div class="c2-msg-time">09:14 AM</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- V3: Faded Line -->
+      <div class="concept-wrapper c2-v3">
+        <span class="concept-label">2.3 Faded Gradient Line</span>
+        <div class="mobile-container">
+          <div class="glass-blob-1"></div>
+          <div class="glass-blob-2"></div>
+          <div class="c2-message-list">
+            <div class="c2-message-group c2-msg-received">
+              <div class="c2-bubble">Are we still on for today?</div>
+              <div class="c2-bubble">I have the documents ready.</div>
+              <div class="c2-msg-time">09:12 AM</div>
+            </div>
+            
+            <div class="c2-divider-base"></div>
+            
+            <div class="c2-message-group c2-msg-sent">
+              <div class="c2-bubble">Yes, absolutely.</div>
+              <div class="c2-bubble">Let's meet at the lobby at noon.</div>
+              <div class="c2-msg-time">09:14 AM</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- V4: Dashed Subtle -->
+      <div class="concept-wrapper c2-v4">
+        <span class="concept-label">2.4 Dashed Minimal Divider</span>
+        <div class="mobile-container">
+          <div class="glass-blob-1"></div>
+          <div class="glass-blob-2"></div>
+          <div class="c2-message-list">
+            <div class="c2-message-group c2-msg-received">
+              <div class="c2-bubble">Are we still on for today?</div>
+              <div class="c2-bubble">I have the documents ready.</div>
+              <div class="c2-msg-time">09:12 AM</div>
+            </div>
+            
+            <div class="c2-divider-base"></div>
+            
+            <div class="c2-message-group c2-msg-sent">
+              <div class="c2-bubble">Yes, absolutely.</div>
+              <div class="c2-bubble">Let's meet at the lobby at noon.</div>
+              <div class="c2-msg-time">09:14 AM</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- V5: No line, just spatial gap -->
+      <div class="concept-wrapper c2-v5">
+        <span class="concept-label">2.5 Spatial Gap Only (No Line)</span>
+        <div class="mobile-container">
+          <div class="glass-blob-1"></div>
+          <div class="glass-blob-2"></div>
+          <div class="c2-message-list">
+            <div class="c2-message-group c2-msg-received">
+              <div class="c2-bubble">Are we still on for today?</div>
+              <div class="c2-bubble">I have the documents ready.</div>
+              <div class="c2-msg-time">09:12 AM</div>
+            </div>
+            
+            <div class="c2-divider-base"></div>
+            
+            <div class="c2-message-group c2-msg-sent">
+              <div class="c2-bubble">Yes, absolutely.</div>
+              <div class="c2-bubble">Let's meet at the lobby at noon.</div>
+              <div class="c2-msg-time">09:14 AM</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ========================================== -->
+  <!-- COMPONENT 3: EMPTY DM THREAD               -->
+  <!-- ========================================== -->
+  <section class="concept-group">
+    <h2 class="concept-group-title">3. Empty DM Thread (Fixed CSS Transition Animations)</h2>
+    <p style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 1rem; margin-top: -0.5rem;">Click "Start the conversation" to trigger. Uses stable CSS transitions instead of keyframes.</p>
+    <div class="concept-grid">
+      
+      <!-- V1: Smooth Diffuse Drop -->
+      <div class="concept-wrapper c3-v1">
+        <span class="concept-label">3.1 Smooth Diffuse Drop</span>
+        <div class="mobile-container">
+          <div class="empty-state">
+            <div class="watermark-container">
+              <div class="empty-initials">AK</div>
+            </div>
+            <div class="empty-content-group">
+              <div class="empty-name">Arthur Kensington</div>
+              <div class="empty-prompt">Start the conversation</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- V2: Bouncy Drop -->
+      <div class="concept-wrapper c3-v2">
+        <span class="concept-label">3.2 Bouncy Drop</span>
+        <div class="mobile-container">
+          <div class="empty-state">
+            <div class="watermark-container">
+              <div class="empty-initials">AK</div>
+            </div>
+            <div class="empty-content-group">
+              <div class="empty-name">Arthur Kensington</div>
+              <div class="empty-prompt">Start the conversation</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- V3: Slow Sink -->
+      <div class="concept-wrapper c3-v3">
+        <span class="concept-label">3.3 Slow Sink</span>
+        <div class="mobile-container">
+          <div class="empty-state">
+            <div class="watermark-container">
+              <div class="empty-initials">AK</div>
+            </div>
+            <div class="empty-content-group">
+              <div class="empty-name">Arthur Kensington</div>
+              <div class="empty-prompt">Start the conversation</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- V4: Expand & Dissolve -->
+      <div class="concept-wrapper c3-v4">
+        <span class="concept-label">3.4 Expand & Dissolve</span>
+        <div class="mobile-container">
+          <div class="empty-state">
+            <div class="watermark-container">
+              <div class="empty-initials">AK</div>
+            </div>
+            <div class="empty-content-group">
+              <div class="empty-name">Arthur Kensington</div>
+              <div class="empty-prompt">Start the conversation</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- V5: Drift Down-Right -->
+      <div class="concept-wrapper c3-v5">
+        <span class="concept-label">3.5 Drift Down-Right</span>
+        <div class="mobile-container">
+          <div class="empty-state">
+            <div class="watermark-container">
+              <div class="empty-initials">AK</div>
+            </div>
+            <div class="empty-content-group">
+              <div class="empty-name">Arthur Kensington</div>
+              <div class="empty-prompt">Start the conversation</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ========================================== -->
+  <!-- COMPONENT 4: DATE DIVIDER                  -->
+  <!-- ========================================== -->
+  <section class="concept-group">
+    <h2 class="concept-group-title">4. Date Divider (Settled: Double Track)</h2>
+    <div class="concept-grid">
+      
+      <!-- V1: Base -->
+      <div class="concept-wrapper c4-v1">
+        <span class="concept-label">4.1 Finalized Style</span>
+        <div class="mobile-container divider-container">
+          <div class="date-divider">
+            <span class="date-text">thursday</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- V2: Narrow -->
+      <div class="concept-wrapper c4-v2">
+        <span class="concept-label">4.2 Alt: Narrow Tracks</span>
+        <div class="mobile-container divider-container">
+          <div class="date-divider">
+            <span class="date-text">thursday</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- V3: Wide -->
+      <div class="concept-wrapper c4-v3">
+        <span class="concept-label">4.3 Alt: Wide Tracks</span>
+        <div class="mobile-container divider-container">
+          <div class="date-divider">
+            <span class="date-text">thursday</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- V4: Faded Edges -->
+      <div class="concept-wrapper c4-v4">
+        <span class="concept-label">4.4 Alt: Faded Edges</span>
+        <div class="mobile-container divider-container">
+          <div class="date-divider">
+            <span class="date-text">thursday</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- V5: Dashed -->
+      <div class="concept-wrapper c4-v5">
+        <span class="concept-label">4.5 Alt: Dashed Tracks</span>
+        <div class="mobile-container divider-container">
+          <div class="date-divider">
+            <span class="date-text">thursday</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ========================================== -->
+  <!-- COMPONENT 5: PROFILE CARD WITH BANNER      -->
+  <!-- ========================================== -->
+  <section class="concept-group">
+    <h2 class="concept-group-title">5. Profile Card (Settled: Floating Inner Banner + Dramatic Contrast)</h2>
+    <div class="concept-grid">
+      
+      <!-- V1 -->
+      <div class="concept-wrapper c5-v1">
+        <span class="concept-label">5.1 Finalized Style</span>
+        <div class="mobile-container modal-overlay">
+          <div class="profile-card">
+            <div class="profile-banner"></div>
+            <div class="profile-content">
+              <div class="profile-avatar">
+                <div class="profile-avatar-inner">EJ</div>
+                <div class="profile-status"></div>
+              </div>
+              <div class="profile-name">Eleanor James</div>
+              <div class="profile-username">@eleanorj</div>
+              <div class="profile-joined">member since march 2025</div>
+              <button class="btn-outline">Send message</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- V2 -->
+      <div class="concept-wrapper c5-v2">
+        <span class="concept-label">5.2 Alt Banner: Ocean</span>
+        <div class="mobile-container modal-overlay">
+          <div class="profile-card">
+            <div class="profile-banner"></div>
+            <div class="profile-content">
+              <div class="profile-avatar">
+                <div class="profile-avatar-inner" style="background-color: #2D6A4F;">EJ</div>
+                <div class="profile-status"></div>
+              </div>
+              <div class="profile-name">Eleanor James</div>
+              <div class="profile-username">@eleanorj</div>
+              <div class="profile-joined">member since march 2025</div>
+              <button class="btn-outline">Send message</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- V3 -->
+      <div class="concept-wrapper c5-v3">
+        <span class="concept-label">5.3 Alt Banner: Sunset</span>
+        <div class="mobile-container modal-overlay">
+          <div class="profile-card">
+            <div class="profile-banner"></div>
+            <div class="profile-content">
+              <div class="profile-avatar">
+                <div class="profile-avatar-inner" style="background-color: #9D0208;">EJ</div>
+                <div class="profile-status"></div>
+              </div>
+              <div class="profile-name">Eleanor James</div>
+              <div class="profile-username">@eleanorj</div>
+              <div class="profile-joined">member since march 2025</div>
+              <button class="btn-outline">Send message</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- V4 -->
+      <div class="concept-wrapper c5-v4">
+        <span class="concept-label">5.4 Alt Banner: Noir</span>
+        <div class="mobile-container modal-overlay">
+          <div class="profile-card">
+            <div class="profile-banner"></div>
+            <div class="profile-content">
+              <div class="profile-avatar">
+                <div class="profile-avatar-inner" style="background-color: #370617;">EJ</div>
+                <div class="profile-status"></div>
+              </div>
+              <div class="profile-name">Eleanor James</div>
+              <div class="profile-username">@eleanorj</div>
+              <div class="profile-joined">member since march 2025</div>
+              <button class="btn-outline">Send message</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- V5 -->
+      <div class="concept-wrapper c5-v5">
+        <span class="concept-label">5.5 Alt Banner: Emerald</span>
+        <div class="mobile-container modal-overlay">
+          <div class="profile-card">
+            <div class="profile-banner"></div>
+            <div class="profile-content">
+              <div class="profile-avatar">
+                <div class="profile-avatar-inner" style="background-color: #03045E;">EJ</div>
+                <div class="profile-status"></div>
+              </div>
+              <div class="profile-name">Eleanor James</div>
+              <div class="profile-username">@eleanorj</div>
+              <div class="profile-joined">member since march 2025</div>
+              <button class="btn-outline">Send message</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <script>
+    // Handle Component 3 Transition Animation using stable JS + CSS transitions
+    document.querySelectorAll('.empty-prompt').forEach(button => {
+      button.addEventListener('click', (e) => {
+        const stateContainer = e.target.closest('.empty-state');
+        if (stateContainer && !stateContainer.classList.contains('entering-dm')) {
+          
+          // Trigger the transition
+          stateContainer.classList.add('entering-dm');
+          
+          // Wait for transition to finish, then reset it invisibly
+          setTimeout(() => {
+            const wm = stateContainer.querySelector('.watermark-container');
+            
+            // Temporarily disable transition
+            wm.style.transition = 'none';
+            stateContainer.classList.remove('entering-dm');
+            
+            // Force reflow and re-enable transition so it's ready for next click
+            void wm.offsetWidth; 
+            wm.style.transition = '';
+            
+          }, 2000); // 2 second animation window
+        }
+      });
+    });
+  </script>
+</body>
+</html>

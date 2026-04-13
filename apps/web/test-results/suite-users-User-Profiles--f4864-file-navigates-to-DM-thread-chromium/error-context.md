@@ -1,0 +1,188 @@
+# Instructions
+
+- Following Playwright test failed.
+- Explain why, be concise, respect Playwright best practices.
+- Provide a snippet of code with the fix, if possible.
+
+# Test info
+
+- Name: suite-users.spec.ts >> User Profiles >> Send Message from profile navigates to DM thread
+- Location: e2e/suite-users.spec.ts:120:3
+
+# Error details
+
+```
+Test timeout of 120000ms exceeded.
+```
+
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - button "Back to chat list" [ref=e5] [cursor=pointer]:
+        - img [ref=e6]
+      - heading "Find People" [level=1] [ref=e8]
+    - generic [ref=e9]:
+      - textbox "Search by username or name..." [ref=e10]: dm_from_b_1775845127149
+      - button "Search users" [ref=e11] [cursor=pointer]: 🔍
+    - generic [ref=e12]:
+      - generic [ref=e13]: Showing 1–20 of 70 users
+      - button "A aimtest_manual_1 @aimtest_manual_1 Away" [ref=e14] [cursor=pointer]:
+        - generic [ref=e17]: A
+        - generic [ref=e18]:
+          - generic [ref=e19]: aimtest_manual_1
+          - generic [ref=e20]: "@aimtest_manual_1"
+          - generic [ref=e21]: Away
+        - img [ref=e23]
+      - button "B badpw_1775842100832 @badpw_1775842100832 Away" [ref=e25] [cursor=pointer]:
+        - generic [ref=e28]: B
+        - generic [ref=e29]:
+          - generic [ref=e30]: badpw_1775842100832
+          - generic [ref=e31]: "@badpw_1775842100832"
+          - generic [ref=e32]: Away
+        - img [ref=e34]
+      - button "B badpw_1775842938446 @badpw_1775842938446 Away" [ref=e36] [cursor=pointer]:
+        - generic [ref=e39]: B
+        - generic [ref=e40]:
+          - generic [ref=e41]: badpw_1775842938446
+          - generic [ref=e42]: "@badpw_1775842938446"
+          - generic [ref=e43]: Away
+        - img [ref=e45]
+      - button "B badpw_1775844570077 @badpw_1775844570077 Away" [ref=e47] [cursor=pointer]:
+        - generic [ref=e50]: B
+        - generic [ref=e51]:
+          - generic [ref=e52]: badpw_1775844570077
+          - generic [ref=e53]: "@badpw_1775844570077"
+          - generic [ref=e54]: Away
+        - img [ref=e56]
+      - button "B browser_qa_2 @browser_qa_2 Away" [ref=e58] [cursor=pointer]:
+        - generic [ref=e61]: B
+        - generic [ref=e62]:
+          - generic [ref=e63]: browser_qa_2
+          - generic [ref=e64]: "@browser_qa_2"
+          - generic [ref=e65]: Away
+        - img [ref=e67]
+      - button "B browser_tester_1775843481772 @browser_tester_1775843481772 Away" [ref=e69] [cursor=pointer]:
+        - generic [ref=e72]: B
+        - generic [ref=e73]:
+          - generic [ref=e74]: browser_tester_1775843481772
+          - generic [ref=e75]: "@browser_tester_1775843481772"
+          - generic [ref=e76]: Away
+        - img [ref=e78]
+      - button "C chat_a_1775842159371 @chat_a_1775842159371 Away" [ref=e80] [cursor=pointer]:
+        - generic [ref=e83]: C
+        - generic [ref=e84]:
+          - generic [ref=e85]: chat_a_1775842159371
+          - generic [ref=e86]: "@chat_a_1775842159371"
+          - generic [ref=e87]: Away
+        - img [ref=e89]
+      - button "C chat_a_1775842279780 @chat_a_1775842279780 Away" [ref=e91] [cursor=pointer]:
+        - generic [ref=e94]: C
+        - generic [ref=e95]:
+          - generic [ref=e96]: chat_a_1775842279780
+          - generic [ref=e97]: "@chat_a_1775842279780"
+          - generic [ref=e98]: Away
+        - img [ref=e100]
+      - button "C chat_a_1775842400155 @chat_a_1775842400155 Away" [ref=e102] [cursor=pointer]:
+        - generic [ref=e105]: C
+        - generic [ref=e106]:
+          - generic [ref=e107]: chat_a_1775842400155
+          - generic [ref=e108]: "@chat_a_1775842400155"
+          - generic [ref=e109]: Away
+        - img [ref=e111]
+      - button "C chat_a_1775842962317 @chat_a_1775842962317 Away" [ref=e113] [cursor=pointer]:
+        - generic [ref=e116]: C
+        - generic [ref=e117]:
+          - generic [ref=e118]: chat_a_1775842962317
+          - generic [ref=e119]: "@chat_a_1775842962317"
+          - generic [ref=e120]: Away
+        - img [ref=e122]
+      - button "C chat_a_1775843082675 @chat_a_1775843082675 Away" [ref=e124] [cursor=pointer]:
+        - generic [ref=e127]: C
+        - generic [ref=e128]:
+          - generic [ref=e129]: chat_a_1775843082675
+          - generic [ref=e130]: "@chat_a_1775843082675"
+          - generic [ref=e131]: Away
+        - img [ref=e133]
+      - button "C chat_a_1775843203179 @chat_a_1775843203179 Away" [ref=e135] [cursor=pointer]:
+        - generic [ref=e138]: C
+        - generic [ref=e139]:
+          - generic [ref=e140]: chat_a_1775843203179
+          - generic [ref=e141]: "@chat_a_1775843203179"
+          - generic [ref=e142]: Away
+        - img [ref=e144]
+      - button "C chat_a_1775843323614 @chat_a_1775843323614 Away" [ref=e146] [cursor=pointer]:
+        - generic [ref=e149]: C
+        - generic [ref=e150]:
+          - generic [ref=e151]: chat_a_1775843323614
+          - generic [ref=e152]: "@chat_a_1775843323614"
+          - generic [ref=e153]: Away
+        - img [ref=e155]
+      - button "C chat_a_1775843444023 @chat_a_1775843444023 Away" [ref=e157] [cursor=pointer]:
+        - generic [ref=e160]: C
+        - generic [ref=e161]:
+          - generic [ref=e162]: chat_a_1775843444023
+          - generic [ref=e163]: "@chat_a_1775843444023"
+          - generic [ref=e164]: Away
+        - img [ref=e166]
+      - button "C chat_a_1775843564489 @chat_a_1775843564489 Away" [ref=e168] [cursor=pointer]:
+        - generic [ref=e171]: C
+        - generic [ref=e172]:
+          - generic [ref=e173]: chat_a_1775843564489
+          - generic [ref=e174]: "@chat_a_1775843564489"
+          - generic [ref=e175]: Away
+        - img [ref=e177]
+      - button "C chat_a_1775843684920 @chat_a_1775843684920 Away" [ref=e179] [cursor=pointer]:
+        - generic [ref=e182]: C
+        - generic [ref=e183]:
+          - generic [ref=e184]: chat_a_1775843684920
+          - generic [ref=e185]: "@chat_a_1775843684920"
+          - generic [ref=e186]: Away
+        - img [ref=e188]
+      - button "C chat_a_1775844598118 @chat_a_1775844598118 Away" [ref=e190] [cursor=pointer]:
+        - generic [ref=e193]: C
+        - generic [ref=e194]:
+          - generic [ref=e195]: chat_a_1775844598118
+          - generic [ref=e196]: "@chat_a_1775844598118"
+          - generic [ref=e197]: Away
+        - img [ref=e199]
+      - button "C chat_a_1775844718456 @chat_a_1775844718456 Away" [ref=e201] [cursor=pointer]:
+        - generic [ref=e204]: C
+        - generic [ref=e205]:
+          - generic [ref=e206]: chat_a_1775844718456
+          - generic [ref=e207]: "@chat_a_1775844718456"
+          - generic [ref=e208]: Away
+        - img [ref=e210]
+      - button "C chat_b_1775842159371 @chat_b_1775842159371 Away" [ref=e212] [cursor=pointer]:
+        - generic [ref=e215]: C
+        - generic [ref=e216]:
+          - generic [ref=e217]: chat_b_1775842159371
+          - generic [ref=e218]: "@chat_b_1775842159371"
+          - generic [ref=e219]: Away
+        - img [ref=e221]
+      - button "C chat_b_1775842279780 @chat_b_1775842279780 Away" [ref=e223] [cursor=pointer]:
+        - generic [ref=e226]: C
+        - generic [ref=e227]:
+          - generic [ref=e228]: chat_b_1775842279780
+          - generic [ref=e229]: "@chat_b_1775842279780"
+          - generic [ref=e230]: Away
+        - img [ref=e232]
+      - generic [ref=e234]:
+        - button "Previous page" [disabled]:
+          - img
+        - generic [ref=e235]: Page 1
+        - button "Next page" [ref=e236] [cursor=pointer]:
+          - img [ref=e237]
+  - navigation "Main navigation" [ref=e239]:
+    - button "Chats" [ref=e240] [cursor=pointer]:
+      - img [ref=e242]
+      - generic [ref=e244]: Chats
+    - button "People" [ref=e245] [cursor=pointer]:
+      - img [ref=e247]
+      - generic [ref=e252]: People
+    - button "Settings" [ref=e253] [cursor=pointer]:
+      - img [ref=e255]
+      - generic [ref=e258]: Settings
+```

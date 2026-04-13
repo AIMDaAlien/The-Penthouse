@@ -46,6 +46,10 @@
       "_internal.js"
     ]
   },
+  "_Avatar.svelte_svelte_type_style_lang.js": {
+    "file": "chunks/Avatar.svelte_svelte_type_style_lang.js",
+    "name": "Avatar.svelte_svelte_type_style_lang"
+  },
   "_client.js": {
     "file": "chunks/client.js",
     "name": "client",
@@ -88,9 +92,9 @@
       "_environment.js"
     ]
   },
-  "_public.js": {
-    "file": "chunks/public.js",
-    "name": "public"
+  "_presence.svelte.js": {
+    "file": "chunks/presence.svelte.js",
+    "name": "presence.svelte"
   },
   "_render-context.js": {
     "file": "chunks/render-context.js",
@@ -139,10 +143,10 @@
       "_state.svelte.js",
       "_client.js",
       "_session.svelte.js",
-      "_public.js"
+      "_presence.svelte.js"
     ],
     "css": [
-      "_app/immutable/assets/_layout.b-qdb2Ka.css"
+      "_app/immutable/assets/_layout.DDhxCHF-.css"
     ]
   },
   "src/routes/+page.svelte": {
@@ -151,14 +155,16 @@
     "src": "src/routes/+page.svelte",
     "isEntry": true,
     "imports": [
+      "_root.js",
       "_exports.js",
       "_utils.js",
-      "_root.js",
       "_state.svelte.js",
-      "_session.svelte.js"
+      "_session.svelte.js",
+      "_presence.svelte.js",
+      "_Avatar.svelte_svelte_type_style_lang.js"
     ],
     "css": [
-      "_app/immutable/assets/_page.DR2hOz7y.css"
+      "_app/immutable/assets/_page.BBlrouhu.css"
     ]
   },
   "src/routes/auth/+page.svelte": {
@@ -188,11 +194,12 @@
       "_utils.js",
       "_state.svelte.js",
       "_index2.js",
-      "_public.js",
-      "_session.svelte.js"
+      "_presence.svelte.js",
+      "_session.svelte.js",
+      "_Avatar.svelte_svelte_type_style_lang.js"
     ],
     "css": [
-      "_app/immutable/assets/_page.Cb5-1ei2.css"
+      "_app/immutable/assets/_page.Cabn6pw_.css"
     ]
   },
   "src/routes/users/+page.svelte": {

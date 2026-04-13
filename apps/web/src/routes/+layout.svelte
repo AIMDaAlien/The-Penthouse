@@ -76,6 +76,13 @@
 		 page.url.pathname === '/settings')
 	);
 
+	// Auto-connect socket for authenticated users on page load / hard reload
+	$effect(() => {
+		if (sessionStore.isAuthenticated && socketStore.state === 'idle') {
+			socketStore.connect(sessionStore.accessToken);
+		}
+	});
+
 	// Initialize read receipts socket listeners when connected
 	$effect(() => {
 		if (connectionStatus === 'connected') {

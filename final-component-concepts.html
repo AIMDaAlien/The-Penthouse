@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Penthouse - Final Component Concepts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gelasio:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Ubuntu:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-color: #12121C;
+    --surface-color: #1E1E2D;
+    --accent-color: #7777C2;
+    --accent-dark: #5a5a9e;
+    --accent-bright: #9B9BEE;
+    --text-primary: #E2E2EC;
+    --text-secondary: #8C8CC5;
+    --danger-color: #ff8ca6;
+    --success-color: #34d399;
+    --border-solid: rgba(140, 140, 197, 0.2);
+
+    --font-display: 'Gelasio', serif;
+    --font-body: 'Ubuntu', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+
+    --radius-sm: 6px;
+    --radius-md: 12px;
+    --radius-lg: 20px;
+    --radius-xl: 24px;
+    --radius-xxl: 32px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background-color: #0A0A10;
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    padding: 2rem;
+  }
+
+  h1, h2 { font-family: var(--font-display); font-weight: 500; }
+  .intro-text { color: var(--text-secondary); font-family: var(--font-mono); font-size: 0.85rem; margin-top: 1rem; margin-bottom: 3rem; max-width: 800px; line-height: 1.6; }
+
+  .showcase-section { margin-bottom: 6rem; display: flex; flex-direction: column; align-items: center; }
+  .section-title { font-size: 2rem; color: var(--text-primary); margin-bottom: 3rem; text-align: center; }
+
+  .grid-mobile {
+    display: flex; flex-wrap: wrap; gap: 4rem; justify-content: center;
+  }
+
+  /* Base Mobile Wrapper (Standardized for these isolated component demos) */
+  .mobile-app-wrapper {
+    width: 390px; height: 844px;
+    background: var(--bg-color); border-radius: 40px; border: 12px solid #000;
+    box-shadow: 0 32px 80px rgba(0,0,0,0.6); overflow: hidden; display: flex; flex-direction: column; position: relative;
+  }
+  .concept-label-mobile { position: absolute; top: 30px; right: -60px; background: var(--accent-color); color: white; padding: 4px 40px; font-family: var(--font-mono); font-size: 0.7rem; transform: rotate(45deg); z-index: 50; }
+  .status-bar { height: 44px; display: flex; justify-content: space-between; align-items: center; padding: 0 24px; font-family: var(--font-body); font-size: 0.8rem; font-weight: 500; flex-shrink: 0; z-index: 10; }
+  
+  /* Shared Base Styles for Inner Content */
+  .header-bar { display: flex; align-items: center; padding: 16px 24px; border-bottom: 1px solid var(--border-solid); background: rgba(18, 18, 28, 0.8); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); z-index: 10; }
+  .header-title { font-family: var(--font-display); font-size: 1.2rem; color: var(--text-primary); flex: 1; text-align: center; }
+  .scroll-area { flex: 1; overflow-y: auto; display: flex; flex-direction: column; padding: 1.5rem 1rem; gap: 1.5rem; position: relative; }
+
+  /* Message Bubbles (Settled Base) */
+  .bubble-group { display: flex; flex-direction: column; gap: 4px; max-width: 85%; }
+  .msg-sent { align-self: flex-end; align-items: flex-end; }
+  .msg-received { align-self: flex-start; align-items: flex-start; }
+  .bubble { padding: 12px 18px; font-size: 0.95rem; line-height: 1.5; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-radius: var(--radius-lg); position: relative;}
+  .msg-sent .bubble { background: linear-gradient(135deg, rgba(160, 160, 240, 0.9) 0%, rgba(130, 130, 215, 0.9) 100%); color: #12121C; }
+  .msg-received .bubble { background: rgba(40, 40, 58, 0.6); border: 1px solid rgba(140, 140, 197, 0.15); color: var(--text-primary); }
+
+  /* Composer Base */
+  .composer-wrapper { background: rgba(18, 18, 28, 0.95); border-top: 1px solid var(--border-solid); display: flex; flex-direction: column; align-items: center; }
+  .composer-area { padding: 16px 24px; width: 100%; display: flex; align-items: center; gap: 12px; }
+  .plus-btn { width: 36px; height: 36px; border-radius: 50%; background: rgba(140, 140, 197, 0.1); display: flex; align-items: center; justify-content: center; color: var(--text-secondary); font-size: 1.5rem; cursor: pointer; transition: all 0.2s; }
+  .composer-input { flex: 1; background: rgba(140, 140, 197, 0.08); border: 1px solid rgba(140, 140, 197, 0.2); border-radius: var(--radius-xl); padding: 10px 16px; color: var(--text-primary); font-family: var(--font-body); font-size: 0.9rem; outline: none; }
+  .send-btn { width: 36px; height: 36px; border-radius: 50%; background: var(--accent-bright); display: flex; align-items: center; justify-content: center; color: #12121C; font-weight: bold; cursor: pointer; }
+
+
+  /* ========================================== */
+  /* 1. PICKERS & TRAYS (GIFs / Commands)       */
+  /* ========================================== */
+
+  /* Base Tray Container */
+  .inline-tray { width: 100%; display: flex; flex-direction: column; padding: 16px 24px 0 24px; }
+  .tray-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .tray-title { font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; }
+  
+  /* T1: Inset Dark Grid (Matches Settled Mobile Row) */
+  .t1-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .t1-gif { aspect-ratio: 1; background: rgba(0, 0, 0, 0.3); border-radius: var(--radius-md); box-shadow: inset 0 2px 10px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; color: var(--text-secondary); font-size: 0.8rem; overflow: hidden; position: relative;}
+  .t1-gif::after { content:'GIF'; font-family: var(--font-mono); opacity: 0.3;}
+
+  /* T2: Glassmorphic Masonry (Staggered heights) */
+  .t2-grid { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; scrollbar-width: none; }
+  .t2-col { display: flex; flex-direction: column; gap: 8px; min-width: 140px; }
+  .t2-gif { background: rgba(140, 140, 197, 0.1); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.05); border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; }
+  .t2-h1 { height: 100px; } .t2-h2 { height: 140px; } .t2-h3 { height: 80px; }
+
+  /* T3: Monolith Command Picker (List style) */
+  .t3-list { display: flex; flex-direction: column; gap: 4px; max-height: 200px; overflow-y: auto; }
+  .t3-cmd { padding: 12px 16px; border-radius: var(--radius-md); display: flex; align-items: center; gap: 12px; background: transparent; transition: background 0.2s; }
+  .t3-cmd:hover, .t3-cmd.active { background: rgba(119, 119, 194, 0.1); }
+  .t3-cmd-icon { width: 32px; height: 32px; border-radius: 8px; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); color: var(--accent-bright); }
+  .t3-cmd-text { flex: 1; }
+  .t3-cmd-name { font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-primary); margin-bottom: 2px;}
+  .t3-cmd-desc { font-size: 0.75rem; color: var(--text-secondary); }
+
+  /* T4: Floating Bubble Picker (Horizontal bubbles) */
+  .t4-tray { padding: 16px 24px; display: flex; gap: 12px; overflow-x: auto; scrollbar-width: none; }
+  .t4-bubble { flex-shrink: 0; padding: 10px 20px; border-radius: 40px; background: rgba(40, 40, 58, 0.6); border: 1px solid rgba(140, 140, 197, 0.15); font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-primary); display: flex; align-items: center; gap: 8px; }
+  .t4-bubble.active { background: var(--surface-color); border-color: var(--accent-color); color: var(--accent-bright); }
+
+  /* T5: Editorial Carousel (Large, focus-centered items) */
+  .t5-carousel { display: flex; gap: 16px; overflow-x: auto; padding: 16px 0 16px 24px; scroll-snap-type: x mandatory; }
+  .t5-card { scroll-snap-align: center; min-width: 240px; height: 160px; background: var(--surface-color); border-radius: var(--radius-lg); box-shadow: 0 8px 24px rgba(0,0,0,0.3); display: flex; flex-direction: column; justify-content: flex-end; padding: 16px; position: relative; overflow: hidden; }
+  .t5-card::before { content:''; position: absolute; inset: 0; background: linear-gradient(135deg, rgba(119,119,194,0.1), transparent); pointer-events: none; }
+  .t5-card-title { font-family: var(--font-display); font-size: 1.2rem; color: white; position: relative; z-index: 1; }
+  .t5-card-meta { font-family: var(--font-mono); font-size: 0.7rem; color: var(--accent-bright); position: relative; z-index: 1; }
+
+
+  /* ========================================== */
+  /* 2. POLL CARDS (Inside Message Bubbles)     */
+  /* ========================================== */
+
+  /* Base Poll Bubble */
+  .poll-bubble { width: 100%; min-width: 280px; display: flex; flex-direction: column; gap: 16px; }
+  .poll-question { font-family: var(--font-display); font-size: 1.1rem; font-weight: 500; line-height: 1.4; }
+  .poll-meta { font-family: var(--font-mono); font-size: 0.7rem; color: var(--text-secondary); opacity: 0.8; }
+
+  /* P1: Inset Progress Bars (Matches mobile rows) */
+  .p1-option { position: relative; height: 40px; background: rgba(0,0,0,0.3); border-radius: var(--radius-sm); display: flex; align-items: center; padding: 0 12px; overflow: hidden; cursor: pointer; box-shadow: inset 0 1px 4px rgba(0,0,0,0.2); }
+  .p1-fill { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(119, 119, 194, 0.2); border-right: 2px solid var(--accent-color); z-index: 0; transition: width 0.6s cubic-bezier(0.2, 0.8, 0.2, 1); }
+  .p1-text { position: relative; z-index: 1; font-size: 0.9rem; flex: 1; }
+  .p1-percent { position: relative; z-index: 1; font-family: var(--font-mono); font-size: 0.8rem; font-weight: 600; }
+
+  /* P2: Ghost Outlines with Neon Fill */
+  .p2-option { position: relative; padding: 12px 16px; border: 1px solid rgba(140,140,197,0.3); border-radius: var(--radius-md); display: flex; justify-content: space-between; align-items: center; cursor: pointer; overflow: hidden; }
+  .p2-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent-dark); opacity: 0.3; z-index: 0; }
+  .p2-text { position: relative; z-index: 1; font-size: 0.9rem; }
+  .p2-percent { position: relative; z-index: 1; font-family: var(--font-mono); font-size: 0.75rem; color: var(--accent-bright); }
+
+  /* P3: Minimalist Typographic (No boxes, just text and lines) */
+  .p3-poll { display: flex; flex-direction: column; gap: 12px; }
+  .p3-option { display: flex; flex-direction: column; gap: 6px; cursor: pointer; }
+  .p3-header { display: flex; justify-content: space-between; align-items: baseline; }
+  .p3-text { font-size: 0.95rem; }
+  .p3-percent { font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-secondary); }
+  .p3-track { height: 2px; width: 100%; background: rgba(140,140,197,0.1); border-radius: 2px; overflow: hidden; }
+  .p3-fill { height: 100%; background: var(--accent-bright); }
+
+  /* P4: Floating Glass Pills */
+  .p4-option { position: relative; padding: 10px 16px; background: rgba(255,255,255,0.03); backdrop-filter: blur(8px); border-radius: 40px; display: flex; align-items: center; gap: 12px; cursor: pointer; border: 1px solid rgba(255,255,255,0.05); }
+  .p4-radio { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--text-secondary); display: flex; align-items: center; justify-content: center; }
+  .p4-option.voted .p4-radio { border-color: var(--accent-bright); }
+  .p4-option.voted .p4-radio::after { content: ''; width: 8px; height: 8px; background: var(--accent-bright); border-radius: 50%; }
+  .p4-text { flex: 1; font-size: 0.9rem; }
+  .p4-fill-bg { position: absolute; inset: 0; border-radius: 40px; background: linear-gradient(90deg, rgba(119,119,194,0.15), transparent); z-index: -1; }
+
+  /* P5: Dense Monolith Squeeze */
+  .p5-option { display: flex; background: var(--surface-color); border-radius: var(--radius-sm); overflow: hidden; height: 36px; cursor: pointer; }
+  .p5-percent-box { width: 48px; background: rgba(119, 119, 194, 0.1); border-right: 1px solid rgba(140,140,197,0.1); display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: 0.75rem; color: var(--accent-bright); }
+  .p5-text-box { flex: 1; display: flex; align-items: center; padding: 0 12px; font-size: 0.85rem; position: relative; }
+  .p5-fill { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(119, 119, 194, 0.05); z-index: 0; }
+
+
+  /* ========================================== */
+  /* 3. SETTINGS & DIRECTORY LISTS              */
+  /* ========================================== */
+
+  /* Dir1: Inset Dark Directory (Match Mobile Rows) */
+  .dir-list { display: flex; flex-direction: column; padding: 16px; gap: 12px; flex: 1; overflow-y: auto;}
+  .dir-row { display: flex; align-items: center; gap: 16px; background: rgba(0, 0, 0, 0.2); box-shadow: inset 0 2px 10px rgba(0,0,0,0.2); border-radius: var(--radius-xl); padding: 12px 16px; cursor: pointer; }
+  .dir-avatar { width: 44px; height: 44px; border-radius: 50%; background: var(--accent-color); color: white; display: flex; align-items: center; justify-content: center; font-family: var(--font-body); font-size: 1.1rem; }
+  .dir-info { flex: 1; }
+  .dir-name { font-weight: 500; font-size: 1rem; margin-bottom: 2px; }
+  .dir-role { font-family: var(--font-mono); font-size: 0.7rem; color: var(--accent-bright); text-transform: uppercase; letter-spacing: 0.05em; }
+  .dir-date { font-family: var(--font-mono); font-size: 0.7rem; color: var(--text-secondary); opacity: 0.5; }
+
+  /* Set1: Elegant Settings Toggles */
+  .set-section { margin-bottom: 32px; }
+  .set-title { font-family: var(--font-display); font-size: 1.2rem; color: var(--accent-hover); margin-bottom: 16px; padding: 0 20px; }
+  .set-card { background: var(--surface-color); border-radius: var(--radius-xl); overflow: hidden; border: 1px solid rgba(140,140,197,0.1); }
+  .set-row { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid rgba(140,140,197,0.05); }
+  .set-row:last-child { border-bottom: none; }
+  .set-label { font-size: 0.95rem; }
+  .set-desc { font-size: 0.8rem; color: var(--text-secondary); margin-top: 4px; }
+  
+  /* Penthouse Toggle */
+  .toggle { width: 44px; height: 24px; background: rgba(0,0,0,0.4); border-radius: 24px; position: relative; cursor: pointer; box-shadow: inset 0 2px 4px rgba(0,0,0,0.3); border: 1px solid rgba(140,140,197,0.1); transition: background 0.3s; }
+  .toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; background: var(--text-secondary); border-radius: 50%; transition: transform 0.3s, background 0.3s; }
+  .toggle.active { background: rgba(119, 119, 194, 0.2); border-color: var(--accent-color); }
+  .toggle.active::after { transform: translateX(20px); background: var(--accent-bright); box-shadow: 0 0 8px rgba(155,155,238,0.4); }
+
+  /* Destructive Button */
+  .btn-danger { width: calc(100% - 40px); margin: 20px; background: transparent; border: 1px solid var(--danger-color); color: var(--danger-color); padding: 14px; border-radius: var(--radius-lg); font-family: var(--font-body); font-weight: 500; font-size: 0.95rem; cursor: pointer; text-align: center; }
+
+
+  /* ========================================== */
+  /* 4. CONTEXT MENUS & READ RECEIPTS           */
+  /* ========================================== */
+
+  /* Read Receipts aligned right, monospace, fading in */
+  .receipt { font-family: var(--font-mono); font-size: 0.65rem; color: var(--accent-bright); text-align: right; margin-top: 4px; padding-right: 4px; opacity: 0.8; }
+  .receipt-faded { color: var(--text-secondary); opacity: 0.4; }
+
+  /* Context Menu (Glassmorphic Popover) */
+  .context-overlay { position: absolute; inset: 0; background: rgba(10, 10, 16, 0.4); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); z-index: 50; display: flex; align-items: center; justify-content: center; }
+  .context-menu { width: 220px; background: rgba(30, 30, 45, 0.85); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(140, 140, 197, 0.2); border-radius: var(--radius-lg); box-shadow: 0 16px 40px rgba(0,0,0,0.5); overflow: hidden; transform: translateY(-40px); }
+  .ctx-item { padding: 14px 20px; display: flex; align-items: center; gap: 12px; font-size: 0.95rem; color: var(--text-primary); cursor: pointer; border-bottom: 1px solid rgba(140,140,197,0.05); }
+  .ctx-item:last-child { border-bottom: none; }
+  .ctx-item:hover { background: rgba(140,140,197,0.1); }
+  .ctx-icon { font-family: var(--font-mono); color: var(--text-secondary); width: 20px; text-align: center; }
+  .ctx-danger { color: var(--danger-color); }
+  .ctx-danger .ctx-icon { color: var(--danger-color); }
+
+</style>
+</head>
+<body>
+
+  <h1>The Penthouse &mdash; Final Component Concepts</h1>
+  <p class="intro-text" style="text-align: center;">Styling the remaining functional components (Pickers, Polls, Settings, Directory, Context Menus) to seamlessly match the established Inset Dark, Glassmorphic, and Deep Depth of Field design language.</p>
+
+  <!-- ======================================================= -->
+  <!-- ROW 1: INLINE PICKERS & TRAYS                           -->
+  <!-- ======================================================= -->
+  <div class="showcase-section">
+    <h2 class="section-title">1. Inline Expansion Pickers (GIFs/Commands)</h2>
+    <div class="grid-mobile">
+      
+      <!-- T1: Inset Dark Grid -->
+      <div class="mobile-app-wrapper">
+        <span class="concept-label-mobile">1. Inset Grid</span>
+        <div class="header-bar"><div class="header-title">Arthur Kensington</div></div>
+        <div class="scroll-area">
+          <div class="bubble-group msg-received"><div class="bubble">Let's decide on the venue.</div></div>
+        </div>
+        <div class="composer-wrapper">
+          <div class="inline-tray">
+            <div class="tray-header"><span class="tray-title">Trending GIFs</span></div>
+            <div class="t1-grid">
+              <div class="t1-gif"></div><div class="t1-gif"></div><div class="t1-gif"></div>
+              <div class="t1-gif"></div><div class="t1-gif"></div><div class="t1-gif"></div>
+            </div>
+          </div>
+          <div class="composer-area"><div class="plus-btn" style="transform: rotate(45deg); background: var(--surface-color);">+</div><input type="text" class="composer-input" placeholder="Search Tenor..."><div class="send-btn">↑</div></div>
+        </div>
+      </div>
+
+      <!-- T2: Glass Masonry -->
+      <div class="mobile-app-wrapper">
+        <span class="concept-label-mobile">2. Glass Masonry</span>
+        <div class="header-bar"><div class="header-title">Arthur Kensington</div></div>
+        <div class="scroll-area">
+          <div class="bubble-group msg-received"><div class="bubble">Let's decide on the venue.</div></div>
+        </div>
+        <div class="composer-wrapper">
+          <div class="inline-tray">
+            <div class="tray-header"><span class="tray-title">Trending GIFs</span></div>
+            <div class="t2-grid">
+              <div class="t2-col"><div class="t2-gif t2-h1">GIF</div><div class="t2-gif t2-h2">GIF</div></div>
+              <div class="t2-col"><div class="t2-gif t2-h2">GIF</div><div class="t2-gif t2-h3">GIF</div></div>
+              <div class="t2-col"><div class="t2-gif t2-h3">GIF</div><div class="t2-gif t2-h1">GIF</div></div>
+            </div>
+          </div>
+          <div class="composer-area"><div class="plus-btn" style="transform: rotate(45deg); background: var(--surface-color);">+</div><input type="text" class="composer-input" placeholder="Search Tenor..."><div class="send-btn">↑</div></div>
+        </div>
+      </div>
+
+      <!-- T3: Command List -->
+      <div class="mobile-app-wrapper">
+        <span class="concept-label-mobile">3. Command List</span>
+        <div class="header-bar"><div class="header-title">Arthur Kensington</div></div>
+        <div class="scroll-area">
+          <div class="bubble-group msg-received"><div class="bubble">Let's decide on the venue.</div></div>
+        </div>
+        <div class="composer-wrapper">
+          <div class="inline-tray">
+            <div class="tray-header"><span class="tray-title">Slash Commands</span></div>
+            <div class="t3-list">
+              <div class="t3-cmd active">
+                <div class="t3-cmd-icon">/</div>
+                <div class="t3-cmd-text"><div class="t3-cmd-name">poll</div><div class="t3-cmd-desc">Create a new poll in this chat</div></div>
+              </div>
+              <div class="t3-cmd">
+                <div class="t3-cmd-icon">/</div>
+                <div class="t3-cmd-text"><div class="t3-cmd-name">gif</div><div class="t3-cmd-desc">Search and send a GIF</div></div>
+              </div>
+              <div class="t3-cmd">
+                <div class="t3-cmd-icon">/</div>
+                <div class="t3-cmd-text"><div class="t3-cmd-name">clear</div><div class="t3-cmd-desc">Clear local chat history</div></div>
+              </div>
+            </div>
+          </div>
+          <div class="composer-area"><div class="plus-btn" style="transform: rotate(45deg); background: var(--surface-color);">+</div><input type="text" class="composer-input" value="/"><div class="send-btn">↑</div></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+
+  <!-- ======================================================= -->
+  <!-- ROW 2: POLL CARDS IN BUBBLES                            -->
+  <!-- ======================================================= -->
+  <div class="showcase-section">
+    <h2 class="section-title">2. Poll Cards (Inside Message Bubbles)</h2>
+    <div class="grid-mobile">
+      
+      <!-- P1: Inset Progress -->
+      <div class="mobile-app-wrapper">
+        <span class="concept-label-mobile">1. Inset Bars</span>
+        <div class="header-bar"><div class="header-title">The Syndicate</div></div>
+        <div class="scroll-area">
+          <div class="bubble-group msg-received">
+            <div class="bubble">
+              <div class="poll-bubble">
+                <div class="poll-question">Where are we hosting the launch dinner?</div>
+                <div class="p1-poll" style="display:flex; flex-direction:column; gap:8px;">
+                  <div class="p1-option"><div class="p1-fill" style="width: 65%;"></div><div class="p1-text">The Continental</div><div class="p1-percent">65%</div></div>
+                  <div class="p1-option"><div class="p1-fill" style="width: 25%;"></div><div class="p1-text">Nobu Downtown</div><div class="p1-percent">25%</div></div>
+                  <div class="p1-option"><div class="p1-fill" style="width: 10%;"></div><div class="p1-text">Private Estate</div><div class="p1-percent">10%</div></div>
+                </div>
+                <div class="poll-meta">12 votes · Ends in 2 hours</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- P2: Ghost Neon Fill -->
+      <div class="mobile-app-wrapper">
+        <span class="concept-label-mobile">2. Ghost Neon</span>
+        <div class="header-bar"><div class="header-title">The Syndicate</div></div>
+        <div class="scroll-area">
+          <div class="bubble-group msg-received">
+            <div class="bubble">
+              <div class="poll-bubble">
+                <div class="poll-question">Where are we hosting the launch dinner?</div>
+                <div style="display:flex; flex-direction:column; gap:8px;">
+                  <div class="p2-option" style="border-color: var(--accent-color);"><div class="p2-fill" style="width: 65%;"></div><div class="p2-text">The Continental</div><div class="p2-percent">65%</div></div>
+                  <div class="p2-option"><div class="p2-fill" style="width: 25%;"></div><div class="p2-text">Nobu Downtown</div><div class="p2-percent">25%</div></div>
+                  <div class="p2-option"><div class="p2-fill" style="width: 10%;"></div><div class="p2-text">Private Estate</div><div class="p2-percent">10%</div></div>
+                </div>
+                <div class="poll-meta">12 votes · Ends in 2 hours</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- P3: Minimal Typographic -->
+      <div class="mobile-app-wrapper">
+        <span class="concept-label-mobile">3. Typographic</span>
+        <div class="header-bar"><div class="header-title">The Syndicate</div></div>
+        <div class="scroll-area">
+          <div class="bubble-group msg-received">
+            <div class="bubble">
+              <div class="poll-bubble">
+                <div class="poll-question">Where are we hosting the launch dinner?</div>
+                <div class="p3-poll">
+                  <div class="p3-option">
+                    <div class="p3-header"><span class="p3-text">The Continental</span><span class="p3-percent">65%</span></div>
+                    <div class="p3-track"><div class="p3-fill" style="width: 65%;"></div></div>
+                  </div>
+                  <div class="p3-option">
+                    <div class="p3-header"><span class="p3-text" style="color:var(--text-secondary);">Nobu Downtown</span><span class="p3-percent">25%</span></div>
+                    <div class="p3-track"><div class="p3-fill" style="width: 25%; background: var(--text-secondary);"></div></div>
+                  </div>
+                  <div class="p3-option">
+                    <div class="p3-header"><span class="p3-text" style="color:var(--text-secondary);">Private Estate</span><span class="p3-percent">10%</span></div>
+                    <div class="p3-track"><div class="p3-fill" style="width: 10%; background: var(--text-secondary);"></div></div>
+                  </div>
+                </div>
+                <div class="poll-meta">12 votes · Ends in 2 hours</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+
+  <!-- ======================================================= -->
+  <!-- ROW 3: SETTINGS & DIRECTORY                             -->
+  <!-- ======================================================= -->
+  <div class="showcase-section">
+    <h2 class="section-title">3. Settings & Member Directory</h2>
+    <div class="grid-mobile">
+      
+      <!-- DIR 1: Inset Directory List -->
+      <div class="mobile-app-wrapper">
+        <span class="concept-label-mobile">1. Inset Dir</span>
+        <div class="status-bar"><span>9:41</span><span>Wifi &middot; Battery</span></div>
+        <h2 style="padding: 10px 20px 0; font-size: 1.8rem; margin-bottom: 0.5rem;">Directory</h2>
+        <div class="dir-list">
+          <div class="dir-row">
+            <div class="dir-avatar">AK</div>
+            <div class="dir-info"><div class="dir-name">Arthur Kensington</div><div class="dir-role">Administrator</div></div>
+            <div class="dir-date">Jan '25</div>
+          </div>
+          <div class="dir-row">
+            <div class="dir-avatar">EJ</div>
+            <div class="dir-info"><div class="dir-name">Eleanor James</div><div class="dir-role">Member</div></div>
+            <div class="dir-date">Feb '25</div>
+          </div>
+          <div class="dir-row">
+            <div class="dir-avatar">MR</div>
+            <div class="dir-info"><div class="dir-name">Marcus Reed</div><div class="dir-role">Member</div></div>
+            <div class="dir-date">Dec '24</div>
+          </div>
+        </div>
+        <!-- Simulated Bottom Nav -->
+        <div style="height: 70px; background: rgba(18,18,28,0.95); border-top: 1px solid var(--border-solid);"></div>
+      </div>
+
+      <!-- SET 1: Elegant Settings Toggles -->
+      <div class="mobile-app-wrapper">
+        <span class="concept-label-mobile">1. Settings</span>
+        <div class="status-bar"><span>9:41</span><span>Wifi &middot; Battery</span></div>
+        <h2 style="padding: 10px 20px 0; font-size: 1.8rem; margin-bottom: 1.5rem;">Settings</h2>
+        
+        <div class="scroll-area" style="padding: 0; display: block;">
+          <div class="set-section">
+            <div class="set-title">Preferences</div>
+            <div class="set-card" style="margin: 0 20px;">
+              <div class="set-row">
+                <div><div class="set-label">Read Receipts</div><div class="set-desc">Let others know when you read their messages.</div></div>
+                <div class="toggle active"></div>
+              </div>
+              <div class="set-row">
+                <div><div class="set-label">High-Quality Media</div><div class="set-desc">Upload images in original resolution.</div></div>
+                <div class="toggle"></div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="set-section">
+            <div class="set-title">Account</div>
+            <div class="set-card" style="margin: 0 20px;">
+              <div class="set-row" style="cursor:pointer;"><div class="set-label">Edit Profile</div><div style="color:var(--text-secondary);">›</div></div>
+              <div class="set-row" style="cursor:pointer;"><div class="set-label">Change Password</div><div style="color:var(--text-secondary);">›</div></div>
+            </div>
+            <button class="btn-danger">Log Out</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ======================================================= -->
+  <!-- ROW 4: CONTEXT MENUS & READ RECEIPTS                    -->
+  <!-- ======================================================= -->
+  <div class="showcase-section">
+    <h2 class="section-title">4. Micro-Interactions (Context Menu & Receipts)</h2>
+    <div class="grid-mobile">
+      
+      <!-- C1: Glassy Context Overlay -->
+      <div class="mobile-app-wrapper">
+        <span class="concept-label-mobile">1. Context Menu</span>
+        <div class="header-bar"><div class="header-title">Eleanor James</div></div>
+        
+        <!-- Background Chat (Dimmed) -->
+        <div class="scroll-area">
+          <div class="bubble-group msg-received">
+            <div class="bubble" style="box-shadow: 0 0 0 2px var(--accent-color);">Are we still on for the gallery?</div>
+          </div>
+        </div>
+        
+        <!-- The Glassy Overlay -->
+        <div class="context-overlay">
+          <!-- Context Menu Positioned near the bubble -->
+          <div class="context-menu" style="position: absolute; top: 160px; left: 24px;">
+            <div class="ctx-item"><span class="ctx-icon">↵</span>Reply</div>
+            <div class="ctx-item"><span class="ctx-icon">⎘</span>Copy Text</div>
+            <div class="ctx-item"><span class="ctx-icon">★</span>Save Message</div>
+            <div class="ctx-item ctx-danger"><span class="ctx-icon">×</span>Delete</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- R1: Elegant Monospace Read Receipts -->
+      <div class="mobile-app-wrapper">
+        <span class="concept-label-mobile">1. Receipts</span>
+        <div class="header-bar"><div class="header-title">Arthur Kensington</div></div>
+        <div class="scroll-area">
+          
+          <div class="bubble-group msg-sent">
+            <div class="bubble">I've sent the draft over.</div>
+            <div class="receipt receipt-faded">Sent · 9:14 AM</div>
+          </div>
+          
+          <div style="height: 20px;"></div>
+
+          <div class="bubble-group msg-sent">
+            <div class="bubble">Let me know your thoughts when you have a moment.</div>
+            <!-- The active read receipt using the bright accent color -->
+            <div class="receipt">Read · 9:22 AM</div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</body>
+</html>

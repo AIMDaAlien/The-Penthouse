@@ -2,6 +2,7 @@
 	"/": [],
 	"/auth": [],
 	"/chat/[id]": [],
+	"/settings": [],
 	"/users": [],
 	"/users/[id]": []
 }

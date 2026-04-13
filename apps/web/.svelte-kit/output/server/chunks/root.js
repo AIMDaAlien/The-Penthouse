@@ -3972,8 +3972,8 @@ function Root($$renderer, $$props) {
 }
 const root = asClassComponent(Root);
 export {
-  attr as a,
-  attr_class as b,
+  attr_class as a,
+  attr as b,
   ensure_array_like as c,
   derived as d,
   escape_html as e,
