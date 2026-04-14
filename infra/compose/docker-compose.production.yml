@@ -27,18 +27,19 @@ services:
       PORT: 3000
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       JWT_SECRET: ${JWT_SECRET}
+      ALTCHA_HMAC_KEY: ${ALTCHA_HMAC_KEY}
       CORS_ORIGIN: ${CORS_ORIGIN}
       UPLOAD_MAX_MB: ${UPLOAD_MAX_MB:-20}
       ADMIN_BOOTSTRAP_USERNAME: ${ADMIN_BOOTSTRAP_USERNAME:-}
       TEST_ACCOUNT_NOTICE_VERSION: ${TEST_ACCOUNT_NOTICE_VERSION:-alpha-v1}
       GIPHY_API_KEY: ${GIPHY_API_KEY:-}
       KLIPY_API_KEY: ${KLIPY_API_KEY:-}
-      FCM_SERVICE_ACCOUNT_PATH: /run/secrets/firebase-admin.json
+      FCM_SERVICE_ACCOUNT_PATH: ${FCM_SERVICE_ACCOUNT_PATH:-}
     expose:
       - "3000"
     volumes:
       - penthouse_uploads:/app/services/api/uploads
-      - ${FCM_SERVICE_ACCOUNT_FILE}:/run/secrets/firebase-admin.json:ro
+      - ${FCM_SERVICE_ACCOUNT_FILE:-/dev/null}:/run/secrets/firebase-admin.json:ro
 
   caddy:
     image: caddy:2-alpine
