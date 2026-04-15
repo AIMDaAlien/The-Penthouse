@@ -61,13 +61,8 @@
 
 <svelte:head>
 	<title>The Penthouse</title>
-	<link href="https://fonts.cdnfonts.com/css/erode?weights=400,600" rel="stylesheet" />
-	<link rel="preconnect" href="https://fonts.googleapis.com" />
-	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
-	<link
-		href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Ubuntu:wght@300;400;600&display=swap"
-		rel="stylesheet"
-	/>
+	<!-- Erode: logo-only serif — Ubuntu + JetBrains Mono already loaded globally in app.html -->
+	<link href="https://fonts.cdnfonts.com/css/erode" rel="stylesheet" />
 </svelte:head>
 
 <div class="welcome-root" data-theme={theme}>
