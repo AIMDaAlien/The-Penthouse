@@ -10,13 +10,14 @@
 
 	let { children } = $props();
 
-	// Auth guard: redirect unauthenticated users to /auth
+	// Auth guard: redirect unauthenticated users to /welcome (public landing)
 	$effect(() => {
 		const isAuthRoute = page.url.pathname.startsWith('/auth');
-		if (!sessionStore.isAuthenticated && !isAuthRoute) {
-			goto('/auth');
+		const isWelcomeRoute = page.url.pathname === '/welcome';
+		if (!sessionStore.isAuthenticated && !isAuthRoute && !isWelcomeRoute) {
+			goto('/welcome');
 		}
-		if (sessionStore.isAuthenticated && isAuthRoute) {
+		if (sessionStore.isAuthenticated && (isAuthRoute || isWelcomeRoute)) {
 			goto('/');
 		}
 	});
@@ -79,7 +80,7 @@
 	// Auto-connect socket for authenticated users on page load / hard reload
 	$effect(() => {
 		if (sessionStore.isAuthenticated && socketStore.state === 'idle') {
-			socketStore.connect(sessionStore.accessToken);
+			socketStore.connect(sessionStore.accessToken ?? '');
 		}
 	});
 

@@ -76,6 +76,11 @@
 	}
 
 	onMount(async () => {
+		// Guard: auth redirect from +layout.svelte is async — API calls must not fire before it lands.
+		if (!sessionStore.isAuthenticated) {
+			loading = false;
+			return;
+		}
 		try {
 			// Fetch chat list and self-DM in parallel.
 			// chats.self() will fail until Codex implements the endpoint — that's expected.
