@@ -22,6 +22,9 @@
     }
   }
 
+  redir /downloads/the-penthouse-rebuild.apk / 308
+  redir /downloads/the-penthouse.apk /downloads/legacy/the-penthouse.apk 308
+
   handle_path /downloads/* {
     root * /srv/downloads
     file_server

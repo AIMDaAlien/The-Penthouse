@@ -115,6 +115,23 @@ export const AltchaChallengeSchema = z.object({
   signature: z.string().min(1)
 });
 
+export const AppDistributionResponseSchema = z.object({
+  sourceOfTruth: z.literal('pwa'),
+  defaultPlatform: z.literal('pwa'),
+  pwa: z.object({
+    status: z.literal('live'),
+    url: z.string().url(),
+    installUrl: z.string().url()
+  }),
+  legacyAndroid: z.object({
+    status: z.enum(['available', 'unavailable']),
+    deprecated: z.literal(true),
+    url: z.string().url(),
+    fileName: z.string().min(1),
+    notes: z.string().min(1)
+  })
+});
+
 export const LoginRequestSchema = z.object({
   username: UsernameSchema,
   password: PasswordEntrySchema

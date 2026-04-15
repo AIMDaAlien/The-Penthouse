@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   AddReactionRequestSchema,
+  AppDistributionResponseSchema,
   ClientPresenceUpdateEventSchema,
   PollDataSchema,
   RegisterRequestSchema,
@@ -15,6 +16,27 @@ import {
   SendMessageRequestSchema,
   ClientMessageSendEventSchema
 } from '@penthouse/contracts';
+
+test('app distribution schema makes the PWA canonical and Android legacy', () => {
+  const ok = AppDistributionResponseSchema.safeParse({
+    sourceOfTruth: 'pwa',
+    defaultPlatform: 'pwa',
+    pwa: {
+      status: 'live',
+      url: 'https://penthouse.blog',
+      installUrl: 'https://penthouse.blog'
+    },
+    legacyAndroid: {
+      status: 'unavailable',
+      deprecated: true,
+      url: 'https://penthouse.blog/downloads/legacy/the-penthouse.apk',
+      fileName: 'the-penthouse.apk',
+      notes: 'Deprecated Android APK retained only for existing installs. Use the PWA for new installs.'
+    }
+  });
+
+  assert.equal(ok.success, true);
+});
 
 test('register schema validates invite-code fields', () => {
   const ok = RegisterRequestSchema.safeParse({

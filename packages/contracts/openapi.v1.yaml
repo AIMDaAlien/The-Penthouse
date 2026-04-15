@@ -77,6 +77,49 @@ components:
         signature:
           type: string
 
+    AppDistributionResponse:
+      type: object
+      required: [sourceOfTruth, defaultPlatform, pwa, legacyAndroid]
+      properties:
+        sourceOfTruth:
+          type: string
+          enum: [pwa]
+          description: The canonical install/update surface for new users.
+        defaultPlatform:
+          type: string
+          enum: [pwa]
+          description: The client experience that should be promoted by default.
+        pwa:
+          type: object
+          required: [status, url, installUrl]
+          properties:
+            status:
+              type: string
+              enum: [live]
+            url:
+              type: string
+              format: uri
+            installUrl:
+              type: string
+              format: uri
+        legacyAndroid:
+          type: object
+          required: [status, deprecated, url, fileName, notes]
+          properties:
+            status:
+              type: string
+              enum: [available, unavailable]
+            deprecated:
+              type: boolean
+              enum: [true]
+            url:
+              type: string
+              format: uri
+            fileName:
+              type: string
+            notes:
+              type: string
+
     LoginRequest:
       type: object
       required: [username, password]
@@ -840,6 +883,18 @@ components:
               $ref: '#/components/schemas/AdminMessageModeration'
 
 paths:
+  /api/v1/app-distribution:
+    get:
+      summary: Current app install and distribution metadata
+      operationId: getAppDistribution
+      responses:
+        '200':
+          description: PWA-first distribution metadata with Android APK marked as legacy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppDistributionResponse'
+
   /api/v1/health:
     get:
       summary: Health check

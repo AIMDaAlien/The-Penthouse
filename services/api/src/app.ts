@@ -14,6 +14,7 @@ import { registerMemberRoutes } from './routes/members.js';
 import { registerPresenceRoutes } from './routes/presence.js';
 import { registerUserRoutes } from './routes/users.js';
 import { registerAdminRoutes } from './routes/admin.js';
+import { registerDistributionRoutes } from './routes/distribution.js';
 import { registerObservability } from './observability.js';
 import { pool } from './db/pool.js';
 import { getUserById, mapAuthUser } from './utils/users.js';
@@ -124,6 +125,7 @@ export async function createApp() {
 
   registerObservability(app);
 
+  await registerDistributionRoutes(app);
   await registerHealthRoutes(app);
   await registerAuthRoutes(app);
   await registerPresenceRoutes(app);

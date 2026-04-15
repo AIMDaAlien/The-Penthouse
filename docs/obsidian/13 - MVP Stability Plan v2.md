@@ -95,7 +95,14 @@ Status: in progress
 - Backend notice-gating is implemented.
 - Mobile/client notice UX is implemented.
 - Android push is now proven on Google Play-backed runtime paths.
-- The rebuild is live publicly on `penthouse.blog` / `api.penthouse.blog`.
+- The PWA root and API are live on TrueNAS at `https://penthouse.blog/` and `https://api.penthouse.blog/api/v1/health`, and the auth page loads in a headless browser smoke.
+- TrueNAS deployment storage was cut over from offline `Storage_Pool` paths to `/mnt/Backup/penthouse-rebuild` on 2026-04-15.
+- The PWA is now the public source of truth and default install/update path.
+- `GET /api/v1/app-distribution` exposes that policy for frontend and client consumers.
+- APKs are legacy-only: `/downloads/the-penthouse-rebuild.apk` redirects to `/`, and `/downloads/the-penthouse.apk` redirects to `/downloads/legacy/the-penthouse.apk`.
+- Legacy APK status remains unavailable until an older APK is recovered under `/mnt/Backup/penthouse-rebuild/downloads/legacy/`.
+- Public cutover still needs logged-in chat proof.
+- Pre-auth browser load still makes noisy protected chat calls that should be cleaned up.
 - Admin/operator slices now in place:
   - user management
   - read-only server/operator summary

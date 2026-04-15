@@ -146,6 +146,59 @@ Current working tree:
   - fresh signing key created outside the repo
   - signed rebuild APK produced and copied to the TrueNAS rebuild downloads directory
 
+### 2026-04-14 - TrueNAS PWA Deploy Retry
+
+Highlights:
+- Fixed production Compose blockers for optional FCM and required `ALTCHA_HMAC_KEY`.
+- Fixed the production API image so workspace-local API dependencies are copied into the runtime image.
+- Cloned the `pwa` branch to `/mnt/Storage_Pool/penthouse-rebuild/app` on TrueNAS.
+- Built and copied the SvelteKit PWA output into `infra/compose/site/public`.
+- Started the TrueNAS Compose stack with `postgres`, `api`, and `caddy`.
+- Ran database migrations through the built API runtime entrypoint.
+- Verified Docker-internal API health returns OK.
+- Updated DNS for `penthouse.blog` and `api.penthouse.blog` to WAN IPv4 `69.250.152.141`.
+- Restarted Caddy and obtained certificates for both domains.
+- Verified `https://penthouse.blog/` returns HTTP 200.
+- Verified `https://api.penthouse.blog/api/v1/health` returns OK.
+- Ran a headless browser smoke against `https://penthouse.blog/`; it redirects to `/auth` and shows the sign-in UI.
+
+Current blocker:
+- Public cutover is not complete until APK downloads and logged-in chat proof pass.
+- `/mnt/Storage_Pool/penthouse-rebuild/downloads` is empty, so `https://penthouse.blog/downloads/the-penthouse.apk` and `https://penthouse.blog/downloads/the-penthouse-rebuild.apk` return HTTP 404.
+- No local or TrueNAS APK artifact was found during the 2026-04-14 deploy retry.
+- Browser smoke still sees pre-auth protected calls to `/api/v1/chats/self` and `/api/v1/chats`; these do not block auth UI loading, but should be cleaned up so production console/API diagnostics stay quiet.
+
+### 2026-04-15 - Backup Pool Cutover
+
+Highlights:
+- TrueNAS reported `Storage_Pool` as `OFFLINE` and `Backup` as `ONLINE`.
+- Docker/App storage was already configured for `Backup/ix-apps`.
+- The readable `/mnt/Storage_Pool/penthouse-rebuild` deployment tree was copied to `/mnt/Backup/penthouse-rebuild` while the Compose stack was stopped.
+- `infra/compose/.env` was backed up and rewritten so TrueNAS bind mounts point at `/mnt/Backup/penthouse-rebuild`.
+- The Compose stack was rebuilt and restarted from `/mnt/Backup/penthouse-rebuild/app/infra/compose`.
+- Verified the running container mounts now point at `/mnt/Backup/penthouse-rebuild/{postgres,uploads,downloads,caddy-data,caddy-config}`.
+- Ran migrations from the API container; result was `[migration] complete`.
+- Verified `https://penthouse.blog/` returns HTTP 200 and `https://api.penthouse.blog/api/v1/health` returns OK after the cutover.
+
+Current blocker:
+- APK downloads are no longer the public source of truth. The PWA at `https://penthouse.blog/` is the default release surface.
+- Legacy APK status stays unavailable until an older APK is recovered and placed under `/mnt/Backup/penthouse-rebuild/downloads/legacy/the-penthouse.apk`.
+- The deployment folder is still named `penthouse-rebuild`; that is only a NAS path label. The code comes from the `pwa` branch of the current optimized repo.
+
+### 2026-04-15 - PWA-first distribution policy
+
+Highlights:
+- Added `GET /api/v1/app-distribution` so clients can read the current install policy from the backend.
+- The endpoint reports `sourceOfTruth: "pwa"` and `defaultPlatform: "pwa"`.
+- Android APK metadata is explicitly deprecated legacy metadata and defaults to `status: "unavailable"`.
+- Production env now supports `PUBLIC_APP_URL`, `LEGACY_APK_DOWNLOAD_PATH`, and `LEGACY_APK_STATUS`.
+- Caddy redirects `/downloads/the-penthouse-rebuild.apk` to `/`, because the PWA itself is the rebuild now.
+- Caddy redirects `/downloads/the-penthouse.apk` to `/downloads/legacy/the-penthouse.apk` for stale links.
+
+Current blocker:
+- The legacy APK file has not been found locally or in the Backup deployment tree yet.
+- Claude/frontend handoff remains: remove APK-forward UI language, consume `/api/v1/app-distribution`, and make the PWA install path the only primary CTA.
+
 ### 2026-03-28 - Public site refresh
 
 Highlights:

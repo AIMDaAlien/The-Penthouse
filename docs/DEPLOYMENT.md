@@ -1,15 +1,15 @@
 # Deployment Guide
 
-This project is deployable without Expo or EAS. The mobile app is a Capacitor Android app, and the backend already has a Docker-friendly shape.
+This project is deployable without Expo or EAS. The current public source of truth is the SvelteKit PWA at the root site, and the backend already has a Docker-friendly shape.
 
 ## Plain-English deployment shape
 
 There are two separate things to ship:
 
-1. The public site + downloads
-- landing page at `penthouse.blog`
-- direct Android APK downloads
-- legacy fallback download
+1. The public PWA + legacy downloads
+- PWA at `penthouse.blog`
+- install/update by opening the PWA URL
+- optional legacy Android APK download kept only for older installs
 - Caddy in front for HTTPS and routing
 
 2. The backend
@@ -17,10 +17,9 @@ There are two separate things to ship:
 - PostgreSQL database
 - uploaded files
 
-3. The Android app
-- build the Capacitor Android app locally
-- point it at the public API URL at build time
-- distribute it through Google Play internal testing first
+3. Legacy Android artifacts
+- keep older APKs only under the legacy download path
+- do not promote a rebuild APK as the default install surface
 
 ## Recommended path
 
@@ -34,23 +33,21 @@ Why:
 If you are deploying on TrueNAS specifically, use the TrueNAS override and keep the Caddy container on `9080/9443`.
 That matches the older Penthouse deployment pattern and avoids clashing with the TrueNAS UI on host `80/443`.
 
-For the Android app, use a normal Android release flow:
-- set `VITE_API_URL` to the public API URL before building
-- produce a release APK/AAB
-- upload to Google Play internal testing first
+For new installs, use the PWA. Treat Android APK work as legacy continuity unless the release strategy is explicitly changed.
 
 ## What must exist before production
 
 - `penthouse.blog` or another root domain for the landing/download site
 - `api.penthouse.blog` or another API subdomain
 - a Linux host with Docker and Docker Compose
-- Firebase Android app config:
-  - `apps/mobile/android/app/google-services.json`
 - Firebase Admin key on the server host
 - production values for:
   - `JWT_SECRET`
   - `DATABASE_URL`
   - `CORS_ORIGIN`
+  - `PUBLIC_APP_URL`
+  - `LEGACY_APK_DOWNLOAD_PATH`
+  - `LEGACY_APK_STATUS`
   - `GIPHY_API_KEY`
   - `KLIPY_API_KEY`
   - `FCM_SERVICE_ACCOUNT_PATH`
@@ -85,12 +82,17 @@ Important values:
 - `JWT_SECRET`
 - `CORS_ORIGIN`
   - this should include both the public site and API origins
+- `PUBLIC_APP_URL`
+  - canonical PWA URL, normally `https://penthouse.blog`
+- `LEGACY_APK_DOWNLOAD_PATH`
+  - normally `/downloads/legacy/the-penthouse.apk`
+- `LEGACY_APK_STATUS`
+  - keep `unavailable` until the legacy APK file exists on the host
 - `GIPHY_API_KEY`
 - `KLIPY_API_KEY`
 - `PUBLIC_DOWNLOADS_PATH`
   - host path containing:
-    - `the-penthouse.apk`
-    - `the-penthouse-rebuild.apk`
+    - `legacy/the-penthouse.apk` only if the legacy APK has been recovered
 - `FCM_SERVICE_ACCOUNT_FILE`
   - host path to the Firebase Admin JSON file
 
@@ -102,37 +104,42 @@ From the repo root:
 docker compose -f infra/compose/docker-compose.production.yml --env-file infra/compose/.env.production up -d --build
 ```
 
-### 3. Put both APK files on the host
+### 3. Put the legacy APK on the host only if recovered
 
-Your downloads directory must contain both files:
+The PWA is the default install/update path. APK files are now legacy-only.
 
-- `the-penthouse.apk`
-  - the earlier legacy APK, kept as fallback
-- `the-penthouse-rebuild.apk`
-  - the new rebuild APK, shown as the main download
+If the older Android APK is recovered, store it at:
+
+- `legacy/the-penthouse.apk`
+  - earlier Android APK, kept only for existing-install continuity
 
 Example:
 
 ```bash
-mkdir -p /srv/penthouse/downloads
-cp /path/to/legacy/the-penthouse.apk /srv/penthouse/downloads/the-penthouse.apk
-cp /path/to/new/the-penthouse-rebuild.apk /srv/penthouse/downloads/the-penthouse-rebuild.apk
+mkdir -p /srv/penthouse/downloads/legacy
+cp /path/to/legacy/the-penthouse.apk /srv/penthouse/downloads/legacy/the-penthouse.apk
 ```
 
-### 4. Verify the public site and API
+Then set `LEGACY_APK_STATUS=available` in the Compose env file and restart the API container.
+
+The old `/downloads/the-penthouse.apk` URL redirects to `/downloads/legacy/the-penthouse.apk` for stale links.
+The old `/downloads/the-penthouse-rebuild.apk` URL redirects to `/` because the PWA is now the rebuild.
+
+### 4. Verify the public PWA and API
 
 ```bash
 curl https://ROOT_DOMAIN/
-curl -I https://ROOT_DOMAIN/downloads/the-penthouse.apk
-curl -I https://ROOT_DOMAIN/downloads/the-penthouse-rebuild.apk
+curl https://API_DOMAIN/api/v1/app-distribution
 curl https://API_DOMAIN/api/v1/health
+curl -I https://ROOT_DOMAIN/downloads/the-penthouse-rebuild.apk
 ```
 
 You should see:
 
-- the rebuild landing page at the root domain
-- both APK files downloadable
+- the PWA at the root domain
+- app-distribution reporting `"sourceOfTruth":"pwa"`
 - healthy API response from the API domain
+- the old rebuild APK URL redirecting to `/`
 
 ### 5. Run the release gate before treating the deploy as real
 
@@ -144,9 +151,9 @@ npm run scenario:test
 DATABASE_URL=postgresql://... npm run release:gate -- --require-db
 ```
 
-## Android app release prep
+## Legacy Android app release prep
 
-This app does not use Expo Go. That is a good thing here.
+The Android app is no longer the default release surface. Keep this section only for maintaining older APK continuity.
 
 For release builds, the app must talk to the public API, not `localhost`.
 
@@ -258,5 +265,5 @@ Use this order:
 - Android push is now the real notification path
 - Google Play services are required for this Firebase-based Android push implementation
 - AOSP-only emulator images are not the right push-validation target
-- the root site serves the rebuild page and both APK download links
-- the legacy APK should stay available even after the rebuild becomes the main public version
+- the root site serves the PWA as the default app surface
+- legacy APK links must stay secondary and only work after the older APK is recovered under `downloads/legacy/`
