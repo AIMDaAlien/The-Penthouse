@@ -1,6 +1,6 @@
 {
   "name": "the-penthouse",
-  "version": "2.1.0-alpha.0",
+  "version": "2.1.0-alpha.1",
   "private": true,
   "description": "The Penthouse clean-room rebuild monorepo",
   "packageManager": "npm@11.8.0",

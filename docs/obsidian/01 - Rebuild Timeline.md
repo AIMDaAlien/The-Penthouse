@@ -199,6 +199,31 @@ Current blocker:
 - The legacy APK file has not been found locally or in the Backup deployment tree yet.
 - Claude/frontend handoff remains: remove APK-forward UI language, consume `/api/v1/app-distribution`, and make the PWA install path the only primary CTA.
 
+### 2026-04-15 - Alpha deploy and PWA smoke
+
+Highlights:
+- Pushed Claude's welcome-page/auth-guard handoff commit to `origin/pwa`.
+- Built the SvelteKit frontend locally because the TrueNAS host does not have `npm`, then copied `apps/web/build/` into `/mnt/Backup/penthouse-rebuild/app/infra/compose/site/public/`.
+- Added absolute service-worker registration in `apps/web/src/app.html` so `/sw.js` registers with scope `/` on routed pages like `/welcome` and `/auth`.
+- Rotated production `JWT_SECRET` and `ALTCHA_HMAC_KEY`; old sessions were intentionally invalidated.
+- Rebuilt and restarted the TrueNAS Compose stack from `/mnt/Backup/penthouse-rebuild/app/infra/compose`.
+- Ran migrations inside the production API container; result was `[migration] complete`.
+- Added nightly PostgreSQL dumps through TrueNAS cron job `1` at 03:00 using `/mnt/Backup/penthouse-rebuild/scripts/nightly-pg-dump.sh`.
+- Verified backup integrity with `gunzip -t` and restored the latest dump into a temporary `penthouse_restore_test` database before dropping it.
+- Verified public API health and app-distribution metadata:
+  - `https://api.penthouse.blog/api/v1/health`
+  - `https://api.penthouse.blog/api/v1/app-distribution`
+- Verified APK policy:
+  - `/downloads/the-penthouse.apk` redirects to `/downloads/legacy/the-penthouse.apk`
+  - `/downloads/the-penthouse-rebuild.apk` redirects to `/`
+- Ran production backend smoke against `https://api.penthouse.blog`: registered two users, created a DM, sent a message, and read it back.
+- Ran browser/PWA smoke against `https://penthouse.blog`: root redirects to `/welcome`, the landing CTA reaches `/auth`, manifest is valid, `/sw.js` controls the page, and the shell renders offline for `/welcome` and `/`.
+- Promoted release metadata to `2.1.0-alpha.1` for tag `v2.1.0-alpha.1`.
+
+Known follow-up:
+- The welcome page's third-party Erode font CSS returned HTTP 500 during smoke. The page falls back successfully, but the font should be removed or self-hosted during the next frontend pass.
+- Manual Add-to-Home-Screen proof is still needed on a real mobile browser.
+
 ### 2026-03-28 - Public site refresh
 
 Highlights:
@@ -219,4 +244,4 @@ Highlights:
 - Auth, chat, media, user management, realtime hardening, and Android push foundations are present.
 - Phase 1/2 backend work for MVP Stability Plan v2 is done in code.
 - Strict DB release gate still needs a clean rerun in a working Docker/Postgres environment.
-- The remaining launch blockers are now release signing, public cutover, and one small Klipy picker polish item.
+- Public PWA/API cutover is live on the Backup pool; the remaining operational blockers are strict DB gate rerun, mobile install proof, and cleaning up the third-party font dependency.

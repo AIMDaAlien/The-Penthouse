@@ -1,7 +1,7 @@
 {
 	"name": "@penthouse/web",
 	"private": true,
-	"version": "2.1.0-alpha.0",
+	"version": "2.1.0-alpha.1",
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",
