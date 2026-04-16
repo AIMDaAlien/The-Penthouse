@@ -102,11 +102,13 @@
 	<link rel="manifest" href="/manifest.webmanifest" />
 </svelte:head>
 
-{@render children()}
+<div class="app-shell" class:app-bounded={page.url.pathname !== '/welcome'}>
+	{@render children()}
 
-{#if showBottomNav}
-	<BottomNav />
-{/if}
+	{#if showBottomNav}
+		<BottomNav />
+	{/if}
+</div>
 
 <style>
 	/* ── Reset ── */
@@ -285,6 +287,23 @@
 		:global(::view-transition-old(root)),
 		:global(::view-transition-new(root)) {
 			animation: none !important;
+		}
+	}
+
+	/* ── App shell ── */
+	.app-shell {
+		position: relative;
+		min-height: 100dvh;
+		width: 100%;
+	}
+
+	/* ── Desktop: constrain to phone width, centered ── */
+	@media (min-width: 600px) {
+		.app-bounded {
+			max-width: 480px;
+			margin: 0 auto;
+			/* Subtle pillar-box to separate app from page background */
+			box-shadow: 0 0 0 1px var(--color-border), 0 0 80px rgba(0, 0, 0, 0.4);
 		}
 	}
 

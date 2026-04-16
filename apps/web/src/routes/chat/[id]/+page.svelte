@@ -1099,13 +1099,17 @@
 		overflow-y: auto;
 		overflow-x: hidden;
 		padding: var(--space-4) var(--space-4) var(--space-2);
-		scroll-behavior: smooth;
+		/* display:flex makes margin-top:auto on .messages-inner push content to bottom,
+		   so the view starts at the newest message without JS scroll in compact mode */
+		display: flex;
+		flex-direction: column;
 	}
 
 	.messages-inner {
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-3);
+		margin-top: auto; /* stick messages to the bottom of the scroll container */
 	}
 
 	:global([data-density='compact']) .messages-inner {
@@ -1161,7 +1165,9 @@
 		font-size: var(--text-sm);
 		line-height: 1.5;
 		word-break: break-word;
+		overflow-wrap: anywhere; /* break long URLs that have no spaces */
 		white-space: pre-wrap;
+		max-width: 100%; /* never exceed the msg-row max-width */
 	}
 
 	.bubble.mine {

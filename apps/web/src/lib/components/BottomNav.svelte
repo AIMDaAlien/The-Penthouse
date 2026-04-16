@@ -49,6 +49,17 @@
 		padding-bottom: env(safe-area-inset-bottom, 0);
 	}
 
+	/* On desktop, keep nav aligned with the bounded app column */
+	@media (min-width: 600px) {
+		.bottom-nav {
+			left: 50%;
+			transform: translateX(-50%);
+			width: min(480px, 100%);
+			border-left: 1px solid var(--color-border);
+			border-right: 1px solid var(--color-border);
+		}
+	}
+
 	.nav-tab {
 		flex: 1;
 		display: flex;
