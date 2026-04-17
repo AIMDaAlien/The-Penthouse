@@ -1,118 +1,86 @@
 <script lang="ts">
 	import { readReceiptsStore } from '$stores/readReceipts.svelte';
-	import Avatar from './Avatar.svelte';
 
 	interface Props {
-		chatId: string;
 		messageId: string;
+		chatId: string;
 		isSentByMe: boolean;
-		chatType?: 'dm' | 'channel';
-		// Optional: pass user map for getting display names
-		userMap?: Map<string, { displayName: string; avatarUrl?: string | null }>;
+		isPending: boolean;
+		deliveredAt?: string | null;
+		clientSendTime?: number;
+		isLastOwnMessage?: boolean;
 	}
 
-	let { chatId, messageId, isSentByMe, chatType = 'dm', userMap = undefined } = $props();
+	let {
+		messageId,
+		chatId,
+		isSentByMe,
+		isPending,
+		deliveredAt = null,
+		clientSendTime,
+		isLastOwnMessage = true
+	}: Props = $props();
 
-	// Only show read receipts for messages sent by current user
 	const receipts = $derived(isSentByMe ? readReceiptsStore.getReadReceipts(chatId, messageId) : []);
+	const isRead = $derived(receipts.length > 0);
 
-	// Sort by most recent read first
-	const sortedReceipts = $derived([...receipts].sort((a, b) => new Date(b.readAt).getTime() - new Date(a.readAt).getTime()));
+	const latencyMs = $derived(
+		deliveredAt && clientSendTime != null
+			? new Date(deliveredAt).getTime() - clientSendTime
+			: null
+	);
 
-	// For DMs, show "Seen" if any receipts
-	const seenTime = $derived(sortedReceipts.length > 0 ? sortedReceipts[0].readAt : null);
-	const seenAt = $derived(seenTime ? new Date(seenTime) : null);
-
-	function formatSeenTime(date: Date | null): string {
-		if (!date) return '';
-		
-		const now = new Date();
-		const isToday = date.getDate() === now.getDate() && date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
-
-		if (isToday) {
-			return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-		}
-
-		return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+	function formatLatency(ms: number): string {
+		if (ms < 1000) return `${ms}ms`;
+		if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
+		return ''; // unusually slow — just show "Received"
 	}
+
+	const readAt = $derived(receipts[0]?.readAt ?? null);
+
+	function formatElapsed(iso: string): string {
+		const elapsed = Date.now() - new Date(iso).getTime();
+		const m = Math.floor(elapsed / 60_000);
+		if (m < 1) return 'just now';
+		if (m < 60) return `${m}m`;
+		const h = Math.floor(m / 60);
+		const rem = m % 60;
+		if (h < 24) return rem > 0 ? `${h}h ${rem}m` : `${h}h`;
+		return `${Math.floor(h / 24)}d`;
+	}
+
+	const state = $derived(
+		!isSentByMe
+			? null
+			: isRead
+				? 'read'
+				: deliveredAt
+					? 'received'
+					: 'sent'
+	);
+
+	const label = $derived(
+		state === 'read' && readAt
+			? `Read after ${formatElapsed(readAt)}`
+			: state === 'received' && latencyMs !== null
+				? `Received${formatLatency(latencyMs) ? ` in ${formatLatency(latencyMs)}` : ''}`
+				: state === 'sent'
+					? 'Sent'
+					: ''
+	);
 </script>
 
-{#if isSentByMe && sortedReceipts.length > 0}
-	{#if chatType === 'dm'}
-		<!-- DM: Show "Seen" text with timestamp -->
-		<div class="read-receipt dm-receipt">
-			<span class="seen-label">Seen {formatSeenTime(seenAt)}</span>
-		</div>
-	{:else if chatType === 'channel'}
-		<!-- Group Chat: Show avatar stack (up to 3) with "+N others" -->
-		<div class="read-receipt channel-receipt">
-			<div class="avatar-stack">
-				{#each sortedReceipts.slice(0, 3) as receipt (receipt.userId)}
-					{@const user = userMap?.get(receipt.userId)}
-					{#if user}
-						<Avatar
-							userId={receipt.userId}
-							displayName={user.displayName}
-							avatarUrl={user.avatarUrl}
-							size="sm"
-							showPresence={false}
-						/>
-					{/if}
-				{/each}
-
-				{#if sortedReceipts.length > 3}
-					<div class="more-count">+{sortedReceipts.length - 3}</div>
-				{/if}
-			</div>
-		</div>
-	{/if}
+{#if label && isLastOwnMessage}
+	<span class="receipt-label">{label}</span>
 {/if}
 
 <style>
-	.read-receipt {
-		margin-top: var(--space-2);
+	.receipt-label {
+		display: block;
+		text-align: right;
 		font-size: var(--text-xs);
-		color: var(--color-text-secondary);
-	}
-
-	.dm-receipt .seen-label {
-		display: inline-block;
-		padding: 2px 8px;
-		background: rgba(119, 119, 194, 0.1);
-		border-radius: var(--radius-full);
-		border: 1px solid var(--color-border);
-	}
-
-	.channel-receipt {
-		padding: var(--space-2) 0;
-	}
-
-	.avatar-stack {
-		display: flex;
-		align-items: center;
-		gap: -6px;
-		flex-wrap: wrap;
-	}
-
-	:global(.avatar-stack .avatar-container) {
-		margin-left: -6px;
-		border: 2px solid var(--color-bg);
-		flex-shrink: 0;
-	}
-
-	:global(.avatar-stack .avatar-container:first-child) {
-		margin-left: 0;
-	}
-
-	.more-count {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 24px;
-		height: 24px;
-		font-size: var(--text-xs);
-		font-weight: 600;
-		color: var(--color-text-secondary);
-		margin-left: -6px;
+		color: var(--color-accent);
+		opacity: 0.75;
+		margin-top: var(--space-1);
 	}
 </style>
