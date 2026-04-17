@@ -29,8 +29,9 @@ export type MediaSendPayload = {
 /**
  * Classify a file's media kind from its MIME type.
  * Accepts any object with a `type` string — avoids importing File in tests.
+ * Extension-based fallback (using `name`) is not implemented; MIME type is authoritative.
  */
-export function classifyMediaKind(file: { type: string; name: string }): MediaKind {
+export function classifyMediaKind(file: { type: string }): MediaKind {
   const mime = file.type.toLowerCase();
   if (mime.startsWith('image/')) return 'image';
   if (mime.startsWith('video/')) return 'video';
@@ -49,6 +50,9 @@ export function computeColumns(visualCount: number): 1 | 2 | 3 {
 
 /**
  * Human-readable file size string.
+ * - Bytes: exact integer (e.g. "512 B")
+ * - Kilobytes: rounded to nearest whole number (e.g. "2 KB")
+ * - Megabytes: one decimal place (e.g. "2.5 MB") — precision matters at this scale
  */
 export function formatFileSize(bytes: number): string {
   if (bytes >= 1_048_576) return `${(bytes / 1_048_576).toFixed(1)} MB`;
@@ -66,6 +70,8 @@ export function getTotalSize(files: { size: number }[]): number {
 /**
  * Determine the `MessageType` to use for a message based on what was attached.
  * Priority: image > video > file. Matches the MessageTypeSchema enum.
+ * If called with an empty array, returns 'file' as a safe default —
+ * callers must ensure at least one attachment is present before calling.
  */
 export function getPrimaryKind(attachments: { mediaKind: MediaKind }[]): MediaKind {
   if (attachments.some((a) => a.mediaKind === 'image')) return 'image';

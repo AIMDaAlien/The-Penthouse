@@ -9,23 +9,23 @@ import {
 
 describe('classifyMediaKind', () => {
   it('classifies image MIME types as image', () => {
-    expect(classifyMediaKind({ type: 'image/jpeg', name: 'photo.jpg' })).toBe('image');
-    expect(classifyMediaKind({ type: 'image/png', name: 'photo.png' })).toBe('image');
-    expect(classifyMediaKind({ type: 'image/webp', name: 'photo.webp' })).toBe('image');
-    expect(classifyMediaKind({ type: 'image/gif', name: 'anim.gif' })).toBe('image');
+    expect(classifyMediaKind({ type: 'image/jpeg' })).toBe('image');
+    expect(classifyMediaKind({ type: 'image/png' })).toBe('image');
+    expect(classifyMediaKind({ type: 'image/webp' })).toBe('image');
+    expect(classifyMediaKind({ type: 'image/gif' })).toBe('image');
   });
 
   it('classifies video MIME types as video', () => {
-    expect(classifyMediaKind({ type: 'video/mp4', name: 'clip.mp4' })).toBe('video');
-    expect(classifyMediaKind({ type: 'video/webm', name: 'clip.webm' })).toBe('video');
-    expect(classifyMediaKind({ type: 'video/quicktime', name: 'clip.mov' })).toBe('video');
+    expect(classifyMediaKind({ type: 'video/mp4' })).toBe('video');
+    expect(classifyMediaKind({ type: 'video/webm' })).toBe('video');
+    expect(classifyMediaKind({ type: 'video/quicktime' })).toBe('video');
   });
 
   it('classifies all other MIME types as file', () => {
-    expect(classifyMediaKind({ type: 'application/pdf', name: 'doc.pdf' })).toBe('file');
-    expect(classifyMediaKind({ type: 'text/plain', name: 'notes.txt' })).toBe('file');
-    expect(classifyMediaKind({ type: 'text/csv', name: 'data.csv' })).toBe('file');
-    expect(classifyMediaKind({ type: '', name: 'unknown' })).toBe('file');
+    expect(classifyMediaKind({ type: 'application/pdf' })).toBe('file');
+    expect(classifyMediaKind({ type: 'text/plain' })).toBe('file');
+    expect(classifyMediaKind({ type: 'text/csv' })).toBe('file');
+    expect(classifyMediaKind({ type: '' })).toBe('file');
   });
 });
 
@@ -104,5 +104,9 @@ describe('getPrimaryKind', () => {
 
   it('handles single image attachment', () => {
     expect(getPrimaryKind([{ mediaKind: 'image' }])).toBe('image');
+  });
+
+  it('returns file for an empty array (documented safe default)', () => {
+    expect(getPrimaryKind([])).toBe('file');
   });
 });
