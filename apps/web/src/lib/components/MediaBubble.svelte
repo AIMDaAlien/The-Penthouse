@@ -22,7 +22,15 @@
 	};
 
 	const attachments = $derived(
-		(message.metadata?.attachments as BubbleAttachment[] | undefined) ?? []
+		Array.isArray(message.metadata?.attachments)
+			? (message.metadata.attachments as BubbleAttachment[]).filter(
+					(a): a is BubbleAttachment =>
+						a !== null &&
+						typeof a === 'object' &&
+						typeof a.url === 'string' &&
+						typeof a.mediaKind === 'string'
+				)
+			: []
 	);
 
 	const visualAttachments = $derived(
