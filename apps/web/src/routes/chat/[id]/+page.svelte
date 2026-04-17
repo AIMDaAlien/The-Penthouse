@@ -101,6 +101,11 @@
 		return 'pending' in m && m.pending === true;
 	}
 
+	// Last non-pending message sent by the current user — used for group chat receipt display
+	const lastOwnMessageId = $derived(
+		[...messages].reverse().find((m) => m.senderId === currentUserId && !isPending(m))?.id ?? null
+	);
+
 	function formatTime(iso: string): string {
 		const d = new Date(iso);
 		const isToday = d.toDateString() === new Date().toDateString();
@@ -314,7 +319,12 @@
 			if (payload.chatId !== chatId) return;
 			const idx = messages.findIndex((m) => m.clientMessageId === payload.clientMessageId);
 			if (idx !== -1) {
-				messages[idx] = { ...messages[idx], id: payload.messageId };
+				const prev = messages[idx] as any;
+				messages[idx] = {
+					...prev,
+					id: payload.messageId,
+					deliveredAt: payload.deliveredAt ?? prev.deliveredAt ?? null
+				} as any;
 			}
 		}
 
@@ -492,6 +502,7 @@
 				: undefined,
 			pending: true
 		};
+		(optimistic as any).clientSendTime = Date.now();
 		messages.push(optimistic);
 		await scrollToBottom(true);
 
@@ -606,6 +617,7 @@
 			clientMessageId,
 			pending: true
 		};
+		(optimistic as any).clientSendTime = Date.now();
 		messages.push(optimistic);
 		await scrollToBottom(true);
 
@@ -666,6 +678,7 @@
 			clientMessageId,
 			pending: true
 		};
+		(optimistic as any).clientSendTime = Date.now();
 
 		messages.push(optimistic);
 		await scrollToBottom(true);
@@ -1041,7 +1054,15 @@
 									<Icon name="check" size={11} class="send-status sent-check" />
 								{/if}
 							</span>
-							<ReadReceipts {chatId} messageId={msg.id} isSentByMe={true} {chatType} />
+							<ReadReceipts
+									messageId={msg.id}
+									{chatId}
+									isSentByMe={msg.senderId === currentUserId}
+									isPending={isPending(msg)}
+									deliveredAt={(msg as any).deliveredAt}
+									clientSendTime={(msg as any).clientSendTime}
+									isLastOwnMessage={chatType !== 'dm' ? msg.id === lastOwnMessageId : true}
+								/>
 						{/if}
 					</div>
 				{/each}
