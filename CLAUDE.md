@@ -4,129 +4,86 @@
 A privacy-focused, invite-only social messaging PWA for small communities (~20–200 users).
 Self-hosted on a personal server. No dependency on big tech services where avoidable.
 
-## Current branch: `pwa`
-- Replaces the Vue + Capacitor mobile app with a SvelteKit PWA
-- Backend (Fastify + PostgreSQL + Socket.IO) is unchanged
-- Target version: **v2.1.0** (releases after MVP alpha is stable)
-- Previous release: v2.0.0-alpha (Vue + Capacitor, on `main`)
+## Current state
+- `main` branch — v2.1.0-alpha.1, SvelteKit PWA (canonical release)
+- Frontend: `apps/web/` (SvelteKit 2.x) — Vue + Capacitor retired
+- Backend: `services/api/` (Fastify + PostgreSQL + Socket.IO) — unchanged architecture
 
 ---
 
 ## Repository structure
 
 ```
-apps/web/          ← SvelteKit PWA frontend (CLAUDE owns this)
-services/api/      ← Fastify backend (Codex/GPT-5.4 owns this)
-packages/contracts/ ← Shared Zod schemas + TypeScript types (coordination required)
-infra/             ← Docker Compose, Caddy, env configs (Codex/GPT-5.4 owns this)
-scripts/           ← Build + release gate scripts (Codex/GPT-5.4 owns this)
+apps/web/           ← SvelteKit PWA frontend (Claude owns this)
+services/api/       ← Fastify backend (Codex owns this)
+packages/contracts/ ← Shared Zod schemas + TypeScript types (coordinate)
+infra/              ← Docker Compose, Caddy, env configs (Codex owns this)
+scripts/            ← Build + release scripts (Codex owns this)
+docs/               ← Specs, plans, handoff docs
 ```
 
 ---
 
 ## Agent delegation map
 
-| Directory | Primary agent | Can the other agent read? | Can the other agent edit? |
+| Directory | Owner | Other agent: read? | Other agent: edit? |
 |---|---|---|---|
-| `apps/web/` | Claude (Sonnet) | Yes | Only with explicit handoff note |
-| `services/api/` | Codex (GPT-5.4) | Yes | Only with explicit handoff note |
-| `packages/contracts/` | Both (coordinate) | Yes | Both, but document the change |
+| `apps/web/` | Claude (Sonnet) | Yes | Only with handoff note |
+| `services/api/` | Codex (GPT-5.4) | Yes | Only with handoff note |
+| `packages/contracts/` | Both | Yes | Both — document changes |
 | `infra/` | Codex (GPT-5.4) | Yes | No |
 | `scripts/` | Codex (GPT-5.4) | Yes | No |
-| `CLAUDE.md` files | Claude (Sonnet) | Yes | No — only updated by the human owner |
+| `CLAUDE.md` files | Human owner | Yes | No — human only |
+
+Handoff format → `docs/AGENT-HANDOFFS.md`
 
 ---
 
-## MVP feature lock — ENFORCED
+## Shipped features (v2.1.0-alpha.1)
 
-The following features are the ONLY features in scope for the initial `pwa` alpha release.
-No agent may add features outside this list without explicit approval from the project owner.
+- Auth: Login, Register, Logout, Password reset
+- Chat list (DMs + group channels)
+- Text messaging, real-time via Socket.IO
+- GIF picker (Klipy), message reactions, threaded replies, polls, chat muting
+- Read receipts (basic "Seen" display)
+- Presence + connection status indicator
+- Media uploads — images, video, documents (up to 10 files / 25 MB per message)
+- User profile (display name, avatar)
+- PWA install ("Add to Home Screen")
 
-### In scope
-1. Login / Register / Logout
-2. Password reset (in-app)
-3. Chat list (direct messages + group channels)
-4. Open a chat and read messages
-5. Send a text message (real-time via Socket.IO)
-6. Basic user profile (display name, avatar)
-7. PWA install prompt (add to home screen)
-8. Connection status indicator (online/offline/reconnecting)
+## Active development
 
-### Explicitly out of scope for MVP
-- GIF picker / Giphy / Klipy
-- Media uploads (images, video, files)
-- Typing indicators
-- Read receipts / seen status
+- Typing indicators — named, animated, 3-second inactivity hide
+- Read receipts redesign — Sent / Received (with latency) / Read (with elapsed time)
+
+## Planned (post-alpha)
+
 - Push notifications (Web Push / VAPID)
-- Admin suite UI (backend admin routes exist, UI comes post-MVP)
+- Admin suite UI
 - Member directory
-- Presence indicators
-- Message reactions
-
-These features will be added in post-MVP sprints. Do not implement them speculatively.
+- Message search
 
 ---
 
 ## The 3-file rule
-No single task prompt may touch more than 3 files.
-If a feature requires more than 3 files, split it into multiple tasks.
-This rule prevents scope creep and cascading breakage.
+No single task may touch more than 3 files. If a feature requires more, split into multiple tasks.
 
 ---
 
-## How agents hand off work to each other
-
-When a frontend change requires a backend change (or vice versa), the implementing agent
-leaves a **handoff note** in the task description or as a comment in the relevant contracts file.
-
-Format:
-```
-HANDOFF → [target agent] [target file]
-Needs: [exact endpoint shape / event name / type change]
-Why: [one sentence]
-```
-
-Example:
-```
-HANDOFF → Codex services/api/src/routes/chats.ts
-Needs: GET /api/v1/chats/:chatId/messages to return `cursor` field in response
-Why: Frontend pagination uses cursor-based scroll
-```
+## No scope creep
+If a task requires touching files outside its scope, stop and report back before proceeding.
 
 ---
 
-## No scope creep clause
-If an agent receives a prompt and notices it would require touching files outside its scope
-or implementing features outside the MVP list, it must STOP and report back to the project owner
-before proceeding. Never silently expand scope.
-
----
-
-## Versioning policy
-- `main` = v2.0.0-alpha (Vue + Capacitor, current public release)
-- `pwa` branch = v2.1.0 development (this branch)
-- Version is bumped in root `package.json` and `apps/web/package.json` at release time only
+## Versioning
+- `main` = v2.1.0-alpha.1 (current)
+- Bump `package.json` versions at release time only
 - Pre-release tag: `-alpha.N` until public release readiness is confirmed
 
 ---
 
-## Stack reference
-
-| Layer | Technology |
-|---|---|
-| Frontend | SvelteKit 2.x + TypeScript |
-| PWA | @vite-pwa/sveltekit (Workbox) |
-| Realtime client | socket.io-client |
-| HTTP client | fetch (native, no axios) |
-| Backend | Fastify + PostgreSQL + Socket.IO |
-| Shared types | @penthouse/contracts (Zod schemas) |
-| Infra | Docker Compose + Caddy (self-hosted) |
-
----
-
-## What "done" means for any task
-A task is complete when:
-1. The feature works in a browser dev server (`npm run dev`)
-2. TypeScript compiles without errors (`npm run typecheck`)
-3. No existing tests are broken (`npm run test`)
-4. No files outside the task scope were modified
+## Definition of done
+1. Feature works in dev server (`npm run dev`)
+2. TypeScript compiles clean (`npm run typecheck`)
+3. No existing tests broken (`npm run test`)
+4. No files outside task scope modified

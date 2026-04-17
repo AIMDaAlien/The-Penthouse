@@ -6,97 +6,112 @@ Codex may read this directory for context. Codex must NOT edit files here withou
 ---
 
 ## What this directory is
-The SvelteKit PWA that users interact with directly.
-Replaces the old `apps/mobile` (Vue + Capacitor). No native shell, no APK.
-Users install via browser "Add to Home Screen" on Android.
+The SvelteKit PWA that users interact with directly. Installed via browser "Add to Home Screen" on Android. No native shell, no APK, no Capacitor.
 
 ---
 
 ## Stack
-- SvelteKit 2.x with TypeScript
-- `@vite-pwa/sveltekit` for service worker, manifest, offline support
-- `socket.io-client` for real-time messaging
-- Native `fetch` for REST calls (no axios)
-- CSS: custom properties (design tokens), no UI framework (Tailwind, MUI, etc.)
-- `@penthouse/contracts` for all request/response types
+- SvelteKit 2.x with TypeScript, Svelte 5 runes (`$state`, `$derived`, `$effect`)
+- `@vite-pwa/sveltekit` — service worker, manifest, offline support
+- `socket.io-client` — real-time messaging
+- Native `fetch` — REST calls (no axios)
+- CSS custom properties — design tokens, no UI framework (no Tailwind, MUI, etc.)
+- `@penthouse/contracts` — all request/response/event types
 
 ---
 
-## Directory structure (target)
+## Directory structure
+
 ```
-apps/web/
-├── src/
-│   ├── lib/
-│   │   ├── components/     ← Reusable UI components (.svelte)
-│   │   ├── stores/         ← Svelte stores (session, socket, chat state)
-│   │   ├── services/       ← API client functions (REST + socket)
-│   │   └── types.ts        ← App-level types (extends contracts)
-│   ├── routes/             ← SvelteKit file-based routing
-│   │   ├── +layout.svelte  ← Root layout (auth guard, socket init)
-│   │   ├── +page.svelte    ← Chat list (home)
-│   │   ├── chat/[id]/      ← Message thread
-│   │   └── auth/           ← Login / Register pages
-│   ├── service-worker.ts   ← PWA service worker
-│   └── app.html            ← HTML shell
-├── static/
-│   └── icons/              ← PWA icons (192px, 512px, maskable)
-├── package.json
-├── svelte.config.js
-└── vite.config.ts
+apps/web/src/
+├── lib/
+│   ├── components/         ← Reusable UI components
+│   │   ├── Avatar.svelte
+│   │   ├── Icon.svelte     ← SVG icon system (Lucide-style, stroke-based)
+│   │   ├── MediaBubble.svelte
+│   │   ├── MediaComposer.svelte
+│   │   ├── MediaComposer.utils.ts
+│   │   ├── ReadReceipts.svelte
+│   │   ├── TypingIndicator.svelte
+│   │   └── ...
+│   ├── stores/
+│   │   ├── session.svelte.ts    ← Auth state + access token
+│   │   ├── socket.svelte.ts     ← Socket.IO singleton
+│   │   └── readReceipts.svelte.ts ← Per-message read receipt state
+│   └── services/
+│       └── api.ts              ← REST API client (thin fetch wrapper)
+├── routes/
+│   ├── +layout.svelte          ← Auth guard, socket init, global listeners
+│   ├── +page.svelte            ← Chat list (home)
+│   ├── chat/[id]/+page.svelte  ← Message thread (primary feature surface)
+│   └── auth/                   ← Login / Register pages
+├── service-worker.ts
+└── app.html
 ```
 
 ---
 
 ## Design principles
-- Mobile-first layout (primary target: Android Chrome)
-- Dark theme as default, consistent with The Penthouse visual identity
-- CSS custom properties for all colors, spacing, and typography — no hardcoded values
-- Smooth but not gratuitous animations (respect `prefers-reduced-motion`)
-- No external UI frameworks — keep the bundle small and the look distinctive
+- Mobile-first (primary target: Android Chrome, 375px viewport)
+- Dark theme by default — consistent with The Penthouse visual identity
+- CSS custom properties for all colors, spacing, typography — no hardcoded values
+- Smooth but not gratuitous animations — respect `prefers-reduced-motion`
+- No external UI frameworks — keep the bundle lean and the look distinctive
+- SVG icons only via `<Icon name="..." />` — never emoji as icon substitutes
 
 ---
 
-## Socket.IO usage
-- One socket instance, initialized in a Svelte store (`stores/socket.ts`)
-- Socket connects on successful login, disconnects on logout
-- Events mirror the existing backend: `message.new`, `message.ack`, `chat.updated`, `typing`, `presence`
-- All socket event types are imported from `@penthouse/contracts` (events.ts)
+## Socket.IO events
+
+| Event (in) | Handler location | Purpose |
+|---|---|---|
+| `message.new` | `chat/[id]/+page.svelte` | New message received |
+| `message.ack` | `chat/[id]/+page.svelte` | Server confirms delivery + deliveredAt |
+| `message.read` | `+layout.svelte` → `readReceiptsStore` | Recipient read a message |
+| `typing.update` | `chat/[id]/+page.svelte` | Who is currently typing |
+| `chat.updated` | `+layout.svelte` | Chat metadata changed |
+| `presence.update` | `chat/[id]/+page.svelte` | User came online/offline |
+| `presence.sync` | `chat/[id]/+page.svelte` | Full presence snapshot on join |
+
+| Event (out) | Emitted from | Purpose |
+|---|---|---|
+| `typing.start` | `chat/[id]/+page.svelte` | User started typing |
+| `typing.stop` | `chat/[id]/+page.svelte` | User stopped typing |
 
 ---
 
 ## API calls
-- Base URL read from `PUBLIC_API_URL` environment variable
-- All REST calls go through a thin wrapper in `services/api.ts`
-- Request/response types imported from `@penthouse/contracts`
-- Auth token stored in memory (not localStorage) — refreshed via httpOnly cookie flow
+- Base URL: `PUBLIC_API_URL` env var
+- All calls go through `services/api.ts`
+- Auth token in memory (not localStorage) — refreshed via httpOnly cookie flow
 
 ---
 
-## What this directory does NOT do
-- No Fastify routes, no SQL, no migrations
-- No Docker or infra configuration
-- No FCM / Firebase — push notifications are post-MVP
-- No native Android/iOS build tooling (no Capacitor)
-
----
-
-## Environment variables (prefix: PUBLIC_ for client-exposed)
+## Environment variables
 ```
-PUBLIC_API_URL=https://api.penthouse.blog   # or http://localhost:3000 for dev
+PUBLIC_API_URL=https://api.penthouse.blog   # http://localhost:3000 for dev
 PUBLIC_SOCKET_URL=https://api.penthouse.blog
 ```
 
 ---
 
+## What this directory does NOT do
+- No Fastify routes, SQL, or migrations
+- No Docker or infra config
+- No FCM / Firebase (push notifications are post-alpha)
+- No native Android/iOS build tooling
+
+---
+
 ## Testing
-- Unit tests: Vitest
-- Component tests: `@testing-library/svelte`
-- Test files live alongside components (`Component.test.ts`)
+- Unit tests: Vitest (pure functions, no jsdom required)
+- Test files: alongside source (`Component.test.ts`, `module.utils.test.ts`)
+- Run: `npm run test`
 
 ---
 
 ## Definition of done (frontend tasks)
-1. Component renders without console errors
-2. TypeScript compiles clean
-3. Works on a real Android Chrome browser (or emulated 375px mobile viewport)
-4. No files outside `apps/web/` were touched (unless a contract change was needed — document it)
+1. Renders without console errors
+2. TypeScript compiles clean (`npm run typecheck`)
+3. Works at 375px mobile viewport (Android Chrome target)
+4. No files outside `apps/web/` modified (unless a contract change — document it)
