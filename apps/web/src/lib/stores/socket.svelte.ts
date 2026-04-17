@@ -8,6 +8,10 @@ import { PUBLIC_SOCKET_URL } from '$env/static/public';
 
 type SocketState = 'idle' | 'connecting' | 'connected' | 'degraded' | 'failed';
 
+// Roughly two minutes with the configured backoff. Long enough for mobile
+// network handoffs without keeping a broken session noisy forever.
+const RECONNECTION_ATTEMPTS = 10;
+
 function createSocketStore() {
 	let socket = $state<Socket | null>(null);
 	let state = $state<SocketState>('idle');
@@ -19,7 +23,7 @@ function createSocketStore() {
 		const s = io(PUBLIC_SOCKET_URL, {
 			auth: { token: accessToken },
 			transports: ['websocket', 'polling'],
-			reconnectionAttempts: 10,
+			reconnectionAttempts: RECONNECTION_ATTEMPTS,
 			reconnectionDelay: 1000,
 			reconnectionDelayMax: 15000
 		});

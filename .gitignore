@@ -1,6 +1,8 @@
 node_modules/
 dist/
 coverage/
+.gradle/
+.superpowers/
 .env
 .env.*
 !.env.example
@@ -13,6 +15,11 @@ coverage/
 .apps/
 services/api/uploads/
 services/api/tmp/
+apps/web/.svelte-kit/
+apps/web/build/
 apps/mobile/.capacitor/
 apps/mobile/android/
 apps/mobile/ios/
+poc-landing-pages*/
+landing-page-reference.html
+memory/

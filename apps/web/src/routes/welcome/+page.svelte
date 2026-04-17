@@ -7,8 +7,8 @@
 	let showApk = $state(false);
 	let apkUrl = $state('');
 
-	let blobEl: HTMLDivElement = undefined!;
-	let containerEl: HTMLDivElement = undefined!;
+	let blobEl: HTMLDivElement | null = null;
+	let containerEl: HTMLDivElement | null = null;
 
 	onMount(async () => {
 		try {
@@ -27,17 +27,26 @@
 	}
 
 	function handleBlobMove(e: MouseEvent) {
+		if (!blobEl) return;
+
 		blobEl.style.opacity = '0.7';
 		blobEl.style.left = e.clientX + 'px';
 		blobEl.style.top = e.clientY + 'px';
 	}
 
 	function handleBlobLeave() {
+		if (!blobEl) return;
+
 		blobEl.style.opacity = '0';
 	}
 
 	function handleEnterApp() {
-		const btn = document.getElementById('enter-btn') as HTMLButtonElement;
+		const btn = document.getElementById('enter-btn');
+		if (!(btn instanceof HTMLButtonElement) || !blobEl || !containerEl) {
+			goto('/auth');
+			return;
+		}
+
 		const rect = btn.getBoundingClientRect();
 		const x = rect.left + rect.width / 2;
 		const y = rect.top + rect.height / 2;
