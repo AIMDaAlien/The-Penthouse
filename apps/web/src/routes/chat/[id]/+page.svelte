@@ -627,6 +627,7 @@
 	// ── Media send ──────────────────────────────────────────────────────────────
 
 	async function handleMediaSend(payload: MediaSendPayload) {
+		sending = true;
 		const clientMessageId = crypto.randomUUID();
 
 		const optimistic: PendingMessage = {
@@ -679,6 +680,8 @@
 			messages = messages.filter((m) => (m as any).clientMessageId !== clientMessageId);
 			error = err instanceof Error ? err.message : 'Failed to send media.';
 			setTimeout(() => (error = ''), 4000);
+		} finally {
+			sending = false;
 		}
 	}
 
@@ -694,7 +697,7 @@
 		if (selected.length === 0) return;
 
 		const MAX = 10;
-		if (mediaFiles.length >= MAX) {
+		if (mediaFiles.length + selected.length > MAX) {
 			error = 'Max 10 files per message';
 			setTimeout(() => (error = ''), 3000);
 			return;
