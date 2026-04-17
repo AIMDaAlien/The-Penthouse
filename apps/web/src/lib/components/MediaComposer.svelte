@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onDestroy } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { PUBLIC_API_URL } from '$env/static/public';
 	import { sessionStore } from '$stores/session.svelte';
 	import Icon from './Icon.svelte';
@@ -49,7 +49,7 @@
 
 	// ── Initialise from prop ───────────────────────────────────────────────────
 
-	$effect(() => {
+	onMount(() => {
 		initFiles(initialFiles);
 	});
 
@@ -68,6 +68,8 @@
 			};
 		});
 		files = entries;
+		// Start uploads immediately — no $effect needed
+		Promise.allSettled(entries.map((e) => uploadFile(e)));
 	}
 
 	// ── Add more files ─────────────────────────────────────────────────────────
@@ -101,6 +103,8 @@
 			};
 		});
 		files = [...files, ...newEntries];
+		// Start uploads for new entries immediately
+		Promise.allSettled(newEntries.map((e) => uploadFile(e)));
 	}
 
 	// ── Remove a file ──────────────────────────────────────────────────────────
@@ -178,13 +182,6 @@
 	async function handleSend() {
 		if (!canSend) return;
 
-		const pending = files.filter((f) => f.progress === 0 && f.error === null);
-		if (pending.length > 0) {
-			sending = true;
-			await Promise.allSettled(pending.map((e) => uploadFile(e)));
-			sending = false;
-		}
-
 		if (hasError) return;
 		if (!files.every((f) => f.uploadId && f.url)) return;
 
@@ -215,15 +212,6 @@
 			sending = false;
 		}
 	}
-
-	// ── Auto-upload on mount ───────────────────────────────────────────────────
-
-	$effect(() => {
-		const toUpload = files.filter((f) => f.progress === 0 && f.error === null && !f.uploadId);
-		if (toUpload.length > 0) {
-			Promise.allSettled(toUpload.map((e) => uploadFile(e)));
-		}
-	});
 
 	// ── Toast ──────────────────────────────────────────────────────────────────
 
