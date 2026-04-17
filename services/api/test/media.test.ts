@@ -6,6 +6,7 @@ process.env.DATABASE_URL ??= 'postgresql://penthouse:penthouse@localhost:5432/pe
 process.env.JWT_SECRET ??= 'integration-test-jwt-secret-long-enough';
 
 const { __testables } = await import('../src/routes/media.js');
+const { env } = await import('../src/config/env.js');
 
 test('[media] classifyUpload treats known image extensions as images even with generic mime types', () => {
   assert.equal(__testables.classifyUpload('IMG_20260309_224037.jpg', 'application/octet-stream'), 'image');
@@ -122,6 +123,54 @@ test('[media] fetchJsonWithCache prunes old entries so the provider cache stays 
   } finally {
     __testables.clearGifProviderCache();
     globalThis.fetch = originalFetch;
+  }
+});
+
+test('[media] upload rate limit allows users below the rolling window cap', async () => {
+  const originalMaxFiles = env.UPLOAD_RATE_LIMIT_MAX_FILES;
+  const originalWindowMinutes = env.UPLOAD_RATE_LIMIT_WINDOW_MINUTES;
+
+  env.UPLOAD_RATE_LIMIT_MAX_FILES = 3;
+  env.UPLOAD_RATE_LIMIT_WINDOW_MINUTES = 15;
+
+  try {
+    const state = await __testables.getUploadRateLimitState({
+      query: async () => ({
+        rows: [{ upload_count: 2, retry_after_seconds: 60 }]
+      })
+    } as any, 'user-id');
+
+    assert.deepEqual(state, {
+      allowed: true,
+      retryAfterSeconds: 0
+    });
+  } finally {
+    env.UPLOAD_RATE_LIMIT_MAX_FILES = originalMaxFiles;
+    env.UPLOAD_RATE_LIMIT_WINDOW_MINUTES = originalWindowMinutes;
+  }
+});
+
+test('[media] upload rate limit blocks users at the rolling window cap', async () => {
+  const originalMaxFiles = env.UPLOAD_RATE_LIMIT_MAX_FILES;
+  const originalWindowMinutes = env.UPLOAD_RATE_LIMIT_WINDOW_MINUTES;
+
+  env.UPLOAD_RATE_LIMIT_MAX_FILES = 3;
+  env.UPLOAD_RATE_LIMIT_WINDOW_MINUTES = 15;
+
+  try {
+    const state = await __testables.getUploadRateLimitState({
+      query: async () => ({
+        rows: [{ upload_count: 3, retry_after_seconds: 120 }]
+      })
+    } as any, 'user-id');
+
+    assert.deepEqual(state, {
+      allowed: false,
+      retryAfterSeconds: 120
+    });
+  } finally {
+    env.UPLOAD_RATE_LIMIT_MAX_FILES = originalMaxFiles;
+    env.UPLOAD_RATE_LIMIT_WINDOW_MINUTES = originalWindowMinutes;
   }
 });
 

@@ -2,7 +2,7 @@ import { createWriteStream } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import { pipeline } from 'node:stream/promises';
 import {
   GifProviderSchema,
@@ -31,6 +31,16 @@ const GIF_PROVIDER_CACHE_TTL_MS = 60 * 60 * 1000;
 const GIF_PROVIDER_CACHE_MAX_ENTRIES = 200;
 const GIF_PROVIDER_NOT_CONFIGURED_ERROR = 'GIF provider not configured';
 const gifProviderCache = new Map<string, { expiresAt: number; data: unknown }>();
+
+type UploadRateLimitRow = {
+  upload_count: number | string;
+  retry_after_seconds: number | string | null;
+};
+
+type UploadRateLimitState = {
+  allowed: boolean;
+  retryAfterSeconds: number;
+};
 
 function pruneGifProviderCache(now = Date.now()): void {
   for (const [key, entry] of gifProviderCache.entries()) {
@@ -255,6 +265,44 @@ function normalizeLimit(raw: unknown, fallback: number, max: number): number {
   return Math.min(parsed, max);
 }
 
+async function getUploadRateLimitState(
+  db: Pick<typeof pool, 'query'>,
+  userId: string
+): Promise<UploadRateLimitState> {
+  const result = await db.query<UploadRateLimitRow>(
+    `SELECT COUNT(*)::int AS upload_count,
+            COALESCE(
+              CEIL(EXTRACT(EPOCH FROM (MIN(created_at) + ($2::int * INTERVAL '1 minute') - NOW())))::int,
+              $2::int * 60
+            ) AS retry_after_seconds
+       FROM media_uploads
+      WHERE uploader_id = $1
+        AND created_at >= NOW() - ($2::int * INTERVAL '1 minute')`,
+    [userId, env.UPLOAD_RATE_LIMIT_WINDOW_MINUTES]
+  );
+
+  const row = result.rows[0];
+  const uploadCount = Number(row?.upload_count ?? 0);
+  if (uploadCount < env.UPLOAD_RATE_LIMIT_MAX_FILES) {
+    return { allowed: true, retryAfterSeconds: 0 };
+  }
+
+  return {
+    allowed: false,
+    retryAfterSeconds: Math.max(1, Number(row?.retry_after_seconds ?? env.UPLOAD_RATE_LIMIT_WINDOW_MINUTES * 60))
+  };
+}
+
+function sendUploadRateLimit(reply: FastifyReply, state: UploadRateLimitState) {
+  return reply
+    .header('Retry-After', String(state.retryAfterSeconds))
+    .status(429)
+    .send({
+      error: `Upload limit reached. You can upload up to ${env.UPLOAD_RATE_LIMIT_MAX_FILES} files every ${env.UPLOAD_RATE_LIMIT_WINDOW_MINUTES} minutes.`,
+      retryAfterSeconds: state.retryAfterSeconds
+    });
+}
+
 async function fetchGifProvider(provider: GifProvider, mode: 'trending' | 'search', query?: string, limit = 30) {
   if (provider === 'giphy') {
     if (!env.GIPHY_API_KEY) {
@@ -285,6 +333,7 @@ export const __testables = {
   extractKlipyResults,
   fetchGifProvider,
   fetchJsonWithCache,
+  getUploadRateLimitState,
   pruneGifProviderCache,
   gifProviderCacheSize: () => gifProviderCache.size
 };
@@ -298,6 +347,12 @@ export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
     const mediaKind = classifyUpload(originalFileName, part.mimetype);
     if (!mediaKind) {
       return reply.status(415).send({ error: 'Unsupported file type' });
+    }
+
+    const initialRateLimit = await getUploadRateLimitState(pool, request.user.userId);
+    if (!initialRateLimit.allowed) {
+      part.file.resume();
+      return sendUploadRateLimit(reply, initialRateLimit);
     }
 
     const uploadDir = await ensureUploadsDirReady();
@@ -315,20 +370,39 @@ export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
       }
 
       const size = Number(part.file.bytesRead || 0);
-      await pool.query(
-        `INSERT INTO media_uploads(
-          id,
-          uploader_id,
-          file_name,
-          original_file_name,
-          storage_key,
-          file_path,
-          size_bytes,
-          content_type,
-          media_kind
-        ) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-        [id, request.user.userId, originalFileName, originalFileName, storageKey, filePath, size, part.mimetype, mediaKind]
-      );
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query('SELECT pg_advisory_xact_lock(hashtext($1), 0)', [`media-upload:${request.user.userId}`]);
+
+        const finalRateLimit = await getUploadRateLimitState(client, request.user.userId);
+        if (!finalRateLimit.allowed) {
+          await client.query('ROLLBACK');
+          await rm(filePath, { force: true });
+          return sendUploadRateLimit(reply, finalRateLimit);
+        }
+
+        await client.query(
+          `INSERT INTO media_uploads(
+            id,
+            uploader_id,
+            file_name,
+            original_file_name,
+            storage_key,
+            file_path,
+            size_bytes,
+            content_type,
+            media_kind
+          ) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+          [id, request.user.userId, originalFileName, originalFileName, storageKey, filePath, size, part.mimetype, mediaKind]
+        );
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK').catch(() => undefined);
+        throw error;
+      } finally {
+        client.release();
+      }
 
       return reply.status(201).send(
         UploadResponseSchema.parse({
