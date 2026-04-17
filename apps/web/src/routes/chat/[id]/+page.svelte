@@ -16,6 +16,7 @@
 	import MessageContextMenu from '$lib/components/MessageContextMenu.svelte';
 	import MediaComposer from '$lib/components/MediaComposer.svelte';
 	import MediaBubble from '$lib/components/MediaBubble.svelte';
+	import TypingIndicator from '$lib/components/TypingIndicator.svelte';
 	import type { MediaSendPayload } from '$lib/components/MediaComposer.utils';
 	import type { Message, GifResult, PollData, MessageReaction } from '@penthouse/contracts';
 
@@ -80,9 +81,10 @@
 	// Pins
 	let pinnedMessageIds = $state<Set<string>>(new Set());
 
-	// Typing indicators
-	let typingUserIds = $state<Set<string>>(new Set());
-	let typingTimeoutId: NodeJS.Timeout | null = null;
+	// Typing indicators — userId → displayName map; per-user timeouts for fallback cleanup
+	let typingUsers = $state<Map<string, string>>(new Map());
+	const typingTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
+	let typingStopTimer: ReturnType<typeof setTimeout> | null = null;
 
 	// Pagination
 	let loadingOlder = $state(false);
@@ -115,15 +117,13 @@
 		return m.senderDisplayName ?? m.senderUsername ?? 'Unknown';
 	}
 
-	function getTypingLabel(): string {
-		if (typingUserIds.size === 0) return '';
-		// This is a simplified version - in a real implementation,
-		// we'd map userIds to display names from the message history or a user map
-		// For now, just show a generic "typing..." indicator
-		if (typingUserIds.size === 1) {
-			return 'Someone is typing...';
-		}
-		return `${typingUserIds.size} people are typing...`;
+	function getTypingLabel(users: Map<string, string>): string {
+		const names = Array.from(users.values());
+		if (names.length === 0) return '';
+		if (names.length === 1) return `${names[0]} is typing`;
+		if (names.length === 2) return `${names[0]} and ${names[1]} are typing`;
+		if (names.length === 3) return `${names[0]}, ${names[1]} and ${names[2]} are typing`;
+		return 'Several people are typing';
 	}
 
 	async function scrollToBottom(smooth = false) {
@@ -318,19 +318,27 @@
 			}
 		}
 
-		// typing.update payload: { chatId, userId, status: 'start' | 'stop', displayName, avatarUrl }
-		function onTypingUpdate(envelope: { type: string; payload: { chatId: string; userId: string; status: 'start' | 'stop' } }) {
-			const { userId, status } = envelope.payload;
-			if (status === 'start' && userId !== currentUserId) {
-				typingUserIds.add(userId);
-				if (typingTimeoutId) clearTimeout(typingTimeoutId);
-				typingTimeoutId = setTimeout(() => {
-					typingUserIds.delete(userId);
-					typingUserIds = typingUserIds;
-				}, 4000);
+		function onTypingUpdate(envelope: { type: string; payload: { chatId: string; userId: string; status: 'start' | 'stop'; displayName: string } }) {
+			const { userId, status, displayName } = envelope.payload;
+			if (userId === currentUserId) return;
+
+			if (status === 'start') {
+				typingUsers.set(userId, displayName);
+				typingUsers = typingUsers; // trigger reactivity
+
+				const existing = typingTimeouts.get(userId);
+				if (existing) clearTimeout(existing);
+
+				typingTimeouts.set(userId, setTimeout(() => {
+					typingUsers.delete(userId);
+					typingUsers = typingUsers;
+					typingTimeouts.delete(userId);
+				}, 3000));
 			} else {
-				typingUserIds.delete(userId);
-				typingUserIds = typingUserIds;
+				typingUsers.delete(userId);
+				typingUsers = typingUsers;
+				const t = typingTimeouts.get(userId);
+				if (t) { clearTimeout(t); typingTimeouts.delete(userId); }
 			}
 		}
 
@@ -435,7 +443,8 @@
 			socket.off('message.pinned', onMessagePinned);
 			socket.off('message.unpinned', onMessageUnpinned);
 			socket.off('message.moderated', onMessageModerated);
-			if (typingTimeoutId) clearTimeout(typingTimeoutId);
+			if (typingStopTimer) clearTimeout(typingStopTimer);
+			for (const t of typingTimeouts.values()) clearTimeout(t);
 		};
 	});
 
@@ -552,17 +561,22 @@
 		const socket = socketStore.instance;
 		if (!socket) return;
 
-		const now = Date.now();
-		// Only emit every 1 second to avoid spam
-		if (now - typingStartTime < 1000) return;
-		typingStartTime = now;
+		// Reset inactivity stop timer on every keystroke
+		if (typingStopTimer) clearTimeout(typingStopTimer);
+		typingStopTimer = setTimeout(() => {
+			emitTypingStop();
+		}, 3000);
 
+		const now = Date.now();
+		if (now - typingStartTime < 1000) return; // throttle re-emits
+		typingStartTime = now;
 		socket.emit('typing.start', { chatId });
 	}
 
 	function emitTypingStop() {
 		const socket = socketStore.instance;
 		if (!socket) return;
+		if (typingStopTimer) { clearTimeout(typingStopTimer); typingStopTimer = null; }
 		socket.emit('typing.stop', { chatId });
 		typingStartTime = 0;
 	}
@@ -856,9 +870,7 @@
 		{/if}
 		<div class="header-content">
 			<h2 class="thread-name">{chatName}</h2>
-			{#if typingUserIds.size > 0}
-				<span class="typing-indicator">{getTypingLabel()}</span>
-			{/if}
+			<TypingIndicator label={getTypingLabel(typingUsers)} />
 		</div>
 		<span
 			class="conn-dot"
@@ -1217,15 +1229,6 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		margin: 0;
-	}
-
-	.typing-indicator {
-		font-size: var(--text-xs);
-		color: var(--color-text-secondary);
-		font-style: italic;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
 	}
 
 	/* ── Messages ── */
