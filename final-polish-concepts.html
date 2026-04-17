@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Penthouse - Final Polish Concepts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gelasio:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Ubuntu:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-color: #12121C;
+    --surface-color: #1E1E2D;
+    --accent-color: #7777C2;
+    --accent-dark: #5a5a9e;
+    --accent-bright: #9B9BEE;
+    --text-primary: #E2E2EC;
+    --text-secondary: #8C8CC5;
+    --danger-color: #ff8ca6;
+    --success-color: #34d399;
+    --border-solid: rgba(140, 140, 197, 0.2);
+
+    --font-display: 'Gelasio', serif;
+    --font-body: 'Ubuntu', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+
+    --radius-sm: 6px;
+    --radius-md: 12px;
+    --radius-lg: 20px;
+    --radius-xl: 24px;
+    --radius-xxl: 32px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background-color: #0A0A10;
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    padding: 2rem;
+  }
+
+  h1, h2 { font-family: var(--font-display); font-weight: 500; }
+  .intro-text { color: var(--text-secondary); font-family: var(--font-mono); font-size: 0.85rem; margin-top: 1rem; margin-bottom: 3rem; max-width: 800px; line-height: 1.6; }
+
+  .showcase-section { margin-bottom: 6rem; display: flex; flex-direction: column; align-items: center; }
+  .section-title { font-size: 2rem; color: var(--text-primary); margin-bottom: 3rem; text-align: center; }
+
+  .grid-mobile {
+    display: flex; flex-wrap: wrap; gap: 4rem; justify-content: center;
+  }
+  .grid-desktop {
+    display: flex; flex-wrap: wrap; gap: 4rem; justify-content: center; width: 100%;
+  }
+
+  /* ========================================== */
+  /* SHARED UI COMPONENTS                       */
+  /* ========================================== */
+
+  .segment-control { display: flex; background: rgba(140, 140, 197, 0.08); border-radius: var(--radius-md); padding: 4px; margin: 0 20px 16px; flex-shrink: 0; }
+  .segment-btn { flex: 1; text-align: center; padding: 8px 12px; font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-secondary); cursor: pointer; border-radius: var(--radius-sm); transition: all 0.2s ease; }
+  .segment-btn.active { background: var(--surface-color); color: var(--text-primary); box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+
+  .nav-icon { width: 24px; height: 24px; background: currentColor; mask-size: contain; -webkit-mask-size: contain; mask-repeat: no-repeat; -webkit-mask-repeat: no-repeat; mask-position: center; -webkit-mask-position: center; }
+  .icon-chat { -webkit-mask-image: url('data:image/svg+xml;utf8,<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'); }
+  .icon-dir { -webkit-mask-image: url('data:image/svg+xml;utf8,<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="9" cy="7" r="4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'); }
+  .icon-set { -webkit-mask-image: url('data:image/svg+xml;utf8,<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'); }
+
+  /* Base Mobile Wrapper */
+  .mobile-app-wrapper {
+    width: 390px; height: 844px;
+    background: var(--bg-color); border-radius: 40px; border: 12px solid #000;
+    box-shadow: 0 32px 80px rgba(0,0,0,0.6); overflow: hidden; display: flex; flex-direction: column; position: relative;
+  }
+  .concept-label-mobile { position: absolute; top: 30px; right: -60px; background: var(--accent-color); color: white; padding: 4px 40px; font-family: var(--font-mono); font-size: 0.7rem; transform: rotate(45deg); z-index: 50; }
+  .status-bar { height: 44px; display: flex; justify-content: space-between; align-items: center; padding: 0 24px; font-family: var(--font-body); font-size: 0.8rem; font-weight: 500; flex-shrink: 0; }
+  
+  .chat-list-scroll { flex: 1; overflow-y: auto; display: flex; flex-direction: column; padding-bottom: 120px; }
+
+  /* Core Card Layout */
+  .chat-row { 
+    display: flex; align-items: center; gap: 16px; 
+    background: var(--surface-color); 
+    border-radius: var(--radius-xxl);
+    padding: 16px 20px;
+    cursor: pointer; transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .chat-row:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.2); }
+  
+  /* Circular Avatars */
+  .avatar { width: 52px; height: 52px; border-radius: 50%; background: var(--accent-color); color: white; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0; }
+  .chat-content { flex: 1; min-width: 0; }
+  .chat-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+  .chat-name { font-size: 1.05rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chat-time { font-family: var(--font-mono); font-size: 0.7rem; color: var(--text-secondary); }
+  .chat-footer { display: flex; align-items: center; justify-content: space-between; }
+  .chat-preview { font-size: 0.9rem; color: var(--text-secondary); text-align: right; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 300; }
+  .unread-dot { width: 8px; height: 8px; background-color: var(--accent-color); border-radius: 50%; flex-shrink: 0; margin-left: 8px; }
+
+  /* Floating Glassmorphic Nav */
+  .bottom-nav-floating {
+    position: absolute; bottom: 24px; left: 24px; right: 24px;
+    display: flex; align-items: center; justify-content: space-around; padding: 16px 0;
+    border-radius: var(--radius-xl);
+    background: rgba(30, 30, 45, 0.7);
+    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 16px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
+    z-index: 40;
+  }
+  .bottom-nav-item { display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--text-secondary); font-family: var(--font-mono); font-size: 0.65rem; cursor: pointer; transition: color 0.2s; }
+  .bottom-nav-item:hover, .bottom-nav-item.active { color: var(--text-primary); }
+
+  /* ========================================== */
+  /* 5 MOBILE CARD VARIATIONS                   */
+  /* ========================================== */
+
+  /* M1: Base Rounded Glass Cards */
+  .m1-base .chat-list-scroll { padding: 12px 16px 120px; gap: 12px; }
+  .m1-base .chat-row { border: 1px solid rgba(140, 140, 197, 0.08); background: rgba(30, 30, 45, 0.4); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+
+  /* M2: Inset Dark Cards */
+  .m2-inset .chat-list-scroll { padding: 12px 16px 120px; gap: 12px; }
+  .m2-inset .chat-row { background: rgba(0, 0, 0, 0.2); border: none; box-shadow: inset 0 2px 10px rgba(0,0,0,0.2); }
+
+  /* M3: Neon Glow Accent Cards */
+  .m3-glow .chat-list-scroll { padding: 12px 16px 120px; gap: 16px; }
+  .m3-glow .chat-row { background: var(--surface-color); position: relative; border: none; }
+  .m3-glow .chat-row::before { content: ''; position: absolute; inset: -1px; border-radius: var(--radius-xxl); background: linear-gradient(135deg, rgba(119,119,194,0.3) 0%, transparent 100%); z-index: -1; filter: blur(4px); }
+
+  /* M4: Elevated Float */
+  .m4-padded .chat-list-scroll { padding: 16px 24px 120px; gap: 16px; }
+  .m4-padded .chat-row { padding: 20px 24px; background: var(--surface-color); box-shadow: 0 8px 24px rgba(0,0,0,0.2); }
+  
+  /* M5: Compact Density */
+  .m5-compact .chat-list-scroll { padding: 12px 16px 120px; gap: 8px; }
+  .m5-compact .chat-row { padding: 12px 16px; background: rgba(30, 30, 45, 0.6); }
+  .m5-compact .avatar { width: 44px; height: 44px; }
+
+
+  /* ========================================== */
+  /* DESKTOP AUTH -> HOME TRANSITION (MONOLITH) */
+  /* ========================================== */
+
+  .desktop-app-wrapper {
+    width: 100%; max-width: 1200px; height: 760px;
+    background: var(--bg-color); border: 1px solid rgba(140, 140, 197, 0.15); border-radius: 24px;
+    box-shadow: 0 32px 80px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.05);
+    overflow: hidden; position: relative; display: flex; align-items: center; justify-content: center;
+  }
+
+  .auth-trigger-btn { position: absolute; top: 20px; right: 20px; background: rgba(0,0,0,0.6); color: white; border: 1px solid var(--border-solid); padding: 8px 16px; border-radius: 12px; font-family: var(--font-mono); font-size: 0.8rem; cursor: pointer; z-index: 100; backdrop-filter: blur(4px); }
+
+  .d-view { position: absolute; inset: 0; width: 100%; height: 100%; display: flex; }
+  
+  .auth-view { background: var(--bg-color); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 20; }
+  .auth-card { width: 400px; padding: 48px; display: flex; flex-direction: column; align-items: center; }
+  .auth-logo { font-family: var(--font-display); font-size: 2.5rem; color: var(--text-primary); margin-bottom: 2rem; letter-spacing: 0.05em; }
+  .auth-input { width: 100%; background: rgba(18, 18, 28, 0.6); border: none; border-bottom: 1px solid var(--border-solid); padding: 16px; margin-bottom: 1.5rem; color: var(--text-primary); font-family: var(--font-body); font-size: 1rem; outline: none; transition: border-color 0.2s; }
+  .auth-input:focus { border-color: var(--accent-bright); }
+  .auth-btn { width: 100%; background: var(--accent-bright); color: #12121C; border: none; padding: 16px; border-radius: var(--radius-md); font-family: var(--font-body); font-weight: 600; font-size: 1rem; cursor: pointer; margin-top: 1rem; }
+
+  .home-view { background: var(--bg-color); z-index: 10; opacity: 0; pointer-events: none; }
+  .desktop-left-pane { width: 340px; border-right: 1px solid var(--border-solid); display: flex; flex-direction: column; background: var(--bg-color); flex-shrink: 0; }
+  .desktop-right-pane { flex: 1; display: flex; flex-direction: column; background: var(--bg-color); position: relative; align-items: center; justify-content: center; }
+  
+  .mock-top-nav { display: flex; justify-content: space-around; padding: 24px; border-bottom: 1px solid var(--border-solid); font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-secondary); }
+  .mock-chat-list { flex: 1; padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+  .mock-chat-item { display: flex; align-items: center; gap: 16px; }
+  .mock-avatar { width: 48px; height: 48px; border-radius: 50%; background: var(--surface-color); }
+  .mock-lines { flex: 1; }
+  .mock-line-1 { height: 12px; width: 60%; background: var(--surface-color); border-radius: 4px; margin-bottom: 8px; }
+  .mock-line-2 { height: 10px; width: 40%; background: rgba(140,140,197,0.1); border-radius: 4px; }
+  .mock-watermark { font-family: var(--font-display); font-size: 120px; color: var(--accent-color); opacity: 0.05; }
+
+  /* ========================================== */
+  /* 5 DESKTOP MONOLITH EXPANSION VARIATIONS    */
+  /* ========================================== */
+
+  /* Shared Expansion Base */
+  .t-expand { transition: width 1.2s cubic-bezier(0.65, 0, 0.35, 1), height 1.2s cubic-bezier(0.65, 0, 0.35, 1); width: 440px; height: 560px; margin: 0 auto; }
+  .t-expand .auth-view { transition: opacity 0.4s ease; width: 440px; height: 560px; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+  .t-expand .home-view { transition: opacity 0.8s ease 0.6s; width: 100%; height: 100%; }
+  
+  .t-expand.is-home { width: 100%; height: 760px; }
+  .t-expand.is-home .auth-view { opacity: 0; pointer-events: none; }
+  .t-expand.is-home .home-view { opacity: 1; pointer-events: auto; }
+
+  /* E1: Classic Expansion Fade */
+  .t-e1 .home-view { transition: opacity 0.6s ease 0.4s; opacity: 0; }
+  .t-e1.is-home .home-view { opacity: 1; }
+
+  /* E2: Expansion + Inner Slide Up */
+  .t-e2 .home-view { transition: opacity 0.6s ease 0.4s, transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) 0.4s; transform: translateY(40px); opacity: 0; }
+  .t-e2.is-home .home-view { opacity: 1; transform: translateY(0); pointer-events: auto; }
+
+  /* E3: Expansion + Scale Down Focus */
+  .t-e3 .home-view { transition: opacity 0.6s ease 0.4s, transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) 0.4s, filter 0.8s ease 0.4s; transform: scale(1.05); filter: blur(10px); opacity: 0; }
+  .t-e3.is-home .home-view { opacity: 1; transform: scale(1); filter: blur(0); pointer-events: auto; }
+
+  /* E4: Expansion + Staggered Reveal */
+  .t-e4 .home-view { opacity: 1; pointer-events: none; }
+  .t-e4 .desktop-left-pane { transition: opacity 0.6s ease 0.4s, transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) 0.4s; transform: translateX(-20px); opacity: 0; }
+  .t-e4 .desktop-right-pane { transition: opacity 0.6s ease 0.6s, transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) 0.6s; transform: translateY(20px); opacity: 0; }
+  
+  .t-e4.is-home .home-view { pointer-events: auto; }
+  .t-e4.is-home .desktop-left-pane { opacity: 1; transform: translateX(0); }
+  .t-e4.is-home .desktop-right-pane { opacity: 1; transform: translateY(0); }
+
+  /* E5: Expansion + Glass Shutter Wipe */
+  .t-e5 { position: relative; }
+  .t-e5::after { content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 100%; background: rgba(255,255,255,0.05); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); z-index: 30; transition: left 1.4s cubic-bezier(0.65, 0, 0.35, 1); pointer-events: none; border-right: 1px solid rgba(255,255,255,0.1); }
+  .t-e5 .home-view { opacity: 0; transition: opacity 0.1s ease 0.6s; }
+  
+  .t-e5.is-home::after { left: 100%; }
+  .t-e5.is-home .home-view { opacity: 1; pointer-events: auto; }
+
+</style>
+</head>
+<body>
+
+  <div class="showcase-section">
+    <h2 class="section-title">Part 1: Mobile Rounded Cards & Glass Nav</h2>
+    <p class="intro-text" style="text-align: center;">5 variations of the highly rounded card layout with strictly circular avatars and the floating glassmorphic navigation bar.</p>
+    
+    <div class="grid-mobile">
+      
+      <!-- C1: Base Rounded Glass Cards -->
+      <div class="mobile-app-wrapper m1-base">
+        <span class="concept-label-mobile">1. Glassy Minimal</span>
+        <div class="status-bar"><span>9:41</span><span>Wifi &middot; Battery</span></div>
+        <h2 style="padding: 0 20px; font-size: 1.8rem; margin-bottom: 0.5rem;">Messages</h2>
+        <div class="segment-control"><div class="segment-btn active">Direct</div><div class="segment-btn">Channels</div></div>
+        
+        <div class="chat-list-scroll">
+          <div class="chat-row active">
+            <div class="avatar">EJ</div>
+            <div class="chat-content">
+              <div class="chat-header"><div class="chat-name">Eleanor James</div><div class="chat-time">11:47 PM</div></div>
+              <div class="chat-footer"><div class="chat-preview">Are we still on for the gallery?</div></div>
+            </div>
+          </div>
+          <div class="chat-row">
+            <div class="avatar">MR</div>
+            <div class="chat-content">
+              <div class="chat-header"><div class="chat-name">Marcus Reed</div><div class="chat-time">Yesterday</div></div>
+              <div class="chat-footer"><div class="chat-preview" style="color: var(--text-primary);">Let's review the draft.</div><div class="unread-dot"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="bottom-nav-floating">
+          <div class="bottom-nav-item active"><div class="nav-icon icon-chat"></div>Chat</div>
+          <div class="bottom-nav-item"><div class="nav-icon icon-dir"></div>Directory</div>
+          <div class="bottom-nav-item"><div class="nav-icon icon-set"></div>Settings</div>
+        </div>
+      </div>
+
+      <!-- C2: Inset Dark Cards -->
+      <div class="mobile-app-wrapper m2-inset">
+        <span class="concept-label-mobile">2. Inset Dark</span>
+        <div class="status-bar"><span>9:41</span><span>Wifi &middot; Battery</span></div>
+        <h2 style="padding: 0 20px; font-size: 1.8rem; margin-bottom: 0.5rem;">Messages</h2>
+        <div class="segment-control"><div class="segment-btn active">Direct</div><div class="segment-btn">Channels</div></div>
+        
+        <div class="chat-list-scroll">
+          <div class="chat-row active">
+            <div class="avatar">EJ</div>
+            <div class="chat-content">
+              <div class="chat-header"><div class="chat-name">Eleanor James</div><div class="chat-time">11:47 PM</div></div>
+              <div class="chat-footer"><div class="chat-preview">Are we still on for the gallery?</div></div>
+            </div>
+          </div>
+          <div class="chat-row">
+            <div class="avatar">MR</div>
+            <div class="chat-content">
+              <div class="chat-header"><div class="chat-name">Marcus Reed</div><div class="chat-time">Yesterday</div></div>
+              <div class="chat-footer"><div class="chat-preview" style="color: var(--text-primary);">Let's review the draft.</div><div class="unread-dot"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="bottom-nav-floating">
+          <div class="bottom-nav-item active"><div class="nav-icon icon-chat"></div>Chat</div>
+          <div class="bottom-nav-item"><div class="nav-icon icon-dir"></div>Directory</div>
+          <div class="bottom-nav-item"><div class="nav-icon icon-set"></div>Settings</div>
+        </div>
+      </div>
+
+      <!-- C3: Neon Glow Accent Cards -->
+      <div class="mobile-app-wrapper m3-glow">
+        <span class="concept-label-mobile">3. Neon Accent</span>
+        <div class="status-bar"><span>9:41</span><span>Wifi &middot; Battery</span></div>
+        <h2 style="padding: 0 20px; font-size: 1.8rem; margin-bottom: 0.5rem;">Messages</h2>
+        <div class="segment-control"><div class="segment-btn active">Direct</div><div class="segment-btn">Channels</div></div>
+        
+        <div class="chat-list-scroll">
+          <div class="chat-row active">
+            <div class="avatar">EJ</div>
+            <div class="chat-content">
+              <div class="chat-header"><div class="chat-name">Eleanor James</div><div class="chat-time">11:47 PM</div></div>
+              <div class="chat-footer"><div class="chat-preview">Are we still on for the gallery?</div></div>
+            </div>
+          </div>
+          <div class="chat-row">
+            <div class="avatar">MR</div>
+            <div class="chat-content">
+              <div class="chat-header"><div class="chat-name">Marcus Reed</div><div class="chat-time">Yesterday</div></div>
+              <div class="chat-footer"><div class="chat-preview" style="color: var(--text-primary);">Let's review the draft.</div><div class="unread-dot"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="bottom-nav-floating">
+          <div class="bottom-nav-item active"><div class="nav-icon icon-chat"></div>Chat</div>
+          <div class="bottom-nav-item"><div class="nav-icon icon-dir"></div>Directory</div>
+          <div class="bottom-nav-item"><div class="nav-icon icon-set"></div>Settings</div>
+        </div>
+      </div>
+
+      <!-- C4: Ultra Padded Floating -->
+      <div class="mobile-app-wrapper m4-padded">
+        <span class="concept-label-mobile">4. Elevated Float</span>
+        <div class="status-bar"><span>9:41</span><span>Wifi &middot; Battery</span></div>
+        <h2 style="padding: 0 24px; font-size: 1.8rem; margin-bottom: 0.5rem;">Messages</h2>
+        <div class="segment-control" style="margin: 0 24px 16px;"><div class="segment-btn active">Direct</div><div class="segment-btn">Channels</div></div>
+        
+        <div class="chat-list-scroll">
+          <div class="chat-row active">
+            <div class="avatar">EJ</div>
+            <div class="chat-content">
+              <div class="chat-header"><div class="chat-name">Eleanor James</div><div class="chat-time">11:47 PM</div></div>
+              <div class="chat-footer"><div class="chat-preview">Are we still on for the gallery?</div></div>
+            </div>
+          </div>
+          <div class="chat-row">
+            <div class="avatar">MR</div>
+            <div class="chat-content">
+              <div class="chat-header"><div class="chat-name">Marcus Reed</div><div class="chat-time">Yesterday</div></div>
+              <div class="chat-footer"><div class="chat-preview" style="color: var(--text-primary);">Let's review the draft.</div><div class="unread-dot"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="bottom-nav-floating">
+          <div class="bottom-nav-item active"><div class="nav-icon icon-chat"></div>Chat</div>
+          <div class="bottom-nav-item"><div class="nav-icon icon-dir"></div>Directory</div>
+          <div class="bottom-nav-item"><div class="nav-icon icon-set"></div>Settings</div>
+        </div>
+      </div>
+
+      <!-- C5: Compact Density -->
+      <div class="mobile-app-wrapper m5-compact">
+        <span class="concept-label-mobile">5. Compact Pill</span>
+        <div class="status-bar"><span>9:41</span><span>Wifi &middot; Battery</span></div>
+        <h2 style="padding: 0 20px; font-size: 1.8rem; margin-bottom: 0.5rem;">Messages</h2>
+        <div class="segment-control"><div class="segment-btn active">Direct</div><div class="segment-btn">Channels</div></div>
+        
+        <div class="chat-list-scroll">
+          <div class="chat-row active">
+            <div class="avatar">EJ</div>
+            <div class="chat-content">
+              <div class="chat-header"><div class="chat-name">Eleanor James</div><div class="chat-time">11:47 PM</div></div>
+              <div class="chat-footer"><div class="chat-preview">Are we still on for the gallery?</div></div>
+            </div>
+          </div>
+          <div class="chat-row">
+            <div class="avatar">MR</div>
+            <div class="chat-content">
+              <div class="chat-header"><div class="chat-name">Marcus Reed</div><div class="chat-time">Yesterday</div></div>
+              <div class="chat-footer"><div class="chat-preview" style="color: var(--text-primary);">Let's review the draft.</div><div class="unread-dot"></div></div>
+            </div>
+          </div>
+          <div class="chat-row">
+            <div class="avatar">AK</div>
+            <div class="chat-content">
+              <div class="chat-header"><div class="chat-name">Arthur K.</div><div class="chat-time">Tue</div></div>
+              <div class="chat-footer"><div class="chat-preview">I'll send it soon.</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="bottom-nav-floating">
+          <div class="bottom-nav-item active"><div class="nav-icon icon-chat"></div>Chat</div>
+          <div class="bottom-nav-item"><div class="nav-icon icon-dir"></div>Directory</div>
+          <div class="bottom-nav-item"><div class="nav-icon icon-set"></div>Settings</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+
+  <div class="showcase-section">
+    <h2 class="section-title">Desktop: Monolith Expansion Core Variations</h2>
+    <p class="intro-text" style="text-align: center;">5 variations of the "Monolith Expansion" transition. Click "Trigger Login" to watch the small login window expand into the full desktop environment, showcasing different internal reveal choreographies.</p>
+    
+    <div class="grid-desktop">
+      
+      <!-- VARIATION 1: Classic Expansion Fade -->
+      <div style="width: 100%; max-width: 1200px; position: relative;">
+        <button class="auth-trigger-btn" onclick="toggleAuth('desk-exp-1')">Trigger Login (Classic Fade)</button>
+        <div class="desktop-app-wrapper t-expand t-e1" id="desk-exp-1">
+          
+          <div class="d-view auth-view">
+            <div class="auth-card">
+              <div class="auth-logo">The Penthouse</div>
+              <input type="text" class="auth-input" value="ArthurKensington" readonly>
+              <input type="password" class="auth-input" value="••••••••" readonly>
+              <button class="auth-btn">Enter</button>
+            </div>
+          </div>
+
+          <div class="d-view home-view">
+            <div class="desktop-left-pane">
+              <div class="mock-top-nav"><span>Chat</span><span>Directory</span><span>Settings</span></div>
+              <div class="mock-chat-list">
+                <div class="mock-chat-item"><div class="mock-avatar"></div><div class="mock-lines"><div class="mock-line-1"></div><div class="mock-line-2"></div></div></div>
+                <div class="mock-chat-item"><div class="mock-avatar"></div><div class="mock-lines"><div class="mock-line-1"></div><div class="mock-line-2"></div></div></div>
+              </div>
+            </div>
+            <div class="desktop-right-pane">
+              <div class="mock-watermark">AK</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- VARIATION 2: Expansion + Inner Slide Up -->
+      <div style="width: 100%; max-width: 1200px; position: relative;">
+        <button class="auth-trigger-btn" onclick="toggleAuth('desk-exp-2')">Trigger Login (Slide Up)</button>
+        <div class="desktop-app-wrapper t-expand t-e2" id="desk-exp-2">
+          
+          <div class="d-view auth-view">
+            <div class="auth-card">
+              <div class="auth-logo">The Penthouse</div>
+              <input type="text" class="auth-input" value="ArthurKensington" readonly>
+              <input type="password" class="auth-input" value="••••••••" readonly>
+              <button class="auth-btn">Enter</button>
+            </div>
+          </div>
+
+          <div class="d-view home-view">
+            <div class="desktop-left-pane">
+              <div class="mock-top-nav"><span>Chat</span><span>Directory</span><span>Settings</span></div>
+              <div class="mock-chat-list">
+                <div class="mock-chat-item"><div class="mock-avatar"></div><div class="mock-lines"><div class="mock-line-1"></div><div class="mock-line-2"></div></div></div>
+                <div class="mock-chat-item"><div class="mock-avatar"></div><div class="mock-lines"><div class="mock-line-1"></div><div class="mock-line-2"></div></div></div>
+              </div>
+            </div>
+            <div class="desktop-right-pane">
+              <div class="mock-watermark">AK</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- VARIATION 3: Expansion + Scale Down Focus -->
+      <div style="width: 100%; max-width: 1200px; position: relative;">
+        <button class="auth-trigger-btn" onclick="toggleAuth('desk-exp-3')">Trigger Login (Focus Pull)</button>
+        <div class="desktop-app-wrapper t-expand t-e3" id="desk-exp-3">
+          
+          <div class="d-view auth-view">
+            <div class="auth-card">
+              <div class="auth-logo">The Penthouse</div>
+              <input type="text" class="auth-input" value="ArthurKensington" readonly>
+              <input type="password" class="auth-input" value="••••••••" readonly>
+              <button class="auth-btn">Enter</button>
+            </div>
+          </div>
+
+          <div class="d-view home-view">
+            <div class="desktop-left-pane">
+              <div class="mock-top-nav"><span>Chat</span><span>Directory</span><span>Settings</span></div>
+              <div class="mock-chat-list">
+                <div class="mock-chat-item"><div class="mock-avatar"></div><div class="mock-lines"><div class="mock-line-1"></div><div class="mock-line-2"></div></div></div>
+                <div class="mock-chat-item"><div class="mock-avatar"></div><div class="mock-lines"><div class="mock-line-1"></div><div class="mock-line-2"></div></div></div>
+              </div>
+            </div>
+            <div class="desktop-right-pane">
+              <div class="mock-watermark">AK</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- VARIATION 4: Expansion + Staggered Reveal -->
+      <div style="width: 100%; max-width: 1200px; position: relative;">
+        <button class="auth-trigger-btn" onclick="toggleAuth('desk-exp-4')">Trigger Login (Staggered)</button>
+        <div class="desktop-app-wrapper t-expand t-e4" id="desk-exp-4">
+          
+          <div class="d-view auth-view">
+            <div class="auth-card">
+              <div class="auth-logo">The Penthouse</div>
+              <input type="text" class="auth-input" value="ArthurKensington" readonly>
+              <input type="password" class="auth-input" value="••••••••" readonly>
+              <button class="auth-btn">Enter</button>
+            </div>
+          </div>
+
+          <div class="d-view home-view">
+            <div class="desktop-left-pane">
+              <div class="mock-top-nav"><span>Chat</span><span>Directory</span><span>Settings</span></div>
+              <div class="mock-chat-list">
+                <div class="mock-chat-item"><div class="mock-avatar"></div><div class="mock-lines"><div class="mock-line-1"></div><div class="mock-line-2"></div></div></div>
+                <div class="mock-chat-item"><div class="mock-avatar"></div><div class="mock-lines"><div class="mock-line-1"></div><div class="mock-line-2"></div></div></div>
+              </div>
+            </div>
+            <div class="desktop-right-pane">
+              <div class="mock-watermark">AK</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- VARIATION 5: Expansion + Glass Shutter Wipe -->
+      <div style="width: 100%; max-width: 1200px; position: relative;">
+        <button class="auth-trigger-btn" onclick="toggleAuth('desk-exp-5')">Trigger Login (Glass Shutter)</button>
+        <div class="desktop-app-wrapper t-expand t-e5" id="desk-exp-5">
+          
+          <div class="d-view auth-view">
+            <div class="auth-card">
+              <div class="auth-logo">The Penthouse</div>
+              <input type="text" class="auth-input" value="ArthurKensington" readonly>
+              <input type="password" class="auth-input" value="••••••••" readonly>
+              <button class="auth-btn">Enter</button>
+            </div>
+          </div>
+
+          <div class="d-view home-view">
+            <div class="desktop-left-pane">
+              <div class="mock-top-nav"><span>Chat</span><span>Directory</span><span>Settings</span></div>
+              <div class="mock-chat-list">
+                <div class="mock-chat-item"><div class="mock-avatar"></div><div class="mock-lines"><div class="mock-line-1"></div><div class="mock-line-2"></div></div></div>
+                <div class="mock-chat-item"><div class="mock-avatar"></div><div class="mock-lines"><div class="mock-line-1"></div><div class="mock-line-2"></div></div></div>
+              </div>
+            </div>
+            <div class="desktop-right-pane">
+              <div class="mock-watermark">AK</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    function toggleAuth(id) {
+      const container = document.getElementById(id);
+      if (container) {
+        container.classList.toggle('is-home');
+      }
+    }
+  </script>
+</body>
+</html>

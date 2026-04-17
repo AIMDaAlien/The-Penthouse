@@ -2,7 +2,7 @@ import { createWriteStream } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import { pipeline } from 'node:stream/promises';
 import {
   GifProviderSchema,
@@ -27,6 +27,34 @@ const TEXT_MIME_TYPES = new Set([
   'text/plain',
   'text/xml'
 ]);
+const GIF_PROVIDER_CACHE_TTL_MS = 60 * 60 * 1000;
+const GIF_PROVIDER_CACHE_MAX_ENTRIES = 200;
+const GIF_PROVIDER_NOT_CONFIGURED_ERROR = 'GIF provider not configured';
+const gifProviderCache = new Map<string, { expiresAt: number; data: unknown }>();
+
+type UploadRateLimitRow = {
+  upload_count: number | string;
+  retry_after_seconds: number | string | null;
+};
+
+type UploadRateLimitState = {
+  allowed: boolean;
+  retryAfterSeconds: number;
+};
+
+function pruneGifProviderCache(now = Date.now()): void {
+  for (const [key, entry] of gifProviderCache.entries()) {
+    if (entry.expiresAt <= now) {
+      gifProviderCache.delete(key);
+    }
+  }
+
+  while (gifProviderCache.size > GIF_PROVIDER_CACHE_MAX_ENTRIES) {
+    const oldestKey = gifProviderCache.keys().next().value;
+    if (!oldestKey) break;
+    gifProviderCache.delete(oldestKey);
+  }
+}
 
 function safeOriginalFileName(fileName: string): string {
   const base = path.basename(fileName || 'attachment');
@@ -70,6 +98,13 @@ function classifyUpload(fileName: string, mimeType: string): MediaKind | null {
 }
 
 async function fetchJsonWithCache(url: string): Promise<unknown> {
+  const now = Date.now();
+  pruneGifProviderCache(now);
+  const cached = gifProviderCache.get(url);
+  if (cached && cached.expiresAt > now) {
+    return cached.data;
+  }
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8_000);
 
@@ -94,7 +129,17 @@ async function fetchJsonWithCache(url: string): Promise<unknown> {
     throw new Error(`Upstream responded ${response.status}`);
   }
 
-  return response.json();
+  const data = await response.json();
+  gifProviderCache.set(url, {
+    expiresAt: now + GIF_PROVIDER_CACHE_TTL_MS,
+    data
+  });
+  pruneGifProviderCache(now);
+  return data;
+}
+
+function clearGifProviderCache(): void {
+  gifProviderCache.clear();
 }
 
 function extractGiphyResults(json: any): ReturnType<typeof GifSearchResponseSchema.parse>['results'] {
@@ -214,33 +259,83 @@ function extractKlipyResults(json: any): ReturnType<typeof GifSearchResponseSche
   return results;
 }
 
-async function fetchGifProvider(provider: GifProvider, mode: 'trending' | 'search', query?: string) {
+function normalizeLimit(raw: unknown, fallback: number, max: number): number {
+  const parsed = Number.parseInt(String(raw ?? ''), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return Math.min(parsed, max);
+}
+
+async function getUploadRateLimitState(
+  db: Pick<typeof pool, 'query'>,
+  userId: string
+): Promise<UploadRateLimitState> {
+  const result = await db.query<UploadRateLimitRow>(
+    `SELECT COUNT(*)::int AS upload_count,
+            COALESCE(
+              CEIL(EXTRACT(EPOCH FROM (MIN(created_at) + ($2::int * INTERVAL '1 minute') - NOW())))::int,
+              $2::int * 60
+            ) AS retry_after_seconds
+       FROM media_uploads
+      WHERE uploader_id = $1
+        AND created_at >= NOW() - ($2::int * INTERVAL '1 minute')`,
+    [userId, env.UPLOAD_RATE_LIMIT_WINDOW_MINUTES]
+  );
+
+  const row = result.rows[0];
+  const uploadCount = Number(row?.upload_count ?? 0);
+  if (uploadCount < env.UPLOAD_RATE_LIMIT_MAX_FILES) {
+    return { allowed: true, retryAfterSeconds: 0 };
+  }
+
+  return {
+    allowed: false,
+    retryAfterSeconds: Math.max(1, Number(row?.retry_after_seconds ?? env.UPLOAD_RATE_LIMIT_WINDOW_MINUTES * 60))
+  };
+}
+
+function sendUploadRateLimit(reply: FastifyReply, state: UploadRateLimitState) {
+  return reply
+    .header('Retry-After', String(state.retryAfterSeconds))
+    .status(429)
+    .send({
+      error: `Upload limit reached. You can upload up to ${env.UPLOAD_RATE_LIMIT_MAX_FILES} files every ${env.UPLOAD_RATE_LIMIT_WINDOW_MINUTES} minutes.`,
+      retryAfterSeconds: state.retryAfterSeconds
+    });
+}
+
+async function fetchGifProvider(provider: GifProvider, mode: 'trending' | 'search', query?: string, limit = 30) {
   if (provider === 'giphy') {
     if (!env.GIPHY_API_KEY) {
       throw new Error('GIPHY not configured');
     }
 
-    const limit = 30;
+    const cappedLimit = normalizeLimit(limit, 30, 30);
     const url = mode === 'trending'
-      ? `https://api.giphy.com/v1/gifs/trending?api_key=${encodeURIComponent(env.GIPHY_API_KEY)}&limit=${limit}&rating=pg-13`
-      : `https://api.giphy.com/v1/gifs/search?api_key=${encodeURIComponent(env.GIPHY_API_KEY)}&q=${encodeURIComponent(query || '')}&limit=${limit}&rating=pg-13`;
+      ? `https://api.giphy.com/v1/gifs/trending?api_key=${encodeURIComponent(env.GIPHY_API_KEY)}&limit=${cappedLimit}&rating=pg-13`
+      : `https://api.giphy.com/v1/gifs/search?api_key=${encodeURIComponent(env.GIPHY_API_KEY)}&q=${encodeURIComponent(query || '')}&limit=${cappedLimit}&rating=pg-13`;
     return extractGiphyResults(await fetchJsonWithCache(url));
   }
 
   if (!env.KLIPY_API_KEY) {
-    throw new Error('Klipy not configured');
+    throw new Error(GIF_PROVIDER_NOT_CONFIGURED_ERROR);
   }
 
+  const cappedLimit = normalizeLimit(limit, 30, 30);
   const url = mode === 'trending'
-    ? `https://api.klipy.com/v2/featured?key=${encodeURIComponent(env.KLIPY_API_KEY)}&limit=30`
-    : `https://api.klipy.com/v2/search?key=${encodeURIComponent(env.KLIPY_API_KEY)}&q=${encodeURIComponent(query || '')}&limit=30`;
+    ? `https://api.klipy.com/v2/featured?key=${encodeURIComponent(env.KLIPY_API_KEY)}&limit=${cappedLimit}`
+    : `https://api.klipy.com/v2/search?key=${encodeURIComponent(env.KLIPY_API_KEY)}&q=${encodeURIComponent(query || '')}&limit=${cappedLimit}`;
   return extractKlipyResults(await fetchJsonWithCache(url));
 }
 
 export const __testables = {
   classifyUpload,
+  clearGifProviderCache,
   extractKlipyResults,
-  fetchJsonWithCache
+  fetchGifProvider,
+  fetchJsonWithCache,
+  getUploadRateLimitState,
+  pruneGifProviderCache,
+  gifProviderCacheSize: () => gifProviderCache.size
 };
 
 export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
@@ -252,6 +347,12 @@ export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
     const mediaKind = classifyUpload(originalFileName, part.mimetype);
     if (!mediaKind) {
       return reply.status(415).send({ error: 'Unsupported file type' });
+    }
+
+    const initialRateLimit = await getUploadRateLimitState(pool, request.user.userId);
+    if (!initialRateLimit.allowed) {
+      part.file.resume();
+      return sendUploadRateLimit(reply, initialRateLimit);
     }
 
     const uploadDir = await ensureUploadsDirReady();
@@ -269,20 +370,39 @@ export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
       }
 
       const size = Number(part.file.bytesRead || 0);
-      await pool.query(
-        `INSERT INTO media_uploads(
-          id,
-          uploader_id,
-          file_name,
-          original_file_name,
-          storage_key,
-          file_path,
-          size_bytes,
-          content_type,
-          media_kind
-        ) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-        [id, request.user.userId, originalFileName, originalFileName, storageKey, filePath, size, part.mimetype, mediaKind]
-      );
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query('SELECT pg_advisory_xact_lock(hashtext($1), 0)', [`media-upload:${request.user.userId}`]);
+
+        const finalRateLimit = await getUploadRateLimitState(client, request.user.userId);
+        if (!finalRateLimit.allowed) {
+          await client.query('ROLLBACK');
+          await rm(filePath, { force: true });
+          return sendUploadRateLimit(reply, finalRateLimit);
+        }
+
+        await client.query(
+          `INSERT INTO media_uploads(
+            id,
+            uploader_id,
+            file_name,
+            original_file_name,
+            storage_key,
+            file_path,
+            size_bytes,
+            content_type,
+            media_kind
+          ) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+          [id, request.user.userId, originalFileName, originalFileName, storageKey, filePath, size, part.mimetype, mediaKind]
+        );
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK').catch(() => undefined);
+        throw error;
+      } finally {
+        client.release();
+      }
 
       return reply.status(201).send(
         UploadResponseSchema.parse({
@@ -303,15 +423,17 @@ export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
 
   app.get('/api/v1/gifs/:provider/trending', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
     const { provider: rawProvider } = request.params as { provider: string };
+    const { limit: rawLimit } = request.query as { limit?: string | number };
     const provider = GifProviderSchema.safeParse(rawProvider);
     if (!provider.success) {
       return reply.status(404).send({ error: 'Unknown GIF provider' });
     }
 
     try {
+      const limit = normalizeLimit(rawLimit, 30, 30);
       return GifSearchResponseSchema.parse({
         provider: provider.data,
-        results: await fetchGifProvider(provider.data, 'trending')
+        results: await fetchGifProvider(provider.data, 'trending', undefined, limit)
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to fetch GIFs';
@@ -328,7 +450,7 @@ export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
 
   app.get('/api/v1/gifs/:provider/search', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
     const { provider: rawProvider } = request.params as { provider: string };
-    const { q } = request.query as { q?: string };
+    const { q, limit: rawLimit } = request.query as { q?: string; limit?: string | number };
     const provider = GifProviderSchema.safeParse(rawProvider);
     if (!provider.success) {
       return reply.status(404).send({ error: 'Unknown GIF provider' });
@@ -338,9 +460,44 @@ export async function registerMediaRoutes(app: FastifyInstance): Promise<void> {
     }
 
     try {
+      const limit = normalizeLimit(rawLimit, 30, 30);
       return GifSearchResponseSchema.parse({
         provider: provider.data,
-        results: await fetchGifProvider(provider.data, 'search', q.trim())
+        results: await fetchGifProvider(provider.data, 'search', q.trim(), limit)
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to search GIFs';
+      const statusCode = /not configured/i.test(message) ? 503 : 502;
+      const publicError = /not configured/i.test(message)
+        ? message
+        : provider.data === 'klipy'
+          ? 'Klipy temporarily unavailable'
+          : 'Failed to search GIFs';
+      request.log.warn({ provider: provider.data, error: message }, 'gif provider search failed');
+      return reply.status(statusCode).send({ error: publicError });
+    }
+  });
+
+  app.get('/api/v1/gifs/search', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
+    const {
+      q,
+      provider: rawProvider = 'giphy',
+      limit: rawLimit
+    } = request.query as { q?: string; provider?: string; limit?: string | number };
+
+    const provider = GifProviderSchema.safeParse(rawProvider);
+    if (!provider.success) {
+      return reply.status(404).send({ error: 'Unknown GIF provider' });
+    }
+    if (!q?.trim()) {
+      return reply.status(400).send({ error: 'Search query required' });
+    }
+
+    try {
+      const limit = normalizeLimit(rawLimit, 20, 20);
+      return GifSearchResponseSchema.parse({
+        provider: provider.data,
+        results: await fetchGifProvider(provider.data, 'search', q.trim(), limit)
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to search GIFs';

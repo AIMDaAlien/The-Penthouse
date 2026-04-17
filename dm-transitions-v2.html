@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Penthouse - Elegant DM Transitions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gelasio:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Ubuntu:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-color: #12121C;
+    --surface-color: #1E1E2D;
+    --accent-color: #7777C2;
+    --accent-dark: #5a5a9e;
+    --accent-bright: #9B9BEE;
+    --text-primary: #E2E2EC;
+    --text-secondary: #8C8CC5;
+    --border-solid: rgba(140, 140, 197, 0.2);
+
+    --font-display: 'Gelasio', serif;
+    --font-body: 'Ubuntu', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+
+    --radius-sm: 6px;
+    --radius-md: 12px;
+    --radius-lg: 20px;
+    --radius-xl: 24px;
+  }
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    background-color: var(--bg-color);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    padding: 2rem;
+  }
+
+  h1, h2 {
+    font-family: var(--font-display);
+    font-weight: 500;
+  }
+
+  .intro-text {
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    margin-top: 1rem;
+    margin-bottom: 4rem;
+  }
+
+  .concept-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    gap: 3rem;
+  }
+
+  .concept-wrapper {
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-solid);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    height: 600px;
+  }
+
+  .concept-label {
+    position: absolute;
+    top: 0;
+    left: 0;
+    background: var(--surface-color);
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    padding: 4px 8px;
+    border-bottom-right-radius: var(--radius-sm);
+    z-index: 30;
+  }
+
+  .dm-container {
+    flex: 1;
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background-color: var(--bg-color);
+    overflow: hidden;
+  }
+
+  /* ========================================== */
+  /* VIEW: EMPTY STATE                          */
+  /* ========================================== */
+  .view-empty {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+  }
+
+  .watermark-container {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    pointer-events: none;
+    opacity: 0.05;
+    filter: blur(0px);
+  }
+
+  .empty-initials {
+    font-family: var(--font-display);
+    font-size: 180px;
+    color: var(--accent-color);
+    margin: 0;
+    user-select: none;
+    white-space: nowrap;
+  }
+
+  .empty-content-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    z-index: 2;
+    margin-top: 120px;
+    transition: opacity 0.8s ease, filter 0.8s ease;
+  }
+
+  .is-chat .empty-content-group {
+    opacity: 0;
+    pointer-events: none;
+    filter: blur(4px);
+  }
+
+  .empty-name {
+    font-family: var(--font-display);
+    font-size: 18px;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+  }
+
+  .empty-prompt {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 8px 16px;
+    border-radius: var(--radius-sm);
+    transition: color 0.2s ease, background 0.2s ease;
+    border: 1px solid transparent;
+  }
+
+  .empty-prompt:hover {
+    color: var(--text-primary);
+    background: rgba(119, 119, 194, 0.1);
+    border-color: rgba(119, 119, 194, 0.2);
+  }
+
+  /* ========================================== */
+  /* VIEW: CHAT STATE                           */
+  /* ========================================== */
+  .view-chat {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    z-index: 5;
+    opacity: 0;
+    pointer-events: none;
+    background: var(--bg-color);
+  }
+
+  .chat-header-bar {
+    display: flex;
+    align-items: center;
+    padding: 16px;
+    border-bottom: 1px solid var(--border-solid);
+    background: rgba(18, 18, 28, 0.8);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    z-index: 10;
+  }
+
+  .back-btn { color: var(--text-secondary); margin-right: 16px; font-family: var(--font-mono); cursor: pointer; font-size: 1.2rem; }
+  
+  .chat-header-avatar {
+    width: 32px; height: 32px; border-radius: 50%; background-color: var(--accent-color);
+    color: white; display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-body); font-size: 0.8rem; margin-right: 12px;
+  }
+
+  .chat-header-name { font-family: var(--font-body); font-weight: 500; font-size: 1rem; color: var(--text-primary); flex: 1; }
+
+  /* Chat Messages */
+  .message-list {
+    flex: 1; display: flex; flex-direction: column; padding: 1.5rem 1rem; gap: 2.5rem;
+    overflow-y: auto; position: relative;
+  }
+
+  .message-group { display: flex; flex-direction: column; gap: 4px; max-width: 85%; }
+  .msg-sent { align-self: flex-end; align-items: flex-end; }
+  .msg-received { align-self: flex-start; align-items: flex-start; }
+
+  .bubble {
+    padding: 12px 16px; font-size: 0.95rem; line-height: 1.4;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    border-radius: var(--radius-lg);
+  }
+
+  .msg-sent .bubble { background: linear-gradient(135deg, rgba(160, 160, 240, 0.9) 0%, rgba(130, 130, 215, 0.9) 100%); color: #12121C; }
+  .msg-received .bubble { background: rgba(40, 40, 58, 0.6); border: 1px solid rgba(140, 140, 197, 0.15); color: var(--text-primary); }
+
+  .msg-sent .bubble:first-child:not(:last-child) { border-bottom-right-radius: 4px; }
+  .msg-sent .bubble:not(:first-child):not(:last-child) { border-top-right-radius: 4px; border-bottom-right-radius: 4px; }
+  .msg-sent .bubble:last-child:not(:first-child) { border-top-right-radius: 4px; }
+
+  .msg-received .bubble:first-child:not(:last-child) { border-bottom-left-radius: 4px; }
+  .msg-received .bubble:not(:first-child):not(:last-child) { border-top-left-radius: 4px; border-bottom-left-radius: 4px; }
+  .msg-received .bubble:last-child:not(:first-child) { border-top-left-radius: 4px; }
+
+  .msg-time { font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-secondary); margin-top: 4px; opacity: 0.4; padding: 0 4px; }
+
+  .composer-area { padding: 12px 16px; border-top: 1px solid var(--border-solid); background: rgba(18, 18, 28, 0.95); display: flex; align-items: center; gap: 12px; }
+  .composer-input { flex: 1; background: rgba(140, 140, 197, 0.08); border: 1px solid rgba(140, 140, 197, 0.2); border-radius: var(--radius-xl); padding: 10px 16px; color: var(--text-primary); font-family: var(--font-body); font-size: 0.9rem; }
+  .send-btn { width: 36px; height: 36px; border-radius: 50%; background: var(--accent-bright); display: flex; align-items: center; justify-content: center; color: #12121C; font-weight: bold; cursor: pointer; }
+
+  .bg-blob-1 { position: absolute; top: 20%; left: 10%; width: 150px; height: 150px; background: var(--accent-color); border-radius: 50%; opacity: 0.15; filter: blur(40px); z-index: 0; }
+  .bg-blob-2 { position: absolute; bottom: 30%; right: 10%; width: 120px; height: 120px; background: var(--accent-bright); border-radius: 50%; opacity: 0.1; filter: blur(40px); z-index: 0; }
+
+  .chat-elements-wrapper { position: relative; z-index: 1; display: flex; flex-direction: column; flex: 1; }
+
+  .reset-demo {
+    position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,0,0,0.6); color: white; border: 1px solid var(--border-solid);
+    padding: 6px 12px; border-radius: 12px; font-size: 0.7rem; font-family: var(--font-mono);
+    cursor: pointer; z-index: 20; backdrop-filter: blur(4px);
+    opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
+  }
+  .dm-container.is-chat .reset-demo { opacity: 1; pointer-events: auto; transition-delay: 2.5s; }
+
+  /* ========================================== */
+  /* ELEGANT TRANSITION CONCEPTS                */
+  /* ========================================== */
+  
+  /* 1. Cinematic Bloom */
+  .c-bloom .watermark-container { transition: all 1.5s cubic-bezier(0.4, 0, 0.2, 1); }
+  .c-bloom .view-chat { transition: all 1.5s cubic-bezier(0.4, 0, 0.2, 1); transform: scale(1.02); filter: blur(10px); }
+  .c-bloom.is-chat .watermark-container { transform: translate(-50%, -50%) scale(1.2); opacity: 0; filter: blur(20px) brightness(1.5); }
+  .c-bloom.is-chat .view-chat { opacity: 1; pointer-events: auto; transform: scale(1); filter: blur(0); z-index: 15; }
+
+  /* 2. The Breath (Tracking) */
+  .c-breath .watermark-container { transition: opacity 2s ease-out; }
+  .c-breath .empty-initials { transition: letter-spacing 2.5s ease-out, filter 2s ease-out; letter-spacing: normal; }
+  .c-breath .view-chat { transition: opacity 1.8s ease 0.4s; }
+  .c-breath.is-chat .empty-initials { letter-spacing: 0.2em; filter: blur(4px); }
+  .c-breath.is-chat .watermark-container { opacity: 0; }
+  .c-breath.is-chat .view-chat { opacity: 1; pointer-events: auto; z-index: 15; }
+
+  /* 3. Deep Depth of Field */
+  .c-dof .watermark-container { transition: all 1.8s cubic-bezier(0.2, 0.8, 0.2, 1); }
+  .c-dof .view-chat { transition: all 1.8s cubic-bezier(0.2, 0.8, 0.2, 1); transform: scale(1.05); filter: blur(15px); }
+  .c-dof.is-chat .watermark-container { transform: translate(-50%, -50%) scale(0.85); opacity: 0; filter: blur(25px); }
+  .c-dof.is-chat .view-chat { opacity: 1; pointer-events: auto; transform: scale(1); filter: blur(0); z-index: 15; }
+
+  /* 4. Editorial Diagonal Wipe */
+  .c-wipe .view-empty { transition: clip-path 1.4s cubic-bezier(0.65, 0, 0.35, 1); clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); z-index: 10; }
+  .c-wipe .view-chat { opacity: 1; clip-path: polygon(0 100%, 100% 100%, 100% 100%, 0 100%); transition: clip-path 1.4s cubic-bezier(0.65, 0, 0.35, 1); z-index: 15; }
+  .c-wipe.is-chat .view-empty { clip-path: polygon(0 0, 100% 0, 100% 0, 0 0); pointer-events: none; }
+  .c-wipe.is-chat .view-chat { pointer-events: auto; clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); }
+
+  /* 5. Ethereal Ghost */
+  .c-ghost .watermark-container { transition: transform 3.5s cubic-bezier(0.1, 0.7, 0.1, 1), opacity 1.5s ease; }
+  .c-ghost .view-chat { transition: opacity 2s ease 0.6s; }
+  .c-ghost.is-chat .watermark-container { transform: translate(-50%, -50%) scale(1.8); opacity: 0; filter: blur(2px); }
+  .c-ghost.is-chat .view-chat { opacity: 1; pointer-events: auto; z-index: 15; }
+
+  /* 6. The Horizon Fold */
+  .c-fold .watermark-container { transition: all 1.2s cubic-bezier(0.7, 0, 0.3, 1); }
+  .c-fold .view-chat { transition: all 1.2s cubic-bezier(0.7, 0, 0.3, 1) 0.1s; transform: scaleY(1.05); }
+  .c-fold.is-chat .watermark-container { transform: translate(-50%, -50%) scaleY(0.01) scaleX(1.3); opacity: 0; filter: blur(4px); }
+  .c-fold.is-chat .view-chat { opacity: 1; pointer-events: auto; transform: scaleY(1); z-index: 15; }
+
+  /* 7. The Monolith Squeeze */
+  .c-squeeze .watermark-container { transition: all 1.6s cubic-bezier(0.8, 0, 0.2, 1); }
+  .c-squeeze .empty-initials { transition: letter-spacing 1.6s cubic-bezier(0.8, 0, 0.2, 1); }
+  .c-squeeze .view-chat { transition: all 1.6s cubic-bezier(0.8, 0, 0.2, 1) 0.2s; transform: scale(0.96); filter: blur(5px); }
+  .c-squeeze.is-chat .empty-initials { letter-spacing: -0.15em; }
+  .c-squeeze.is-chat .watermark-container { transform: translate(-50%, -50%) scale(0.9); opacity: 0; filter: blur(8px); }
+  .c-squeeze.is-chat .view-chat { opacity: 1; pointer-events: auto; transform: scale(1); filter: blur(0); z-index: 15; }
+
+  /* 8. The Veil Drift */
+  .c-drift .watermark-container { transition: all 2.2s cubic-bezier(0.33, 1, 0.68, 1); }
+  .c-drift .view-chat { transition: all 2.2s cubic-bezier(0.33, 1, 0.68, 1) 0.2s; transform: translateY(30px); opacity: 0; filter: blur(4px); }
+  .c-drift.is-chat .watermark-container { transform: translate(-50%, -65%); opacity: 0; filter: blur(12px); }
+  .c-drift.is-chat .view-chat { opacity: 1; pointer-events: auto; transform: translateY(0); filter: blur(0); z-index: 15; }
+
+  /* 9. The Ink Bleed */
+  .c-ink .watermark-container { transition: filter 2.5s ease, opacity 2s ease; }
+  .c-ink .view-chat { transition: opacity 2s ease 0.5s; }
+  .c-ink.is-chat .watermark-container { filter: blur(40px); opacity: 0; }
+  .c-ink.is-chat .view-chat { opacity: 1; pointer-events: auto; z-index: 15; }
+
+  /* 10. The Silk Sway */
+  .c-silk .watermark-container { transition: all 1.8s cubic-bezier(0.25, 0.46, 0.45, 0.94); transform-origin: top center; }
+  .c-silk .view-chat { transition: opacity 1.5s ease 0.4s; }
+  .c-silk.is-chat .watermark-container { transform: translate(-50%, -35%) skewX(-6deg) skewY(3deg); opacity: 0; filter: blur(10px); }
+  .c-silk.is-chat .view-chat { opacity: 1; pointer-events: auto; z-index: 15; }
+
+</style>
+</head>
+<body>
+
+  <h1>The Penthouse &mdash; Elegant DM Transitions</h1>
+  <p class="intro-text">10 unique, artsy, non-bouncy transitions. Showing settled Glassy Bubbles, Spatial Gaps, and Brighter Periwinkle.</p>
+
+  <div class="concept-grid">
+    
+    <!-- CONCEPT 1 -->
+    <div class="concept-wrapper">
+      <span class="concept-label">1. Cinematic Bloom</span>
+      <div class="dm-container c-bloom" id="dm-1">
+        <div class="view-empty">
+          <div class="watermark-container"><div class="empty-initials">AK</div></div>
+          <div class="empty-content-group">
+            <div class="empty-name">Arthur Kensington</div>
+            <div class="empty-prompt" onclick="startTransition('dm-1')">Start the conversation</div>
+          </div>
+        </div>
+        <div class="view-chat">
+          <div class="bg-blob-1"></div><div class="bg-blob-2"></div>
+          <div class="chat-elements-wrapper">
+            <div class="chat-header-bar"><div class="back-btn">‹</div><div class="chat-header-avatar">AK</div><div class="chat-header-name">Arthur Kensington</div></div>
+            <div class="message-list">
+              <div class="message-group msg-received"><div class="bubble">I just reviewed the plans.</div><div class="bubble">Everything looks perfectly in order.</div><div class="msg-time">09:12 AM</div></div>
+              <div class="message-group msg-sent"><div class="bubble">Excellent. I'll send it over.</div><div class="msg-time">09:14 AM</div></div>
+            </div>
+            <div class="composer-area"><div class="composer-input">Message @arthurk...</div><div class="send-btn">↑</div></div>
+          </div>
+          <button class="reset-demo" onclick="resetTransition('dm-1')">Reset Demo</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONCEPT 2 -->
+    <div class="concept-wrapper">
+      <span class="concept-label">2. The Breath (Tracking)</span>
+      <div class="dm-container c-breath" id="dm-2">
+        <div class="view-empty">
+          <div class="watermark-container"><div class="empty-initials">AK</div></div>
+          <div class="empty-content-group">
+            <div class="empty-name">Arthur Kensington</div>
+            <div class="empty-prompt" onclick="startTransition('dm-2')">Start the conversation</div>
+          </div>
+        </div>
+        <div class="view-chat">
+          <div class="bg-blob-1"></div><div class="bg-blob-2"></div>
+          <div class="chat-elements-wrapper">
+            <div class="chat-header-bar"><div class="back-btn">‹</div><div class="chat-header-avatar">AK</div><div class="chat-header-name">Arthur Kensington</div></div>
+            <div class="message-list">
+              <div class="message-group msg-received"><div class="bubble">I just reviewed the plans.</div><div class="bubble">Everything looks perfectly in order.</div><div class="msg-time">09:12 AM</div></div>
+              <div class="message-group msg-sent"><div class="bubble">Excellent. I'll send it over.</div><div class="msg-time">09:14 AM</div></div>
+            </div>
+            <div class="composer-area"><div class="composer-input">Message @arthurk...</div><div class="send-btn">↑</div></div>
+          </div>
+          <button class="reset-demo" onclick="resetTransition('dm-2')">Reset Demo</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONCEPT 3 -->
+    <div class="concept-wrapper">
+      <span class="concept-label">3. Deep Depth of Field</span>
+      <div class="dm-container c-dof" id="dm-3">
+        <div class="view-empty">
+          <div class="watermark-container"><div class="empty-initials">AK</div></div>
+          <div class="empty-content-group">
+            <div class="empty-name">Arthur Kensington</div>
+            <div class="empty-prompt" onclick="startTransition('dm-3')">Start the conversation</div>
+          </div>
+        </div>
+        <div class="view-chat">
+          <div class="bg-blob-1"></div><div class="bg-blob-2"></div>
+          <div class="chat-elements-wrapper">
+            <div class="chat-header-bar"><div class="back-btn">‹</div><div class="chat-header-avatar">AK</div><div class="chat-header-name">Arthur Kensington</div></div>
+            <div class="message-list">
+              <div class="message-group msg-received"><div class="bubble">I just reviewed the plans.</div><div class="bubble">Everything looks perfectly in order.</div><div class="msg-time">09:12 AM</div></div>
+              <div class="message-group msg-sent"><div class="bubble">Excellent. I'll send it over.</div><div class="msg-time">09:14 AM</div></div>
+            </div>
+            <div class="composer-area"><div class="composer-input">Message @arthurk...</div><div class="send-btn">↑</div></div>
+          </div>
+          <button class="reset-demo" onclick="resetTransition('dm-3')">Reset Demo</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONCEPT 4 -->
+    <div class="concept-wrapper">
+      <span class="concept-label">4. Editorial Diagonal Wipe</span>
+      <div class="dm-container c-wipe" id="dm-4">
+        <div class="view-empty">
+          <div class="watermark-container"><div class="empty-initials">AK</div></div>
+          <div class="empty-content-group">
+            <div class="empty-name">Arthur Kensington</div>
+            <div class="empty-prompt" onclick="startTransition('dm-4')">Start the conversation</div>
+          </div>
+        </div>
+        <div class="view-chat">
+          <div class="bg-blob-1"></div><div class="bg-blob-2"></div>
+          <div class="chat-elements-wrapper">
+            <div class="chat-header-bar"><div class="back-btn">‹</div><div class="chat-header-avatar">AK</div><div class="chat-header-name">Arthur Kensington</div></div>
+            <div class="message-list">
+              <div class="message-group msg-received"><div class="bubble">I just reviewed the plans.</div><div class="bubble">Everything looks perfectly in order.</div><div class="msg-time">09:12 AM</div></div>
+              <div class="message-group msg-sent"><div class="bubble">Excellent. I'll send it over.</div><div class="msg-time">09:14 AM</div></div>
+            </div>
+            <div class="composer-area"><div class="composer-input">Message @arthurk...</div><div class="send-btn">↑</div></div>
+          </div>
+          <button class="reset-demo" onclick="resetTransition('dm-4')">Reset Demo</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONCEPT 5 -->
+    <div class="concept-wrapper">
+      <span class="concept-label">5. Ethereal Ghost</span>
+      <div class="dm-container c-ghost" id="dm-5">
+        <div class="view-empty">
+          <div class="watermark-container"><div class="empty-initials">AK</div></div>
+          <div class="empty-content-group">
+            <div class="empty-name">Arthur Kensington</div>
+            <div class="empty-prompt" onclick="startTransition('dm-5')">Start the conversation</div>
+          </div>
+        </div>
+        <div class="view-chat">
+          <div class="bg-blob-1"></div><div class="bg-blob-2"></div>
+          <div class="chat-elements-wrapper">
+            <div class="chat-header-bar"><div class="back-btn">‹</div><div class="chat-header-avatar">AK</div><div class="chat-header-name">Arthur Kensington</div></div>
+            <div class="message-list">
+              <div class="message-group msg-received"><div class="bubble">I just reviewed the plans.</div><div class="bubble">Everything looks perfectly in order.</div><div class="msg-time">09:12 AM</div></div>
+              <div class="message-group msg-sent"><div class="bubble">Excellent. I'll send it over.</div><div class="msg-time">09:14 AM</div></div>
+            </div>
+            <div class="composer-area"><div class="composer-input">Message @arthurk...</div><div class="send-btn">↑</div></div>
+          </div>
+          <button class="reset-demo" onclick="resetTransition('dm-5')">Reset Demo</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONCEPT 6 -->
+    <div class="concept-wrapper">
+      <span class="concept-label">6. The Horizon Fold</span>
+      <div class="dm-container c-fold" id="dm-6">
+        <div class="view-empty">
+          <div class="watermark-container"><div class="empty-initials">AK</div></div>
+          <div class="empty-content-group">
+            <div class="empty-name">Arthur Kensington</div>
+            <div class="empty-prompt" onclick="startTransition('dm-6')">Start the conversation</div>
+          </div>
+        </div>
+        <div class="view-chat">
+          <div class="bg-blob-1"></div><div class="bg-blob-2"></div>
+          <div class="chat-elements-wrapper">
+            <div class="chat-header-bar"><div class="back-btn">‹</div><div class="chat-header-avatar">AK</div><div class="chat-header-name">Arthur Kensington</div></div>
+            <div class="message-list">
+              <div class="message-group msg-received"><div class="bubble">I just reviewed the plans.</div><div class="bubble">Everything looks perfectly in order.</div><div class="msg-time">09:12 AM</div></div>
+              <div class="message-group msg-sent"><div class="bubble">Excellent. I'll send it over.</div><div class="msg-time">09:14 AM</div></div>
+            </div>
+            <div class="composer-area"><div class="composer-input">Message @arthurk...</div><div class="send-btn">↑</div></div>
+          </div>
+          <button class="reset-demo" onclick="resetTransition('dm-6')">Reset Demo</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONCEPT 7 -->
+    <div class="concept-wrapper">
+      <span class="concept-label">7. The Monolith Squeeze</span>
+      <div class="dm-container c-squeeze" id="dm-7">
+        <div class="view-empty">
+          <div class="watermark-container"><div class="empty-initials">AK</div></div>
+          <div class="empty-content-group">
+            <div class="empty-name">Arthur Kensington</div>
+            <div class="empty-prompt" onclick="startTransition('dm-7')">Start the conversation</div>
+          </div>
+        </div>
+        <div class="view-chat">
+          <div class="bg-blob-1"></div><div class="bg-blob-2"></div>
+          <div class="chat-elements-wrapper">
+            <div class="chat-header-bar"><div class="back-btn">‹</div><div class="chat-header-avatar">AK</div><div class="chat-header-name">Arthur Kensington</div></div>
+            <div class="message-list">
+              <div class="message-group msg-received"><div class="bubble">I just reviewed the plans.</div><div class="bubble">Everything looks perfectly in order.</div><div class="msg-time">09:12 AM</div></div>
+              <div class="message-group msg-sent"><div class="bubble">Excellent. I'll send it over.</div><div class="msg-time">09:14 AM</div></div>
+            </div>
+            <div class="composer-area"><div class="composer-input">Message @arthurk...</div><div class="send-btn">↑</div></div>
+          </div>
+          <button class="reset-demo" onclick="resetTransition('dm-7')">Reset Demo</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONCEPT 8 -->
+    <div class="concept-wrapper">
+      <span class="concept-label">8. The Veil Drift</span>
+      <div class="dm-container c-drift" id="dm-8">
+        <div class="view-empty">
+          <div class="watermark-container"><div class="empty-initials">AK</div></div>
+          <div class="empty-content-group">
+            <div class="empty-name">Arthur Kensington</div>
+            <div class="empty-prompt" onclick="startTransition('dm-8')">Start the conversation</div>
+          </div>
+        </div>
+        <div class="view-chat">
+          <div class="bg-blob-1"></div><div class="bg-blob-2"></div>
+          <div class="chat-elements-wrapper">
+            <div class="chat-header-bar"><div class="back-btn">‹</div><div class="chat-header-avatar">AK</div><div class="chat-header-name">Arthur Kensington</div></div>
+            <div class="message-list">
+              <div class="message-group msg-received"><div class="bubble">I just reviewed the plans.</div><div class="bubble">Everything looks perfectly in order.</div><div class="msg-time">09:12 AM</div></div>
+              <div class="message-group msg-sent"><div class="bubble">Excellent. I'll send it over.</div><div class="msg-time">09:14 AM</div></div>
+            </div>
+            <div class="composer-area"><div class="composer-input">Message @arthurk...</div><div class="send-btn">↑</div></div>
+          </div>
+          <button class="reset-demo" onclick="resetTransition('dm-8')">Reset Demo</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONCEPT 9 -->
+    <div class="concept-wrapper">
+      <span class="concept-label">9. The Ink Bleed</span>
+      <div class="dm-container c-ink" id="dm-9">
+        <div class="view-empty">
+          <div class="watermark-container"><div class="empty-initials">AK</div></div>
+          <div class="empty-content-group">
+            <div class="empty-name">Arthur Kensington</div>
+            <div class="empty-prompt" onclick="startTransition('dm-9')">Start the conversation</div>
+          </div>
+        </div>
+        <div class="view-chat">
+          <div class="bg-blob-1"></div><div class="bg-blob-2"></div>
+          <div class="chat-elements-wrapper">
+            <div class="chat-header-bar"><div class="back-btn">‹</div><div class="chat-header-avatar">AK</div><div class="chat-header-name">Arthur Kensington</div></div>
+            <div class="message-list">
+              <div class="message-group msg-received"><div class="bubble">I just reviewed the plans.</div><div class="bubble">Everything looks perfectly in order.</div><div class="msg-time">09:12 AM</div></div>
+              <div class="message-group msg-sent"><div class="bubble">Excellent. I'll send it over.</div><div class="msg-time">09:14 AM</div></div>
+            </div>
+            <div class="composer-area"><div class="composer-input">Message @arthurk...</div><div class="send-btn">↑</div></div>
+          </div>
+          <button class="reset-demo" onclick="resetTransition('dm-9')">Reset Demo</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONCEPT 10 -->
+    <div class="concept-wrapper">
+      <span class="concept-label">10. The Silk Sway</span>
+      <div class="dm-container c-silk" id="dm-10">
+        <div class="view-empty">
+          <div class="watermark-container"><div class="empty-initials">AK</div></div>
+          <div class="empty-content-group">
+            <div class="empty-name">Arthur Kensington</div>
+            <div class="empty-prompt" onclick="startTransition('dm-10')">Start the conversation</div>
+          </div>
+        </div>
+        <div class="view-chat">
+          <div class="bg-blob-1"></div><div class="bg-blob-2"></div>
+          <div class="chat-elements-wrapper">
+            <div class="chat-header-bar"><div class="back-btn">‹</div><div class="chat-header-avatar">AK</div><div class="chat-header-name">Arthur Kensington</div></div>
+            <div class="message-list">
+              <div class="message-group msg-received"><div class="bubble">I just reviewed the plans.</div><div class="bubble">Everything looks perfectly in order.</div><div class="msg-time">09:12 AM</div></div>
+              <div class="message-group msg-sent"><div class="bubble">Excellent. I'll send it over.</div><div class="msg-time">09:14 AM</div></div>
+            </div>
+            <div class="composer-area"><div class="composer-input">Message @arthurk...</div><div class="send-btn">↑</div></div>
+          </div>
+          <button class="reset-demo" onclick="resetTransition('dm-10')">Reset Demo</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    function startTransition(id) {
+      const container = document.getElementById(id);
+      if (container && !container.classList.contains('is-chat')) {
+        container.classList.add('is-chat');
+      }
+    }
+
+    function resetTransition(id) {
+      const container = document.getElementById(id);
+      if (container) {
+        // Find animated elements to reset cleanly
+        const viewEmpty = container.querySelector('.view-empty');
+        const watermark = container.querySelector('.watermark-container');
+        const chat = container.querySelector('.view-chat');
+        const initials = container.querySelector('.empty-initials');
+        
+        // Disable transitions temporarily
+        if(viewEmpty) viewEmpty.style.transition = 'none';
+        if(watermark) watermark.style.transition = 'none';
+        if(chat) chat.style.transition = 'none';
+        if(initials) initials.style.transition = 'none';
+        
+        container.classList.remove('is-chat');
+        
+        // Force reflow
+        void container.offsetWidth; 
+        
+        // Re-enable transitions
+        if(viewEmpty) viewEmpty.style.transition = '';
+        if(watermark) watermark.style.transition = '';
+        if(chat) chat.style.transition = '';
+        if(initials) initials.style.transition = '';
+      }
+    }
+  </script>
+</body>
+</html>

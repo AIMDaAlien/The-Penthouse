@@ -211,6 +211,6 @@ export async function getChatSendState(
   return {
     isMember: true,
     type: row.type,
-    isReadOnly: row.type === 'dm' && row.counterpart_status !== 'active'
+    isReadOnly: row.type === 'dm' && row.counterpart_status !== null && row.counterpart_status !== 'active'
   };
 }

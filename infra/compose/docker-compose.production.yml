@@ -27,24 +27,42 @@ services:
       PORT: 3000
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       JWT_SECRET: ${JWT_SECRET}
+      ALTCHA_HMAC_KEY: ${ALTCHA_HMAC_KEY}
       CORS_ORIGIN: ${CORS_ORIGIN}
-      UPLOAD_MAX_MB: ${UPLOAD_MAX_MB:-20}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
+      LEGACY_APK_DOWNLOAD_PATH: ${LEGACY_APK_DOWNLOAD_PATH:-/downloads/legacy/the-penthouse.apk}
+      LEGACY_APK_STATUS: ${LEGACY_APK_STATUS:-unavailable}
+      UPLOAD_MAX_MB: ${UPLOAD_MAX_MB:-25}
+      UPLOAD_RATE_LIMIT_MAX_FILES: ${UPLOAD_RATE_LIMIT_MAX_FILES:-3}
+      UPLOAD_RATE_LIMIT_WINDOW_MINUTES: ${UPLOAD_RATE_LIMIT_WINDOW_MINUTES:-15}
       ADMIN_BOOTSTRAP_USERNAME: ${ADMIN_BOOTSTRAP_USERNAME:-}
       TEST_ACCOUNT_NOTICE_VERSION: ${TEST_ACCOUNT_NOTICE_VERSION:-alpha-v1}
       GIPHY_API_KEY: ${GIPHY_API_KEY:-}
       KLIPY_API_KEY: ${KLIPY_API_KEY:-}
-      FCM_SERVICE_ACCOUNT_PATH: /run/secrets/firebase-admin.json
+      FCM_SERVICE_ACCOUNT_PATH: ${FCM_SERVICE_ACCOUNT_PATH:-}
+      BACKUP_STATUS_PATH: ${BACKUP_STATUS_PATH:-}
     expose:
       - "3000"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:3000/api/v1/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     volumes:
       - penthouse_uploads:/app/services/api/uploads
-      - ${FCM_SERVICE_ACCOUNT_FILE}:/run/secrets/firebase-admin.json:ro
+      - ${FCM_SERVICE_ACCOUNT_FILE:-/dev/null}:/run/secrets/firebase-admin.json:ro
 
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     environment:
       ROOT_SITE_ADDRESS: ${ROOT_SITE_ADDRESS}
       API_SITE_ADDRESS: ${API_SITE_ADDRESS}
@@ -57,6 +75,12 @@ services:
       - ${PUBLIC_DOWNLOADS_PATH}:/srv/downloads:ro
       - caddy_data:/data
       - caddy_config:/config
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:2019/config/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
 volumes:
   penthouse_pgdata:

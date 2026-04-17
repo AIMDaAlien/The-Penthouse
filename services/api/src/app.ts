@@ -11,10 +11,14 @@ import { registerChatRoutes } from './routes/chats.js';
 import { registerHealthRoutes } from './routes/health.js';
 import { registerMediaRoutes } from './routes/media.js';
 import { registerMemberRoutes } from './routes/members.js';
+import { registerPresenceRoutes } from './routes/presence.js';
+import { registerUserRoutes } from './routes/users.js';
 import { registerAdminRoutes } from './routes/admin.js';
+import { registerDistributionRoutes } from './routes/distribution.js';
 import { registerObservability } from './observability.js';
 import { pool } from './db/pool.js';
 import { getUserById, mapAuthUser } from './utils/users.js';
+import { formatHttpErrorMessage } from './utils/error-responses.js';
 import { ensureUploadsDirReady } from './utils/uploads.js';
 import { recordServerError } from './utils/operatorDiagnostics.js';
 
@@ -35,7 +39,18 @@ export async function createApp() {
       }
     }
 
-    return reply.status(500).send({ error: 'Internal server error' });
+    const statusCode =
+      typeof (error as { statusCode?: unknown })?.statusCode === 'number'
+        ? (error as { statusCode: number }).statusCode
+        : 500;
+
+    return reply
+      .status(statusCode >= 400 && statusCode < 600 ? statusCode : 500)
+      .send({ error: formatHttpErrorMessage(error, statusCode) });
+  });
+
+  app.setNotFoundHandler((request, reply) => {
+    return reply.status(404).send({ error: 'Route not found' });
   });
 
   app.addHook('onResponse', async (request, reply) => {
@@ -58,7 +73,7 @@ export async function createApp() {
     try {
       await request.jwtVerify();
     } catch {
-      return reply.status(401).send({ error: 'Unauthorized' });
+      return reply.status(401).send({ error: 'Authorization token is missing or invalid' });
     }
 
     const tokenUser = request.user as { userId: string; username: string; sessionId?: string };
@@ -110,10 +125,13 @@ export async function createApp() {
 
   registerObservability(app);
 
+  await registerDistributionRoutes(app);
   await registerHealthRoutes(app);
   await registerAuthRoutes(app);
+  await registerPresenceRoutes(app);
   await registerChatRoutes(app);
   await registerMemberRoutes(app);
+  await registerUserRoutes(app);
   await registerAdminRoutes(app);
   await registerMediaRoutes(app);
 

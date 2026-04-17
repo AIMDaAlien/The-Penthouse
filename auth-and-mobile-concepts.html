@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Penthouse - Refined Mobile & Auth Transitions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gelasio:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Ubuntu:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-color: #12121C;
+    --surface-color: #1E1E2D;
+    --accent-color: #7777C2;
+    --accent-dark: #5a5a9e;
+    --accent-bright: #9B9BEE;
+    --text-primary: #E2E2EC;
+    --text-secondary: #8C8CC5;
+    --danger-color: #ff8ca6;
+    --success-color: #34d399;
+    --border-solid: rgba(140, 140, 197, 0.2);
+
+    --font-display: 'Gelasio', serif;
+    --font-body: 'Ubuntu', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+
+    --radius-sm: 6px;
+    --radius-md: 12px;
+    --radius-lg: 20px;
+    --radius-xl: 24px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background-color: #0A0A10;
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    padding: 2rem;
+  }
+
+  h1, h2 { font-family: var(--font-display); font-weight: 500; }
+  .intro-text { color: var(--text-secondary); font-family: var(--font-mono); font-size: 0.85rem; margin-top: 1rem; margin-bottom: 3rem; max-width: 800px; line-height: 1.6; }
+
+  .showcase-section { margin-bottom: 6rem; display: flex; flex-direction: column; align-items: center; }
+  .section-title { font-size: 2rem; color: var(--text-primary); margin-bottom: 3rem; }
+
+  .grid-mobile {
+    display: flex; flex-wrap: wrap; gap: 4rem; justify-content: center;
+  }
+
+  .grid-desktop {
+    display: flex; flex-direction: column; gap: 6rem; align-items: center; width: 100%;
+  }
+
+  /* ========================================== */
+  /* SHARED UI COMPONENTS                       */
+  /* ========================================== */
+
+  /* Tabbed Segment Control */
+  .segment-control { display: flex; background: rgba(140, 140, 197, 0.08); border-radius: var(--radius-md); padding: 4px; margin: 0 20px 16px; flex-shrink: 0; }
+  .segment-btn { flex: 1; text-align: center; padding: 8px 12px; font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-secondary); cursor: pointer; border-radius: var(--radius-sm); transition: all 0.2s ease; }
+  .segment-btn.active { background: var(--surface-color); color: var(--text-primary); box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+
+  /* Bottom Nav */
+  .bottom-nav-bar {
+    display: flex; align-items: center; justify-content: space-around; padding: 12px 0 24px 0;
+    border-top: 1px solid var(--border-solid); background: rgba(18, 18, 28, 0.95); backdrop-filter: blur(12px);
+    flex-shrink: 0; /* Ensures it stays at the bottom */
+  }
+  .bottom-nav-item { display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--text-secondary); font-family: var(--font-mono); font-size: 0.65rem; cursor: pointer; }
+  .bottom-nav-item.active { color: var(--text-primary); }
+  .nav-icon { width: 24px; height: 24px; background: currentColor; mask-size: contain; -webkit-mask-size: contain; mask-repeat: no-repeat; -webkit-mask-repeat: no-repeat; mask-position: center; -webkit-mask-position: center; }
+  .icon-chat { -webkit-mask-image: url('data:image/svg+xml;utf8,<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'); }
+  .icon-dir { -webkit-mask-image: url('data:image/svg+xml;utf8,<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="9" cy="7" r="4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'); }
+  .icon-set { -webkit-mask-image: url('data:image/svg+xml;utf8,<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'); }
+
+  /* Base Chat List Scroll */
+  .chat-list-scroll { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+
+  /* ========================================== */
+  /* MOBILE REFINEMENT CONCEPTS                 */
+  /* ========================================== */
+  
+  .mobile-app-wrapper {
+    width: 390px; height: 844px; /* Simulating a larger phone (iPhone 13/14 Pro size) */
+    background: var(--bg-color); border-radius: 40px; border: 12px solid #000;
+    box-shadow: 0 32px 80px rgba(0,0,0,0.6); overflow: hidden; display: flex; flex-direction: column; position: relative;
+  }
+  
+  .concept-label-mobile { position: absolute; top: 30px; right: -60px; background: var(--accent-color); color: white; padding: 4px 40px; font-family: var(--font-mono); font-size: 0.7rem; transform: rotate(45deg); z-index: 50; }
+
+  /* M1: Spacious Relaxed (More height, bigger avatars) */
+  .m-spacious .chat-row { padding: 16px 20px; gap: 18px; border-bottom: 1px solid rgba(140, 140, 197, 0.08); display: flex; align-items: center; }
+  .m-spacious .avatar { width: 56px; height: 56px; font-size: 1.4rem; border-radius: 50%; background: var(--accent-color); color: white; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .m-spacious .chat-header { margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
+  .m-spacious .chat-name { font-size: 1.1rem; }
+  .m-spacious .chat-preview { font-size: 0.95rem; color: var(--text-secondary); text-align: right; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .m-spacious .chat-time { font-family: var(--font-mono); font-size: 0.75rem; background: rgba(140, 140, 197, 0.1); padding: 4px 8px; border-radius: 6px; color: var(--text-secondary); margin-left: 8px;}
+  .m-spacious .chat-content { flex: 1; min-width: 0; }
+  .m-spacious .chat-footer { display: flex; justify-content: space-between; align-items: center; }
+
+  /* M2: Edge-to-Edge Cards */
+  .m-cards .chat-list-scroll { padding: 12px 16px; gap: 12px; }
+  .m-cards .chat-row { padding: 16px; background: var(--surface-color); border-radius: var(--radius-lg); display: flex; align-items: center; gap: 16px; border: 1px solid rgba(140, 140, 197, 0.05); }
+  .m-cards .avatar { width: 52px; height: 52px; border-radius: 16px; background: var(--accent-color); color: white; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; flex-shrink: 0; }
+  .m-cards .chat-content { flex: 1; min-width: 0; }
+  .m-cards .chat-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+  .m-cards .chat-name { font-size: 1.05rem; }
+  .m-cards .chat-time { font-family: var(--font-mono); font-size: 0.7rem; color: var(--text-secondary); }
+  .m-cards .chat-footer { display: flex; align-items: center; justify-content: space-between; }
+  .m-cards .chat-preview { font-size: 0.9rem; color: var(--text-secondary); text-align: right; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* M3: Editorial Focus (Airy, Serif names) */
+  .m-editorial .chat-row { padding: 20px 24px; gap: 20px; border-bottom: 1px solid rgba(140, 140, 197, 0.1); display: flex; align-items: center; }
+  .m-editorial .avatar { width: 60px; height: 60px; background: transparent; border: 1px solid var(--accent-color); color: var(--accent-color); font-family: var(--font-display); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; flex-shrink: 0;}
+  .m-editorial .chat-content { flex: 1; min-width: 0; }
+  .m-editorial .chat-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
+  .m-editorial .chat-name { font-family: var(--font-display); font-size: 1.25rem; letter-spacing: 0.02em; }
+  .m-editorial .chat-time { font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-secondary); opacity: 0.6; }
+  .m-editorial .chat-footer { display: flex; align-items: center; justify-content: space-between; }
+  .m-editorial .chat-preview { font-size: 0.95rem; color: var(--text-secondary); flex: 1; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* M4: Floating Bottom Nav */
+  .m-floating-nav .bottom-nav-bar { position: absolute; bottom: 24px; left: 24px; right: 24px; border-radius: var(--radius-xl); border: 1px solid rgba(140,140,197,0.2); padding: 16px 0; box-shadow: 0 16px 32px rgba(0,0,0,0.6); }
+  .m-floating-nav .chat-list-scroll { padding-bottom: 100px; } /* Space for floating nav */
+  .m-floating-nav .chat-row { padding: 14px 20px; gap: 16px; border-bottom: 1px solid rgba(140, 140, 197, 0.05); display: flex; align-items: center;}
+  .m-floating-nav .avatar { width: 50px; height: 50px; border-radius: 50%; background: var(--accent-color); color: white; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0;}
+  .m-floating-nav .chat-content { flex: 1; min-width: 0; }
+  .m-floating-nav .chat-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;}
+  .m-floating-nav .chat-name { font-size: 1rem; font-weight: 500; }
+  .m-floating-nav .chat-time { font-family: var(--font-mono); font-size: 0.7rem; background: rgba(140, 140, 197, 0.1); padding: 2px 6px; border-radius: 4px; color: var(--text-secondary); }
+  .m-floating-nav .chat-footer { display: flex; justify-content: space-between; }
+  .m-floating-nav .chat-preview { font-size: 0.9rem; color: var(--text-secondary); flex: 1; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* M5: Minimalist Tall Rows */
+  .m-tall .chat-row { height: 90px; padding: 0 20px; gap: 16px; border-bottom: 1px solid rgba(140, 140, 197, 0.05); display: flex; align-items: center; }
+  .m-tall .avatar { width: 56px; height: 56px; border-radius: 50%; background: var(--accent-color); color: white; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; flex-shrink: 0; }
+  .m-tall .chat-content { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; height: 100%; }
+  .m-tall .chat-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+  .m-tall .chat-name { font-size: 1.1rem; font-weight: 500; }
+  .m-tall .chat-time { font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-secondary); border: 1px solid rgba(140,140,197,0.2); padding: 2px 6px; border-radius: 12px; }
+  .m-tall .chat-footer { display: flex; justify-content: space-between; }
+  .m-tall .chat-preview { font-size: 0.95rem; color: var(--text-secondary); text-align: right; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .status-bar { height: 44px; display: flex; justify-content: space-between; align-items: center; padding: 0 24px; font-family: var(--font-body); font-size: 0.8rem; font-weight: 500; flex-shrink: 0; }
+
+  /* ========================================== */
+  /* DESKTOP AUTH -> HOME TRANSITION CONCEPTS   */
+  /* ========================================== */
+
+  .desktop-app-wrapper {
+    width: 100%; max-width: 1200px; height: 760px;
+    background: var(--bg-color); border: 1px solid rgba(140, 140, 197, 0.15); border-radius: 24px;
+    box-shadow: 0 32px 80px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.05);
+    overflow: hidden; position: relative;
+  }
+
+  .auth-trigger-btn {
+    position: absolute; top: 20px; right: 20px; background: rgba(0,0,0,0.6); color: white; border: 1px solid var(--border-solid); padding: 8px 16px; border-radius: 12px; font-family: var(--font-mono); font-size: 0.8rem; cursor: pointer; z-index: 100; backdrop-filter: blur(4px);
+  }
+
+  /* View Layers */
+  .d-view { position: absolute; inset: 0; width: 100%; height: 100%; display: flex; }
+  
+  /* Shared Auth View Design */
+  .auth-view { background: var(--bg-color); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 20; }
+  .auth-card { width: 400px; padding: 48px; display: flex; flex-direction: column; align-items: center; }
+  .auth-logo { font-family: var(--font-display); font-size: 2.5rem; color: var(--text-primary); margin-bottom: 2rem; letter-spacing: 0.05em; }
+  .auth-input { width: 100%; background: rgba(18, 18, 28, 0.6); border: none; border-bottom: 1px solid var(--border-solid); padding: 16px; margin-bottom: 1.5rem; color: var(--text-primary); font-family: var(--font-body); font-size: 1rem; outline: none; transition: border-color 0.2s; }
+  .auth-input:focus { border-color: var(--accent-bright); }
+  .auth-btn { width: 100%; background: var(--accent-bright); color: #12121C; border: none; padding: 16px; border-radius: var(--radius-md); font-family: var(--font-body); font-weight: 600; font-size: 1rem; cursor: pointer; margin-top: 1rem; transition: transform 0.2s; }
+  .auth-btn:hover { transform: translateY(-2px); }
+
+  /* Shared Home View Design (Monolith Structure) */
+  .home-view { background: var(--bg-color); z-index: 10; opacity: 0; pointer-events: none; }
+  .desktop-left-pane { width: 340px; border-right: 1px solid var(--border-solid); display: flex; flex-direction: column; background: var(--bg-color); flex-shrink: 0; }
+  .desktop-right-pane { flex: 1; display: flex; flex-direction: column; background: var(--bg-color); position: relative; align-items: center; justify-content: center; }
+  
+  /* Mock content for Home View */
+  .mock-top-nav { display: flex; justify-content: space-around; padding: 24px; border-bottom: 1px solid var(--border-solid); font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-secondary); }
+  .mock-chat-list { flex: 1; padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+  .mock-chat-item { display: flex; align-items: center; gap: 16px; }
+  .mock-avatar { width: 48px; height: 48px; border-radius: 50%; background: var(--surface-color); }
+  .mock-lines { flex: 1; }
+  .mock-line-1 { height: 12px; width: 60%; background: var(--surface-color); border-radius: 4px; margin-bottom: 8px; }
+  .mock-line-2 { height: 10px; width: 40%; background: rgba(140,140,197,0.1); border-radius: 4px; }
+  .mock-watermark { font-family: var(--font-display); font-size: 120px; color: var(--accent-color); opacity: 0.05; }
+
+
+  /* ------------------------------------------
+     TRANSITION 1: The Iris Reveal
+     Auth scales up/fades out. Home scales down into focus.
+  ------------------------------------------ */
+  .t-iris .auth-view { transition: transform 1.2s cubic-bezier(0.4, 0, 0.2, 1), opacity 1s ease, filter 1s ease; }
+  .t-iris .home-view { transition: transform 1.4s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 1.2s ease, filter 1.4s ease; transform: scale(1.1); filter: blur(20px); }
+  
+  .t-iris.is-home .auth-view { transform: scale(1.2); opacity: 0; filter: blur(10px); pointer-events: none; }
+  .t-iris.is-home .home-view { opacity: 1; transform: scale(1); filter: blur(0); pointer-events: auto; }
+
+
+  /* ------------------------------------------
+     TRANSITION 2: The Theater Curtain (Smooth Slide Up)
+     Auth slides up smoothly, Home is revealed beneath.
+  ------------------------------------------ */
+  .t-curtain .auth-view { transition: transform 1.2s cubic-bezier(0.65, 0, 0.35, 1), opacity 1.2s ease; transform-origin: top; z-index: 20; }
+  .t-curtain .home-view { transition: transform 1.2s cubic-bezier(0.65, 0, 0.35, 1), filter 1s ease; transform: translateY(40px); filter: blur(8px); opacity: 1; }
+  
+  .t-curtain.is-home .auth-view { transform: translateY(-100%); opacity: 0.5; pointer-events: none; }
+  .t-curtain.is-home .home-view { transform: translateY(0); filter: blur(0); pointer-events: auto; }
+
+
+  /* ------------------------------------------
+     TRANSITION 3: Slow Dissolve & Sink
+     Auth sinks down and dissolves. Home rises gracefully.
+  ------------------------------------------ */
+  .t-sink .auth-view { transition: transform 1.5s ease-out, opacity 1.2s ease; }
+  .t-sink .home-view { transition: transform 1.5s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 1.5s ease; transform: translateY(20px); }
+  
+  .t-sink.is-home .auth-view { transform: translateY(40px); opacity: 0; pointer-events: none; }
+  .t-sink.is-home .home-view { opacity: 1; transform: translateY(0); pointer-events: auto; }
+
+
+  /* ------------------------------------------
+     TRANSITION 4: The Monolith Expansion
+     Container starts small (Login size), expands to full UI.
+  ------------------------------------------ */
+  .t-expand { transition: width 1.2s cubic-bezier(0.65, 0, 0.35, 1), height 1.2s cubic-bezier(0.65, 0, 0.35, 1); width: 440px; height: 560px; margin: 0 auto; }
+  .t-expand .auth-view { transition: opacity 0.4s ease; width: 440px; height: 560px; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+  .t-expand .home-view { transition: opacity 0.8s ease 0.6s; width: 100%; height: 100%; }
+  
+  .t-expand.is-home { width: 100%; height: 760px; }
+  .t-expand.is-home .auth-view { opacity: 0; pointer-events: none; }
+  .t-expand.is-home .home-view { opacity: 1; pointer-events: auto; }
+
+
+  /* ------------------------------------------
+     TRANSITION 5: The Glass Shutter
+     A glassy pseudo-element wipes across horizontally.
+  ------------------------------------------ */
+  .t-glass { position: relative; }
+  .t-glass::after { content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 100%; background: rgba(255,255,255,0.05); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); z-index: 30; transition: left 1.4s cubic-bezier(0.65, 0, 0.35, 1); pointer-events: none; border-right: 1px solid rgba(255,255,255,0.1); }
+  .t-glass .auth-view { transition: opacity 0.4s ease 0.5s; }
+  .t-glass .home-view { transition: opacity 0.4s ease 0.5s; }
+  
+  .t-glass.is-home::after { left: 100%; }
+  .t-glass.is-home .auth-view { opacity: 0; pointer-events: none; }
+  .t-glass.is-home .home-view { opacity: 1; pointer-events: auto; }
+
+</style>
+</head>
+<body>
+
+  <div class="showcase-section">
+    <h2 class="section-title">Part 1: Mobile Row Refinements</h2>
+    <p class="intro-text" style="text-align: center;">Fixing the bottom navigation position (anchored to the bottom of the flex container) and providing 5 larger, more spacious layouts for the chat rows to feel less cramped on large phones.</p>
+    
+    <div class="grid-mobile">
+      
+      <!-- CONCEPT 1: Spacious Relaxed -->
+      <div class="mobile-app-wrapper m-spacious">
+        <span class="concept-label-mobile">Spacious</span>
+        <div class="status-bar"><span>9:41</span><span>Wifi &middot; Battery</span></div>
+        <h2 style="padding: 0 20px; font-size: 1.8rem; margin-bottom: 0.5rem;">Messages</h2>
+        <div class="segment-control"><div class="segment-btn active">Direct</div><div class="segment-btn">Channels</div></div>
+        
+        <div class="chat-list-scroll">
+          <div class="chat-row active">
+            <div class="avatar">EJ</div>
+            <div class="chat-content">
+              <div class="chat-header"><div class="chat-name">Eleanor James</div><div class="chat-time">11:47 PM</div></div>
+              <div class="chat-footer"><div class="chat-preview">Are we still on for the gallery?</div></div>
+            </div>
+          </div>
+          <div class="chat-row">
+            <div class="avatar">MR</div>
+            <div class="chat-content">
+              <div class="chat-header"><div class="chat-name">Marcus Reed</div><div class="chat-time">Yesterday</div></div>
+              <div class="chat-footer"><div class="chat-preview" style="color: var(--text-primary);">Let's review the draft.</div><div class="unread-dot"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="bottom-nav-bar">
+          <div class="bottom-nav-item active"><div class="nav-icon icon-chat"></div>Chat</div>
+          <div class="bottom-nav-item"><div class="nav-icon icon-dir"></div>Directory</div>
+          <div class="bottom-nav-item"><div class="nav-icon icon-set"></div>Settings</div>
+        </div>
+      </div>
+
+      <!-- CONCEPT 2: Edge-to-Edge Cards -->
+      <div class="mobile-app-wrapper m-cards">
+        <span class="concept-label-mobile">Cards</span>
+        <div class="status-bar"><span>9:41</span><span>Wifi &middot; Battery</span></div>
+        <h2 style="padding: 0 20px; font-size: 1.8rem; margin-bottom: 0.5rem;">Messages</h2>
+        <div class="segment-control"><div class="segment-btn active">Direct</div><div class="segment-btn">Channels</div></div>
+        
+        <div class="chat-list-scroll">
+          <div class="chat-row active">
+            <div class="avatar">EJ</div>
+            <div class="chat-content">
+              <div class="chat-header"><div class="chat-name">Eleanor James</div><div class="chat-time">11:47 PM</div></div>
+              <div class="chat-footer"><div class="chat-preview">Are we still on for the gallery?</div></div>
+            </div>
+          </div>
+          <div class="chat-row">
+            <div class="avatar">MR</div>
+            <div class="chat-content">
+              <div class="chat-header"><div class="chat-name">Marcus Reed</div><div class="chat-time">Yesterday</div></div>
+              <div class="chat-footer"><div class="chat-preview" style="color: var(--text-primary);">Let's review the draft.</div><div class="unread-dot"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="bottom-nav-bar">
+          <div class="bottom-nav-item active"><div class="nav-icon icon-chat"></div>Chat</div>
+          <div class="bottom-nav-item"><div class="nav-icon icon-dir"></div>Directory</div>
+          <div class="bottom-nav-item"><div class="nav-icon icon-set"></div>Settings</div>
+        </div>
+      </div>
+
+      <!-- CONCEPT 3: Editorial Focus -->
+      <div class="mobile-app-wrapper m-editorial">
+        <span class="concept-label-mobile">Editorial</span>
+        <div class="status-bar"><span>9:41</span><span>Wifi &middot; Battery</span></div>
+        <h2 style="padding: 0 24px; font-size: 2rem; margin-bottom: 0.5rem;">Messages</h2>
+        <div class="segment-control" style="margin: 0 24px 16px;"><div class="segment-btn active">Direct</div><div class="segment-btn">Channels</div></div>
+        
+        <div class="chat-list-scroll">
+          <div class="chat-row active">
+            <div class="avatar">EJ</div>
+            <div class="chat-content">
+              <div class="chat-header"><div class="chat-name">Eleanor James</div><div class="chat-time">11:47 PM</div></div>
+              <div class="chat-footer"><div class="chat-preview">Are we still on for the gallery?</div></div>
+            </div>
+          </div>
+          <div class="chat-row">
+            <div class="avatar">MR</div>
+            <div class="chat-content">
+              <div class="chat-header"><div class="chat-name">Marcus Reed</div><div class="chat-time">Yesterday</div></div>
+              <div class="chat-footer"><div class="chat-preview" style="color: var(--text-primary);">Let's review the draft.</div><div class="unread-dot"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="bottom-nav-bar">
+          <div class="bottom-nav-item active"><div class="nav-icon icon-chat"></div>Chat</div>
+          <div class="bottom-nav-item"><div class="nav-icon icon-dir"></div>Directory</div>
+          <div class="bottom-nav-item"><div class="nav-icon icon-set"></div>Settings</div>
+        </div>
+      </div>
+
+      <!-- CONCEPT 4: Floating Nav -->
+      <div class="mobile-app-wrapper m-floating-nav">
+        <span class="concept-label-mobile">Floating</span>
+        <div class="status-bar"><span>9:41</span><span>Wifi &middot; Battery</span></div>
+        <h2 style="padding: 0 20px; font-size: 1.8rem; margin-bottom: 0.5rem;">Messages</h2>
+        <div class="segment-control"><div class="segment-btn active">Direct</div><div class="segment-btn">Channels</div></div>
+        
+        <div class="chat-list-scroll">
+          <div class="chat-row active">
+            <div class="avatar">EJ</div>
+            <div class="chat-content">
+              <div class="chat-header"><div class="chat-name">Eleanor James</div><div class="chat-time">11:47 PM</div></div>
+              <div class="chat-footer"><div class="chat-preview">Are we still on for the gallery?</div></div>
+            </div>
+          </div>
+          <div class="chat-row">
+            <div class="avatar">MR</div>
+            <div class="chat-content">
+              <div class="chat-header"><div class="chat-name">Marcus Reed</div><div class="chat-time">Yesterday</div></div>
+              <div class="chat-footer"><div class="chat-preview" style="color: var(--text-primary);">Let's review the draft.</div><div class="unread-dot"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Floating Nav inside the wrapper -->
+        <div class="bottom-nav-bar">
+          <div class="bottom-nav-item active"><div class="nav-icon icon-chat"></div>Chat</div>
+          <div class="bottom-nav-item"><div class="nav-icon icon-dir"></div>Directory</div>
+          <div class="bottom-nav-item"><div class="nav-icon icon-set"></div>Settings</div>
+        </div>
+      </div>
+
+      <!-- CONCEPT 5: Minimalist Tall Rows -->
+      <div class="mobile-app-wrapper m-tall">
+        <span class="concept-label-mobile">Tall Rows</span>
+        <div class="status-bar"><span>9:41</span><span>Wifi &middot; Battery</span></div>
+        <h2 style="padding: 0 20px; font-size: 1.8rem; margin-bottom: 0.5rem;">Messages</h2>
+        <div class="segment-control"><div class="segment-btn active">Direct</div><div class="segment-btn">Channels</div></div>
+        
+        <div class="chat-list-scroll">
+          <div class="chat-row active">
+            <div class="avatar">EJ</div>
+            <div class="chat-content">
+              <div class="chat-header"><div class="chat-name">Eleanor James</div><div class="chat-time">11:47 PM</div></div>
+              <div class="chat-footer"><div class="chat-preview">Are we still on for the gallery?</div></div>
+            </div>
+          </div>
+          <div class="chat-row">
+            <div class="avatar">MR</div>
+            <div class="chat-content">
+              <div class="chat-header"><div class="chat-name">Marcus Reed</div><div class="chat-time">Yesterday</div></div>
+              <div class="chat-footer"><div class="chat-preview" style="color: var(--text-primary);">Let's review the draft.</div><div class="unread-dot"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="bottom-nav-bar">
+          <div class="bottom-nav-item active"><div class="nav-icon icon-chat"></div>Chat</div>
+          <div class="bottom-nav-item"><div class="nav-icon icon-dir"></div>Directory</div>
+          <div class="bottom-nav-item"><div class="nav-icon icon-set"></div>Settings</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+
+  <div class="showcase-section">
+    <h2 class="section-title">Part 2: Desktop Auth to Home Transitions</h2>
+    <p class="intro-text" style="text-align: center;">Simulating the transition from the Login screen into the Desktop Monolith view. Click "Trigger Login" on each concept to see the animation.</p>
+    
+    <div class="grid-desktop">
+      
+      <!-- TRANSITION 1: Iris Reveal -->
+      <div style="width: 100%; max-width: 1200px; position: relative;">
+        <button class="auth-trigger-btn" onclick="toggleAuth('desk-1')">Trigger Login</button>
+        <div class="desktop-app-wrapper t-iris" id="desk-1">
+          
+          <!-- Auth View -->
+          <div class="d-view auth-view">
+            <div class="auth-card">
+              <div class="auth-logo">The Penthouse</div>
+              <input type="text" class="auth-input" value="ArthurKensington" readonly>
+              <input type="password" class="auth-input" value="••••••••" readonly>
+              <button class="auth-btn">Enter</button>
+            </div>
+          </div>
+
+          <!-- Home View -->
+          <div class="d-view home-view">
+            <div class="desktop-left-pane">
+              <div class="mock-top-nav"><span>Chat</span><span>Directory</span><span>Settings</span></div>
+              <div class="mock-chat-list">
+                <div class="mock-chat-item"><div class="mock-avatar"></div><div class="mock-lines"><div class="mock-line-1"></div><div class="mock-line-2"></div></div></div>
+                <div class="mock-chat-item"><div class="mock-avatar"></div><div class="mock-lines"><div class="mock-line-1"></div><div class="mock-line-2"></div></div></div>
+                <div class="mock-chat-item"><div class="mock-avatar"></div><div class="mock-lines"><div class="mock-line-1"></div><div class="mock-line-2"></div></div></div>
+              </div>
+            </div>
+            <div class="desktop-right-pane">
+              <div class="mock-watermark">AK</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- TRANSITION 2: Theater Curtain -->
+      <div style="width: 100%; max-width: 1200px; position: relative;">
+        <button class="auth-trigger-btn" onclick="toggleAuth('desk-2')">Trigger Login</button>
+        <div class="desktop-app-wrapper t-curtain" id="desk-2">
+          
+          <div class="d-view auth-view">
+            <div class="auth-card">
+              <div class="auth-logo">The Penthouse</div>
+              <input type="text" class="auth-input" value="ArthurKensington" readonly>
+              <input type="password" class="auth-input" value="••••••••" readonly>
+              <button class="auth-btn">Enter</button>
+            </div>
+          </div>
+
+          <div class="d-view home-view">
+            <div class="desktop-left-pane">
+              <div class="mock-top-nav"><span>Chat</span><span>Directory</span><span>Settings</span></div>
+              <div class="mock-chat-list">
+                <div class="mock-chat-item"><div class="mock-avatar"></div><div class="mock-lines"><div class="mock-line-1"></div><div class="mock-line-2"></div></div></div>
+                <div class="mock-chat-item"><div class="mock-avatar"></div><div class="mock-lines"><div class="mock-line-1"></div><div class="mock-line-2"></div></div></div>
+              </div>
+            </div>
+            <div class="desktop-right-pane">
+              <div class="mock-watermark">AK</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- TRANSITION 3: Dissolve & Sink -->
+      <div style="width: 100%; max-width: 1200px; position: relative;">
+        <button class="auth-trigger-btn" onclick="toggleAuth('desk-3')">Trigger Login</button>
+        <div class="desktop-app-wrapper t-sink" id="desk-3">
+          
+          <div class="d-view auth-view">
+            <div class="auth-card">
+              <div class="auth-logo">The Penthouse</div>
+              <input type="text" class="auth-input" value="ArthurKensington" readonly>
+              <input type="password" class="auth-input" value="••••••••" readonly>
+              <button class="auth-btn">Enter</button>
+            </div>
+          </div>
+
+          <div class="d-view home-view">
+            <div class="desktop-left-pane">
+              <div class="mock-top-nav"><span>Chat</span><span>Directory</span><span>Settings</span></div>
+              <div class="mock-chat-list">
+                <div class="mock-chat-item"><div class="mock-avatar"></div><div class="mock-lines"><div class="mock-line-1"></div><div class="mock-line-2"></div></div></div>
+                <div class="mock-chat-item"><div class="mock-avatar"></div><div class="mock-lines"><div class="mock-line-1"></div><div class="mock-line-2"></div></div></div>
+              </div>
+            </div>
+            <div class="desktop-right-pane">
+              <div class="mock-watermark">AK</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- TRANSITION 4: Monolith Expansion -->
+      <div style="width: 100%; max-width: 1200px; position: relative;">
+        <button class="auth-trigger-btn" onclick="toggleAuth('desk-4')">Trigger Login</button>
+        <!-- The wrapper itself scales for this transition -->
+        <div class="desktop-app-wrapper t-expand" id="desk-4">
+          
+          <div class="d-view auth-view">
+            <div class="auth-card">
+              <div class="auth-logo">The Penthouse</div>
+              <input type="text" class="auth-input" value="ArthurKensington" readonly>
+              <input type="password" class="auth-input" value="••••••••" readonly>
+              <button class="auth-btn">Enter</button>
+            </div>
+          </div>
+
+          <div class="d-view home-view">
+            <div class="desktop-left-pane">
+              <div class="mock-top-nav"><span>Chat</span><span>Directory</span><span>Settings</span></div>
+              <div class="mock-chat-list">
+                <div class="mock-chat-item"><div class="mock-avatar"></div><div class="mock-lines"><div class="mock-line-1"></div><div class="mock-line-2"></div></div></div>
+                <div class="mock-chat-item"><div class="mock-avatar"></div><div class="mock-lines"><div class="mock-line-1"></div><div class="mock-line-2"></div></div></div>
+              </div>
+            </div>
+            <div class="desktop-right-pane">
+              <div class="mock-watermark">AK</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- TRANSITION 5: Glass Shutter -->
+      <div style="width: 100%; max-width: 1200px; position: relative;">
+        <button class="auth-trigger-btn" onclick="toggleAuth('desk-5')">Trigger Login</button>
+        <div class="desktop-app-wrapper t-glass" id="desk-5">
+          
+          <div class="d-view auth-view">
+            <div class="auth-card">
+              <div class="auth-logo">The Penthouse</div>
+              <input type="text" class="auth-input" value="ArthurKensington" readonly>
+              <input type="password" class="auth-input" value="••••••••" readonly>
+              <button class="auth-btn">Enter</button>
+            </div>
+          </div>
+
+          <div class="d-view home-view">
+            <div class="desktop-left-pane">
+              <div class="mock-top-nav"><span>Chat</span><span>Directory</span><span>Settings</span></div>
+              <div class="mock-chat-list">
+                <div class="mock-chat-item"><div class="mock-avatar"></div><div class="mock-lines"><div class="mock-line-1"></div><div class="mock-line-2"></div></div></div>
+                <div class="mock-chat-item"><div class="mock-avatar"></div><div class="mock-lines"><div class="mock-line-1"></div><div class="mock-line-2"></div></div></div>
+              </div>
+            </div>
+            <div class="desktop-right-pane">
+              <div class="mock-watermark">AK</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    function toggleAuth(id) {
+      const container = document.getElementById(id);
+      if (container) {
+        container.classList.toggle('is-home');
+      }
+    }
+  </script>
+</body>
+</html>

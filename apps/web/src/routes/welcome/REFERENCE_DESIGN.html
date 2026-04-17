@@ -1,0 +1,183 @@
+<!-- Concept: The Floating Orb -->
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Penthouse — Floating Orb</title>
+<link href="https://fonts.cdnfonts.com/css/erode?weights=400,600" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Ubuntu:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0D0D14; --bg-surface: #14141F; --accent: #7777C2; --accent-soft: #2A2A40;
+    --text: #E2E2EC; --text-soft: #9a9ab4; --border: rgba(119, 119, 194, 0.15);
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  [data-theme="light"] {
+    --bg: #F0F0F7; --bg-surface: #F8F8FD; --accent: #6666B3; --accent-soft: #DADAEC;
+    --text: #1A1A2E; --text-soft: #666680; --border: rgba(102, 102, 179, 0.1);
+  }
+  body { background-color: var(--bg); color: var(--text); font-family: 'Ubuntu', sans-serif; margin: 0; overflow-x: hidden; transition: background 0.8s var(--ease); }
+  .grain { position: fixed; inset: 0; pointer-events: none; z-index: 9999; opacity: 0.04; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+  
+  /* Atmospheric Orbs */
+  .orb { position: fixed; width: 60vmax; height: 60vmax; border-radius: 50%; filter: blur(120px); pointer-events: none; z-index: -1; opacity: 0.2; background: radial-gradient(circle, var(--accent) 0%, transparent 70%); animation: drift 20s infinite alternate ease-in-out; }
+  .orb-1 { top: -20%; right: -10%; background: radial-gradient(circle, var(--accent) 0%, transparent 70%); }
+  .orb-2 { bottom: -20%; left: -10%; opacity: 0.1; animation-delay: -5s; }
+  @keyframes drift { from { transform: translate(0,0) scale(1); } to { transform: translate(5%, 10%) scale(1.1); } }
+
+  .theme-toggle { position: fixed; top: 2.5rem; right: 2.5rem; width: 52px; height: 52px; border-radius: 50%; border: 1px solid var(--border); background: var(--bg-surface); cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 1000; transition: all 0.5s var(--ease); overflow: hidden; }
+  .theme-toggle:hover { border-color: var(--accent); transform: scale(1.05); }
+  .theme-toggle svg { width: 22px; height: 22px; stroke: var(--text); fill: none; stroke-width: 1.5; transition: transform 0.8s var(--ease), opacity 0.5s; }
+  [data-theme="light"] .sun { transform: translateY(40px); opacity: 0; }
+  [data-theme="dark"] .moon { transform: translateY(40px); opacity: 0; }
+  [data-theme="light"] .moon { transform: translateY(0); opacity: 1; }
+  [data-theme="dark"] .sun { transform: translateY(0); opacity: 1; }
+
+  .container { max-width: 1200px; margin: 0 auto; padding: 10vh 2.5rem; display: grid; grid-template-columns: 1fr 1.2fr; gap: 8rem; position: relative; }
+  
+  .sidebar { position: sticky; top: 10vh; height: fit-content; }
+  .label { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.2em; color: var(--accent); margin-bottom: 1.5rem; display: flex; align-items: center; gap: 1rem; }
+  .label::after { content: ''; height: 1px; flex-grow: 1; background: var(--border); }
+  
+  .logo { font-family: 'Erode', serif; margin-bottom: 3rem; }
+  .logo-the { color: var(--accent); font-weight: 400; font-size: 2.2rem; margin-bottom: 0.5rem; opacity: 0.9; }
+  .logo-pent, .logo-house { color: var(--text); font-weight: 600; font-size: 8.5rem; line-height: 0.8; text-transform: uppercase; letter-spacing: -0.05em; }
+  
+  .main-content { display: flex; flex-direction: column; gap: 10rem; }
+  h1 { font-family: 'Erode', serif; font-weight: 400; font-size: 3.8rem; line-height: 1.05; margin: 0 0 2.5rem 0; color: var(--accent); max-width: 12ch; }
+  p { color: var(--text-soft); font-weight: 300; font-size: 1.3rem; line-height: 1.85; max-width: 540px; }
+  
+  .cta-box { position: relative; margin-top: 2rem; }
+  .cta { position: relative; display: inline-flex; align-items: center; justify-content: center; background: var(--text); color: var(--bg); padding: 1.8rem 4.5rem; text-decoration: none; font-family: 'JetBrains Mono', monospace; font-size: 1rem; border-radius: 100px; font-weight: 600; transition: all 0.5s var(--ease); border: none; cursor: pointer; overflow: hidden; }
+  .cta:hover { transform: translateY(-3px); background: var(--accent); color: #FFF; box-shadow: 0 20px 40px rgba(119, 119, 194, 0.25); }
+  
+  .liquid-blob { position: fixed; width: 12vw; height: 12vw; background: var(--accent); border-radius: 50%; filter: blur(60px); pointer-events: none; z-index: 9998; opacity: 0; transform: translate(-50%, -50%); transition: opacity 0.4s var(--ease), transform 1.2s cubic-bezier(0.7, 0, 0.3, 1); }
+
+  .section { border-left: 1px solid var(--border); padding-left: 3rem; }
+  .section h2 { font-family: 'Erode', serif; font-weight: 400; font-size: 2.6rem; margin: 0 0 1.5rem 0; }
+  
+  .apk-link { display: inline-flex; align-items: center; gap: 0.75rem; margin-top: 2rem; font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; color: var(--accent); text-decoration: none; padding: 1rem 1.5rem; border: 1px solid var(--border); border-radius: 4px; transition: all 0.3s; }
+  .apk-link:hover { background: var(--bg-surface); border-color: var(--accent); }
+
+  footer { grid-column: span 2; margin-top: 10rem; opacity: 0.35; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; letter-spacing: 0.1em; text-align: center; border-top: 1px solid var(--border); padding-top: 5rem; display: flex; justify-content: space-between; align-items: center; }
+
+  @media (max-width: 1024px) { 
+    .container { grid-template-columns: 1fr; gap: 5rem; } 
+    .logo-pent, .logo-house { font-size: 6.5rem; }
+    .sidebar { position: static; }
+    .main-content { gap: 6rem; }
+  }
+</style>
+</head>
+<body>
+<div class="grain"></div>
+<div class="orb orb-1"></div>
+<div class="orb orb-2"></div>
+<div class="liquid-blob" id="blob"></div>
+
+<button class="theme-toggle" id="themeToggle" aria-label="Toggle Theme">
+  <svg class="sun" viewBox="0 0 24 24"><path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+  <svg class="moon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+</button>
+
+<div class="container" id="page">
+  <aside class="sidebar">
+    <div class="label">Primary Wordmark</div>
+    <div class="logo">
+      <div class="logo-the">The</div>
+      <div class="logo-pent">PENT</div>
+      <div class="logo-house">HOUSE</div>
+    </div>
+  </aside>
+
+  <main class="main-content">
+    <div class="hero">
+      <div class="label">Mission // 01</div>
+      <h1>Quiet contact.<br>Reserved for yours.</h1>
+      <p>A bright take on a private world. The Penthouse is where your most important conversations live, away from the glare of the public web.</p>
+      <div class="cta-box">
+        <button class="cta" id="enterApp">Enter the app</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="label">Values // 02</div>
+      <h2>Human scale.</h2>
+      <p>A deliberately small gathering space. No metrics, no global discovery. It exists solely to connect people who already know each other in real life, prioritizing genuine conversation over engagement loops.</p>
+    </div>
+
+    <div class="section">
+      <div class="label">Delivery // 03</div>
+      <h2>Installation.</h2>
+      <p>The Penthouse is a Progressive Web App. To install it, open this link in Safari or Chrome, tap your browser's share icon, and select "Add to Home Screen".</p>
+      <div id="apk-block" style="display: none;">
+        <a href="#" class="apk-link">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          Legacy Android APK
+        </a>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <span>EST. 2024</span>
+    <span>ALPHA RELEASE 2.1.0</span>
+    <span>© THE PENTHOUSE</span>
+  </footer>
+</div>
+
+<script>
+const themeToggle = document.getElementById('themeToggle');
+themeToggle.addEventListener('click', () => {
+  const current = document.documentElement.getAttribute('data-theme');
+  document.documentElement.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
+});
+
+const enterBtn = document.getElementById('enterApp');
+const blob = document.getElementById('blob');
+const page = document.getElementById('page');
+
+enterBtn.addEventListener('mousemove', (e) => {
+  blob.style.opacity = '0.7';
+  blob.style.left = e.clientX + 'px';
+  blob.style.top = e.clientY + 'px';
+});
+
+enterBtn.addEventListener('mouseleave', () => {
+  blob.style.opacity = '0';
+});
+
+enterBtn.addEventListener('click', (e) => {
+  const rect = enterBtn.getBoundingClientRect();
+  const x = rect.left + rect.width / 2;
+  const y = rect.top + rect.height / 2;
+  
+  blob.style.opacity = '1';
+  blob.style.left = x + 'px';
+  blob.style.top = y + 'px';
+  blob.style.transform = 'translate(-50%, -50%) scale(60)';
+  blob.style.transition = 'transform 1.8s cubic-bezier(0.7, 0, 0.3, 1), opacity 0.6s ease';
+  
+  page.style.transition = 'filter 1.2s ease, opacity 1s ease, transform 1.2s var(--ease)';
+  page.style.filter = 'blur(20px)';
+  page.style.opacity = '0';
+  page.style.transform = 'scale(0.98)';
+  
+  setTimeout(() => {
+    window.location.href = 'https://penthouse.blog/auth';
+  }, 1400);
+});
+
+async function checkApk() {
+  try {
+    const res = await fetch('https://api.penthouse.blog/api/v1/app-distribution');
+    if (!res.ok) return; const data = await res.json();
+    if (data?.legacyAndroid?.status === 'available') document.getElementById('apk-block').style.display = 'block';
+  } catch {}
+} checkApk();
+</script>
+</body>
+</html>

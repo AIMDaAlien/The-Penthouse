@@ -27,7 +27,7 @@ components:
 
     RegisterRequest:
       type: object
-      required: [username, password, inviteCode, acceptTestNotice, testNoticeVersion]
+      required: [username, password, inviteCode, captchaToken, acceptTestNotice, testNoticeVersion]
       properties:
         username:
           type: string
@@ -45,6 +45,11 @@ components:
           minLength: 6
           maxLength: 64
           description: Trimmed and uppercased by the server
+        captchaToken:
+          type: string
+          minLength: 1
+          maxLength: 2048
+          description: Base64-encoded ALTCHA payload returned by the widget
         acceptTestNotice:
           type: boolean
           enum: [true]
@@ -54,6 +59,66 @@ components:
           minLength: 1
           maxLength: 64
           description: Version of the notice acknowledged by the client
+
+    AltchaChallenge:
+      type: object
+      required: [algorithm, challenge, salt, signature]
+      properties:
+        algorithm:
+          type: string
+          enum: [SHA-1, SHA-256, SHA-512]
+        challenge:
+          type: string
+        maxnumber:
+          type: integer
+          minimum: 1
+        salt:
+          type: string
+        signature:
+          type: string
+
+    AppDistributionResponse:
+      type: object
+      required: [sourceOfTruth, defaultPlatform, pwa, legacyAndroid]
+      properties:
+        sourceOfTruth:
+          type: string
+          enum: [pwa]
+          description: The canonical install/update surface for new users.
+        defaultPlatform:
+          type: string
+          enum: [pwa]
+          description: The client experience that should be promoted by default.
+        pwa:
+          type: object
+          required: [status, url, installUrl]
+          properties:
+            status:
+              type: string
+              enum: [live]
+            url:
+              type: string
+              format: uri
+            installUrl:
+              type: string
+              format: uri
+        legacyAndroid:
+          type: object
+          required: [status, deprecated, url, fileName, notes]
+          properties:
+            status:
+              type: string
+              enum: [available, unavailable]
+            deprecated:
+              type: boolean
+              enum: [true]
+            url:
+              type: string
+              format: uri
+            fileName:
+              type: string
+            notes:
+              type: string
 
     LoginRequest:
       type: object
@@ -818,6 +883,18 @@ components:
               $ref: '#/components/schemas/AdminMessageModeration'
 
 paths:
+  /api/v1/app-distribution:
+    get:
+      summary: Current app install and distribution metadata
+      operationId: getAppDistribution
+      responses:
+        '200':
+          description: PWA-first distribution metadata with Android APK marked as legacy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppDistributionResponse'
+
   /api/v1/health:
     get:
       summary: Health check
@@ -839,6 +916,28 @@ paths:
                   ts:
                     type: string
                     format: date-time
+
+  /api/v1/altcha:
+    get:
+      summary: Generate a new ALTCHA challenge
+      operationId: getAltchaChallenge
+      responses:
+        '200':
+          description: Fresh ALTCHA challenge
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AltchaChallenge'
+    post:
+      summary: Generate a new ALTCHA challenge
+      operationId: postAltchaChallenge
+      responses:
+        '200':
+          description: Fresh ALTCHA challenge
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AltchaChallenge'
 
   /api/v1/auth/register:
     post:
@@ -869,10 +968,7 @@ paths:
                     error: 'Invalid or expired invite code'
                 validationError:
                   value:
-                    error:
-                      fieldErrors:
-                        username: ['String must contain at least 3 character(s)']
-                      formErrors: []
+                    error: 'Username must be at least 3 characters'
         '409':
           description: Username already taken
           content:
@@ -880,7 +976,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
               example:
-                error: 'Username already exists'
+                error: 'Username is already taken'
         '500':
           description: Internal server error
           content:

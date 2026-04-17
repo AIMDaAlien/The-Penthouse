@@ -95,7 +95,20 @@ Status: in progress
 - Backend notice-gating is implemented.
 - Mobile/client notice UX is implemented.
 - Android push is now proven on Google Play-backed runtime paths.
-- The rebuild is live publicly on `penthouse.blog` / `api.penthouse.blog`.
+- The PWA root and API are live on TrueNAS at `https://penthouse.blog/` and `https://api.penthouse.blog/api/v1/health`, and the auth page loads in a headless browser smoke.
+- TrueNAS deployment storage was cut over from offline `Storage_Pool` paths to `/mnt/Backup/penthouse-rebuild` on 2026-04-15.
+- The PWA is now the public source of truth and default install/update path.
+- The current alpha release tag is `v2.1.0-alpha.1`.
+- `GET /api/v1/app-distribution` exposes that policy for frontend and client consumers.
+- APKs are legacy-only: `/downloads/the-penthouse-rebuild.apk` redirects to `/`, and `/downloads/the-penthouse.apk` redirects to `/downloads/legacy/the-penthouse.apk`.
+- Legacy APK status remains unavailable until an older APK is recovered under `/mnt/Backup/penthouse-rebuild/downloads/legacy/`.
+- Production alpha smoke passed on 2026-04-15:
+  - browser/PWA smoke verified `/welcome`, `/auth`, manifest, service-worker control, and offline shell rendering for `/welcome` and `/`
+  - backend smoke registered two fresh users, created a DM, sent a message, and read it back through `https://api.penthouse.blog`
+- Production `JWT_SECRET` and `ALTCHA_HMAC_KEY` were rotated during the alpha deploy, so old sessions were intentionally invalidated.
+- Nightly PostgreSQL dumps now run through TrueNAS cron job `1` at 03:00, with dumps under `/mnt/Backup/penthouse-rebuild/backups/postgres/`; restore was tested successfully.
+- Known frontend follow-up: the welcome page still loads Erode from a third-party font CDN that returned HTTP 500 during smoke. It falls back, but the dependency should be removed or self-hosted.
+- Manual mobile Add-to-Home-Screen proof is still pending.
 - Admin/operator slices now in place:
   - user management
   - read-only server/operator summary

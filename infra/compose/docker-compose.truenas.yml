@@ -6,7 +6,7 @@ services:
   api:
     volumes:
       - ${TRUENAS_UPLOADS_PATH}:/app/services/api/uploads
-      - ${FCM_SERVICE_ACCOUNT_FILE}:/run/secrets/firebase-admin.json:ro
+      - ${FCM_SERVICE_ACCOUNT_FILE:-/dev/null}:/run/secrets/firebase-admin.json:ro
 
   caddy:
     volumes:

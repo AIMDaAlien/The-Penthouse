@@ -11,7 +11,7 @@ The two real differences from the old branch are:
 
 1. the rebuild needs PostgreSQL
 2. push notifications need a Firebase Admin key on the server
-3. the public site now needs a downloads directory containing both the rebuild and legacy APKs
+3. the public site now serves the PWA as the default and keeps APKs under legacy downloads only if recovered
 
 ## What carried over from the old setup
 
@@ -28,13 +28,13 @@ That means you do not need a brand new deployment model. You can reuse the same 
 
 Keep the rebuild in its own dataset tree so it does not collide with the old app:
 
-- app root: `/mnt/Storage_Pool/penthouse-rebuild/app`
-- postgres data: `/mnt/Storage_Pool/penthouse-rebuild/postgres`
-- uploads: `/mnt/Storage_Pool/penthouse-rebuild/uploads`
-- downloads: `/mnt/Storage_Pool/penthouse-rebuild/downloads`
-- caddy data: `/mnt/Storage_Pool/penthouse-rebuild/caddy-data`
-- caddy config: `/mnt/Storage_Pool/penthouse-rebuild/caddy-config`
-- firebase key: `/mnt/Storage_Pool/penthouse-rebuild/secrets/firebase-admin.json`
+- app root: `/mnt/Backup/penthouse-rebuild/app`
+- postgres data: `/mnt/Backup/penthouse-rebuild/postgres`
+- uploads: `/mnt/Backup/penthouse-rebuild/uploads`
+- downloads: `/mnt/Backup/penthouse-rebuild/downloads`
+- caddy data: `/mnt/Backup/penthouse-rebuild/caddy-data`
+- caddy config: `/mnt/Backup/penthouse-rebuild/caddy-config`
+- firebase key: `/mnt/Backup/penthouse-rebuild/secrets/firebase-admin.json`
 
 On TrueNAS itself, the rebuild Caddy container should follow the same host-port shape as the old live stack:
 
@@ -55,13 +55,13 @@ This avoids fighting the TrueNAS UI, which already owns host `80/443`.
 SSH into the box and create the dataset folders:
 
 ```bash
-mkdir -p /mnt/Storage_Pool/penthouse-rebuild/{app,postgres,uploads,downloads,caddy-data,caddy-config,secrets}
+mkdir -p /mnt/Backup/penthouse-rebuild/{app,postgres,uploads,downloads/legacy,caddy-data,caddy-config,secrets}
 ```
 
 Clone the repo:
 
 ```bash
-cd /mnt/Storage_Pool/penthouse-rebuild
+cd /mnt/Backup/penthouse-rebuild
 git clone <YOUR_REPO_URL> app
 cd app
 ```
@@ -82,6 +82,9 @@ Then fill in the real values:
 - `POSTGRES_PASSWORD`
 - `JWT_SECRET`
 - `CORS_ORIGIN`
+- `PUBLIC_APP_URL`
+- `LEGACY_APK_DOWNLOAD_PATH`
+- `LEGACY_APK_STATUS`
 - `GIPHY_API_KEY`
 - `KLIPY_API_KEY`
 - `TRUENAS_DOWNLOADS_PATH`
@@ -89,28 +92,29 @@ Then fill in the real values:
 
 Copy the Firebase Admin JSON file into the secrets path named in `.env.truenas`.
 
-## Put both APKs in the downloads directory
+## Put legacy APKs in the legacy downloads directory
 
-The public site expects both of these files:
+The PWA is now the source of truth. New users should open `https://penthouse.blog/`; they should not be sent to a rebuild APK.
 
-- `/mnt/Storage_Pool/penthouse-rebuild/downloads/the-penthouse.apk`
-  - legacy fallback APK
-- `/mnt/Storage_Pool/penthouse-rebuild/downloads/the-penthouse-rebuild.apk`
-  - main rebuild APK
+If the older Android APK is recovered, place it here:
+
+- `/mnt/Backup/penthouse-rebuild/downloads/legacy/the-penthouse.apk`
+  - deprecated Android APK, kept only for existing installs
 
 If your old live deployment already has the legacy APK, copy it forward without renaming it:
 
 ```bash
 cp /mnt/Storage_Pool/penthouse/data/downloads/the-penthouse.apk \
-  /mnt/Storage_Pool/penthouse-rebuild/downloads/the-penthouse.apk
+  /mnt/Backup/penthouse-rebuild/downloads/legacy/the-penthouse.apk
 ```
 
-Then place the new rebuild APK beside it:
+Then set this in `infra/compose/.env`:
 
 ```bash
-cp /path/to/the-penthouse-rebuild.apk \
-  /mnt/Storage_Pool/penthouse-rebuild/downloads/the-penthouse-rebuild.apk
+LEGACY_APK_STATUS=available
 ```
+
+Keep `LEGACY_APK_STATUS=unavailable` while the file is missing. The old `/downloads/the-penthouse.apk` URL redirects to the legacy path. The old `/downloads/the-penthouse-rebuild.apk` URL redirects to `/`.
 
 ## Start the stack
 
@@ -168,17 +172,16 @@ Check externally:
 
 ```bash
 curl -fsSL https://penthouse.blog/
-curl -I https://penthouse.blog/downloads/the-penthouse.apk
-curl -I https://penthouse.blog/downloads/the-penthouse-rebuild.apk
+curl -fsSL https://api.penthouse.blog/api/v1/app-distribution
 curl -fsSL https://api.penthouse.blog/api/v1/health
+curl -I https://penthouse.blog/downloads/the-penthouse-rebuild.apk
 ```
 
 If you are testing directly against the TrueNAS host before public DNS/routing is switched, use the mapped host ports:
 
 ```bash
 curl -H 'Host: penthouse.blog' http://YOUR_TRUENAS_IP:9080/
-curl -I -H 'Host: penthouse.blog' http://YOUR_TRUENAS_IP:9080/downloads/the-penthouse.apk
-curl -I -H 'Host: penthouse.blog' http://YOUR_TRUENAS_IP:9080/downloads/the-penthouse-rebuild.apk
+curl -H 'Host: api.penthouse.blog' http://YOUR_TRUENAS_IP:9080/api/v1/app-distribution
 curl -H 'Host: api.penthouse.blog' http://YOUR_TRUENAS_IP:9080/api/v1/health
 ```
 
@@ -214,9 +217,9 @@ Expected keys:
 - `PENTHOUSE_UPLOAD_KEY_ALIAS`
 - `PENTHOUSE_UPLOAD_KEY_PASSWORD`
 
-If those are not present, the release build will still complete, but the output will remain unsigned and should not be published as the public rebuild APK.
+If those are not present, the release build will still complete, but the output will remain unsigned and should not be published.
 
-Then build the signed APK/AAB in Android Studio and ship it through Google Play internal testing first.
+Only build a signed APK/AAB if Android legacy continuity is explicitly needed. The PWA remains the default public release surface.
 
 The rebuild Android baseline is now:
 
@@ -238,4 +241,4 @@ Add the rebuild-specific pieces:
 - PostgreSQL persistence
 - Firebase Admin key
 - public API URL for Android release builds
-- a public downloads directory holding both the rebuild and legacy APKs
+- a public downloads directory that can hold recovered legacy APKs under `downloads/legacy/`

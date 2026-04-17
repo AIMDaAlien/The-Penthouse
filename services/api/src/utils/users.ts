@@ -19,6 +19,8 @@ export type UserRow = {
   username: string;
   display_name: string;
   bio: string | null;
+  timezone: string | null;
+  last_seen_at: string | null;
   avatar_media_id: string | null;
   avatar_storage_key: string | null;
   avatar_file_name: string | null;
@@ -39,6 +41,8 @@ const USER_BASE_SELECT = `
     u.username,
     u.display_name,
     u.bio,
+    u.timezone,
+    u.last_seen_at,
     u.avatar_media_id,
     u.role,
     u.status,
@@ -96,6 +100,7 @@ export function mapAuthUser(row: UserRow): AuthUser {
     username: row.username,
     displayName: row.display_name,
     avatarUrl: avatarUrlFromFileName(row.avatar_storage_key),
+    timezone: row.timezone,
     role: row.role,
     mustChangePassword: row.must_change_password,
     mustAcceptTestNotice: requiresTestNoticeAck(row),
@@ -124,7 +129,9 @@ export function mapMemberSummary(row: UserRow): MemberSummary {
 export function mapMemberDetail(row: UserRow): MemberDetail {
   return {
     ...mapMemberSummary(row),
-    bio: row.bio
+    bio: row.bio,
+    timezone: row.timezone,
+    lastSeenAt: row.last_seen_at ? new Date(row.last_seen_at).toISOString() : null
   };
 }
 
@@ -164,6 +171,54 @@ export async function listMembers(db: Queryable, search: string, includeInactive
   const values = normalized ? [like] : [];
   const result = await db.query(sql, values);
   return result.rows as UserRow[];
+}
+
+function escapeLikePrefix(value: string): string {
+  return value.replace(/[\\%_]/g, '\\$&');
+}
+
+export async function searchActiveUsers(db: Queryable, query: string, limit: number): Promise<UserRow[]> {
+  const normalized = query.trim();
+  if (!normalized) return [];
+
+  const like = `${escapeLikePrefix(normalized)}%`;
+  const result = await db.query(
+    `${USER_BASE_SELECT}
+     WHERE u.status = 'active'
+       AND (u.username ILIKE $1 ESCAPE '\\' OR u.display_name ILIKE $1 ESCAPE '\\')
+     ORDER BY LOWER(u.username) ASC
+     LIMIT $2`,
+    [like, limit]
+  );
+
+  return result.rows as UserRow[];
+}
+
+export async function listActiveUsersPage(
+  db: Queryable,
+  offset: number,
+  limit: number
+): Promise<{ users: UserRow[]; total: number }> {
+  const [usersResult, totalResult] = await Promise.all([
+    db.query(
+      `${USER_BASE_SELECT}
+       WHERE u.status = 'active'
+       ORDER BY LOWER(u.display_name) ASC, LOWER(u.username) ASC
+       OFFSET $1
+       LIMIT $2`,
+      [offset, limit]
+    ),
+    db.query(
+      `SELECT COUNT(*)::int AS total
+       FROM users u
+       WHERE u.status = 'active'`
+    )
+  ]);
+
+  return {
+    users: usersResult.rows as UserRow[],
+    total: Number(totalResult.rows[0]?.total ?? 0)
+  };
 }
 
 export async function maybeBootstrapAdmin(db: Queryable, username?: string): Promise<void> {

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { MessageMetadataSchema, MessageSchema, MessageTypeSchema, ModerationActionSchema } from './api.js';
+import { MessageMetadataSchema, MessageSchema, MessageTypeSchema, ModerationActionSchema, PollDataSchema } from './api.js';
 
 export const ClientJoinChatEventSchema = z.object({
   type: z.literal('chat.join'),
@@ -21,12 +21,18 @@ export const ClientTypingStopEventSchema = z.object({
   chatId: z.string()
 });
 
+export const ClientPresenceUpdateEventSchema = z.object({
+  type: z.literal('presence.update'),
+  online: z.boolean()
+});
+
 export const ClientMessageSendEventSchema = z.object({
   type: z.literal('message.send'),
   chatId: z.string(),
   content: z.string().min(1).max(4000),
   messageType: MessageTypeSchema.optional().default('text'),
   metadata: MessageMetadataSchema.nullable().optional(),
+  replyToMessageId: z.string().uuid().optional(),
   clientMessageId: z.string().min(8).max(128)
 });
 
@@ -66,6 +72,54 @@ export const ServerMessageReadEventSchema = z.object({
   })
 });
 
+export const ServerPollVotedEventSchema = z.object({
+  type: z.literal('poll.voted'),
+  payload: z.object({
+    chatId: z.string(),
+    pollId: z.string().uuid(),
+    poll: PollDataSchema
+  })
+});
+
+export const ServerReactionAddEventSchema = z.object({
+  type: z.literal('reaction.add'),
+  payload: z.object({
+    chatId: z.string(),
+    messageId: z.string(),
+    userId: z.string(),
+    emoji: z.string(),
+    createdAt: z.string()
+  })
+});
+
+export const ServerReactionRemoveEventSchema = z.object({
+  type: z.literal('reaction.remove'),
+  payload: z.object({
+    chatId: z.string(),
+    messageId: z.string(),
+    userId: z.string(),
+    emoji: z.string()
+  })
+});
+
+export const ServerMessagePinnedEventSchema = z.object({
+  type: z.literal('message.pinned'),
+  payload: z.object({
+    chatId: z.string(),
+    messageId: z.string(),
+    pinnedByUserId: z.string(),
+    pinnedAt: z.string()
+  })
+});
+
+export const ServerMessageUnpinnedEventSchema = z.object({
+  type: z.literal('message.unpinned'),
+  payload: z.object({
+    chatId: z.string(),
+    messageId: z.string()
+  })
+});
+
 export const ServerTypingUpdateEventSchema = z.object({
   type: z.literal('typing.update'),
   payload: z.object({
@@ -78,19 +132,12 @@ export const ServerTypingUpdateEventSchema = z.object({
 });
 
 export const ServerPresenceUpdateEventSchema = z.object({
-  type: z.literal('presence.update'),
-  payload: z.object({
-    userId: z.string(),
-    status: z.enum(['online', 'offline'])
-  })
+  userId: z.string(),
+  online: z.boolean(),
+  timestamp: z.string()
 });
 
-export const ServerPresenceSyncEventSchema = z.object({
-  type: z.literal('presence.sync'),
-  payload: z.object({
-    onlineUserIds: z.array(z.string())
-  })
-});
+export const ServerPresenceSyncEventSchema = z.record(z.string(), z.boolean());
 
 export const ServerChatSyncRequiredEventSchema = z.object({
   type: z.literal('chat.sync_required'),
@@ -100,4 +147,12 @@ export const ServerChatSyncRequiredEventSchema = z.object({
   })
 });
 
+export type ClientPresenceUpdateEvent = z.infer<typeof ClientPresenceUpdateEventSchema>;
 export type ClientMessageSendEvent = z.infer<typeof ClientMessageSendEventSchema>;
+export type ServerPresenceUpdateEvent = z.infer<typeof ServerPresenceUpdateEventSchema>;
+export type ServerPresenceSyncEvent = z.infer<typeof ServerPresenceSyncEventSchema>;
+export type ServerPollVotedEvent = z.infer<typeof ServerPollVotedEventSchema>;
+export type ServerReactionAddEvent = z.infer<typeof ServerReactionAddEventSchema>;
+export type ServerReactionRemoveEvent = z.infer<typeof ServerReactionRemoveEventSchema>;
+export type ServerMessagePinnedEvent = z.infer<typeof ServerMessagePinnedEventSchema>;
+export type ServerMessageUnpinnedEvent = z.infer<typeof ServerMessageUnpinnedEventSchema>;

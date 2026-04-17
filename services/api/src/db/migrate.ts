@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { pool } from './pool.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -19,7 +19,16 @@ const migrations = [
   '010_message_moderation.sql',
   '011_direct_messages.sql',
   '012_session_devices.sql',
-  '013_invite_onboarding.sql'
+  '013_invite_onboarding.sql',
+  '014_refresh_token_grace.sql',
+  '015_messages_visible_chat_created_index.sql',
+  '016_user_timezone.sql',
+  '017_user_last_seen.sql',
+  '018_chat_member_preference_timestamps.sql',
+  '019_chat_member_last_read_message.sql',
+  '020_polls.sql',
+  '021_poll_message_type.sql',
+  '022_message_reactions_replies_pins.sql'
 ];
 
 export async function runMigrations(): Promise<void> {
@@ -57,7 +66,7 @@ export async function runMigrations(): Promise<void> {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   runMigrations()
     .then(async () => {
       await pool.end();

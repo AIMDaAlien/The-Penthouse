@@ -27,33 +27,18 @@ function validRegisterPayload() {
   return {
     username: 'alice',
     password: 'supersecurepassword',
-    inviteCode: 'PENTHOUSE-ALPHA',
+    inviteCode: 'PLACEHOLDER', // Temporary until Codex removes from backend
+    captchaToken: 'valid-captcha-payload',
     acceptTestNotice: true as const,
     testNoticeVersion: 'alpha-v1'
   };
 }
 
-// ─── [schema] invite validation edge cases ─────────────────────────────────
+// ─── [schema] captcha token validation ──────────────────────────────────────
 
-test('[schema] register: rejects missing inviteCode', () => {
-  const result = RegisterRequestSchema.safeParse({ ...validRegisterPayload(), inviteCode: undefined });
-  assert.equal(result.success, false, 'should fail without inviteCode');
-});
-
-test('[schema] register: rejects inviteCode shorter than 6 chars', () => {
-  const result = RegisterRequestSchema.safeParse({
-    ...validRegisterPayload(),
-    inviteCode: 'AB'
-  });
-  assert.equal(result.success, false, 'inviteCode min length is 6');
-});
-
-test('[schema] register: rejects inviteCode longer than 64 chars', () => {
-  const result = RegisterRequestSchema.safeParse({
-    ...validRegisterPayload(),
-    inviteCode: 'A'.repeat(65)
-  });
-  assert.equal(result.success, false, 'inviteCode max length is 64');
+test('[schema] register: rejects missing captchaToken', () => {
+  const result = RegisterRequestSchema.safeParse({ ...validRegisterPayload(), captchaToken: undefined });
+  assert.equal(result.success, false, 'should fail without captchaToken');
 });
 
 test('[schema] register: rejects username shorter than 3 chars', () => {
@@ -93,15 +78,13 @@ test('[schema] register: accepts valid payload', () => {
   assert.equal(result.success, true, 'valid register payload should pass');
 });
 
-test('[schema] register: normalizes username and invite code', () => {
+test('[schema] register: normalizes username', () => {
   const result = RegisterRequestSchema.safeParse({
     ...validRegisterPayload(),
-    username: '  Alice.Test  ',
-    inviteCode: ' penthouse-alpha '
+    username: '  Alice.Test  '
   });
   assert.equal(result.success, true);
   assert.equal(result.data?.username, 'alice.test');
-  assert.equal(result.data?.inviteCode, 'PENTHOUSE-ALPHA');
 });
 
 test('[schema] register: rejects usernames with unsupported characters', () => {
@@ -231,16 +214,16 @@ test('[schema] error shape: flatten() returns fieldErrors structure', () => {
   const result = RegisterRequestSchema.safeParse({
     username: 'ab',         // too short
     password: 'short',      // too short
-    inviteCode: 'AB',       // too short
+    captchaToken: '',       // too short (min 1)
     acceptTestNotice: false,
     testNoticeVersion: ' '
   });
   assert.equal(result.success, false);
   const flat = result.error!.flatten();
-  // All three fields must appear in fieldErrors
+  // All required fields must appear in fieldErrors
   assert.ok('username' in flat.fieldErrors, 'username error present');
   assert.ok('password' in flat.fieldErrors, 'password error present');
-  assert.ok('inviteCode' in flat.fieldErrors, 'inviteCode error present');
+  assert.ok('captchaToken' in flat.fieldErrors, 'captchaToken error present');
 });
 
 test('[schema] session summary accepts current-session device metadata', () => {

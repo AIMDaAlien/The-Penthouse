@@ -1,4 +1,4 @@
-import type { AdminMessage, AdminMessageModeration, Message, MessageType, UserStatus, ModerationAction } from '@penthouse/contracts';
+import { ReplyToSchema, type AdminMessage, type AdminMessageModeration, type Message, type MessageType, type UserStatus, type ModerationAction } from '@penthouse/contracts';
 import { avatarUrlFromFileName } from './users.js';
 
 export const MODERATED_MESSAGE_TOMBSTONE = 'Message removed by moderation.';
@@ -13,9 +13,11 @@ type BaseMessageRow = {
   content: string;
   message_type?: MessageType | null;
   metadata?: Record<string, unknown> | null;
+  reply_to_snapshot?: Record<string, unknown> | null;
   created_at: string | Date;
   client_message_id?: string | null;
   seen_at?: string | Date | null;
+  reactions?: Message['reactions'];
   sender_status?: UserStatus | null;
   hidden_by_moderation?: boolean | null;
   moderation_action?: ModerationAction | null;
@@ -42,9 +44,13 @@ export function toMemberMessage(row: BaseMessageRow): Message {
     content: hidden ? MODERATED_MESSAGE_TOMBSTONE : row.content,
     type: hidden ? 'text' : ((row.message_type as MessageType | null) ?? 'text'),
     metadata: hidden ? null : (row.metadata ?? null),
+    replyTo: hidden
+      ? null
+      : (row.reply_to_snapshot ? ReplyToSchema.parse(row.reply_to_snapshot) : null),
     createdAt: new Date(row.created_at).toISOString(),
     clientMessageId: row.client_message_id ?? undefined,
     seenAt: row.seen_at ? new Date(row.seen_at).toISOString() : null,
+    reactions: hidden ? undefined : (row.reactions ?? []),
     hidden
   };
 }
@@ -73,8 +79,10 @@ export function toAdminMessage(row: BaseMessageRow): AdminMessage {
     content: row.content,
     type: (row.message_type as MessageType | null) ?? 'text',
     metadata: row.metadata ?? null,
+    replyTo: row.reply_to_snapshot ? ReplyToSchema.parse(row.reply_to_snapshot) : null,
     createdAt: new Date(row.created_at).toISOString(),
     clientMessageId: row.client_message_id ?? undefined,
-    seenAt: row.seen_at ? new Date(row.seen_at).toISOString() : null
+    seenAt: row.seen_at ? new Date(row.seen_at).toISOString() : null,
+    reactions: row.reactions
   };
 }

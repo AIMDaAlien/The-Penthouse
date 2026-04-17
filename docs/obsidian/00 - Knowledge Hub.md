@@ -24,6 +24,13 @@ This vault is the "what we built and why" map for people joining the project lat
 13. [[13 - MVP Stability Plan v2]]
 14. [[14 - Opencode Handoff]] (historical snapshot)
 
+### PWA rebuild (v2.1 — current branch)
+
+15. [[15 - PWA Rebuild]] — why the frontend was rebuilt as a PWA and what the baseline covers
+16. [[16 - Wave A - Live Chat on the PWA]] — typing indicators, presence, read receipts, GIF, muting
+17. [[17 - Wave B - Rich Messaging]] — reactions, reply/quote, delete, pins, icon refresh
+18. [[18 - Wave C - Community Features]] — slash commands, polls, note to self
+
 ## Source docs in repo
 
 - [[../START_HERE|Start Here (non-engineer guide)]]
@@ -32,7 +39,7 @@ This vault is the "what we built and why" map for people joining the project lat
 - [[../../services/api/docs/RELIABILITY_DRILL|Reliability Drill Runbook]]
 - [[../../antigravity/customizations|Antigravity customizations]]
 
-## Current status (as of 2026-03-28)
+## Current status (as of 2026-04-15)
 
 - Rebuild baseline is in place:
   - Vue + Capacitor
@@ -103,26 +110,52 @@ This vault is the "what we built and why" map for people joining the project lat
   - AuthPanel reflects closed mode with a clear notice instead of the registration form
   - dedicated Invites tab in admin settings
 - AOSP-only emulator images are not a valid push-proof target for this Firebase path.
-- Public rollout is now live:
-  - `penthouse.blog` serves the rebuild landing page
-  - the rebuild APK and legacy APK are both downloadable
-  - `api.penthouse.blog` serves the rebuild backend
-- Android release signing is now in place for the rebuild:
+- Public PWA/API rollout is live on TrueNAS as of 2026-04-15:
+  - the rebuild stack originally ran under `/mnt/Storage_Pool/penthouse-rebuild/app`
+  - on 2026-04-15 it was copied and cut over to `/mnt/Backup/penthouse-rebuild/app` after `Storage_Pool` went offline
+  - Caddy is bound on TrueNAS host ports `9080` and `9443`
+  - DNS points `penthouse.blog` and `api.penthouse.blog` at the current observed WAN IPv4 `69.250.152.141`
+  - Caddy certificates were issued for both domains after restarting Caddy
+  - `https://penthouse.blog/` returns HTTP 200
+  - `https://api.penthouse.blog/api/v1/health` returns OK
+  - current bind mounts point at `/mnt/Backup/penthouse-rebuild/{postgres,uploads,downloads,caddy-data,caddy-config}`
+  - PWA is now the default install/update source of truth
+  - backend distribution metadata is exposed at `/api/v1/app-distribution`
+  - old APK URLs are treated as legacy: `/downloads/the-penthouse.apk` redirects to `/downloads/legacy/the-penthouse.apk`, and `/downloads/the-penthouse-rebuild.apk` redirects to `/`
+  - legacy APK status remains `unavailable` until an older APK is recovered and placed under `/mnt/Backup/penthouse-rebuild/downloads/legacy/`
+  - browser smoke reaches `/welcome`, enters `/auth`, validates the manifest, confirms `/sw.js` controls the page, and confirms the app shell renders offline for `/welcome` and `/`
+  - backend production smoke registered two fresh users, created a DM, sent a message, and read the message back from `https://api.penthouse.blog`
+  - production `JWT_SECRET` and `ALTCHA_HMAC_KEY` were rotated during the alpha deploy, invalidating old sessions by design
+  - nightly PostgreSQL dumps now run from TrueNAS cron job `1` at 03:00 into `/mnt/Backup/penthouse-rebuild/backups/postgres/`; restore was tested with a temporary database
+  - known frontend warning: the welcome page still requests `https://fonts.cdnfonts.com/css/erode?weights=400,600`, which returned HTTP 500 during smoke; the page falls back to local serif fonts
+- Android release signing was prepared for the earlier rebuild APK path, but APK distribution is now legacy-only:
   - fresh signing key created outside the repo
   - release baseline set to `versionCode 100`
-  - signed rebuild APK produced and staged in the rebuild downloads directory
+  - any recovered APK should be treated as deprecated legacy continuity, not the default release surface
 - Versioned test-account acknowledgement is implemented across backend and mobile client flow:
   - contracts updated
   - migration `007` added
   - API/realtime gating active
   - mobile register/ack flow active
-- Real-device smoke proof now exists on a normal Android phone against the public domains.
+- Real-device smoke proof exists for the earlier Android public-domain path. The 2026-04-15 PWA TrueNAS cutover has fresh browser/PWA proof and backend DM proof; mobile Add-to-Home-Screen proof remains a manual device check.
 - Public site refresh completed:
   - landing page redesigned to match mobile app visual identity (Erode logo, Ubuntu body, JetBrains Mono technical)
   - frosted glass periwinkle palette coherent with mobile app CSS variables
   - glassmorphic cards, atmospheric background, mobile-first responsive
   - copy updated to singular first-person voice for staged single-tester rollout
 
+## PWA rebuild status (as of 2026-04-09)
+
+The `pwa` branch is the active development branch and public deployment target. The PWA is the canonical release surface; older Android APKs are legacy fallback only. The current alpha release tag is `v2.1.0-alpha.1`.
+
+- PWA baseline is complete and testable in a browser
+- Wave A is complete (typing, presence, read receipts, GIF, muting)
+- Wave B is complete (reactions, reply/quote, delete, pins, UI polish)
+- Wave C is complete (slash commands, polls, note to self)
+- Remaining Wave B items still to build: image attachments, markdown rendering, message editing
+
 ## Current blockers
 
 - Strict DB release gate still needs a rerun in a working Docker/Postgres environment.
+- Manual mobile PWA install proof is still needed on a real iOS/Android browser.
+- The third-party Erode font CDN request should be removed or self-hosted in the next frontend pass.

@@ -7,10 +7,13 @@
  * Requires DATABASE_URL and JWT_SECRET in the environment.
  */
 import { createApp } from '../src/app.js';
+import { env } from '../src/config/env.js';
 import { pool } from '../src/db/pool.js';
 import { runMigrations } from '../src/db/migrate.js';
 import type { FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
+import { createChallenge, solveChallenge } from 'altcha-lib';
+import { resetAltchaReplayState } from '../src/utils/altcha.js';
 import { maybeBootstrapAdmin } from '../src/utils/users.js';
 import { assertSafeTestDatabase } from './safe-db.js';
 
@@ -65,8 +68,12 @@ export async function cleanup() {
   if (process.env.NODE_ENV === 'production') {
     throw new Error('cleanup() refused in production');
   }
+  resetAltchaReplayState();
   const client = await pool.connect();
   try {
+    await client.query('DELETE FROM poll_votes');
+    await client.query('DELETE FROM poll_options');
+    await client.query('DELETE FROM polls');
     await client.query('DELETE FROM messages');
     await client.query('DELETE FROM device_tokens');
     await client.query('DELETE FROM chat_members');
@@ -99,6 +106,7 @@ function nextInjectedRemoteAddress(): string {
 }
 
 export async function registerUser(app: FastifyInstance, username: string) {
+  const captchaToken = await createCaptchaToken();
   const res = await app.inject({
     method: 'POST',
     url: '/api/v1/auth/register',
@@ -107,6 +115,7 @@ export async function registerUser(app: FastifyInstance, username: string) {
       username,
       password: 'supersecurepassword',
       inviteCode: 'PENTHOUSE-ALPHA',
+      captchaToken,
       acceptTestNotice: true,
       testNoticeVersion: 'alpha-v1'
     }
@@ -130,6 +139,33 @@ export async function registerUser(app: FastifyInstance, username: string) {
     refreshToken: string;
     recoveryCode?: string;
   };
+}
+
+export async function createCaptchaToken(): Promise<string> {
+  const challenge = await createChallenge({
+    hmacKey: env.ALTCHA_HMAC_KEY,
+    expires: new Date(Date.now() + env.ALTCHA_CHALLENGE_EXPIRE_MS),
+    maxNumber: env.ALTCHA_MAX_NUMBER
+  });
+  const { promise } = solveChallenge(
+    challenge.challenge,
+    challenge.salt,
+    challenge.algorithm,
+    challenge.maxnumber ?? env.ALTCHA_MAX_NUMBER
+  );
+  const solution = await promise;
+
+  if (!solution) {
+    throw new Error('Failed to solve ALTCHA challenge for test setup');
+  }
+
+  return Buffer.from(
+    JSON.stringify({
+      ...challenge,
+      number: solution.number
+    }),
+    'utf8'
+  ).toString('base64');
 }
 
 export async function loginUser(app: FastifyInstance, username: string, password: string) {

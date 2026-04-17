@@ -1,0 +1,1224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Penthouse - Design Concepts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gelasio:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Ubuntu:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-color: #12121C;
+    --surface-color: #1E1E2D;
+    --accent-color: #7777C2;
+    --accent-dark: #5a5a9e;
+    --accent-hover: #C6C6E6;
+    --text-primary: #E2E2EC;
+    --text-secondary: #8C8CC5;
+    --danger-color: #ff8ca6;
+    --success-color: #34d399;
+    --border-solid: rgba(140, 140, 197, 0.2);
+
+    --font-display: 'Gelasio', serif;
+    --font-body: 'Ubuntu', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+
+    --radius-sm: 6px;
+    --radius-md: 12px;
+    --radius-lg: 20px;
+    --radius-xl: 24px;
+  }
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    background-color: var(--bg-color);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    padding: 2rem;
+  }
+
+  h1, h2, h3 {
+    font-family: var(--font-display);
+    font-weight: 500;
+  }
+
+  .concept-group {
+    margin-bottom: 6rem;
+  }
+
+  .concept-group-title {
+    font-size: 2rem;
+    color: var(--accent-hover);
+    margin-bottom: 1rem;
+    border-bottom: 1px solid var(--border-solid);
+    padding-bottom: 0.5rem;
+  }
+
+  .concept-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 3rem;
+  }
+
+  .concept-wrapper {
+    background-color: var(--bg-color);
+    border: 1px solid var(--border-solid);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-height: 400px;
+  }
+
+  .concept-label {
+    position: absolute;
+    top: 0;
+    left: 0;
+    background: var(--surface-color);
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    padding: 4px 8px;
+    border-bottom-right-radius: var(--radius-sm);
+    z-index: 10;
+  }
+
+  .mobile-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background-color: var(--bg-color);
+  }
+
+  /* --- COMPONENT 1: CHAT LIST ROW --- */
+  
+  .chat-list {
+    display: flex;
+    flex-direction: column;
+    padding: 2rem 0;
+  }
+
+  .chat-row {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    gap: 12px;
+  }
+
+  .chat-row:hover {
+    background-color: rgba(30, 30, 45, 0.5);
+  }
+
+  .chat-row.active {
+    border-left: 2px solid var(--accent-color);
+    background-color: var(--surface-color);
+    padding-left: 14px; /* compensate for 2px border */
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  }
+
+  .avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background-color: var(--accent-color);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-display);
+    font-size: 1.2rem;
+    flex-shrink: 0;
+  }
+
+  .chat-content {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .chat-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 2px;
+  }
+
+  .chat-name {
+    font-weight: 500;
+    font-size: 1rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .chat-time {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+    margin-left: 8px;
+  }
+
+  .chat-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .chat-preview {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .unread-dot {
+    width: 8px;
+    height: 8px;
+    background-color: var(--accent-color);
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-left: 8px;
+  }
+
+  /* Variations for Component 1 */
+  .c1-v2 .chat-name { font-family: var(--font-display); font-size: 1.1rem; }
+  .c1-v2 .avatar { width: 56px; height: 56px; }
+
+  .c1-v3 .chat-row { padding: 16px 24px; }
+  .c1-v3 .chat-row.active { padding-left: 22px; }
+  .c1-v3 .chat-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+
+  .c1-v4 .chat-row { flex-wrap: wrap; }
+  .c1-v4 .chat-row.active { background-color: rgba(119, 119, 194, 0.05); }
+  .c1-v4 .chat-preview { line-height: 1.6; font-size: 0.85rem; }
+
+  .c1-v5 .chat-name { font-family: var(--font-mono); text-transform: uppercase; font-size: 0.85rem; letter-spacing: 0.05em; }
+  .c1-v5 .chat-preview { font-family: var(--font-display); font-style: italic; }
+
+  .c1-v6 .chat-row.active { background-color: transparent; box-shadow: none; }
+  .c1-v6 .chat-time { opacity: 0.5; }
+
+  /* --- COMPONENT 2: MESSAGE BUBBLES --- */
+  
+  .message-list {
+    display: flex;
+    flex-direction: column;
+    padding: 2rem 1rem;
+    gap: 1.5rem;
+    overflow-y: auto;
+  }
+
+  .message {
+    display: flex;
+    flex-direction: column;
+    max-width: 85%;
+  }
+
+  .msg-sent {
+    align-self: flex-end;
+    align-items: flex-end;
+  }
+
+  .msg-received {
+    align-self: flex-start;
+    align-items: flex-start;
+  }
+
+  .bubble {
+    padding: 12px 16px;
+    border-radius: var(--radius-lg);
+    font-size: 0.95rem;
+    line-height: 1.4;
+  }
+
+  .msg-sent .bubble {
+    background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-dark) 100%);
+    color: #12121C;
+    border-bottom-right-radius: var(--radius-sm);
+  }
+
+  .msg-received .bubble {
+    background: transparent;
+    border: 1px solid var(--border-solid);
+    color: var(--text-primary);
+    border-bottom-left-radius: var(--radius-sm);
+  }
+
+  .msg-time {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    margin-top: 4px;
+  }
+
+  /* Variations for Component 2 */
+  .c2-v2 { gap: 0.75rem; }
+  .c2-v2 .msg-time { font-size: 0.75rem; margin-top: 2px; opacity: 0.7; }
+  
+  .c2-v3 .message { flex-direction: row; align-items: flex-end; gap: 8px; max-width: 90%; }
+  .c2-v3 .msg-sent { flex-direction: row-reverse; }
+  .c2-v3 .bubble { padding: 16px 24px; }
+  .c2-v3 .msg-time { margin-bottom: 4px; margin-top: 0; }
+
+  .c2-v4 .msg-sent .bubble { box-shadow: 0 4px 16px rgba(119, 119, 194, 0.3); }
+  .c2-v4 .msg-received .bubble { border-color: rgba(140, 140, 197, 0.08); }
+
+  .c2-v5 .msg-received .bubble { font-family: var(--font-display); font-size: 1.05rem; }
+
+  .c2-v6 .bubble { position: relative; padding-bottom: 24px; }
+  .c2-v6 .msg-time { position: absolute; bottom: 6px; right: 12px; margin: 0; opacity: 0.6; }
+  .c2-v6 .msg-sent .msg-time { color: rgba(18, 18, 28, 0.7); }
+
+  /* --- COMPONENT 3: EMPTY DM THREAD --- */
+  
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    padding: 2rem;
+    text-align: center;
+  }
+
+  .empty-initials {
+    font-family: var(--font-display);
+    font-size: 80px;
+    color: var(--accent-color);
+    opacity: 0.08;
+    line-height: 1;
+    margin-bottom: 1rem;
+    user-select: none;
+  }
+
+  .empty-name {
+    font-family: var(--font-display);
+    font-size: 18px;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+  }
+
+  .empty-prompt {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+  }
+
+  /* Variations for Component 3 */
+  .c3-v2 .empty-state { justify-content: flex-start; padding-top: 20%; }
+  .c3-v2 .empty-name { letter-spacing: 0.1em; }
+
+  .c3-v3 .empty-state { overflow: hidden; position: relative; }
+  .c3-v3 .empty-initials { font-size: 180px; position: absolute; top: -40px; opacity: 0.04; margin: 0; }
+  .c3-v3 .empty-name { margin-top: 120px; z-index: 1; }
+  .c3-v3 .empty-prompt { z-index: 1; }
+
+  .c3-v4 .empty-prompt { text-transform: uppercase; letter-spacing: 0.2em; font-size: 0.7rem; }
+
+  .c3-v5 .empty-state { align-items: flex-start; text-align: left; padding: 3rem; justify-content: flex-end; }
+  .c3-v5 .empty-initials { margin-left: -10px; }
+
+  .c3-v6 .empty-initials { text-shadow: -20px -20px 0 rgba(119,119,194,0.03), 20px 20px 0 rgba(119,119,194,0.03); }
+
+
+  /* --- COMPONENT 4: DATE DIVIDER + MESSAGES       --- */
+  
+  .divider-container {
+    padding: 2rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .date-divider {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    margin: 1rem 0;
+  }
+
+  .date-divider::before,
+  .date-divider::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid var(--border-solid);
+  }
+
+  .date-text {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--text-secondary);
+    padding: 0 1rem;
+  }
+
+  /* Variations for Component 4 */
+  .c4-v2 .date-divider::before { display: none; }
+  .c4-v2 .date-text { padding-left: 0; }
+
+  .c4-v3 .date-divider::after { display: none; }
+  .c4-v3 .date-text { padding-right: 0; }
+
+  .c4-v4 .date-divider::before,
+  .c4-v4 .date-divider::after { display: none; }
+  .c4-v4 .date-divider { justify-content: center; margin: 3rem 0; }
+
+  .c4-v5 .date-divider::before { border-bottom: none; height: 1px; background: linear-gradient(to right, transparent, var(--border-solid)); }
+  .c4-v5 .date-divider::after { border-bottom: none; height: 1px; background: linear-gradient(to left, transparent, var(--border-solid)); }
+
+  .c4-v6 { flex-direction: row; }
+  .c4-v6 .date-divider { flex-direction: column; width: 40px; margin: 0; }
+  .c4-v6 .date-divider::before, .c4-v6 .date-divider::after { border-bottom: none; border-left: 1px solid var(--border-solid); flex: 1; height: auto; width: 1px; }
+  .c4-v6 .date-text { writing-mode: vertical-rl; transform: rotate(180deg); padding: 1rem 0; }
+  .c4-v6 .messages-wrap { flex: 1; display: flex; flex-direction: column; gap: 1.5rem; }
+
+
+  /* --- COMPONENT 5: PROFILE CARD                  --- */
+  
+  .modal-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+  }
+
+  .profile-card {
+    background-color: var(--surface-color);
+    border: 1px solid var(--border-solid);
+    border-radius: var(--radius-xl);
+    padding: 2rem;
+    width: 100%;
+    max-width: 320px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  .profile-avatar {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background-color: var(--accent-color);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-display);
+    font-size: 1.8rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .profile-name {
+    font-family: var(--font-display);
+    font-size: 22px;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+  }
+
+  .profile-username {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 1rem;
+  }
+
+  .profile-joined {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    margin-bottom: 2rem;
+  }
+
+  .btn-outline {
+    width: 100%;
+    background: transparent;
+    border: 1px solid var(--accent-color);
+    color: var(--accent-color);
+    padding: 12px 24px;
+    border-radius: var(--radius-lg);
+    font-family: var(--font-body);
+    font-weight: 500;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .btn-outline:hover {
+    background: rgba(119, 119, 194, 0.1);
+    color: var(--accent-hover);
+    border-color: var(--accent-hover);
+  }
+
+  /* Variations for Component 5 */
+  .c5-v2 .profile-card { align-items: flex-start; text-align: left; }
+
+  .c5-v3 .profile-card { position: relative; margin-top: 36px; padding-top: 48px; }
+  .c5-v3 .profile-avatar { position: absolute; top: -36px; left: 50%; transform: translateX(-50%); margin-bottom: 0; border: 4px solid var(--surface-color); }
+
+  .c5-v4 .profile-card { max-width: 400px; padding: 1.5rem; }
+  .c5-v4 .profile-row { display: flex; align-items: center; width: 100%; gap: 1rem; margin-bottom: 1.5rem; text-align: left; }
+  .c5-v4 .profile-avatar { margin-bottom: 0; }
+  .c5-v4 .profile-info { flex: 1; }
+  .c5-v4 .profile-joined { margin-bottom: 0; margin-top: 8px; }
+
+  .c5-v5 .profile-card { padding: 40px 24px; border-radius: 0; border-width: 2px 0; }
+
+  .c5-v6 .profile-card { background: linear-gradient(180deg, rgba(119, 119, 194, 0.08) 0%, var(--surface-color) 40%); }
+
+
+</style>
+</head>
+<body>
+
+  <h1>The Penthouse &mdash; Concept Explorations</h1>
+  <p style="color: var(--text-secondary); font-family: var(--font-mono); font-size: 0.8rem; margin-top: 1rem; margin-bottom: 4rem;">Proof of Concept - UI Variations</p>
+
+  <!-- ========================================== -->
+  <!-- COMPONENT 1: CHAT LIST ROW                 -->
+  <!-- ========================================== -->
+  <section class="concept-group">
+    <h2 class="concept-group-title">1. Chat List Row</h2>
+    <div class="concept-grid">
+      
+      <!-- V1: Standard -->
+      <div class="concept-wrapper">
+        <span class="concept-label">1.1 Standard Base</span>
+        <div class="mobile-container">
+          <div class="chat-list">
+            <div class="chat-row active">
+              <div class="avatar">AK</div>
+              <div class="chat-content">
+                <div class="chat-header">
+                  <div class="chat-name">Arthur Kensington</div>
+                  <div class="chat-time">11:47 PM</div>
+                </div>
+                <div class="chat-footer">
+                  <div class="chat-preview">The reservation is confirmed for eight.</div>
+                </div>
+              </div>
+            </div>
+            <div class="chat-row">
+              <div class="avatar">EJ</div>
+              <div class="chat-content">
+                <div class="chat-header">
+                  <div class="chat-name">Eleanor James</div>
+                  <div class="chat-time">Yesterday</div>
+                </div>
+                <div class="chat-footer">
+                  <div class="chat-preview" style="color: var(--text-primary); font-weight: 500;">Are we still on for the gallery?</div>
+                  <div class="unread-dot"></div>
+                </div>
+              </div>
+            </div>
+            <div class="chat-row">
+              <div class="avatar">MR</div>
+              <div class="chat-content">
+                <div class="chat-header">
+                  <div class="chat-name">Marcus Reed</div>
+                  <div class="chat-time">Tuesday</div>
+                </div>
+                <div class="chat-footer">
+                  <div class="chat-preview">I'll send the files over shortly.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- V2: Editorial Serif Names -->
+      <div class="concept-wrapper c1-v2">
+        <span class="concept-label">1.2 Editorial Serif</span>
+        <div class="mobile-container">
+          <div class="chat-list">
+            <div class="chat-row active">
+              <div class="avatar">AK</div>
+              <div class="chat-content">
+                <div class="chat-header">
+                  <div class="chat-name">Arthur Kensington</div>
+                  <div class="chat-time">11:47 PM</div>
+                </div>
+                <div class="chat-footer">
+                  <div class="chat-preview">The reservation is confirmed for eight.</div>
+                </div>
+              </div>
+            </div>
+            <div class="chat-row">
+              <div class="avatar">EJ</div>
+              <div class="chat-content">
+                <div class="chat-header">
+                  <div class="chat-name">Eleanor James</div>
+                  <div class="chat-time">Yesterday</div>
+                </div>
+                <div class="chat-footer">
+                  <div class="chat-preview" style="color: var(--text-primary); font-weight: 500;">Are we still on for the gallery?</div>
+                  <div class="unread-dot"></div>
+                </div>
+              </div>
+            </div>
+            <div class="chat-row">
+              <div class="avatar">MR</div>
+              <div class="chat-content">
+                <div class="chat-header">
+                  <div class="chat-name">Marcus Reed</div>
+                  <div class="chat-time">Tuesday</div>
+                </div>
+                <div class="chat-footer">
+                  <div class="chat-preview">I'll send the files over shortly.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- V3: Relaxed Spacing, Right Column -->
+      <div class="concept-wrapper c1-v3">
+        <span class="concept-label">1.3 Relaxed & Right-Aligned Meta</span>
+        <div class="mobile-container">
+          <div class="chat-list">
+            <div class="chat-row active">
+              <div class="avatar">AK</div>
+              <div class="chat-content">
+                <div class="chat-name">Arthur Kensington</div>
+                <div class="chat-preview">The reservation is confirmed for eight.</div>
+              </div>
+              <div class="chat-right">
+                <div class="chat-time">11:47 PM</div>
+              </div>
+            </div>
+            <div class="chat-row">
+              <div class="avatar">EJ</div>
+              <div class="chat-content">
+                <div class="chat-name">Eleanor James</div>
+                <div class="chat-preview" style="color: var(--text-primary); font-weight: 500;">Are we still on for the gallery?</div>
+              </div>
+              <div class="chat-right">
+                <div class="chat-time">Yesterday</div>
+                <div class="unread-dot"></div>
+              </div>
+            </div>
+            <div class="chat-row">
+              <div class="avatar">MR</div>
+              <div class="chat-content">
+                <div class="chat-name">Marcus Reed</div>
+                <div class="chat-preview">I'll send the files over shortly.</div>
+              </div>
+              <div class="chat-right">
+                <div class="chat-time">Tuesday</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- V4: Wrapping layout -->
+      <div class="concept-wrapper c1-v4">
+        <span class="concept-label">1.4 Subtle Surface Active</span>
+        <div class="mobile-container">
+          <div class="chat-list">
+            <div class="chat-row active">
+              <div class="avatar">AK</div>
+              <div class="chat-content">
+                <div class="chat-header">
+                  <div class="chat-name">Arthur Kensington</div>
+                  <div class="chat-time">11:47 PM</div>
+                </div>
+                <div class="chat-footer">
+                  <div class="chat-preview">The reservation is confirmed for eight.</div>
+                </div>
+              </div>
+            </div>
+            <div class="chat-row">
+              <div class="avatar">EJ</div>
+              <div class="chat-content">
+                <div class="chat-header">
+                  <div class="chat-name">Eleanor James</div>
+                  <div class="chat-time">Yesterday</div>
+                </div>
+                <div class="chat-footer">
+                  <div class="chat-preview" style="color: var(--text-primary); font-weight: 500;">Are we still on for the gallery?</div>
+                  <div class="unread-dot"></div>
+                </div>
+              </div>
+            </div>
+            <div class="chat-row">
+              <div class="avatar">MR</div>
+              <div class="chat-content">
+                <div class="chat-header">
+                  <div class="chat-name">Marcus Reed</div>
+                  <div class="chat-time">Tuesday</div>
+                </div>
+                <div class="chat-footer">
+                  <div class="chat-preview">I'll send the files over shortly.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- V5: Structural Typographic -->
+      <div class="concept-wrapper c1-v5">
+        <span class="concept-label">1.5 Structural Typographic</span>
+        <div class="mobile-container">
+          <div class="chat-list">
+            <div class="chat-row active">
+              <div class="avatar">AK</div>
+              <div class="chat-content">
+                <div class="chat-header">
+                  <div class="chat-name">Arthur Kensington</div>
+                  <div class="chat-time">11:47 PM</div>
+                </div>
+                <div class="chat-footer">
+                  <div class="chat-preview">The reservation is confirmed for eight.</div>
+                </div>
+              </div>
+            </div>
+            <div class="chat-row">
+              <div class="avatar">EJ</div>
+              <div class="chat-content">
+                <div class="chat-header">
+                  <div class="chat-name">Eleanor James</div>
+                  <div class="chat-time">Yesterday</div>
+                </div>
+                <div class="chat-footer">
+                  <div class="chat-preview" style="color: var(--text-primary); font-weight: 500;">Are we still on for the gallery?</div>
+                  <div class="unread-dot"></div>
+                </div>
+              </div>
+            </div>
+            <div class="chat-row">
+              <div class="avatar">MR</div>
+              <div class="chat-content">
+                <div class="chat-header">
+                  <div class="chat-name">Marcus Reed</div>
+                  <div class="chat-time">Tuesday</div>
+                </div>
+                <div class="chat-footer">
+                  <div class="chat-preview">I'll send the files over shortly.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- V6: Minimalist Outline Only -->
+      <div class="concept-wrapper c1-v6">
+        <span class="concept-label">1.6 Minimalist Outline</span>
+        <div class="mobile-container">
+          <div class="chat-list">
+            <div class="chat-row active">
+              <div class="avatar">AK</div>
+              <div class="chat-content">
+                <div class="chat-header">
+                  <div class="chat-name">Arthur Kensington</div>
+                  <div class="chat-time">11:47 PM</div>
+                </div>
+                <div class="chat-footer">
+                  <div class="chat-preview">The reservation is confirmed for eight.</div>
+                </div>
+              </div>
+            </div>
+            <div class="chat-row">
+              <div class="avatar">EJ</div>
+              <div class="chat-content">
+                <div class="chat-header">
+                  <div class="chat-name">Eleanor James</div>
+                  <div class="chat-time">Yesterday</div>
+                </div>
+                <div class="chat-footer">
+                  <div class="chat-preview" style="color: var(--text-primary); font-weight: 500;">Are we still on for the gallery?</div>
+                  <div class="unread-dot"></div>
+                </div>
+              </div>
+            </div>
+            <div class="chat-row">
+              <div class="avatar">MR</div>
+              <div class="chat-content">
+                <div class="chat-header">
+                  <div class="chat-name">Marcus Reed</div>
+                  <div class="chat-time">Tuesday</div>
+                </div>
+                <div class="chat-footer">
+                  <div class="chat-preview">I'll send the files over shortly.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ========================================== -->
+  <!-- COMPONENT 2: MESSAGE BUBBLES               -->
+  <!-- ========================================== -->
+  <section class="concept-group">
+    <h2 class="concept-group-title">2. Message Bubbles</h2>
+    <div class="concept-grid">
+      
+      <!-- V1: Standard Pill -->
+      <div class="concept-wrapper">
+        <span class="concept-label">2.1 Standard Pill</span>
+        <div class="mobile-container">
+          <div class="message-list">
+            <div class="message msg-received">
+              <div class="bubble">I think we should proceed with the acquisition.</div>
+              <div class="msg-time">09:12 AM</div>
+            </div>
+            <div class="message msg-sent">
+              <div class="bubble">Agreed. I'll have the papers drafted by noon.</div>
+              <div class="msg-time">09:14 AM</div>
+            </div>
+            <div class="message msg-received">
+              <div class="bubble">Perfect. Let's review them over drinks tonight.</div>
+              <div class="msg-time">09:15 AM</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- V2: Tight Spacing -->
+      <div class="concept-wrapper c2-v2">
+        <span class="concept-label">2.2 Tighter Conversation</span>
+        <div class="mobile-container">
+          <div class="message-list">
+            <div class="message msg-received">
+              <div class="bubble">I think we should proceed with the acquisition.</div>
+              <div class="msg-time">09:12 AM</div>
+            </div>
+            <div class="message msg-sent">
+              <div class="bubble">Agreed. I'll have the papers drafted by noon.</div>
+              <div class="msg-time">09:14 AM</div>
+            </div>
+            <div class="message msg-received">
+              <div class="bubble">Perfect. Let's review them over drinks tonight.</div>
+              <div class="msg-time">09:15 AM</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- V3: Inline Meta -->
+      <div class="concept-wrapper c2-v3">
+        <span class="concept-label">2.3 Inline Timestamps</span>
+        <div class="mobile-container">
+          <div class="message-list">
+            <div class="message msg-received">
+              <div class="bubble">I think we should proceed with the acquisition.</div>
+              <div class="msg-time">09:12</div>
+            </div>
+            <div class="message msg-sent">
+              <div class="bubble">Agreed. I'll have the papers drafted by noon.</div>
+              <div class="msg-time">09:14</div>
+            </div>
+            <div class="message msg-received">
+              <div class="bubble">Perfect. Let's review them over drinks.</div>
+              <div class="msg-time">09:15</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- V4: Emphasized Sent Shadow -->
+      <div class="concept-wrapper c2-v4">
+        <span class="concept-label">2.4 Shadow & Depth</span>
+        <div class="mobile-container">
+          <div class="message-list">
+            <div class="message msg-received">
+              <div class="bubble">I think we should proceed with the acquisition.</div>
+              <div class="msg-time">09:12 AM</div>
+            </div>
+            <div class="message msg-sent">
+              <div class="bubble">Agreed. I'll have the papers drafted by noon.</div>
+              <div class="msg-time">09:14 AM</div>
+            </div>
+            <div class="message msg-received">
+              <div class="bubble">Perfect. Let's review them over drinks tonight.</div>
+              <div class="msg-time">09:15 AM</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- V5: Editorial Received Type -->
+      <div class="concept-wrapper c2-v5">
+        <span class="concept-label">2.5 Editorial Received</span>
+        <div class="mobile-container">
+          <div class="message-list">
+            <div class="message msg-received">
+              <div class="bubble">I think we should proceed with the acquisition.</div>
+              <div class="msg-time">09:12 AM</div>
+            </div>
+            <div class="message msg-sent">
+              <div class="bubble">Agreed. I'll have the papers drafted by noon.</div>
+              <div class="msg-time">09:14 AM</div>
+            </div>
+            <div class="message msg-received">
+              <div class="bubble">Perfect. Let's review them over drinks tonight.</div>
+              <div class="msg-time">09:15 AM</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- V6: Overlaid Timestamps -->
+      <div class="concept-wrapper c2-v6">
+        <span class="concept-label">2.6 Inside Timestamp</span>
+        <div class="mobile-container">
+          <div class="message-list">
+            <div class="message msg-received">
+              <div class="bubble">
+                I think we should proceed with the acquisition.
+                <div class="msg-time">09:12 AM</div>
+              </div>
+            </div>
+            <div class="message msg-sent">
+              <div class="bubble">
+                Agreed. I'll have the papers drafted by noon.
+                <div class="msg-time">09:14 AM</div>
+              </div>
+            </div>
+            <div class="message msg-received">
+              <div class="bubble">
+                Perfect. Let's review them over drinks tonight.
+                <div class="msg-time">09:15 AM</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ========================================== -->
+  <!-- COMPONENT 3: EMPTY DM THREAD               -->
+  <!-- ========================================== -->
+  <section class="concept-group">
+    <h2 class="concept-group-title">3. Empty DM Thread</h2>
+    <div class="concept-grid">
+      
+      <!-- V1: Standard Centered -->
+      <div class="concept-wrapper">
+        <span class="concept-label">3.1 Standard Centered</span>
+        <div class="mobile-container">
+          <div class="empty-state">
+            <div class="empty-initials">AK</div>
+            <div class="empty-name">Arthur Kensington</div>
+            <div class="empty-prompt">Start the conversation</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- V2: Top Offset -->
+      <div class="concept-wrapper c3-v2">
+        <span class="concept-label">3.2 Top Offset & Spaced</span>
+        <div class="mobile-container">
+          <div class="empty-state">
+            <div class="empty-initials">AK</div>
+            <div class="empty-name">Arthur Kensington</div>
+            <div class="empty-prompt">Start the conversation</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- V3: Massive Cropped Initials -->
+      <div class="concept-wrapper c3-v3">
+        <span class="concept-label">3.3 Cropped Watermark</span>
+        <div class="mobile-container">
+          <div class="empty-state">
+            <div class="empty-initials">AK</div>
+            <div class="empty-name">Arthur Kensington</div>
+            <div class="empty-prompt">Start the conversation</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- V4: All-Caps Prompt -->
+      <div class="concept-wrapper c3-v4">
+        <span class="concept-label">3.4 Strong Typographic Prompt</span>
+        <div class="mobile-container">
+          <div class="empty-state">
+            <div class="empty-initials">AK</div>
+            <div class="empty-name">Arthur Kensington</div>
+            <div class="empty-prompt">Start the conversation</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- V5: Left Aligned Brutalist -->
+      <div class="concept-wrapper c3-v5">
+        <span class="concept-label">3.5 Bottom-Left Anchor</span>
+        <div class="mobile-container">
+          <div class="empty-state">
+            <div class="empty-initials">AK</div>
+            <div class="empty-name">Arthur Kensington</div>
+            <div class="empty-prompt">Start the conversation</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- V6: Shifted Shadow/Pattern -->
+      <div class="concept-wrapper c3-v6">
+        <span class="concept-label">3.6 Offset Shadow Initials</span>
+        <div class="mobile-container">
+          <div class="empty-state">
+            <div class="empty-initials">AK</div>
+            <div class="empty-name">Arthur Kensington</div>
+            <div class="empty-prompt">Start the conversation</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ========================================== -->
+  <!-- COMPONENT 4: DATE DIVIDER + MESSAGES       -->
+  <!-- ========================================== -->
+  <section class="concept-group">
+    <h2 class="concept-group-title">4. Date Divider</h2>
+    <div class="concept-grid">
+      
+      <!-- V1: Standard -->
+      <div class="concept-wrapper">
+        <span class="concept-label">4.1 Centered Split Rule</span>
+        <div class="mobile-container divider-container">
+          <div class="message msg-received">
+            <div class="bubble">See you tomorrow.</div>
+          </div>
+          
+          <div class="date-divider">
+            <span class="date-text">thursday</span>
+          </div>
+
+          <div class="message msg-sent">
+            <div class="bubble">I've arrived at the lobby.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- V2: Left Aligned -->
+      <div class="concept-wrapper c4-v2">
+        <span class="concept-label">4.2 Left Anchored</span>
+        <div class="mobile-container divider-container">
+          <div class="message msg-received">
+            <div class="bubble">See you tomorrow.</div>
+          </div>
+          
+          <div class="date-divider">
+            <span class="date-text">thursday</span>
+          </div>
+
+          <div class="message msg-sent">
+            <div class="bubble">I've arrived at the lobby.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- V3: Right Aligned -->
+      <div class="concept-wrapper c4-v3">
+        <span class="concept-label">4.3 Right Anchored</span>
+        <div class="mobile-container divider-container">
+          <div class="message msg-received">
+            <div class="bubble">See you tomorrow.</div>
+          </div>
+          
+          <div class="date-divider">
+            <span class="date-text">thursday</span>
+          </div>
+
+          <div class="message msg-sent">
+            <div class="bubble">I've arrived at the lobby.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- V4: No Rule, Spaced -->
+      <div class="concept-wrapper c4-v4">
+        <span class="concept-label">4.4 Invisible Structure</span>
+        <div class="mobile-container divider-container">
+          <div class="message msg-received">
+            <div class="bubble">See you tomorrow.</div>
+          </div>
+          
+          <div class="date-divider">
+            <span class="date-text">thursday</span>
+          </div>
+
+          <div class="message msg-sent">
+            <div class="bubble">I've arrived at the lobby.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- V5: Gradient Rule -->
+      <div class="concept-wrapper c4-v5">
+        <span class="concept-label">4.5 Faded Gradient Rule</span>
+        <div class="mobile-container divider-container">
+          <div class="message msg-received">
+            <div class="bubble">See you tomorrow.</div>
+          </div>
+          
+          <div class="date-divider">
+            <span class="date-text">thursday</span>
+          </div>
+
+          <div class="message msg-sent">
+            <div class="bubble">I've arrived at the lobby.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- V6: Vertical Sidebar Date -->
+      <div class="concept-wrapper c4-v6">
+        <span class="concept-label">4.6 Vertical Axis</span>
+        <div class="mobile-container divider-container">
+          
+          <div class="date-divider">
+            <span class="date-text">thursday</span>
+          </div>
+
+          <div class="messages-wrap">
+            <div class="message msg-received">
+              <div class="bubble">See you tomorrow.</div>
+            </div>
+            <div class="message msg-sent">
+              <div class="bubble">I've arrived at the lobby.</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ========================================== -->
+  <!-- COMPONENT 5: PROFILE CARD                  -->
+  <!-- ========================================== -->
+  <section class="concept-group">
+    <h2 class="concept-group-title">5. Profile Card</h2>
+    <div class="concept-grid">
+      
+      <!-- V1: Standard -->
+      <div class="concept-wrapper">
+        <span class="concept-label">5.1 Standard Centered</span>
+        <div class="mobile-container modal-overlay">
+          <div class="profile-card">
+            <div class="profile-avatar">EJ</div>
+            <div class="profile-name">Eleanor James</div>
+            <div class="profile-username">@eleanorj</div>
+            <div class="profile-joined">member since march 2025</div>
+            <button class="btn-outline">Send message</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- V2: Left Aligned -->
+      <div class="concept-wrapper c5-v2">
+        <span class="concept-label">5.2 Left Structured</span>
+        <div class="mobile-container modal-overlay">
+          <div class="profile-card">
+            <div class="profile-avatar">EJ</div>
+            <div class="profile-name">Eleanor James</div>
+            <div class="profile-username">@eleanorj</div>
+            <div class="profile-joined">member since march 2025</div>
+            <button class="btn-outline">Send message</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- V3: Overlapping Avatar -->
+      <div class="concept-wrapper c5-v3">
+        <span class="concept-label">5.3 Prominent Overlap</span>
+        <div class="mobile-container modal-overlay">
+          <div class="profile-card">
+            <div class="profile-avatar">EJ</div>
+            <div class="profile-name">Eleanor James</div>
+            <div class="profile-username">@eleanorj</div>
+            <div class="profile-joined">member since march 2025</div>
+            <button class="btn-outline">Send message</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- V4: Row Layout -->
+      <div class="concept-wrapper c5-v4">
+        <span class="concept-label">5.4 Landscape Row</span>
+        <div class="mobile-container modal-overlay">
+          <div class="profile-card">
+            <div class="profile-row">
+              <div class="profile-avatar">EJ</div>
+              <div class="profile-info">
+                <div class="profile-name">Eleanor James</div>
+                <div class="profile-username">@eleanorj</div>
+                <div class="profile-joined">member since march 2025</div>
+              </div>
+            </div>
+            <button class="btn-outline">Send message</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- V5: Flush Edges -->
+      <div class="concept-wrapper c5-v5">
+        <span class="concept-label">5.5 Edge-to-Edge Container</span>
+        <div class="mobile-container modal-overlay">
+          <div class="profile-card">
+            <div class="profile-avatar">EJ</div>
+            <div class="profile-name">Eleanor James</div>
+            <div class="profile-username">@eleanorj</div>
+            <div class="profile-joined">member since march 2025</div>
+            <button class="btn-outline">Send message</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- V6: Subtle Gradient Background -->
+      <div class="concept-wrapper c5-v6">
+        <span class="concept-label">5.6 Depth Gradient</span>
+        <div class="mobile-container modal-overlay">
+          <div class="profile-card">
+            <div class="profile-avatar">EJ</div>
+            <div class="profile-name">Eleanor James</div>
+            <div class="profile-username">@eleanorj</div>
+            <div class="profile-joined">member since march 2025</div>
+            <button class="btn-outline">Send message</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+</body>
+</html>
