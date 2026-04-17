@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
+	import { PUBLIC_API_URL } from '$env/static/public';
 
 	let theme = $state<'dark' | 'light'>('dark');
 	let showApk = $state(false);
@@ -11,7 +12,7 @@
 
 	onMount(async () => {
 		try {
-			const res = await fetch('https://api.penthouse.blog/api/v1/app-distribution');
+			const res = await fetch(`${PUBLIC_API_URL}/api/v1/app-distribution`);
 			if (!res.ok) return;
 			const data = await res.json();
 			if (data?.legacyAndroid?.status === 'available') {
