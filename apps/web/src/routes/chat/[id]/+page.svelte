@@ -696,24 +696,24 @@
 
 		if (selected.length === 0) return;
 
-		const MAX = 10;
-		if (mediaFiles.length + selected.length > MAX) {
-			error = 'Max 10 files per message';
-			setTimeout(() => (error = ''), 3000);
-			return;
-		}
-
-		const MAX_BYTES = 25 * 1024 * 1024;
-		const totalSize = selected.reduce((s, f) => s + f.size, 0);
-		if (totalSize > MAX_BYTES) {
-			error = 'Total size exceeds 25 MB';
-			setTimeout(() => (error = ''), 3000);
-			return;
-		}
-
 		if (mediaFiles.length === 0) {
+			// Initial pick — validate count and total size before mounting the composer
+			const MAX = 10;
+			if (selected.length > MAX) {
+				error = 'Max 10 files per message';
+				setTimeout(() => (error = ''), 3000);
+				return;
+			}
+			const MAX_BYTES = 25 * 1024 * 1024;
+			const totalSize = selected.reduce((s, f) => s + f.size, 0);
+			if (totalSize > MAX_BYTES) {
+				error = 'Total size exceeds 25 MB';
+				setTimeout(() => (error = ''), 3000);
+				return;
+			}
 			mediaFiles = selected;
 		} else {
+			// "Add More" path — appendFiles has the authoritative live-count guard
 			mediaComposerEl?.appendFiles(selected);
 		}
 	}
