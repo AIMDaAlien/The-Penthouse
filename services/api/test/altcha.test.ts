@@ -1,7 +1,13 @@
 import test, { beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { createAltchaChallenge, resetAltchaReplayState, verifyAltchaPayloadOnce } from '../src/utils/altcha.js';
-import { createCaptchaToken } from './helpers.js';
+
+// env.ts validates DATABASE_URL + JWT_SECRET at import time — set before dynamic imports
+process.env.DATABASE_URL ??= 'postgresql://penthouse:penthouse@localhost:5432/penthouse_test';
+process.env.JWT_SECRET ??= 'altcha-test-jwt-secret-long-enough';
+
+const { createAltchaChallenge, resetAltchaReplayState, verifyAltchaPayloadOnce } =
+  await import('../src/utils/altcha.js');
+const { createCaptchaToken } = await import('./helpers.js');
 
 beforeEach(() => {
   resetAltchaReplayState();
