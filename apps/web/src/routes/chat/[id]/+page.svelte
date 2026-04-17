@@ -14,6 +14,9 @@
 	import PollCard from '$lib/components/PollCard.svelte';
 	import ReplyBar from '$lib/components/ReplyBar.svelte';
 	import MessageContextMenu from '$lib/components/MessageContextMenu.svelte';
+	import MediaComposer from '$lib/components/MediaComposer.svelte';
+	import MediaBubble from '$lib/components/MediaBubble.svelte';
+	import type { MediaSendPayload } from '$lib/components/MediaComposer.utils';
 	import type { Message, GifResult, PollData, MessageReaction } from '@penthouse/contracts';
 
 	// ─── State ────────────────────────────────────────────────────────────────
@@ -38,6 +41,11 @@
 	let inputText = $state('');
 	let sending = $state(false);
 	let scrollEl = $state<HTMLDivElement | null>(null);
+
+	// ── Media upload state ──────────────────────────────────────────────────
+	let mediaFiles = $state<File[]>([]);
+	let fileInputEl = $state<HTMLInputElement | null>(null);
+	let mediaComposerEl = $state<any>(null);
 
 	// GIF picker
 	let showGifPicker = $state(false);
@@ -616,6 +624,97 @@
 		}
 	}
 
+	// ── Media send ──────────────────────────────────────────────────────────────
+
+	async function handleMediaSend(payload: MediaSendPayload) {
+		const clientMessageId = crypto.randomUUID();
+
+		const optimistic: PendingMessage = {
+			id: `pending-${clientMessageId}`,
+			chatId,
+			senderId: currentUserId,
+			senderUsername: sessionStore.current?.user.username ?? undefined,
+			senderDisplayName: sessionStore.current?.user.displayName,
+			content: payload.caption || '\u00A0',
+			type: payload.primaryKind,
+			metadata: {
+				attachments: payload.attachments.map((a) => ({
+					uploadId: a.uploadId,
+					url: a.previewUrl,     // blob: URL for instant preview
+					previewUrl: a.previewUrl,
+					mediaKind: a.mediaKind,
+					fileName: a.fileName,
+					size: a.size
+				}))
+			},
+			createdAt: new Date().toISOString(),
+			clientMessageId,
+			pending: true
+		};
+
+		messages.push(optimistic);
+		await scrollToBottom(true);
+
+		try {
+			const res = await chats.send(chatId, {
+				chatId,
+				content: payload.caption || '\u00A0',
+				type: payload.primaryKind,
+				clientMessageId,
+				metadata: {
+					attachments: payload.attachments.map((a) => ({
+						uploadId: a.uploadId,
+						url: a.url,          // server /uploads/ path
+						previewUrl: a.previewUrl,
+						mediaKind: a.mediaKind,
+						fileName: a.fileName,
+						size: a.size
+					}))
+				}
+			});
+			// Replace optimistic with confirmed message
+			const idx = messages.findIndex((m) => (m as any).clientMessageId === clientMessageId);
+			if (idx !== -1) messages[idx] = res.message as any;
+		} catch (err: unknown) {
+			messages = messages.filter((m) => (m as any).clientMessageId !== clientMessageId);
+			error = err instanceof Error ? err.message : 'Failed to send media.';
+			setTimeout(() => (error = ''), 4000);
+		}
+	}
+
+	function openFilePicker() {
+		fileInputEl?.click();
+	}
+
+	function handleFileInputChange(e: Event) {
+		const input = e.target as HTMLInputElement;
+		const selected = Array.from(input.files ?? []);
+		input.value = ''; // allow re-picking same file
+
+		if (selected.length === 0) return;
+
+		const MAX = 10;
+		if (mediaFiles.length >= MAX) {
+			error = 'Max 10 files per message';
+			setTimeout(() => (error = ''), 3000);
+			return;
+		}
+
+		const MAX_BYTES = 25 * 1024 * 1024;
+		const totalSize = selected.reduce((s, f) => s + f.size, 0);
+		if (totalSize > MAX_BYTES) {
+			error = 'Total size exceeds 25 MB';
+			setTimeout(() => (error = ''), 3000);
+			return;
+		}
+
+		if (mediaFiles.length === 0) {
+			mediaFiles = selected;
+		} else {
+			mediaComposerEl?.appendFiles(selected);
+		}
+	}
+
 	// ─── Long-press detection ─────────────────────────────────────────────────
 
 	function startLongPress(msg: ChatMessage, e: PointerEvent) {
@@ -836,6 +935,8 @@
 												onVote={(idx) => handleVotePoll((msg.metadata as unknown as PollData).id, idx)}
 												isPending={isPending(msg)}
 											/>
+										{:else if (msg.type === 'image' || msg.type === 'video' || msg.type === 'file') && msg.metadata?.attachments}
+											<MediaBubble message={msg as Message} />
 										{:else}
 											{msg.content}
 										{/if}
@@ -897,6 +998,8 @@
 										onVote={(idx) => handleVotePoll((msg.metadata as unknown as PollData).id, idx)}
 										isPending={isPending(msg)}
 									/>
+								{:else if (msg.type === 'image' || msg.type === 'video' || msg.type === 'file') && msg.metadata?.attachments}
+									<MediaBubble message={msg as Message} />
 								{:else}
 									{msg.content}
 								{/if}
@@ -938,46 +1041,75 @@
 
 	<!-- Composer area (command picker + reply bar + input) -->
 	<div class="composer-area">
-		{#if showCommandPicker && filteredCommands.length > 0}
-			<CommandPicker
-				commands={filteredCommands}
-				selectedIndex={commandSelectedIndex}
-				onSelect={handleCommandSelect}
-				onHover={(i) => (commandSelectedIndex = i)}
+		{#if mediaFiles.length > 0}
+			<MediaComposer
+				bind:this={mediaComposerEl}
+				initialFiles={mediaFiles}
+				onSend={async (payload) => { await handleMediaSend(payload); mediaFiles = []; }}
+				onCancel={() => (mediaFiles = [])}
+				onAddMore={openFilePicker}
 			/>
+		{:else}
+			{#if showCommandPicker && filteredCommands.length > 0}
+				<CommandPicker
+					commands={filteredCommands}
+					selectedIndex={commandSelectedIndex}
+					onSelect={handleCommandSelect}
+					onHover={(i) => (commandSelectedIndex = i)}
+				/>
+			{/if}
+
+			{#if replyToMsg}
+				<ReplyBar message={replyToMsg} onDismiss={() => (replyToMsg = null)} />
+			{/if}
+
+			<div class="composer">
+				<textarea
+					class="composer-input"
+					placeholder="Message..."
+					bind:value={inputText}
+					onkeydown={handleKeydown}
+					disabled={sending}
+					rows="1"
+				></textarea>
+				<button
+					class="composer-btn attach-btn"
+					onclick={openFilePicker}
+					disabled={sending}
+					aria-label="Attach files"
+					title="Attach files"
+				>
+					<Icon name="paperclip" size={18} />
+				</button>
+				<button
+					class="composer-btn gif-btn"
+					onclick={() => (showGifPicker = true)}
+					disabled={sending}
+					aria-label="Send a GIF"
+					title="GIF"
+				>
+					<Icon name="gif" size={18} />
+				</button>
+				<button
+					class="send-btn"
+					onclick={handleSend}
+					disabled={!inputText.trim() || sending}
+					aria-label="Send message"
+				>
+					<Icon name="send" size={16} />
+				</button>
+			</div>
 		{/if}
 
-		{#if replyToMsg}
-			<ReplyBar message={replyToMsg} onDismiss={() => (replyToMsg = null)} />
-		{/if}
-
-		<div class="composer">
-			<textarea
-				class="composer-input"
-				placeholder="Message..."
-				bind:value={inputText}
-				onkeydown={handleKeydown}
-				disabled={sending}
-				rows="1"
-			></textarea>
-			<button
-				class="composer-btn gif-btn"
-				onclick={() => (showGifPicker = true)}
-				disabled={sending}
-				aria-label="Send a GIF"
-				title="GIF"
-			>
-				<Icon name="gif" size={18} />
-			</button>
-			<button
-				class="send-btn"
-				onclick={handleSend}
-				disabled={!inputText.trim() || sending}
-				aria-label="Send message"
-			>
-				<Icon name="send" size={16} />
-			</button>
-		</div>
+		<input
+			type="file"
+			bind:this={fileInputEl}
+			accept="image/*,video/*,.pdf,.txt,.md,.json,.csv,.log,.yaml,.yml,.xml"
+			multiple
+			onchange={handleFileInputChange}
+			style="display:none"
+			aria-hidden="true"
+		/>
 	</div>
 
 	<!-- GIF Picker Modal -->
