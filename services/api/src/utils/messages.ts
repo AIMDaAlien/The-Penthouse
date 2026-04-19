@@ -15,9 +15,14 @@ type BaseMessageRow = {
   metadata?: Record<string, unknown> | null;
   reply_to_snapshot?: Record<string, unknown> | null;
   created_at: string | Date;
+  edited_at?: string | Date | null;
+  edit_count?: number | string | null;
+  deleted_at?: string | Date | null;
+  deleted_by_user_id?: string | null;
   client_message_id?: string | null;
   seen_at?: string | Date | null;
   reactions?: Message['reactions'];
+  starred?: boolean | null;
   sender_status?: UserStatus | null;
   hidden_by_moderation?: boolean | null;
   moderation_action?: ModerationAction | null;
@@ -34,6 +39,7 @@ export function isHiddenFromMembers(row: Pick<BaseMessageRow, 'sender_status' | 
 
 export function toMemberMessage(row: BaseMessageRow): Message {
   const hidden = isHiddenFromMembers(row);
+  const deleted = Boolean(row.deleted_at);
   return {
     id: row.id,
     chatId: row.chat_id,
@@ -41,16 +47,21 @@ export function toMemberMessage(row: BaseMessageRow): Message {
     senderUsername: row.sender_username ?? undefined,
     senderDisplayName: row.sender_display_name ?? undefined,
     senderAvatarUrl: avatarUrlFromFileName(row.avatar_storage_key ?? null),
-    content: hidden ? MODERATED_MESSAGE_TOMBSTONE : row.content,
-    type: hidden ? 'text' : ((row.message_type as MessageType | null) ?? 'text'),
-    metadata: hidden ? null : (row.metadata ?? null),
-    replyTo: hidden
+    content: hidden ? MODERATED_MESSAGE_TOMBSTONE : (deleted ? '' : row.content),
+    type: hidden || deleted ? 'text' : ((row.message_type as MessageType | null) ?? 'text'),
+    metadata: hidden || deleted ? null : (row.metadata ?? null),
+    replyTo: hidden || deleted
       ? null
       : (row.reply_to_snapshot ? ReplyToSchema.parse(row.reply_to_snapshot) : null),
     createdAt: new Date(row.created_at).toISOString(),
+    editedAt: row.edited_at ? new Date(row.edited_at).toISOString() : null,
+    editCount: Number(row.edit_count ?? 0),
+    deletedAt: row.deleted_at ? new Date(row.deleted_at).toISOString() : null,
+    deletedByUserId: row.deleted_by_user_id ?? null,
     clientMessageId: row.client_message_id ?? undefined,
     seenAt: row.seen_at ? new Date(row.seen_at).toISOString() : null,
-    reactions: hidden ? undefined : (row.reactions ?? []),
+    reactions: hidden || deleted ? undefined : (row.reactions ?? []),
+    starred: typeof row.starred === 'boolean' ? row.starred : undefined,
     hidden
   };
 }
@@ -81,6 +92,10 @@ export function toAdminMessage(row: BaseMessageRow): AdminMessage {
     metadata: row.metadata ?? null,
     replyTo: row.reply_to_snapshot ? ReplyToSchema.parse(row.reply_to_snapshot) : null,
     createdAt: new Date(row.created_at).toISOString(),
+    editedAt: row.edited_at ? new Date(row.edited_at).toISOString() : null,
+    editCount: Number(row.edit_count ?? 0),
+    deletedAt: row.deleted_at ? new Date(row.deleted_at).toISOString() : null,
+    deletedByUserId: row.deleted_by_user_id ?? null,
     clientMessageId: row.client_message_id ?? undefined,
     seenAt: row.seen_at ? new Date(row.seen_at).toISOString() : null,
     reactions: row.reactions

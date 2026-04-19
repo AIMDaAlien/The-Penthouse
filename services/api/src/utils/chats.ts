@@ -6,6 +6,7 @@ type MemberChatSummaryRow = {
   type: 'dm' | 'channel';
   chat_name: string;
   updated_at: string;
+  archived_at: string | Date | null;
   unread_count: number;
   notifications_muted: boolean;
   counterpart_member_id: string | null;
@@ -39,6 +40,7 @@ function mapMemberChatSummary(row: MemberChatSummaryRow): ChatSummary {
     type: row.type,
     name: resolvedName,
     updatedAt: new Date(row.updated_at).toISOString(),
+    archivedAt: row.archived_at ? new Date(row.archived_at).toISOString() : null,
     unreadCount: Number(row.unread_count ?? 0),
     counterpartMemberId: isDm ? row.counterpart_member_id ?? undefined : undefined,
     counterpartAvatarUrl: isDm ? avatarUrlFromFileName(row.counterpart_avatar_storage_key) : undefined,
@@ -64,16 +66,23 @@ export function orderDirectChatParticipants(userId: string, counterpartMemberId:
   return userId < counterpartMemberId ? [userId, counterpartMemberId] : [counterpartMemberId, userId];
 }
 
-export async function listChatSummariesForUser(db: Queryable, userId: string): Promise<ChatSummary[]> {
+export async function listChatSummariesForUser(
+  db: Queryable,
+  userId: string,
+  options: { archived?: boolean } = {}
+): Promise<ChatSummary[]> {
+  const archivedPredicate = options.archived ? 'cm.archived_at IS NOT NULL' : 'cm.archived_at IS NULL';
   const result = await db.query(
     `SELECT c.id,
             c.type,
             c.name AS chat_name,
             c.updated_at,
+            cm.archived_at,
             COUNT(m.id) FILTER (
               WHERE m.sender_id <> $1
                 AND u.status = 'active'
                 AND COALESCE(m.hidden_by_moderation, FALSE) = FALSE
+                AND m.deleted_at IS NULL
                 AND m.created_at > cm.last_read_at
             )::int AS unread_count,
             cm.notifications_muted,
@@ -94,10 +103,12 @@ export async function listChatSummariesForUser(db: Queryable, userId: string): P
      LEFT JOIN messages m ON m.chat_id = c.id
      LEFT JOIN users u ON u.id = m.sender_id
      WHERE cm.user_id = $1
+       AND ${archivedPredicate}
      GROUP BY c.id,
               c.type,
               c.name,
               c.updated_at,
+              cm.archived_at,
               cm.last_read_at,
               cm.notifications_muted,
               counterpart.id,
@@ -117,10 +128,12 @@ export async function getChatSummaryForUser(db: Queryable, userId: string, chatI
             c.type,
             c.name AS chat_name,
             c.updated_at,
+            cm.archived_at,
             COUNT(m.id) FILTER (
               WHERE m.sender_id <> $1
                 AND u.status = 'active'
                 AND COALESCE(m.hidden_by_moderation, FALSE) = FALSE
+                AND m.deleted_at IS NULL
                 AND m.created_at > cm.last_read_at
             )::int AS unread_count,
             cm.notifications_muted,
@@ -142,10 +155,11 @@ export async function getChatSummaryForUser(db: Queryable, userId: string, chatI
      LEFT JOIN users u ON u.id = m.sender_id
      WHERE cm.user_id = $1
        AND c.id = $2
-     GROUP BY c.id,
+    GROUP BY c.id,
               c.type,
               c.name,
               c.updated_at,
+              cm.archived_at,
               cm.last_read_at,
               cm.notifications_muted,
               counterpart.id,

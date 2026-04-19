@@ -475,7 +475,8 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     const query = cursor
       ? `SELECT m.id, m.chat_id, m.sender_id, u.username AS sender_username, u.display_name AS sender_display_name,
                 u.status AS sender_status, media.storage_key AS avatar_storage_key,
-                m.content, m.message_type, m.metadata, m.reply_to_snapshot, m.created_at, m.client_message_id,
+                m.content, m.message_type, m.metadata, m.reply_to_snapshot, m.created_at,
+                m.edited_at, m.edit_count, m.deleted_at, m.deleted_by_user_id, m.client_message_id,
                 m.hidden_by_moderation, m.moderation_action, m.moderation_reason, m.moderation_updated_at,
                 m.moderation_actor_user_id, actor.username AS moderation_actor_username,
                 actor.display_name AS moderation_actor_display_name
@@ -488,7 +489,8 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
          LIMIT $3`
       : `SELECT m.id, m.chat_id, m.sender_id, u.username AS sender_username, u.display_name AS sender_display_name,
                 u.status AS sender_status, media.storage_key AS avatar_storage_key,
-                m.content, m.message_type, m.metadata, m.reply_to_snapshot, m.created_at, m.client_message_id,
+                m.content, m.message_type, m.metadata, m.reply_to_snapshot, m.created_at,
+                m.edited_at, m.edit_count, m.deleted_at, m.deleted_by_user_id, m.client_message_id,
                 m.hidden_by_moderation, m.moderation_action, m.moderation_reason, m.moderation_updated_at,
                 m.moderation_actor_user_id, actor.username AS moderation_actor_username,
                 actor.display_name AS moderation_actor_display_name

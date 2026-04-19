@@ -30,12 +30,19 @@
 	let error = $state('');
 	let selfChatId = $state<string | null>(null);
 
-	// Context menu state (mute toggle)
+	// Context menu state (mute toggle / archive)
 	let contextMenuChat = $state<ChatSummary | null>(null);
 	let longPressTimer: ReturnType<typeof setTimeout> | null = null;
 	let muteLoading = $state(false);
+	let archiveLoading = $state(false);
 	// Timestamp comparison prevents ghost-clicks after long-press on slow devices
 	let longPressCompletedAt = 0;
+
+	// Archived chats
+	let archivedChats = $state<ChatSummary[]>([]);
+	let showArchived = $state(false);
+	let archivedLoading = $state(false);
+	let archivedLoaded = $state(false);
 
 	// New DM modal state
 	let showNewDmModal = $state(false);
@@ -237,6 +244,51 @@
 		}
 	}
 
+	async function handleToggleArchive() {
+		if (!contextMenuChat || archiveLoading) return;
+		archiveLoading = true;
+		const target = contextMenuChat;
+		const isArchived = !!(target as any).archivedAt;
+		contextMenuChat = null;
+
+		try {
+			if (isArchived) {
+				await chats.unarchive(target.id);
+				archivedChats = archivedChats.filter((c) => c.id !== target.id);
+				chatList = [...chatList, { ...target, archivedAt: undefined } as any];
+			} else {
+				await chats.archive(target.id);
+				chatList = chatList.filter((c) => c.id !== target.id);
+				if (archivedLoaded) {
+					archivedChats = [{ ...target, archivedAt: new Date().toISOString() } as any, ...archivedChats];
+				}
+			}
+		} catch (err: unknown) {
+			error = err instanceof Error ? err.message : 'Failed to update archive.';
+			setTimeout(() => (error = ''), 4000);
+		} finally {
+			archiveLoading = false;
+		}
+	}
+
+	async function loadArchivedChats() {
+		if (archivedLoaded || archivedLoading) return;
+		archivedLoading = true;
+		try {
+			archivedChats = await chats.list({ archived: true });
+			archivedLoaded = true;
+		} catch {
+			// silently fail
+		} finally {
+			archivedLoading = false;
+		}
+	}
+
+	function toggleArchivedSection() {
+		showArchived = !showArchived;
+		if (showArchived && !archivedLoaded) loadArchivedChats();
+	}
+
 	function handleKeydown(e: KeyboardEvent) {
 		if (e.key === 'Escape') {
 			if (avatarModalProfile) { avatarModalProfile = null; return; }
@@ -284,7 +336,7 @@
 				</button>
 			</div>
 		{:else}
-			{#each sortedChatList as chat (chat.id)}
+			{#each sortedChatList.filter((c) => !(c as any).archivedAt) as chat (chat.id)}
 				{@const isSelf = chat.id === selfChatId}
 				<div
 					class="chat-row"
@@ -346,6 +398,56 @@
 					{/if}
 				</div>
 			{/each}
+
+			<!-- Archived chats collapsible -->
+			<button class="archived-toggle" onclick={toggleArchivedSection} aria-expanded={showArchived}>
+				<Icon name={showArchived ? 'chevron-down' : 'chevron-right'} size={14} />
+				<Icon name="archive" size={15} />
+				<span>Archived</span>
+			</button>
+
+			{#if showArchived}
+				{#if archivedLoading}
+					<div class="state-msg small">Loading...</div>
+				{:else if archivedChats.length === 0}
+					<div class="state-msg small">No archived chats</div>
+				{:else}
+					{#each archivedChats as chat (chat.id)}
+						<div
+							class="chat-row archived-row"
+							role="button"
+							tabindex="0"
+							onclick={() => handleChatRowClick(chat)}
+							onpointerdown={(e) => handlePointerDown(e, chat)}
+							onpointerup={handlePointerUp}
+							onpointerleave={handlePointerUp}
+							oncontextmenu={(e) => handleContextMenu(e, chat)}
+							onkeydown={(e) => e.key === 'Enter' && handleChatRowClick(chat)}
+						>
+							{#if chat.counterpartMemberId}
+								<Avatar
+									userId={chat.counterpartMemberId}
+									displayName={chat.name ?? 'DM'}
+									avatarUrl={chat.counterpartAvatarUrl}
+									size="md"
+									showPresence={false}
+								/>
+							{:else}
+								<div class="channel-icon" aria-hidden="true">
+									<Icon name="hash" size={18} />
+								</div>
+							{/if}
+							<div class="chat-info">
+								<div class="chat-name-row">
+									<span class="chat-name">{chat.name ?? 'Direct message'}</span>
+									<span class="chat-time">{formatChatTime(chat.updatedAt)}</span>
+								</div>
+								<span class="chat-subtext archived-label">Archived</span>
+							</div>
+						</div>
+					{/each}
+				{/if}
+			{/if}
 		{/if}
 	</main>
 </div>
@@ -374,9 +476,13 @@
 					<Icon name="close" size={18} />
 				</button>
 			</div>
-			<button class="sheet-action" onclick={handleToggleMute} disabled={muteLoading}>
+			<button class="sheet-action" onclick={handleToggleMute} disabled={muteLoading || archiveLoading}>
 				<Icon name={contextMenuChat.notificationsMuted ? 'bell' : 'bell-off'} size={18} />
 				{contextMenuChat.notificationsMuted ? 'Unmute notifications' : 'Mute notifications'}
+			</button>
+			<button class="sheet-action" onclick={handleToggleArchive} disabled={muteLoading || archiveLoading}>
+				<Icon name={(contextMenuChat as any).archivedAt ? 'inbox' : 'archive'} size={18} />
+				{(contextMenuChat as any).archivedAt ? 'Unarchive' : 'Archive'}
 			</button>
 		</div>
 	</div>
@@ -746,7 +852,7 @@
 		background: rgba(0, 0, 0, 0.55);
 		display: flex;
 		align-items: flex-end;
-		z-index: 50;
+		z-index: 200;
 		animation: fade-in 0.2s ease;
 	}
 
@@ -939,5 +1045,42 @@
 		padding: 2px 8px;
 		border-radius: var(--radius-full);
 		flex-shrink: 0;
+	}
+
+	/* ── Archived section ── */
+	.archived-toggle {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		width: 100%;
+		padding: var(--space-3) var(--space-5);
+		background: none;
+		border: none;
+		border-top: 1px solid var(--color-border);
+		color: var(--color-text-secondary);
+		font-size: var(--text-sm);
+		cursor: pointer;
+		font-family: var(--font-sans);
+		text-shadow: none;
+		transition: background 0.12s;
+	}
+
+	.archived-toggle:hover {
+		background: var(--color-accent-dim);
+	}
+
+	.archived-row {
+		opacity: 0.65;
+	}
+
+	.archived-label {
+		color: var(--color-text-secondary);
+		font-style: italic;
+		font-size: var(--text-xs);
+	}
+
+	.state-msg.small {
+		padding: var(--space-3) var(--space-5);
+		font-size: var(--text-xs);
 	}
 </style>

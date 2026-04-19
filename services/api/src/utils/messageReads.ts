@@ -43,7 +43,8 @@ async function getVisibleReadMarker(
        WHERE m.chat_id = $1
          AND m.id = $2
          AND u.status = 'active'
-         AND COALESCE(m.hidden_by_moderation, FALSE) = FALSE`,
+         AND COALESCE(m.hidden_by_moderation, FALSE) = FALSE
+         AND m.deleted_at IS NULL`,
       [chatId, throughMessageId]
     );
     return (target.rows[0] as ReadMarkerRow | undefined) ?? null;
@@ -56,6 +57,7 @@ async function getVisibleReadMarker(
      WHERE m.chat_id = $1
        AND u.status = 'active'
        AND COALESCE(m.hidden_by_moderation, FALSE) = FALSE
+       AND m.deleted_at IS NULL
      ORDER BY m.created_at DESC
      LIMIT 1`,
     [chatId]
@@ -111,6 +113,7 @@ export async function markChatRead(
        AND m.sender_id <> $2
        AND u.status = 'active'
        AND COALESCE(m.hidden_by_moderation, FALSE) = FALSE
+       AND m.deleted_at IS NULL
        AND m.created_at > $3`,
     [chatId, userId, effectiveReadAt.toISOString()]
   );
@@ -128,7 +131,9 @@ export async function hydrateMessageReadReceipts(
   currentUserId: string,
   messages: Message[]
 ): Promise<Message[]> {
-  const sentMessageIds = messages.filter((message) => message.senderId === currentUserId).map((message) => message.id);
+  const sentMessageIds = messages
+    .filter((message) => message.senderId === currentUserId && !message.deletedAt)
+    .map((message) => message.id);
   if (sentMessageIds.length === 0) {
     return messages;
   }

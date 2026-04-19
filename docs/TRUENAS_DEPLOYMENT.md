@@ -1,5 +1,7 @@
 # TrueNAS Deployment
 
+If TrueNAS remains unstable, see `docs/TEMP_CLOUD_HOSTING_OPTIONS.md` for the temporary cloud-hosting fallback research. Short version: Oracle Cloud Always Free is the best free lift-and-shift candidate; cheap VPS is the lowest-drama non-free fallback.
+
 This rebuild can use the same broad shape as your old TrueNAS setup:
 
 - repo clone on a dataset
@@ -131,6 +133,95 @@ docker compose \
 On a normal TrueNAS install, the public Caddy container will bind to `9080/9443`, not directly to `80/443`.
 That matches the old Penthouse deployment shape and keeps the rebuild isolated from the TrueNAS host UI.
 
+## Self-healing watchdog
+
+The Compose file already uses `restart: unless-stopped`, which covers a normal container crash.
+It does not cover a stopped Compose stack, a Docker daemon restart, or Docker storage metadata corruption such as:
+
+```text
+Error response from daemon: stat /mnt/.ix-apps/docker/overlay2/...: no such file or directory
+```
+
+Install the host watchdog so TrueNAS periodically checks the local Caddy/API path, runs a safe `docker compose up -d --remove-orphans` when the stack is down, and writes a diagnosis report when it cannot recover automatically.
+
+From the TrueNAS shell:
+
+```bash
+chmod +x /mnt/Backup/penthouse-rebuild/app/scripts/truenas-stack-watchdog.sh
+
+/mnt/Backup/penthouse-rebuild/app/scripts/truenas-stack-watchdog.sh --once
+```
+
+For server reboots, use boot mode. It retries quickly while TrueNAS brings Docker, mounts, and networking back:
+
+```bash
+/mnt/Backup/penthouse-rebuild/app/scripts/truenas-stack-watchdog.sh --boot
+```
+
+The watchdog writes:
+
+- `/mnt/Backup/penthouse-rebuild/uploads/ops/stack-watchdog-status.json`
+- `/mnt/Backup/penthouse-rebuild/uploads/ops/stack-watchdog-status.txt`
+- `/mnt/Backup/penthouse-rebuild/uploads/ops/stack-watchdog.log`
+
+Add this as a TrueNAS post-init task:
+
+```bash
+/mnt/Backup/penthouse-rebuild/app/scripts/truenas-stack-watchdog.sh --boot >> /mnt/Backup/penthouse-rebuild/uploads/ops/stack-watchdog.boot.log 2>&1
+```
+
+Add this as a TrueNAS cron job every minute for ongoing recovery:
+
+```cron
+* * * * * /mnt/Backup/penthouse-rebuild/app/scripts/truenas-stack-watchdog.sh --once >> /mnt/Backup/penthouse-rebuild/uploads/ops/stack-watchdog.cron.log 2>&1
+```
+
+That gives two layers:
+
+- boot recovery checks every `15` seconds for up to `15` minutes by default
+- steady-state recovery checks every minute after the host is already up
+
+You can tune boot mode with environment variables if TrueNAS takes longer to settle:
+
+```bash
+BOOT_MAX_SECONDS=1800 BOOT_RETRY_SECONDS=20 /mnt/Backup/penthouse-rebuild/app/scripts/truenas-stack-watchdog.sh --boot
+```
+
+For manual diagnosis without attempting a restart:
+
+```bash
+/mnt/Backup/penthouse-rebuild/app/scripts/truenas-stack-watchdog.sh --diagnose-only
+```
+
+If the report says `docker-overlay-store-missing-layer`, the Docker image/container metadata points at a missing overlay layer under `/mnt/.ix-apps/docker/overlay2`.
+Do not run `docker system prune --volumes`; that risks deleting data volumes.
+Use the report's recovery commands, which recreate containers/images without deleting the PostgreSQL bind mount:
+
+```bash
+cd /mnt/Backup/penthouse-rebuild/app/infra/compose
+
+docker compose \
+  -f docker-compose.production.yml \
+  -f docker-compose.truenas.yml \
+  --env-file .env \
+  down --remove-orphans
+
+docker compose \
+  -f docker-compose.production.yml \
+  -f docker-compose.truenas.yml \
+  --env-file .env \
+  build --no-cache api
+
+docker compose \
+  -f docker-compose.production.yml \
+  -f docker-compose.truenas.yml \
+  --env-file .env \
+  up -d --force-recreate
+```
+
+If the same overlay error returns after the rebuild, treat it as a TrueNAS Docker/App storage problem:
+check the Apps pool, confirm `/mnt/Backup/penthouse-rebuild/postgres` is intact, then restart the Docker/App service or reboot TrueNAS.
+
 ### Internal preview option
 
 If you want the rebuild running beside the old live branch before public cutover, use the preview override instead.
@@ -183,6 +274,8 @@ If you are testing directly against the TrueNAS host before public DNS/routing i
 curl -H 'Host: penthouse.blog' http://YOUR_TRUENAS_IP:9080/
 curl -H 'Host: api.penthouse.blog' http://YOUR_TRUENAS_IP:9080/api/v1/app-distribution
 curl -H 'Host: api.penthouse.blog' http://YOUR_TRUENAS_IP:9080/api/v1/health
+curl -k --resolve penthouse.blog:9443:YOUR_TRUENAS_IP https://penthouse.blog:9443/
+curl -k --resolve api.penthouse.blog:9443:YOUR_TRUENAS_IP https://api.penthouse.blog:9443/api/v1/health
 ```
 
 For the internal preview path:

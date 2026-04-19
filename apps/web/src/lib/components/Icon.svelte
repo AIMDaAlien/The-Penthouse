@@ -35,7 +35,15 @@
 		| 'edit'
 		| 'copy'
 		| 'file'
-		| 'rotate-ccw';
+		| 'rotate-ccw'
+	| 'mic'
+	| 'square'
+	| 'star'
+	| 'star-filled'
+	| 'info'
+	| 'archive'
+	| 'inbox'
+	| 'chevron-down';
 
 	interface Props {
 		name: IconName;
@@ -179,5 +187,29 @@
 	{:else if name === 'rotate-ccw'}
 		<polyline points="1 4 1 10 7 10" />
 		<path d="M3.51 15a9 9 0 1 0 .49-3.51" />
+	{:else if name === 'mic'}
+		<path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+		<path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+		<line x1="12" y1="19" x2="12" y2="23" />
+		<line x1="8" y1="23" x2="16" y2="23" />
+	{:else if name === 'square'}
+		<rect x="3" y="3" width="18" height="18" rx="2" ry="2" fill="currentColor" stroke="none" />
+	{:else if name === 'star'}
+		<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+	{:else if name === 'star-filled'}
+		<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" fill="currentColor" />
+	{:else if name === 'info'}
+		<circle cx="12" cy="12" r="10" />
+		<line x1="12" y1="16" x2="12" y2="12" />
+		<line x1="12" y1="8" x2="12.01" y2="8" />
+	{:else if name === 'archive'}
+		<polyline points="21 8 21 21 3 21 3 8" />
+		<rect x="1" y="3" width="22" height="5" />
+		<line x1="10" y1="12" x2="14" y2="12" />
+	{:else if name === 'inbox'}
+		<polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+		<path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
+	{:else if name === 'chevron-down'}
+		<polyline points="6 9 12 15 18 9" />
 	{/if}
 </svg>

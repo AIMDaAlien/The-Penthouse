@@ -17,6 +17,8 @@ import { ensureUploadsDirReady } from '../utils/uploads.js';
 
 const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.heic', '.heif']);
 const VIDEO_EXTENSIONS = new Set(['.mp4', '.mov', '.m4v', '.webm']);
+const AUDIO_EXTENSIONS = new Set(['.webm', '.ogg', '.oga', '.mp3', '.m4a']);
+const AUDIO_MIME_TYPES = new Set(['audio/webm', 'audio/ogg', 'audio/mp4', 'audio/mpeg']);
 const TEXT_EXTENSIONS = new Set(['.txt', '.md', '.json', '.log', '.csv', '.yaml', '.yml', '.xml']);
 const TEXT_MIME_TYPES = new Set([
   'application/json',
@@ -72,6 +74,10 @@ function extensionForFile(fileName: string, mimeType: string): string {
   if (mimeType === 'image/webp') return '.webp';
   if (mimeType === 'video/mp4') return '.mp4';
   if (mimeType === 'video/webm') return '.webm';
+  if (mimeType === 'audio/webm') return '.webm';
+  if (mimeType === 'audio/ogg') return '.ogg';
+  if (mimeType === 'audio/mp4') return '.m4a';
+  if (mimeType === 'audio/mpeg') return '.mp3';
   if (mimeType === 'text/plain') return '.txt';
   if (mimeType === 'text/markdown') return '.md';
   if (mimeType === 'application/json') return '.json';
@@ -86,11 +92,15 @@ function classifyUpload(fileName: string, mimeType: string): MediaKind | null {
     return 'image';
   }
 
+  if (AUDIO_MIME_TYPES.has(mimeType)) {
+    return 'file';
+  }
+
   if (VIDEO_EXTENSIONS.has(ext) || mimeType.startsWith('video/')) {
     return 'video';
   }
 
-  if (mimeType.startsWith('text/') || TEXT_MIME_TYPES.has(mimeType) || TEXT_EXTENSIONS.has(ext)) {
+  if (AUDIO_EXTENSIONS.has(ext) || mimeType.startsWith('text/') || TEXT_MIME_TYPES.has(mimeType) || TEXT_EXTENSIONS.has(ext)) {
     return 'file';
   }
 

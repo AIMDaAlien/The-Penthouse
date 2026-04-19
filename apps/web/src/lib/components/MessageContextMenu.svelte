@@ -11,8 +11,11 @@
 		onPin: () => void;
 		onUnpin: () => void;
 		onDelete: () => void;
+		onEdit: () => void;
+		onStar: () => void;
 		onClose: () => void;
 		isPinned?: boolean;
+		isStarred?: boolean;
 	}
 
 	let {
@@ -24,8 +27,11 @@
 		onPin,
 		onUnpin,
 		onDelete,
+		onEdit,
+		onStar,
 		onClose,
-		isPinned = false
+		isPinned = false,
+		isStarred = false
 	}: Props = $props();
 
 	const isOwn = $derived(message.senderId === currentUserId);
@@ -122,6 +128,20 @@
 			<span>Copy text</span>
 		</button>
 
+		{#if !message.deletedAt}
+			<button class="action-btn" onclick={() => handleAction(onStar)}>
+				<Icon name={isStarred ? 'star-filled' : 'star'} size={18} />
+				<span>{isStarred ? 'Unstar' : 'Star'}</span>
+			</button>
+		{/if}
+
+		{#if isOwn && !message.deletedAt && message.type === 'text'}
+			<button class="action-btn" onclick={() => handleAction(onEdit)}>
+				<Icon name="edit" size={18} />
+				<span>Edit</span>
+			</button>
+		{/if}
+
 		{#if isPinned}
 			<button class="action-btn" onclick={() => handleAction(onUnpin)}>
 				<Icon name="pin" size={18} />
@@ -134,10 +154,10 @@
 			</button>
 		{/if}
 
-		{#if isOwn}
+		{#if isOwn && !message.deletedAt}
 			<button class="action-btn danger" onclick={() => handleAction(onDelete)}>
 				<Icon name="trash" size={18} />
-				<span>Delete</span>
+				<span>Delete for everyone</span>
 			</button>
 		{/if}
 	</div>

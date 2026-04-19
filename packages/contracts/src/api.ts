@@ -149,8 +149,8 @@ export const PasswordResetRequestSchema = z.object({
 
 export const UserRoleSchema = z.enum(['admin', 'member']);
 export const UserStatusSchema = z.enum(['active', 'removed', 'banned']);
-// 'poll' added for Wave C — HANDOFF → Codex: add poll message handling in services/api
-export const MessageTypeSchema = z.enum(['text', 'image', 'video', 'gif', 'file', 'poll']);
+// 'poll' added for Wave C; 'audio' supports voice notes over the existing upload pipeline.
+export const MessageTypeSchema = z.enum(['text', 'image', 'video', 'gif', 'file', 'poll', 'audio']);
 export const ModerationActionSchema = z.enum(['hide', 'unhide']);
 export const RegistrationModeSchema = z.enum(['invite_only', 'closed']);
 export const MediaKindSchema = z.enum(['image', 'video', 'file']);
@@ -311,6 +311,7 @@ export const ChatSummarySchema = z.object({
   type: z.enum(['dm', 'channel']),
   name: z.string(),
   updatedAt: z.string(),
+  archivedAt: z.string().nullable().optional(),
   unreadCount: z.number().int().nonnegative().default(0),
   counterpartMemberId: z.string().optional(),
   counterpartAvatarUrl: z.string().nullable().optional(),
@@ -420,11 +421,16 @@ export const MessageSchema = z.object({
   type: MessageTypeSchema.default('text'),
   metadata: MessageMetadataSchema.nullable().optional(),
   createdAt: z.string(),
+  editedAt: z.string().nullable().optional(),
+  editCount: z.number().int().optional(),
+  deletedAt: z.string().nullable().optional(),
+  deletedByUserId: z.string().nullable().optional(),
   clientMessageId: z.string().optional(),
   seenAt: z.string().nullable().optional(),
   readReceipts: z.array(MessageReadReceiptSchema).optional(),
   reactions: z.array(MessageReactionSchema).optional(),
   replyTo: ReplyToSchema.nullable().optional(),
+  starred: z.boolean().optional(),
   hidden: z.boolean().optional()
 });
 
@@ -447,13 +453,42 @@ export const AdminModerateMessageRequestSchema = z.object({
   reason: z.string().trim().min(1).max(500)
 });
 
+const MessageContentSchema = z.string().max(4000);
+
 export const SendMessageRequestSchema = z.object({
   chatId: z.string(),
-  content: z.string().min(1).max(4000),
+  content: MessageContentSchema,
   type: MessageTypeSchema.optional().default('text'),
   metadata: MessageMetadataSchema.nullable().optional(),
   replyToMessageId: z.string().uuid().optional(),
   clientMessageId: z.string().min(8).max(128)
+}).superRefine((value, ctx) => {
+  if (value.type !== 'audio' && value.content.length < 1) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['content'],
+      message: 'Content is required'
+    });
+  }
+
+  if (value.type === 'audio') {
+    const metadata = value.metadata;
+    const audioUrl = metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+      ? (metadata as Record<string, unknown>).audioUrl
+      : null;
+
+    if (typeof audioUrl !== 'string' || audioUrl.length < 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['metadata', 'audioUrl'],
+        message: 'audioUrl is required for audio messages'
+      });
+    }
+  }
+});
+
+export const EditMessageRequestSchema = z.object({
+  content: z.string().min(1).max(4000)
 });
 
 export const AddReactionRequestSchema = z.object({
@@ -474,6 +509,16 @@ export const SendMessageResponseSchema = z.object({
   deduped: z.boolean()
 });
 
+export const EditMessageResponseSchema = z.object({
+  message: MessageSchema
+});
+
+export const DeleteMessageResponseSchema = z.object({
+  messageId: z.string(),
+  deletedAt: z.string(),
+  deletedByUserId: z.string()
+});
+
 export const MarkChatReadRequestSchema = z.object({
   throughMessageId: z.string().uuid().optional()
 });
@@ -487,6 +532,24 @@ export const MarkChatReadResponseSchema = z.object({
 
 export const PinMessageRequestSchema = z.object({
   messageId: z.string().uuid()
+});
+
+export const StarredMessageEntrySchema = z.object({
+  starredAt: z.string(),
+  message: MessageSchema.extend({
+    chatName: z.string(),
+    chatType: z.enum(['dm', 'channel'])
+  })
+});
+
+export const StarredMessagesResponseSchema = z.object({
+  items: z.array(StarredMessageEntrySchema),
+  nextCursor: z.string().nullable()
+});
+
+export const ArchiveChatResponseSchema = z.object({
+  chatId: z.string(),
+  archivedAt: z.string().nullable()
 });
 
 export const UploadResponseSchema = z.object({
@@ -683,11 +746,17 @@ export type AdminMessage = z.infer<typeof AdminMessageSchema>;
 export type AdminModerateMessageRequest = z.infer<typeof AdminModerateMessageRequestSchema>;
 export type SendMessageRequest = z.infer<typeof SendMessageRequestSchema>;
 export type SendMessageResponse = z.infer<typeof SendMessageResponseSchema>;
+export type EditMessageRequest = z.infer<typeof EditMessageRequestSchema>;
+export type EditMessageResponse = z.infer<typeof EditMessageResponseSchema>;
+export type DeleteMessageResponse = z.infer<typeof DeleteMessageResponseSchema>;
 export type AddReactionRequest = z.infer<typeof AddReactionRequestSchema>;
 export type PinnedMessage = z.infer<typeof PinnedMessageSchema>;
 export type MarkChatReadRequest = z.infer<typeof MarkChatReadRequestSchema>;
 export type MarkChatReadResponse = z.infer<typeof MarkChatReadResponseSchema>;
 export type PinMessageRequest = z.infer<typeof PinMessageRequestSchema>;
+export type StarredMessageEntry = z.infer<typeof StarredMessageEntrySchema>;
+export type StarredMessagesResponse = z.infer<typeof StarredMessagesResponseSchema>;
+export type ArchiveChatResponse = z.infer<typeof ArchiveChatResponseSchema>;
 export type UploadResponse = z.infer<typeof UploadResponseSchema>;
 export type GifResult = z.infer<typeof GifResultSchema>;
 export type GifSearchResponse = z.infer<typeof GifSearchResponseSchema>;

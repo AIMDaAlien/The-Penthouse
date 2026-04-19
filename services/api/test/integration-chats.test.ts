@@ -769,6 +769,137 @@ describe('[integration] direct messages', { skip: SKIP }, () => {
     assert.deepEqual(JSON.parse(fetched.payload), JSON.parse(updated.payload));
   });
 
+  test('archived chats are filtered and new messages restore them to the inbox', async () => {
+    const { registerUser, authHeaders } = await import('./helpers.js');
+    const alice = await registerUser(app, 'dm_archive_alice');
+    const bob = await registerUser(app, 'dm_archive_bob');
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/v1/chats/dm',
+      headers: authHeaders(alice.accessToken),
+      payload: { memberId: bob.user.id }
+    });
+    assert.equal(created.statusCode, 200);
+    const chatId = JSON.parse(created.payload).id as string;
+
+    const archived = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${chatId}/archive`,
+      headers: authHeaders(alice.accessToken)
+    });
+    assert.equal(archived.statusCode, 204);
+
+    const aliceInbox = await app.inject({
+      method: 'GET',
+      url: '/api/v1/chats',
+      headers: authHeaders(alice.accessToken)
+    });
+    assert.equal(JSON.parse(aliceInbox.payload).some((chat: any) => chat.id === chatId), false);
+
+    const aliceArchive = await app.inject({
+      method: 'GET',
+      url: '/api/v1/chats?archived=true',
+      headers: authHeaders(alice.accessToken)
+    });
+    const archivedChat = JSON.parse(aliceArchive.payload).find((chat: any) => chat.id === chatId);
+    assert.ok(archivedChat);
+    assert.ok(archivedChat.archivedAt);
+
+    const send = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${chatId}/messages`,
+      headers: authHeaders(bob.accessToken),
+      payload: {
+        content: 'back to inbox',
+        clientMessageId: 'dm-archive-unarchive-001'
+      }
+    });
+    assert.equal(send.statusCode, 200);
+
+    const restoredInbox = await app.inject({
+      method: 'GET',
+      url: '/api/v1/chats',
+      headers: authHeaders(alice.accessToken)
+    });
+    const restoredChat = JSON.parse(restoredInbox.payload).find((chat: any) => chat.id === chatId);
+    assert.ok(restoredChat);
+    assert.equal(restoredChat.archivedAt, null);
+  });
+
+  test('browser-style no-body JSON requests work for empty-action routes', async () => {
+    const { registerUser, authHeaders } = await import('./helpers.js');
+    const alice = await registerUser(app, 'dm_empty_json_alice');
+    const bob = await registerUser(app, 'dm_empty_json_bob');
+    const jsonHeaders = {
+      ...authHeaders(alice.accessToken),
+      'content-type': 'application/json'
+    };
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/v1/chats/dm',
+      headers: authHeaders(alice.accessToken),
+      payload: { memberId: bob.user.id }
+    });
+    assert.equal(created.statusCode, 200);
+    const chatId = JSON.parse(created.payload).id as string;
+
+    const self = await app.inject({
+      method: 'POST',
+      url: '/api/v1/chats/self',
+      headers: jsonHeaders
+    });
+    assert.equal(self.statusCode, 200);
+
+    const archived = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${chatId}/archive`,
+      headers: jsonHeaders
+    });
+    assert.equal(archived.statusCode, 204);
+
+    const unarchived = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${chatId}/unarchive`,
+      headers: jsonHeaders
+    });
+    assert.equal(unarchived.statusCode, 204);
+
+    const sent = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${chatId}/messages`,
+      headers: authHeaders(alice.accessToken),
+      payload: {
+        content: 'empty json actions',
+        clientMessageId: 'dm-empty-json-actions-001'
+      }
+    });
+    assert.equal(sent.statusCode, 200);
+    const messageId = JSON.parse(sent.payload).message.id as string;
+
+    const starred = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${chatId}/messages/${messageId}/star`,
+      headers: jsonHeaders
+    });
+    assert.equal(starred.statusCode, 204);
+
+    const unstarred = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/chats/${chatId}/messages/${messageId}/star`,
+      headers: jsonHeaders
+    });
+    assert.equal(unstarred.statusCode, 204);
+
+    const deleted = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/chats/${chatId}/messages/${messageId}`,
+      headers: jsonHeaders
+    });
+    assert.equal(deleted.statusCode, 204);
+  });
+
   test('muted DMs still update unread counts for the muted recipient', async () => {
     const { registerUser, authHeaders } = await import('./helpers.js');
     const alice = await registerUser(app, 'dm_unread_alice');
@@ -1706,6 +1837,120 @@ describe('[integration] wave b message interactions', { skip: SKIP }, () => {
     assert.equal(JSON.parse(limited.payload).error, 'Too many reaction updates. Try again in a minute.');
   });
 
+  test('senders can edit recent messages and broadcast message.edited', async () => {
+    const { authHeaders, cleanup, registerUser, pool } = await import('./helpers.js');
+    await cleanup();
+
+    const alice = await registerUser(app, 'edit_alice');
+    const bob = await registerUser(app, 'edit_bob');
+
+    const chats = await app.inject({
+      method: 'GET',
+      url: '/api/v1/chats',
+      headers: authHeaders(alice.accessToken)
+    });
+    const generalChatId = JSON.parse(chats.payload).find((chat: any) => chat.name === 'General').id as string;
+
+    const sent = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${generalChatId}/messages`,
+      headers: authHeaders(alice.accessToken),
+      payload: {
+        content: 'original edit target',
+        clientMessageId: 'tier-a-edit-001'
+      }
+    });
+    assert.equal(sent.statusCode, 200);
+    const messageId = JSON.parse(sent.payload).message.id as string;
+
+    const foreignEdit = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/chats/${generalChatId}/messages/${messageId}`,
+      headers: authHeaders(bob.accessToken),
+      payload: { content: 'not yours' }
+    });
+    assert.equal(foreignEdit.statusCode, 403);
+
+    const startIdx = emitted.length;
+    const edited = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/chats/${generalChatId}/messages/${messageId}`,
+      headers: authHeaders(alice.accessToken),
+      payload: { content: 'edited edit target' }
+    });
+    assert.equal(edited.statusCode, 200);
+    const editedBody = JSON.parse(edited.payload);
+    assert.equal(editedBody.message.content, 'edited edit target');
+    assert.equal(editedBody.message.editCount, 1);
+    assert.ok(editedBody.message.editedAt);
+
+    const event = emitted
+      .slice(startIdx)
+      .find((entry) => entry.room === `chat:${generalChatId}` && entry.event === 'message.edited');
+    assert.ok(event, 'editing should broadcast message.edited');
+    assert.equal((event?.data as any)?.payload?.messageId, messageId);
+    assert.equal((event?.data as any)?.payload?.content, 'edited edit target');
+
+    await pool.query(
+      `UPDATE messages
+       SET created_at = NOW() - INTERVAL '16 minutes'
+       WHERE id = $1`,
+      [messageId]
+    );
+    const staleEdit = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/chats/${generalChatId}/messages/${messageId}`,
+      headers: authHeaders(alice.accessToken),
+      payload: { content: 'too late' }
+    });
+    assert.equal(staleEdit.statusCode, 403);
+    assert.equal(JSON.parse(staleEdit.payload).error, 'Message can no longer be edited');
+  });
+
+  test('voice notes can send empty content and cannot be edited as text', async () => {
+    const { authHeaders, cleanup, registerUser } = await import('./helpers.js');
+    await cleanup();
+
+    const alice = await registerUser(app, 'audio_alice');
+
+    const chats = await app.inject({
+      method: 'GET',
+      url: '/api/v1/chats',
+      headers: authHeaders(alice.accessToken)
+    });
+    const generalChatId = JSON.parse(chats.payload).find((chat: any) => chat.name === 'General').id as string;
+
+    const sent = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${generalChatId}/messages`,
+      headers: authHeaders(alice.accessToken),
+      payload: {
+        content: '',
+        type: 'audio',
+        clientMessageId: 'tier-a-audio-001',
+        metadata: {
+          audioUploadId: randomUUID(),
+          audioUrl: '/uploads/voice-note.webm',
+          durationSeconds: 14.3
+        }
+      }
+    });
+    assert.equal(sent.statusCode, 200);
+    const body = JSON.parse(sent.payload);
+    assert.equal(body.message.content, '');
+    assert.equal(body.message.type, 'audio');
+    assert.equal(body.message.metadata.audioUrl, '/uploads/voice-note.webm');
+
+    const editAudio = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/chats/${generalChatId}/messages/${body.message.id}`,
+      headers: authHeaders(alice.accessToken),
+      payload: { content: 'audio is not text' }
+    });
+    assert.equal(editAudio.statusCode, 403);
+    assert.equal(JSON.parse(editAudio.payload).error, 'Only text messages can be edited');
+  });
+
   test('new reaction, pin, and delete routes reject non-members and foreign deletions', async () => {
     const { authHeaders, cleanup, createPrivateChannelForUser, registerUser } = await import('./helpers.js');
     await cleanup();
@@ -1770,6 +2015,13 @@ describe('[integration] wave b message interactions', { skip: SKIP }, () => {
     });
     assert.equal(nonMemberPin.statusCode, 403);
 
+    const nonMemberStar = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${privateChatId}/messages/${messageId}/star`,
+      headers: authHeaders(outsider.accessToken)
+    });
+    assert.equal(nonMemberStar.statusCode, 403);
+
     const pinRes = await app.inject({
       method: 'POST',
       url: `/api/v1/chats/${privateChatId}/messages/${messageId}/pin`,
@@ -1798,6 +2050,75 @@ describe('[integration] wave b message interactions', { skip: SKIP }, () => {
     });
     assert.equal(foreignDeleteMessage.statusCode, 403);
     assert.equal(JSON.parse(foreignDeleteMessage.payload).error, `You don't have permission to perform this action`);
+  });
+
+  test('members can star messages and list their starred inbox', async () => {
+    const { authHeaders, cleanup, registerUser } = await import('./helpers.js');
+    await cleanup();
+
+    const alice = await registerUser(app, 'star_alice');
+    const bob = await registerUser(app, 'star_bob');
+
+    const chats = await app.inject({
+      method: 'GET',
+      url: '/api/v1/chats',
+      headers: authHeaders(alice.accessToken)
+    });
+    const generalChatId = JSON.parse(chats.payload).find((chat: any) => chat.name === 'General').id as string;
+
+    const sent = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${generalChatId}/messages`,
+      headers: authHeaders(alice.accessToken),
+      payload: {
+        content: 'star this one',
+        clientMessageId: 'tier-a-star-001'
+      }
+    });
+    assert.equal(sent.statusCode, 200);
+    const messageId = JSON.parse(sent.payload).message.id as string;
+
+    const starred = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${generalChatId}/messages/${messageId}/star`,
+      headers: authHeaders(bob.accessToken)
+    });
+    assert.equal(starred.statusCode, 204);
+
+    const history = await app.inject({
+      method: 'GET',
+      url: `/api/v1/chats/${generalChatId}/messages`,
+      headers: authHeaders(bob.accessToken)
+    });
+    const hydrated = JSON.parse(history.payload).find((message: any) => message.id === messageId);
+    assert.equal(hydrated.starred, true);
+
+    const list = await app.inject({
+      method: 'GET',
+      url: '/api/v1/me/starred',
+      headers: authHeaders(bob.accessToken)
+    });
+    assert.equal(list.statusCode, 200);
+    const body = JSON.parse(list.payload);
+    assert.equal(body.items.length, 1);
+    assert.equal(body.items[0].message.id, messageId);
+    assert.equal(body.items[0].message.chatName, 'General');
+    assert.equal(body.items[0].message.chatType, 'channel');
+    assert.equal(body.items[0].message.starred, true);
+
+    const unstarred = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/chats/${generalChatId}/messages/${messageId}/star`,
+      headers: authHeaders(bob.accessToken)
+    });
+    assert.equal(unstarred.statusCode, 204);
+
+    const after = await app.inject({
+      method: 'GET',
+      url: '/api/v1/me/starred',
+      headers: authHeaders(bob.accessToken)
+    });
+    assert.equal(JSON.parse(after.payload).items.length, 0);
   });
 
   test('reply snapshots survive deletion of the source message', async () => {
@@ -1907,7 +2228,7 @@ describe('[integration] wave b message interactions', { skip: SKIP }, () => {
     });
   });
 
-  test('own-message deletion emits the moderation tombstone', async () => {
+  test('own-message deletion emits a deletion tombstone', async () => {
     const { authHeaders, cleanup, registerUser } = await import('./helpers.js');
     await cleanup();
 
@@ -1941,12 +2262,13 @@ describe('[integration] wave b message interactions', { skip: SKIP }, () => {
     });
     assert.equal(deleted.statusCode, 204);
 
-    const moderationEvent = emitted
+    const deleteEvent = emitted
       .slice(startIdx)
-      .find((entry) => entry.room === `chat:${generalChatId}` && entry.event === 'message.moderated');
-    assert.ok(moderationEvent, 'own-message deletion should reuse message.moderated');
-    assert.equal((moderationEvent?.data as any)?.payload?.action, 'hide');
-    assert.equal((moderationEvent?.data as any)?.payload?.message?.hidden, true);
+      .find((entry) => entry.room === `chat:${generalChatId}` && entry.event === 'message.deleted');
+    assert.ok(deleteEvent, 'own-message deletion should broadcast message.deleted');
+    assert.equal((deleteEvent?.data as any)?.payload?.messageId, replyBody.message.id);
+    assert.equal((deleteEvent?.data as any)?.payload?.deletedByUserId, bob.user.id);
+    assert.ok((deleteEvent?.data as any)?.payload?.deletedAt);
 
     const afterDelete = await app.inject({
       method: 'GET',
@@ -1954,11 +2276,13 @@ describe('[integration] wave b message interactions', { skip: SKIP }, () => {
       headers: authHeaders(alice.accessToken)
     });
     const deletedMessage = JSON.parse(afterDelete.payload).find((message: any) => message.id === replyBody.message.id);
-    assert.equal(deletedMessage.hidden, true);
-    assert.equal(deletedMessage.content, 'Message removed by moderation.');
+    assert.equal(deletedMessage.hidden, false);
+    assert.equal(deletedMessage.content, '');
+    assert.ok(deletedMessage.deletedAt);
+    assert.equal(deletedMessage.deletedByUserId, bob.user.id);
   });
 
-  test('pins preserve snapshots, broadcast events, and enforce a maximum of five per chat', async () => {
+  test('pins broadcast events, enforce a maximum of five, and are removed when content is deleted', async () => {
     const { authHeaders, cleanup, registerUser } = await import('./helpers.js');
     await cleanup();
 
@@ -2028,7 +2352,7 @@ describe('[integration] wave b message interactions', { skip: SKIP }, () => {
       headers: authHeaders(alice.accessToken)
     });
     const pinnedSnapshot = JSON.parse(pinsAfterDelete.payload).find((pin: any) => pin.messageId === messageIds[0]);
-    assert.equal(pinnedSnapshot.content, 'pin candidate 1', 'pin list should keep the original snapshot content');
+    assert.equal(pinnedSnapshot, undefined, 'delete-for-everyone should remove pinned snapshots that contain deleted content');
 
     const unpin = await app.inject({
       method: 'DELETE',
@@ -2161,7 +2485,7 @@ describe('[integration] wave b message interactions', { skip: SKIP }, () => {
     assert.equal(JSON.parse(limited.payload).error, 'Too many pin updates. Try again in a minute.');
   });
 
-  test('admins can delete another member message through the member delete route', async () => {
+  test('admin role does not bypass sender-only delete-for-everyone', async () => {
     const { authHeaders, cleanup, registerUser } = await import('./helpers.js');
     const { env } = await import('../src/config/env.js');
     await cleanup();
@@ -2197,7 +2521,8 @@ describe('[integration] wave b message interactions', { skip: SKIP }, () => {
         url: `/api/v1/chats/${generalChatId}/messages/${messageId}`,
         headers: authHeaders(admin.accessToken)
       });
-      assert.equal(deleted.statusCode, 204);
+      assert.equal(deleted.statusCode, 403);
+      assert.equal(JSON.parse(deleted.payload).error, `You don't have permission to perform this action`);
     } finally {
       env.ADMIN_BOOTSTRAP_USERNAME = originalBootstrap;
     }

@@ -29,11 +29,34 @@ export const ClientPresenceUpdateEventSchema = z.object({
 export const ClientMessageSendEventSchema = z.object({
   type: z.literal('message.send'),
   chatId: z.string(),
-  content: z.string().min(1).max(4000),
+  content: z.string().max(4000),
   messageType: MessageTypeSchema.optional().default('text'),
   metadata: MessageMetadataSchema.nullable().optional(),
   replyToMessageId: z.string().uuid().optional(),
   clientMessageId: z.string().min(8).max(128)
+}).superRefine((value, ctx) => {
+  if (value.messageType !== 'audio' && value.content.length < 1) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['content'],
+      message: 'Content is required'
+    });
+  }
+
+  if (value.messageType === 'audio') {
+    const metadata = value.metadata;
+    const audioUrl = metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+      ? (metadata as Record<string, unknown>).audioUrl
+      : null;
+
+    if (typeof audioUrl !== 'string' || audioUrl.length < 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['metadata', 'audioUrl'],
+        message: 'audioUrl is required for audio messages'
+      });
+    }
+  }
 });
 
 export const ServerMessageNewEventSchema = z.object({
@@ -49,6 +72,27 @@ export const ServerMessageModeratedEventSchema = z.object({
     action: ModerationActionSchema,
     moderatedAt: z.string(),
     message: MessageSchema
+  })
+});
+
+export const ServerMessageEditedEventSchema = z.object({
+  type: z.literal('message.edited'),
+  payload: z.object({
+    chatId: z.string(),
+    messageId: z.string(),
+    content: z.string(),
+    editedAt: z.string(),
+    editCount: z.number().int()
+  })
+});
+
+export const ServerMessageDeletedEventSchema = z.object({
+  type: z.literal('message.deleted'),
+  payload: z.object({
+    chatId: z.string(),
+    messageId: z.string(),
+    deletedAt: z.string(),
+    deletedByUserId: z.string()
   })
 });
 
@@ -151,6 +195,8 @@ export type ClientPresenceUpdateEvent = z.infer<typeof ClientPresenceUpdateEvent
 export type ClientMessageSendEvent = z.infer<typeof ClientMessageSendEventSchema>;
 export type ServerPresenceUpdateEvent = z.infer<typeof ServerPresenceUpdateEventSchema>;
 export type ServerPresenceSyncEvent = z.infer<typeof ServerPresenceSyncEventSchema>;
+export type ServerMessageEditedEvent = z.infer<typeof ServerMessageEditedEventSchema>;
+export type ServerMessageDeletedEvent = z.infer<typeof ServerMessageDeletedEventSchema>;
 export type ServerPollVotedEvent = z.infer<typeof ServerPollVotedEventSchema>;
 export type ServerReactionAddEvent = z.infer<typeof ServerReactionAddEventSchema>;
 export type ServerReactionRemoveEvent = z.infer<typeof ServerReactionRemoveEventSchema>;

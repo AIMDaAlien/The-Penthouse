@@ -5,6 +5,8 @@ import {
   AppDistributionResponseSchema,
   ClientPresenceUpdateEventSchema,
   PollDataSchema,
+  ServerMessageDeletedEventSchema,
+  ServerMessageEditedEventSchema,
   RegisterRequestSchema,
   ServerMessagePinnedEventSchema,
   ServerMessageUnpinnedEventSchema,
@@ -176,4 +178,32 @@ test('pin realtime payload schemas are enforced', () => {
 
   assert.equal(pinned.success, true);
   assert.equal(unpinned.success, true);
+});
+
+test('edit and delete realtime payload schemas are enforced', () => {
+  const editedAt = new Date().toISOString();
+  const deletedAt = new Date().toISOString();
+
+  const edited = ServerMessageEditedEventSchema.safeParse({
+    type: 'message.edited',
+    payload: {
+      chatId: 'chat-1',
+      messageId: 'message-1',
+      content: 'Updated message',
+      editedAt,
+      editCount: 1
+    }
+  });
+  const deleted = ServerMessageDeletedEventSchema.safeParse({
+    type: 'message.deleted',
+    payload: {
+      chatId: 'chat-1',
+      messageId: 'message-1',
+      deletedAt,
+      deletedByUserId: 'user-1'
+    }
+  });
+
+  assert.equal(edited.success, true);
+  assert.equal(deleted.success, true);
 });

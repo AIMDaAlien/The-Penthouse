@@ -42,6 +42,10 @@ type PersistedMessageRow = {
   metadata: Message['metadata'];
   reply_to_snapshot: Message['replyTo'];
   created_at: string;
+  edited_at: string | null;
+  edit_count: number;
+  deleted_at: string | null;
+  deleted_by_user_id: string | null;
   client_message_id: string;
   seen_at: null;
 };
@@ -65,6 +69,10 @@ async function loadPersistedMessage(
             m.metadata,
             m.reply_to_snapshot,
             m.created_at,
+            m.edited_at,
+            m.edit_count,
+            m.deleted_at,
+            m.deleted_by_user_id,
             m.client_message_id,
             NULL::timestamptz AS seen_at
        FROM messages m
@@ -96,6 +104,10 @@ export async function loadPersistedMessageById(
             m.metadata,
             m.reply_to_snapshot,
             m.created_at,
+            m.edited_at,
+            m.edit_count,
+            m.deleted_at,
+            m.deleted_by_user_id,
             m.client_message_id,
             NULL::timestamptz AS seen_at
        FROM messages m
@@ -188,6 +200,13 @@ export async function sendChatMessage(options: SendChatMessageOptions) {
 
       if (!deduped) {
         await client.query('UPDATE chats SET updated_at = NOW() WHERE id = $1', [options.chatId]);
+        await client.query(
+          `UPDATE chat_members
+           SET archived_at = NULL
+           WHERE chat_id = $1
+             AND archived_at IS NOT NULL`,
+          [options.chatId]
+        );
       }
     }
 

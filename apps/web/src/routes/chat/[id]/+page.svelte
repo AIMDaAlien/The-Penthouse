@@ -1,8 +1,10 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { onMount, onDestroy, tick } from 'svelte';
-	import { chats, polls, reactions, pins } from '$services/api';
+	import { onDestroy, tick } from 'svelte';
+	import type { PageData } from './$types';
+	import { chats, me, polls, reactions, pins } from '$services/api';
+	import { formatMessageContent } from '$lib/utils/messageFormat';
 	import { sessionStore } from '$stores/session.svelte';
 	import { socketStore } from '$stores/socket.svelte';
 	import Avatar from '$lib/components/Avatar.svelte';
@@ -20,10 +22,13 @@
 	import type { MediaSendPayload } from '$lib/components/MediaComposer.utils';
 	import type { Message, GifResult, PollData, MessageReaction } from '@penthouse/contracts';
 
+	// ─── Props / route data ───────────────────────────────────────────────────
+
+	const { data } = $props<{ data: PageData }>();
+
 	// ─── State ────────────────────────────────────────────────────────────────
 
-	// Route always provides id — non-null assert is safe here
-	const chatId = $derived(page.params.id ?? '');
+	const chatId = $derived(data.chatId ?? '');
 	const currentUserId = $derived(sessionStore.current?.user.id ?? '');
 
 	// Connection status
@@ -94,6 +99,21 @@
 
 	// Presence
 	let userPresenceMap = $state<Map<string, boolean>>(new Map());
+
+	// Editing
+	let editingMsgId = $state<string | null>(null);
+	let editingContent = $state('');
+	let editSaving = $state(false);
+
+	// Starring
+	let starredMessageIds = $state<Set<string>>(new Set());
+
+	// Voice recording
+	let isRecording = $state(false);
+	let recordingDuration = $state(0);
+	let recordingTimer: ReturnType<typeof setInterval> | null = null;
+	let mediaRecorder: MediaRecorder | null = null;
+	let audioChunks: Blob[] = [];
 
 	// ─── Helpers ──────────────────────────────────────────────────────────────
 
@@ -253,34 +273,52 @@
 
 	// ─── Load messages ────────────────────────────────────────────────────────
 
-	onMount(async () => {
-		try {
-			const [msgList, chatList, pinList] = await Promise.all([
-				chats.messages(chatId),
-				chats.list(),
-				pins.list(chatId).catch(() => [] as Awaited<ReturnType<typeof pins.list>>),
-				chats.markRead(chatId).catch(() => {}) // non-fatal
-			]);
-			messages = msgList;
-			oldestMessageId = msgList.length > 0 ? msgList[0].id : null;
-			pinnedMessageIds = new Set(pinList.map((p) => p.messageId));
-			chatName = page.url.searchParams.get('name') ?? 'Chat';
+	$effect(() => {
+		const id = chatId;
+		const initialName = page.url.searchParams.get('name') ?? 'Chat';
+		let cancelled = false;
 
-			// Find this chat in the list to get counterpart info for DMs
-			const chatSummary = chatList.find(c => c.id === chatId);
-			if (chatSummary) {
-				chatType = chatSummary.type;
-				if (chatSummary.type === 'dm' && chatSummary.counterpartMemberId) {
-					counterpartMemberId = chatSummary.counterpartMemberId;
-					counterpartAvatarUrl = chatSummary.counterpartAvatarUrl ?? null;
+		messages = [];
+		loading = true;
+		error = '';
+		hasMoreMessages = true;
+		oldestMessageId = null;
+		pinnedMessageIds = new Set();
+
+		(async () => {
+			try {
+				const [msgList, chatList, pinList] = await Promise.all([
+					chats.messages(id),
+					chats.list(),
+					pins.list(id).catch(() => [] as Awaited<ReturnType<typeof pins.list>>),
+					chats.markRead(id).catch(() => {})
+				]);
+				if (cancelled) return;
+				messages = msgList;
+				oldestMessageId = msgList.length > 0 ? msgList[0].id : null;
+				pinnedMessageIds = new Set(pinList.map((p) => p.messageId));
+				chatName = initialName;
+
+				const chatSummary = chatList.find(c => c.id === id);
+				if (chatSummary) {
+					chatType = chatSummary.type;
+					if (chatSummary.type === 'dm' && chatSummary.counterpartMemberId) {
+						counterpartMemberId = chatSummary.counterpartMemberId;
+						counterpartAvatarUrl = chatSummary.counterpartAvatarUrl ?? null;
+					}
+				}
+			} catch (err: unknown) {
+				if (cancelled) return;
+				error = err instanceof Error ? err.message : 'Failed to load messages.';
+			} finally {
+				if (!cancelled) {
+					loading = false;
+					await scrollToBottom();
 				}
 			}
-		} catch (err: unknown) {
-			error = err instanceof Error ? err.message : 'Failed to load messages.';
-		} finally {
-			loading = false;
-			await scrollToBottom();
-		}
+		})();
+
+		return () => { cancelled = true; };
 	});
 
 	// ─── Socket events (from @penthouse/contracts/src/events.ts) ───────────────
@@ -429,6 +467,20 @@
 			if (idx !== -1) messages[idx] = message;
 		}
 
+		function onMessageEdited(envelope: { type: string; payload: { chatId: string; messageId: string; content: string; editedAt: string; editCount: number } }) {
+			const { chatId: evtChatId, messageId, content, editedAt, editCount } = envelope.payload;
+			if (evtChatId !== chatId) return;
+			const idx = messages.findIndex((m) => m.id === messageId);
+			if (idx !== -1) messages[idx] = { ...messages[idx], content, editedAt, editCount } as any;
+		}
+
+		function onMessageDeleted(envelope: { type: string; payload: { chatId: string; messageId: string; deletedAt: string; deletedByUserId: string } }) {
+			const { chatId: evtChatId, messageId, deletedAt } = envelope.payload;
+			if (evtChatId !== chatId) return;
+			const idx = messages.findIndex((m) => m.id === messageId);
+			if (idx !== -1) messages[idx] = { ...messages[idx], deletedAt, content: '' } as any;
+		}
+
 		socket.on('message.new', onMessageNew);
 		socket.on('message.ack', onMessageAck);
 		socket.on('typing.update', onTypingUpdate);
@@ -440,6 +492,8 @@
 		socket.on('message.pinned', onMessagePinned);
 		socket.on('message.unpinned', onMessageUnpinned);
 		socket.on('message.moderated', onMessageModerated);
+		socket.on('message.edited', onMessageEdited);
+		socket.on('message.deleted', onMessageDeleted);
 
 		return () => {
 			socket.off('message.new', onMessageNew);
@@ -453,6 +507,8 @@
 			socket.off('message.pinned', onMessagePinned);
 			socket.off('message.unpinned', onMessageUnpinned);
 			socket.off('message.moderated', onMessageModerated);
+			socket.off('message.edited', onMessageEdited);
+			socket.off('message.deleted', onMessageDeleted);
 			if (typingStopTimer) clearTimeout(typingStopTimer);
 			for (const t of typingTimeouts.values()) clearTimeout(t);
 		};
@@ -821,8 +877,8 @@
 		if (msgIdx === -1) return;
 
 		const original = messages[msgIdx];
-		// Optimistic: show as hidden
-		messages[msgIdx] = { ...original, hidden: true };
+		const tombstone = { ...original, deletedAt: new Date().toISOString(), content: '' } as any;
+		messages[msgIdx] = tombstone;
 
 		try {
 			await chats.deleteMessage(chatId, messageId);
@@ -830,6 +886,161 @@
 			messages[msgIdx] = original;
 			error = 'Failed to delete message.';
 			setTimeout(() => (error = ''), 3000);
+		}
+	}
+
+	// ─── Edit message ─────────────────────────────────────────────────────────
+
+	function startEditing(msg: Message) {
+		editingMsgId = msg.id;
+		editingContent = msg.content;
+	}
+
+	function cancelEdit() {
+		editingMsgId = null;
+		editingContent = '';
+	}
+
+	async function submitEdit() {
+		if (!editingMsgId || !editingContent.trim() || editSaving) return;
+		const msgId = editingMsgId;
+		const content = editingContent.trim();
+		const msgIdx = messages.findIndex((m) => m.id === msgId);
+		if (msgIdx === -1) { cancelEdit(); return; }
+
+		const original = messages[msgIdx];
+		editSaving = true;
+		messages[msgIdx] = { ...original, content, editedAt: new Date().toISOString() } as any;
+		cancelEdit();
+
+		try {
+			const res = await chats.editMessage(chatId, msgId, content);
+			messages[msgIdx] = { ...messages[msgIdx], ...res } as any;
+		} catch {
+			messages[msgIdx] = original;
+			error = 'Failed to edit message.';
+			setTimeout(() => (error = ''), 3000);
+		} finally {
+			editSaving = false;
+		}
+	}
+
+	// ─── Star message ──────────────────────────────────────────────────────────
+
+	async function handleStarMessage(messageId: string) {
+		const isStarred = starredMessageIds.has(messageId);
+		if (isStarred) {
+			starredMessageIds = new Set([...starredMessageIds].filter((id) => id !== messageId));
+		} else {
+			starredMessageIds = new Set([...starredMessageIds, messageId]);
+		}
+		try {
+			if (isStarred) {
+				await chats.unstarMessage(chatId, messageId);
+			} else {
+				await chats.starMessage(chatId, messageId);
+			}
+		} catch {
+			// Revert
+			if (isStarred) {
+				starredMessageIds = new Set([...starredMessageIds, messageId]);
+			} else {
+				starredMessageIds = new Set([...starredMessageIds].filter((id) => id !== messageId));
+			}
+			error = 'Failed to update star.';
+			setTimeout(() => (error = ''), 3000);
+		}
+	}
+
+	// ─── Voice recording ──────────────────────────────────────────────────────
+
+	async function startRecording() {
+		try {
+			const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+			audioChunks = [];
+			mediaRecorder = new MediaRecorder(stream);
+			mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunks.push(e.data); };
+			mediaRecorder.start();
+			isRecording = true;
+			recordingDuration = 0;
+			recordingTimer = setInterval(() => { recordingDuration++; }, 1000);
+		} catch {
+			error = 'Microphone access denied.';
+			setTimeout(() => (error = ''), 3000);
+		}
+	}
+
+	function stopRecording(): Promise<Blob> {
+		return new Promise((resolve) => {
+			if (!mediaRecorder) return;
+			mediaRecorder.onstop = () => {
+				const blob = new Blob(audioChunks, { type: 'audio/webm' });
+				mediaRecorder?.stream.getTracks().forEach((t) => t.stop());
+				resolve(blob);
+			};
+			mediaRecorder.stop();
+		});
+	}
+
+	async function finishRecording() {
+		if (recordingTimer) { clearInterval(recordingTimer); recordingTimer = null; }
+		const duration = recordingDuration;
+		isRecording = false;
+		const blob = await stopRecording();
+		await sendVoiceNote(blob, duration);
+	}
+
+	function cancelRecording() {
+		if (recordingTimer) { clearInterval(recordingTimer); recordingTimer = null; }
+		if (mediaRecorder) {
+			mediaRecorder.stream.getTracks().forEach((t) => t.stop());
+			mediaRecorder = null;
+		}
+		isRecording = false;
+		recordingDuration = 0;
+		audioChunks = [];
+	}
+
+	async function sendVoiceNote(blob: Blob, durationSeconds: number) {
+		sending = true;
+		const clientMessageId = crypto.randomUUID();
+		const file = new File([blob], 'voice-note.webm', { type: 'audio/webm' });
+
+		const optimistic: PendingMessage = {
+			id: `pending-${clientMessageId}`,
+			chatId,
+			senderId: currentUserId,
+			senderUsername: sessionStore.current?.user.username ?? undefined,
+			senderDisplayName: sessionStore.current?.user.displayName,
+			content: '',
+			type: 'audio',
+			metadata: { audioUrl: URL.createObjectURL(blob), durationSeconds },
+			createdAt: new Date().toISOString(),
+			clientMessageId,
+			pending: true
+		};
+		(optimistic as any).clientSendTime = Date.now();
+		messages.push(optimistic);
+		await scrollToBottom(true);
+
+		try {
+			const { media } = await import('$services/api');
+			const upload = await media.upload(file);
+			const res = await chats.send(chatId, {
+				chatId,
+				content: '',
+				type: 'audio',
+				clientMessageId,
+				metadata: { audioUploadId: upload.id, audioUrl: upload.url, durationSeconds }
+			});
+			const idx = messages.findIndex((m) => m.clientMessageId === clientMessageId);
+			if (idx !== -1) messages[idx] = res.message;
+		} catch (err: unknown) {
+			messages = messages.filter((m) => m.clientMessageId !== clientMessageId);
+			error = err instanceof Error ? err.message : 'Failed to send voice note.';
+			setTimeout(() => (error = ''), 4000);
+		} finally {
+			sending = false;
 		}
 	}
 
@@ -909,6 +1120,8 @@
 				{#each messages as msg (msg.id)}
 					{@const isMine = msg.senderId === currentUserId}
 					{@const isHidden = msg.hidden === true}
+					{@const isDeleted = !!(msg as any).deletedAt}
+					{@const isEditing = editingMsgId === msg.id}
 
 					<div class="msg-row" class:mine={isMine} class:theirs={!isMine}>
 						{#if !isMine}
@@ -929,14 +1142,14 @@
 									<div
 										class="bubble theirs"
 										class:pending={isPending(msg)}
-										class:hidden-msg={isHidden}
+										class:hidden-msg={isHidden || isDeleted}
 										class:gif-bubble={msg.type === 'gif'}
 										onpointerdown={(e) => startLongPress(msg, e)}
 										onpointermove={moveLongPress}
 										onpointerup={endLongPress}
 										onpointercancel={endLongPress}
 									>
-										{#if msg.replyTo && !isHidden}
+										{#if msg.replyTo && !isHidden && !isDeleted}
 											<div class="reply-quote">
 												<span class="reply-quote-sender">{msg.replyTo.senderDisplayName ?? 'Message'}</span>
 												<span class="reply-quote-text">{msg.replyTo.content.length > 60 ? msg.replyTo.content.slice(0, 60) + '…' : msg.replyTo.content}</span>
@@ -944,6 +1157,8 @@
 										{/if}
 										{#if isHidden}
 											<span class="tombstone">Message removed</span>
+										{:else if isDeleted}
+											<span class="tombstone">This message was deleted</span>
 										{:else if msg.type === 'gif' && msg.metadata}
 											{#if typeof msg.metadata?.previewUrl === 'string'}
 												<img
@@ -963,10 +1178,15 @@
 												onVote={(idx) => handleVotePoll((msg.metadata as unknown as PollData).id, idx)}
 												isPending={isPending(msg)}
 											/>
+										{:else if msg.type === 'audio'}
+											<MediaBubble message={msg as Message} />
 										{:else if (msg.type === 'image' || msg.type === 'video' || msg.type === 'file') && msg.metadata?.attachments}
 											<MediaBubble message={msg as Message} />
 										{:else}
-											{msg.content}
+											{@html formatMessageContent(msg.content)}
+											{#if (msg as any).editedAt}
+												<span class="edited-label">edited</span>
+											{/if}
 										{/if}
 									</div>
 									{#if msg.reactions && msg.reactions.length > 0}
@@ -989,17 +1209,32 @@
 						{:else}
 							<!-- My message: bubble right-aligned -->
 							<!-- svelte-ignore a11y_no_static_element_interactions -->
+							{#if isEditing}
+								<div class="edit-area">
+									<textarea
+										class="edit-input"
+										bind:value={editingContent}
+										onkeydown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitEdit(); } if (e.key === 'Escape') cancelEdit(); }}
+										rows="2"
+										autofocus
+									></textarea>
+									<div class="edit-actions">
+										<button class="edit-cancel-btn" onclick={cancelEdit}>Cancel</button>
+										<button class="edit-save-btn" onclick={submitEdit} disabled={editSaving}>Save</button>
+									</div>
+								</div>
+							{:else}
 							<div
 								class="bubble mine"
 								class:pending={isPending(msg)}
-								class:hidden-msg={isHidden}
+								class:hidden-msg={isHidden || isDeleted}
 								class:gif-bubble={msg.type === 'gif'}
 								onpointerdown={(e) => startLongPress(msg, e)}
 								onpointermove={moveLongPress}
 								onpointerup={endLongPress}
 								onpointercancel={endLongPress}
 							>
-								{#if msg.replyTo && !isHidden}
+								{#if msg.replyTo && !isHidden && !isDeleted}
 									<div class="reply-quote mine-quote">
 										<span class="reply-quote-sender">{msg.replyTo.senderDisplayName ?? 'Message'}</span>
 										<span class="reply-quote-text">{msg.replyTo.content.length > 60 ? msg.replyTo.content.slice(0, 60) + '…' : msg.replyTo.content}</span>
@@ -1007,6 +1242,8 @@
 								{/if}
 								{#if isHidden}
 									<span class="tombstone">Message removed</span>
+								{:else if isDeleted}
+									<span class="tombstone">This message was deleted</span>
 								{:else if msg.type === 'gif' && msg.metadata}
 									{#if typeof msg.metadata?.previewUrl === 'string'}
 										<img
@@ -1026,12 +1263,18 @@
 										onVote={(idx) => handleVotePoll((msg.metadata as unknown as PollData).id, idx)}
 										isPending={isPending(msg)}
 									/>
+								{:else if msg.type === 'audio'}
+									<MediaBubble message={msg as Message} />
 								{:else if (msg.type === 'image' || msg.type === 'video' || msg.type === 'file') && msg.metadata?.attachments}
 									<MediaBubble message={msg as Message} />
 								{:else}
-									{msg.content}
+									{@html formatMessageContent(msg.content)}
+									{#if (msg as any).editedAt}
+										<span class="edited-label">edited</span>
+									{/if}
 								{/if}
 							</div>
+							{/if}
 							{#if msg.reactions && msg.reactions.length > 0}
 								<div class="reaction-bar mine-reactions">
 									{#each msg.reactions as reaction}
@@ -1085,6 +1328,18 @@
 				onCancel={() => (mediaFiles = [])}
 				onAddMore={openFilePicker}
 			/>
+		{:else if isRecording}
+			<div class="composer recording-bar">
+				<span class="recording-dot"></span>
+				<span class="recording-timer">{Math.floor(recordingDuration / 60)}:{(recordingDuration % 60).toString().padStart(2, '0')}</span>
+				<span class="recording-label">Recording...</span>
+				<button class="composer-btn" onclick={cancelRecording} aria-label="Cancel recording" title="Cancel">
+					<Icon name="close" size={18} />
+				</button>
+				<button class="send-btn" onclick={finishRecording} aria-label="Send voice note">
+					<Icon name="send" size={16} />
+				</button>
+			</div>
 		{:else}
 			{#if showCommandPicker && filteredCommands.length > 0}
 				<CommandPicker
@@ -1126,14 +1381,26 @@
 				>
 					<Icon name="gif" size={18} />
 				</button>
-				<button
-					class="send-btn"
-					onclick={handleSend}
-					disabled={!inputText.trim() || sending}
-					aria-label="Send message"
-				>
-					<Icon name="send" size={16} />
-				</button>
+				{#if !inputText.trim()}
+					<button
+						class="composer-btn mic-btn"
+						onclick={startRecording}
+						disabled={sending}
+						aria-label="Record voice note"
+						title="Voice note"
+					>
+						<Icon name="mic" size={18} />
+					</button>
+				{:else}
+					<button
+						class="send-btn"
+						onclick={handleSend}
+						disabled={!inputText.trim() || sending}
+						aria-label="Send message"
+					>
+						<Icon name="send" size={16} />
+					</button>
+				{/if}
 			</div>
 		{/if}
 
@@ -1168,12 +1435,15 @@
 			message={contextMenuMsg}
 			{currentUserId}
 			isPinned={pinnedMessageIds.has(contextMenuMsg.id)}
+			isStarred={starredMessageIds.has(contextMenuMsg.id)}
 			onReact={(emoji) => handleReact(contextMenuMsg!.id, emoji)}
 			onReply={() => { replyToMsg = contextMenuMsg; }}
 			onCopy={() => handleCopyText(contextMenuMsg!.content)}
 			onPin={() => handlePin(contextMenuMsg!.id)}
 			onUnpin={() => handleUnpin(contextMenuMsg!.id)}
 			onDelete={() => handleDeleteMessage(contextMenuMsg!.id)}
+			onEdit={() => startEditing(contextMenuMsg!)}
+			onStar={() => handleStarMessage(contextMenuMsg!.id)}
 			onClose={() => (contextMenuMsg = null)}
 		/>
 	{/if}
@@ -1587,5 +1857,98 @@
 	.composer-btn:disabled {
 		opacity: 0.35;
 		pointer-events: none;
+	}
+
+	/* ── Edit area ── */
+	.edit-area {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+		align-self: flex-end;
+		width: 100%;
+		max-width: 80%;
+	}
+
+	.edit-input {
+		width: 100%;
+		background: var(--color-bg);
+		border: 1px solid var(--color-accent);
+		border-radius: var(--radius-md);
+		color: var(--color-text-primary);
+		padding: var(--space-2) var(--space-3);
+		resize: none;
+		line-height: 1.5;
+		outline: none;
+		font-size: var(--text-sm);
+		font-family: var(--font-sans);
+	}
+
+	.edit-actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: var(--space-2);
+	}
+
+	.edit-cancel-btn, .edit-save-btn {
+		padding: 4px 12px;
+		font-size: var(--text-xs);
+		border-radius: var(--radius-sm);
+		border: none;
+		cursor: pointer;
+		font-family: var(--font-sans);
+	}
+
+	.edit-cancel-btn {
+		background: rgba(255, 255, 255, 0.08);
+		color: var(--color-text-secondary);
+	}
+
+	.edit-save-btn {
+		background: var(--color-accent);
+		color: #000;
+		font-weight: 600;
+	}
+
+	.edit-save-btn:disabled { opacity: 0.5; }
+
+	/* ── Edited label ── */
+	.edited-label {
+		font-size: 10px;
+		color: var(--color-text-secondary);
+		opacity: 0.65;
+		margin-left: 4px;
+		font-style: italic;
+	}
+
+	/* ── Recording bar ── */
+	.recording-bar {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		padding: var(--space-3) var(--space-4);
+		border-top: 1px solid var(--color-border);
+		background: var(--color-surface);
+	}
+
+	.recording-dot {
+		width: 8px;
+		height: 8px;
+		border-radius: var(--radius-full);
+		background: var(--color-danger);
+		animation: pulse 1s ease-in-out infinite;
+		flex-shrink: 0;
+	}
+
+	.recording-timer {
+		font-size: var(--text-sm);
+		font-weight: 600;
+		color: var(--color-danger);
+		font-variant-numeric: tabular-nums;
+	}
+
+	.recording-label {
+		flex: 1;
+		font-size: var(--text-sm);
+		color: var(--color-text-secondary);
 	}
 </style>

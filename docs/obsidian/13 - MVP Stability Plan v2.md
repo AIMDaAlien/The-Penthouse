@@ -9,11 +9,13 @@ created: 2026-03-12
 
 The rebuild is now live publicly. The strategy has shifted from "make the rebuild viable" to "expand the admin/operator surface carefully without reopening core reliability risk."
 
-This phase also carries a temporary delegation override:
+This phase also carries the current delegation model:
 
 - Codex owns backend/contracts/tests/release gate
-- Opus owns all non-backend implementation for the current cycle
-- Gemini was paused during the stabilization cycle and is now explicitly re-enabled for the member-facing editorial-luxury visual exploration wave
+- Codex acts as validating manager and overall planner
+- Claude owns frontend implementation in `apps/web/`
+- Gemini is currently used for member-facing editorial-luxury visual ideation and design critique
+- Claude Opus 4.7 is consulted for major second takes on architecture, security/privacy, release strategy, or broad frontend rewrites
 
 ## Phase 1 - Backend-only hardening
 
@@ -107,7 +109,16 @@ Status: in progress
   - backend smoke registered two fresh users, created a DM, sent a message, and read it back through `https://api.penthouse.blog`
 - Production `JWT_SECRET` and `ALTCHA_HMAC_KEY` were rotated during the alpha deploy, so old sessions were intentionally invalidated.
 - Nightly PostgreSQL dumps now run through TrueNAS cron job `1` at 03:00, with dumps under `/mnt/Backup/penthouse-rebuild/backups/postgres/`; restore was tested successfully.
+- TrueNAS stack watchdog tooling now exists for public uptime recovery: `scripts/truenas-stack-watchdog.sh --boot` is intended for post-init reboot recovery, `--once` is intended for one-minute cron recovery, and failure reports identify cases like missing Docker overlay2 layers under `/mnt/.ix-apps/docker/overlay2`.
 - Known frontend follow-up: the welcome page still loads Erode from a third-party font CDN that returned HTTP 500 during smoke. It falls back, but the dependency should be removed or self-hosted.
+- Tier A DM enhancements are integrated and locally runtime-proven as of 2026-04-19:
+  - message editing
+  - delete-for-everyone tombstones
+  - voice-note upload/render
+  - starred messages
+  - archive conversations by real pointer click
+  - direct hard-load `/chat/:id`
+- Known frontend follow-up: the chat thread direct-load fix works, but still logs a Vite eager-fetch SSR warning. Claude should move the chat-page API calls behind a browser-only/on-mount boundary or into proper route load plumbing.
 - Manual mobile Add-to-Home-Screen proof is still pending.
 - Admin/operator slices now in place:
   - user management

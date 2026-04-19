@@ -29,6 +29,22 @@ export async function createApp() {
   const app = Fastify({ logger: true, disableRequestLogging: true });
   const uploadsDir = await ensureUploadsDirReady();
 
+  app.removeContentTypeParser('application/json');
+  app.addContentTypeParser('application/json', { parseAs: 'string' }, (_request, body, done) => {
+    const rawBody = typeof body === 'string' ? body : body.toString('utf8');
+
+    if (rawBody.trim().length === 0) {
+      done(null, {});
+      return;
+    }
+
+    try {
+      done(null, JSON.parse(rawBody));
+    } catch (error) {
+      done(error as Error);
+    }
+  });
+
   app.setErrorHandler((error, request, reply) => {
     request.log.error(error);
 

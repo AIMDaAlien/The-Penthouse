@@ -58,18 +58,115 @@
 	// Caption: only shown when content has non-whitespace characters.
 	const caption = $derived(message.content.trim());
 
-	/**
-	 * Resolve an attachment URL to an absolute URL the browser can load.
-	 * - blob: and http(s): URLs pass through unchanged.
-	 * - Relative paths (/uploads/...) are prefixed with PUBLIC_API_URL.
-	 */
 	function resolveUrl(url: string): string {
 		if (url.startsWith('blob:') || url.startsWith('http')) return url;
 		return `${PUBLIC_API_URL}${url}`;
 	}
+
+	// ── Audio voice note ──────────────────────────────────────────────────────
+	const isAudio = $derived(message.type === 'audio');
+	const audioUrl = $derived(
+		isAudio ? resolveUrl((message.metadata?.audioUrl as string) ?? '') : null
+	);
+	const audioDurationSec = $derived(
+		isAudio ? ((message.metadata?.durationSeconds as number) ?? 0) : 0
+	);
+
+	let audioEl = $state<HTMLAudioElement | null>(null);
+	let audioPlaying = $state(false);
+	let audioProgress = $state(0); // 0-1
+	let audioCurrent = $state(0);  // seconds
+	let audioRate = $state(1);
+
+	const RATES = [1, 1.5, 2];
+
+	function formatDuration(sec: number): string {
+		const m = Math.floor(sec / 60);
+		const s = Math.floor(sec % 60);
+		return `${m}:${s.toString().padStart(2, '0')}`;
+	}
+
+	function togglePlay() {
+		if (!audioEl) return;
+		if (audioPlaying) {
+			audioEl.pause();
+		} else {
+			audioEl.play();
+		}
+	}
+
+	function onTimeUpdate() {
+		if (!audioEl) return;
+		audioCurrent = audioEl.currentTime;
+		audioProgress = audioEl.duration ? audioEl.currentTime / audioEl.duration : 0;
+	}
+
+	function onEnded() {
+		audioPlaying = false;
+		audioProgress = 0;
+		audioCurrent = 0;
+		if (audioEl) audioEl.currentTime = 0;
+	}
+
+	function seekAudio(e: MouseEvent) {
+		if (!audioEl) return;
+		const bar = e.currentTarget as HTMLElement;
+		const rect = bar.getBoundingClientRect();
+		const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+		audioEl.currentTime = pct * audioEl.duration;
+	}
+
+	function cycleRate() {
+		const next = RATES[(RATES.indexOf(audioRate) + 1) % RATES.length];
+		audioRate = next;
+		if (audioEl) audioEl.playbackRate = next;
+	}
 </script>
 
-{#if attachments.length > 0}
+{#if isAudio && audioUrl}
+	<div class="audio-bubble">
+		<!-- Hidden native audio element -->
+		<audio
+			bind:this={audioEl}
+			src={audioUrl}
+			bind:paused={audioPlaying}
+			ontimeupdate={onTimeUpdate}
+			onended={onEnded}
+			onplay={() => (audioPlaying = false)}
+			onpause={() => (audioPlaying = true)}
+		></audio>
+
+		<button class="audio-play" onclick={togglePlay} aria-label={audioPlaying ? 'Pause' : 'Play'}>
+			<Icon name={audioPlaying ? 'square' : 'send'} size={16} />
+		</button>
+
+		<div class="audio-track">
+			<div
+				class="audio-bar"
+				role="slider"
+				aria-label="Seek"
+				aria-valuenow={Math.round(audioProgress * 100)}
+				aria-valuemin={0}
+				aria-valuemax={100}
+				tabindex="0"
+				onclick={seekAudio}
+				onkeydown={(e) => {
+					if (!audioEl) return;
+					if (e.key === 'ArrowRight') audioEl.currentTime = Math.min(audioEl.duration, audioEl.currentTime + 5);
+					if (e.key === 'ArrowLeft') audioEl.currentTime = Math.max(0, audioEl.currentTime - 5);
+				}}
+			>
+				<div class="audio-fill" style="width: {audioProgress * 100}%"></div>
+				<div class="audio-thumb" style="left: {audioProgress * 100}%"></div>
+			</div>
+			<span class="audio-time">{audioPlaying ? formatDuration(audioDurationSec) : formatDuration(audioCurrent)}</span>
+		</div>
+
+		<button class="audio-rate" onclick={cycleRate} aria-label="Playback speed {audioRate}x">
+			{audioRate}x
+		</button>
+	</div>
+{:else if attachments.length > 0}
 	<div class="media-bubble">
 		{#if caption}
 			<p class="caption">{caption}</p>
@@ -241,4 +338,89 @@
 	}
 
 	.download-link:hover { background: var(--color-accent-dim); }
+
+	/* ── Audio voice note ── */
+	.audio-bubble {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		padding: var(--space-2) var(--space-3);
+		min-width: 200px;
+	}
+
+	.audio-play {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 36px;
+		height: 36px;
+		border-radius: var(--radius-full);
+		background: var(--color-accent);
+		color: white;
+		border: none;
+		cursor: pointer;
+		flex-shrink: 0;
+		transition: opacity 0.15s;
+	}
+
+	.audio-play:active { opacity: 0.75; }
+
+	.audio-track {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+
+	.audio-bar {
+		position: relative;
+		height: 4px;
+		background: rgba(255, 255, 255, 0.2);
+		border-radius: var(--radius-full);
+		cursor: pointer;
+		outline: none;
+	}
+
+	.audio-bar:focus-visible { box-shadow: 0 0 0 2px var(--color-accent); }
+
+	.audio-fill {
+		position: absolute;
+		inset-block: 0;
+		left: 0;
+		background: var(--color-accent);
+		border-radius: var(--radius-full);
+		pointer-events: none;
+	}
+
+	.audio-thumb {
+		position: absolute;
+		top: 50%;
+		transform: translate(-50%, -50%);
+		width: 12px;
+		height: 12px;
+		border-radius: var(--radius-full);
+		background: white;
+		pointer-events: none;
+	}
+
+	.audio-time {
+		font-size: var(--text-xs);
+		color: var(--color-text-secondary);
+	}
+
+	.audio-rate {
+		font-size: var(--text-xs);
+		font-weight: 600;
+		color: var(--color-text-secondary);
+		background: rgba(255, 255, 255, 0.1);
+		border: none;
+		border-radius: var(--radius-sm);
+		padding: 2px 6px;
+		cursor: pointer;
+		flex-shrink: 0;
+		transition: background 0.12s;
+	}
+
+	.audio-rate:active { background: rgba(255, 255, 255, 0.2); }
 </style>

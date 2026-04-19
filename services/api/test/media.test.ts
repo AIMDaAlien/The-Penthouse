@@ -16,6 +16,13 @@ test('[media] classifyUpload treats known video extensions as videos even with g
   assert.equal(__testables.classifyUpload('clip.mp4', 'application/octet-stream'), 'video');
 });
 
+test('[media] classifyUpload stores voice-note audio as file media', () => {
+  assert.equal(__testables.classifyUpload('voice-message.webm', 'audio/webm'), 'file');
+  assert.equal(__testables.classifyUpload('voice-message.ogg', 'audio/ogg'), 'file');
+  assert.equal(__testables.classifyUpload('voice-message.mp4', 'audio/mp4'), 'file');
+  assert.equal(__testables.classifyUpload('voice-message.mp3', 'audio/mpeg'), 'file');
+});
+
 test('[media] extractKlipyResults supports current file-based response shape', () => {
   const results = __testables.extractKlipyResults({
     result: true,

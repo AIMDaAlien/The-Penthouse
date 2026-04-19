@@ -8,6 +8,8 @@ import {
   ChatPreferencesResponseSchema,
   CreatePollRequestSchema,
   CreateDirectChatRequestSchema,
+  EditMessageRequestSchema,
+  EditMessageResponseSchema,
   MarkChatReadRequestSchema,
   MarkChatReadResponseSchema,
   MessageSchema,
@@ -15,6 +17,7 @@ import {
   PinnedMessageSchema,
   SendMessageRequestSchema,
   SendMessageResponseSchema,
+  StarredMessagesResponseSchema,
   VotePollRequestSchema
 } from '@penthouse/contracts';
 import { pool } from '../db/pool.js';
@@ -24,7 +27,6 @@ import { createAuthRateLimiter, replyIfRateLimited } from '../utils/authRateLimi
 import { formatValidationError } from '../utils/error-responses.js';
 import { hydrateMessageReadReceipts, listChatMemberReadStates, markChatRead } from '../utils/messageReads.js';
 import { hydrateMessageReactions, loadGroupedReactionsForMessageIds, toPinnedMessage } from '../utils/messageHydration.js';
-import { loadMemberMessageById, setMessageModerationState } from '../utils/messageModeration.js';
 import { toMemberMessage } from '../utils/messages.js';
 import { sendPushForNewMessage } from '../push/fcm.js';
 import { createPollRecords, loadPollVoteContext, recordPollVote } from '../utils/polls.js';
@@ -52,12 +54,34 @@ const ChatReactionParamsSchema = z.object({
 const PollVoteParamsSchema = z.object({
   pollId: z.string().uuid()
 });
+const ChatListQuerySchema = z.object({
+  archived: z.enum(['true', 'false']).optional()
+});
 const MessageHistoryQuerySchema = z.object({
   cursor: z.string().uuid().optional(),
   before: z.string().uuid().optional(),
   limit: z.string().optional()
 });
+const StarredMessagesQuerySchema = z.object({
+  cursor: z.string().optional(),
+  limit: z.string().optional()
+});
 const CHAT_ROUTE_RATE_LIMITS = {
+  messageEdits: {
+    windowMs: 60_000,
+    maxRequests: 20,
+    error: 'Too many edits. Try again in a minute.'
+  },
+  messageDeletes: {
+    windowMs: 60_000,
+    maxRequests: 10,
+    error: 'Too many deletes. Try again in a minute.'
+  },
+  stars: {
+    windowMs: 60_000,
+    maxRequests: 60,
+    error: 'Too many star updates. Try again in a minute.'
+  },
   reactions: {
     windowMs: 60_000,
     maxRequests: 30,
@@ -133,6 +157,9 @@ type ChatMessageContextRow = {
   chat_id: string;
   sender_id: string;
   content: string;
+  message_type: string | null;
+  created_at: string | Date;
+  deleted_at: string | Date | null;
   hidden_by_moderation: boolean;
   sender_status: 'active' | 'removed' | 'banned';
   sender_display_name: string | null;
@@ -144,6 +171,9 @@ async function getChatMessageContext(chatId: string, messageId: string): Promise
             m.chat_id,
             m.sender_id,
             m.content,
+            m.message_type,
+            m.created_at,
+            m.deleted_at,
             COALESCE(m.hidden_by_moderation, FALSE) AS hidden_by_moderation,
             u.status AS sender_status,
             u.display_name AS sender_display_name
@@ -155,6 +185,75 @@ async function getChatMessageContext(chatId: string, messageId: string): Promise
   );
 
   return (result.rows[0] as ChatMessageContextRow | undefined) ?? null;
+}
+
+async function loadHydratedMessageForUser(userId: string, chatId: string, messageId: string) {
+  const result = await pool.query(
+    `SELECT m.id,
+            m.chat_id,
+            m.sender_id,
+            u.username AS sender_username,
+            u.display_name AS sender_display_name,
+            u.status AS sender_status,
+            m.hidden_by_moderation,
+            m.moderation_action,
+            m.moderation_reason,
+            m.moderation_updated_at,
+            m.moderation_actor_user_id,
+            media.storage_key AS avatar_storage_key,
+            m.content,
+            m.message_type,
+            m.metadata,
+            m.reply_to_snapshot,
+            m.created_at,
+            m.edited_at,
+            m.edit_count,
+            m.deleted_at,
+            m.deleted_by_user_id,
+            m.client_message_id,
+            sm.user_id IS NOT NULL AS starred,
+            seen.seen_at
+     FROM messages m
+     JOIN users u ON u.id = m.sender_id
+     LEFT JOIN media_uploads media ON media.id = u.avatar_media_id
+     LEFT JOIN starred_messages sm ON sm.message_id = m.id AND sm.user_id = $3
+     LEFT JOIN LATERAL (
+       SELECT MAX(cm_seen.last_read_at) AS seen_at
+       FROM chat_members cm_seen
+       JOIN users u_seen ON u_seen.id = cm_seen.user_id
+       JOIN messages m_seen ON m_seen.id = cm_seen.last_read_message_id
+       WHERE cm_seen.chat_id = m.chat_id
+         AND cm_seen.user_id <> m.sender_id
+         AND u_seen.status = 'active'
+         AND m_seen.created_at >= m.created_at
+     ) seen ON TRUE
+     WHERE m.chat_id = $1
+       AND m.id = $2`,
+    [chatId, messageId, userId]
+  );
+
+  const row = result.rows[0];
+  if (!row) return null;
+
+  const [withReceipts] = await hydrateMessageReadReceipts(pool, userId, [MessageSchema.parse(toMemberMessage(row as any))]);
+  const [message] = await hydrateMessageReactions(pool, [withReceipts]);
+  return MessageSchema.parse(message);
+}
+
+function parseStarredCursor(cursor?: string): { starredAt: string; messageId: string } | null {
+  if (!cursor) return null;
+  const [starredAt, messageId] = cursor.split('|');
+  if (!starredAt || !messageId || Number.isNaN(new Date(starredAt).getTime())) {
+    return null;
+  }
+  if (!z.string().uuid().safeParse(messageId).success) {
+    return null;
+  }
+  return { starredAt, messageId };
+}
+
+function encodeStarredCursor(row: { starred_at: string | Date; message_id: string }): string {
+  return `${new Date(row.starred_at).toISOString()}|${row.message_id}`;
 }
 
 async function listPinnedMessagesForChat(chatId: string) {
@@ -215,6 +314,8 @@ async function pinMessageForChat(
               m.chat_id,
               m.sender_id,
               m.content,
+              m.created_at,
+              m.deleted_at,
               COALESCE(m.hidden_by_moderation, FALSE) AS hidden_by_moderation,
               u.status AS sender_status,
               u.display_name AS sender_display_name
@@ -225,7 +326,7 @@ async function pinMessageForChat(
       [chatId, messageId]
     );
     const row = messageContext.rows[0] as ChatMessageContextRow | undefined;
-    if (!row || row.hidden_by_moderation || row.sender_status !== 'active') {
+    if (!row || row.hidden_by_moderation || row.sender_status !== 'active' || row.deleted_at) {
       await client.query('ROLLBACK');
       return reply.status(404).send({ error: 'Message not found' });
     }
@@ -345,15 +446,134 @@ async function resolveOrCreateSelfChat(userId: string): Promise<string> {
 }
 
 export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
+  const messageEditRateLimiter = createAuthRateLimiter(CHAT_ROUTE_RATE_LIMITS.messageEdits);
+  const messageDeleteRateLimiter = createAuthRateLimiter(CHAT_ROUTE_RATE_LIMITS.messageDeletes);
+  const starRateLimiter = createAuthRateLimiter(CHAT_ROUTE_RATE_LIMITS.stars);
   const reactionRateLimiter = createAuthRateLimiter(CHAT_ROUTE_RATE_LIMITS.reactions);
   const pollVoteRateLimiter = createAuthRateLimiter(CHAT_ROUTE_RATE_LIMITS.pollVotes);
   const pinRateLimiter = createAuthRateLimiter(CHAT_ROUTE_RATE_LIMITS.pins);
   const readMarkRateLimiter = createAuthRateLimiter(CHAT_ROUTE_RATE_LIMITS.readMarks);
 
-  app.get('/api/v1/chats', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request) => {
-    const summaries = await listChatSummariesForUser(pool, request.user.userId);
+  app.get('/api/v1/chats', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
+    const parsedQuery = ChatListQuerySchema.safeParse(request.query ?? {});
+    if (!parsedQuery.success) return reply.status(400).send({ error: formatValidationError(parsedQuery.error) });
+
+    const summaries = await listChatSummariesForUser(pool, request.user.userId, {
+      archived: parsedQuery.data.archived === 'true'
+    });
     touchLastSeen(pool, request.user.userId, request.log);
     return summaries;
+  });
+
+  app.get('/api/v1/me/starred', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
+    const userId = request.user.userId;
+    const parsedQuery = StarredMessagesQuerySchema.safeParse(request.query ?? {});
+    if (!parsedQuery.success) return reply.status(400).send({ error: formatValidationError(parsedQuery.error) });
+
+    const safeLimit = Math.max(1, Math.min(50, Number.parseInt(parsedQuery.data.limit ?? '30', 10) || 30));
+    const cursor = parseStarredCursor(parsedQuery.data.cursor);
+    if (parsedQuery.data.cursor && !cursor) {
+      return reply.status(400).send({ error: 'Invalid cursor' });
+    }
+
+    const query = cursor
+      ? `SELECT sm.starred_at,
+                sm.message_id,
+                c.name AS chat_name,
+                c.type AS chat_type,
+                m.id,
+                m.chat_id,
+                m.sender_id,
+                u.username AS sender_username,
+                u.display_name AS sender_display_name,
+                u.status AS sender_status,
+                m.hidden_by_moderation,
+                m.moderation_action,
+                m.moderation_reason,
+                m.moderation_updated_at,
+                m.moderation_actor_user_id,
+                media.storage_key AS avatar_storage_key,
+                m.content,
+                m.message_type,
+                m.metadata,
+                m.reply_to_snapshot,
+                m.created_at,
+                m.edited_at,
+                m.edit_count,
+                m.deleted_at,
+                m.deleted_by_user_id,
+                m.client_message_id,
+                TRUE AS starred,
+                NULL::timestamptz AS seen_at
+         FROM starred_messages sm
+         JOIN messages m ON m.id = sm.message_id
+         JOIN chats c ON c.id = m.chat_id
+         JOIN chat_members cm ON cm.chat_id = m.chat_id AND cm.user_id = sm.user_id
+         JOIN users u ON u.id = m.sender_id
+         LEFT JOIN media_uploads media ON media.id = u.avatar_media_id
+         WHERE sm.user_id = $1
+           AND (sm.starred_at, sm.message_id) < ($2::timestamptz, $3::uuid)
+         ORDER BY sm.starred_at DESC, sm.message_id DESC
+         LIMIT $4`
+      : `SELECT sm.starred_at,
+                sm.message_id,
+                c.name AS chat_name,
+                c.type AS chat_type,
+                m.id,
+                m.chat_id,
+                m.sender_id,
+                u.username AS sender_username,
+                u.display_name AS sender_display_name,
+                u.status AS sender_status,
+                m.hidden_by_moderation,
+                m.moderation_action,
+                m.moderation_reason,
+                m.moderation_updated_at,
+                m.moderation_actor_user_id,
+                media.storage_key AS avatar_storage_key,
+                m.content,
+                m.message_type,
+                m.metadata,
+                m.reply_to_snapshot,
+                m.created_at,
+                m.edited_at,
+                m.edit_count,
+                m.deleted_at,
+                m.deleted_by_user_id,
+                m.client_message_id,
+                TRUE AS starred,
+                NULL::timestamptz AS seen_at
+         FROM starred_messages sm
+         JOIN messages m ON m.id = sm.message_id
+         JOIN chats c ON c.id = m.chat_id
+         JOIN chat_members cm ON cm.chat_id = m.chat_id AND cm.user_id = sm.user_id
+         JOIN users u ON u.id = m.sender_id
+         LEFT JOIN media_uploads media ON media.id = u.avatar_media_id
+         WHERE sm.user_id = $1
+         ORDER BY sm.starred_at DESC, sm.message_id DESC
+         LIMIT $2`;
+
+    const values = cursor
+      ? [userId, cursor.starredAt, cursor.messageId, safeLimit + 1]
+      : [userId, safeLimit + 1];
+    const result = await pool.query(query, values);
+    const pageRows = result.rows.slice(0, safeLimit);
+    const baseMessages = pageRows.map((row: any) => MessageSchema.parse(toMemberMessage(row)));
+    const hydratedMessages = await hydrateMessageReactions(pool, baseMessages);
+
+    const items = pageRows.map((row: any, index: number) => ({
+      starredAt: new Date(row.starred_at).toISOString(),
+      message: {
+        ...hydratedMessages[index],
+        chatName: row.chat_name,
+        chatType: row.chat_type
+      }
+    }));
+
+    const nextCursor = result.rows.length > safeLimit ? encodeStarredCursor(pageRows[pageRows.length - 1] as any) : null;
+
+    touchLastSeen(pool, userId, request.log);
+    return reply.send(StarredMessagesResponseSchema.parse({ items, nextCursor }));
   });
 
   app.post('/api/v1/chats/dm', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
@@ -472,6 +692,42 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
+  app.post('/api/v1/chats/:chatId/archive', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
+    const params = ChatIdParamsSchema.safeParse(request.params ?? {});
+    if (!params.success) return reply.status(400).send({ error: formatValidationError(params.error) });
+
+    const result = await pool.query(
+      `UPDATE chat_members
+       SET archived_at = NOW()
+       WHERE chat_id = $1 AND user_id = $2`,
+      [params.data.chatId, request.user.userId]
+    );
+
+    if (!result.rowCount) {
+      return reply.status(403).send({ error: NOT_A_CHAT_MEMBER_ERROR });
+    }
+
+    return reply.status(204).send();
+  });
+
+  app.post('/api/v1/chats/:chatId/unarchive', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
+    const params = ChatIdParamsSchema.safeParse(request.params ?? {});
+    if (!params.success) return reply.status(400).send({ error: formatValidationError(params.error) });
+
+    const result = await pool.query(
+      `UPDATE chat_members
+       SET archived_at = NULL
+       WHERE chat_id = $1 AND user_id = $2`,
+      [params.data.chatId, request.user.userId]
+    );
+
+    if (!result.rowCount) {
+      return reply.status(403).send({ error: NOT_A_CHAT_MEMBER_ERROR });
+    }
+
+    return reply.status(204).send();
+  });
+
   app.get('/api/v1/chats/:chatId/messages', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
     const userId = request.user.userId;
     const params = ChatIdParamsSchema.safeParse(request.params ?? {});
@@ -492,11 +748,14 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
       ? `SELECT m.id, m.chat_id, m.sender_id, u.username AS sender_username, u.display_name AS sender_display_name,
                 u.status AS sender_status,
                 m.hidden_by_moderation, m.moderation_action, m.moderation_reason, m.moderation_updated_at, m.moderation_actor_user_id,
-                media.storage_key AS avatar_storage_key, m.content, m.message_type, m.metadata, m.reply_to_snapshot, m.created_at, m.client_message_id,
+                media.storage_key AS avatar_storage_key, m.content, m.message_type, m.metadata, m.reply_to_snapshot, m.created_at,
+                m.edited_at, m.edit_count, m.deleted_at, m.deleted_by_user_id, m.client_message_id,
+                sm.user_id IS NOT NULL AS starred,
                 seen.seen_at
          FROM messages m
          JOIN users u ON u.id = m.sender_id
          LEFT JOIN media_uploads media ON media.id = u.avatar_media_id
+         LEFT JOIN starred_messages sm ON sm.message_id = m.id AND sm.user_id = $4
          LEFT JOIN LATERAL (
            SELECT MAX(cm_seen.last_read_at) AS seen_at
            FROM chat_members cm_seen
@@ -513,11 +772,14 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
       : `SELECT m.id, m.chat_id, m.sender_id, u.username AS sender_username, u.display_name AS sender_display_name,
                 u.status AS sender_status,
                 m.hidden_by_moderation, m.moderation_action, m.moderation_reason, m.moderation_updated_at, m.moderation_actor_user_id,
-                media.storage_key AS avatar_storage_key, m.content, m.message_type, m.metadata, m.reply_to_snapshot, m.created_at, m.client_message_id,
+                media.storage_key AS avatar_storage_key, m.content, m.message_type, m.metadata, m.reply_to_snapshot, m.created_at,
+                m.edited_at, m.edit_count, m.deleted_at, m.deleted_by_user_id, m.client_message_id,
+                sm.user_id IS NOT NULL AS starred,
                 seen.seen_at
          FROM messages m
          JOIN users u ON u.id = m.sender_id
          LEFT JOIN media_uploads media ON media.id = u.avatar_media_id
+         LEFT JOIN starred_messages sm ON sm.message_id = m.id AND sm.user_id = $3
          LEFT JOIN LATERAL (
            SELECT MAX(cm_seen.last_read_at) AS seen_at
            FROM chat_members cm_seen
@@ -532,7 +794,7 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
          ORDER BY m.created_at DESC
          LIMIT $2`;
 
-    const values = paginationCursor ? [chatId, paginationCursor, safeLimit] : [chatId, safeLimit];
+    const values = paginationCursor ? [chatId, paginationCursor, safeLimit, userId] : [chatId, safeLimit, userId];
     const rows = await pool.query(query, values);
     touchLastSeen(pool, request.user.userId, request.log);
 
@@ -585,6 +847,76 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
+  app.patch('/api/v1/chats/:chatId/messages/:messageId', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
+    const userId = request.user.userId;
+    const params = ChatMessageParamsSchema.safeParse(request.params ?? {});
+    if (!params.success) return reply.status(400).send({ error: formatValidationError(params.error) });
+    const parsed = EditMessageRequestSchema.safeParse(request.body ?? {});
+    if (!parsed.success) return reply.status(400).send({ error: formatValidationError(parsed.error) });
+
+    if (
+      replyIfRateLimited(
+        reply,
+        messageEditRateLimiter.consume(userId),
+        CHAT_ROUTE_RATE_LIMITS.messageEdits.error
+      )
+    ) {
+      return;
+    }
+
+    const { chatId, messageId } = params.data;
+    const isMember = await ensureMembership(userId, chatId);
+    if (!isMember) return reply.status(403).send({ error: NOT_A_CHAT_MEMBER_ERROR });
+
+    const messageContext = await getChatMessageContext(chatId, messageId);
+    if (!messageContext || messageContext.hidden_by_moderation || messageContext.sender_status !== 'active' || messageContext.deleted_at) {
+      return reply.status(404).send({ error: 'Message not found' });
+    }
+    if (messageContext.sender_id !== userId) {
+      return reply.status(403).send({ error: `You don't have permission to perform this action` });
+    }
+    if ((messageContext.message_type ?? 'text') !== 'text') {
+      return reply.status(403).send({ error: 'Only text messages can be edited' });
+    }
+    if (Date.now() - new Date(messageContext.created_at).getTime() > 15 * 60 * 1000) {
+      return reply.status(403).send({ error: 'Message can no longer be edited' });
+    }
+
+    const updated = await pool.query(
+      `UPDATE messages
+       SET content = $1,
+           edited_at = NOW(),
+           edit_count = edit_count + 1
+       WHERE id = $2
+         AND chat_id = $3
+         AND sender_id = $4
+         AND deleted_at IS NULL
+         AND COALESCE(message_type, 'text') = 'text'
+         AND NOW() - created_at <= interval '15 minutes'
+       RETURNING edited_at, edit_count`,
+      [parsed.data.content, messageId, chatId, userId]
+    );
+
+    const row = updated.rows[0] as { edited_at: string | Date; edit_count: number } | undefined;
+    if (!row) return reply.status(404).send({ error: 'Message not found' });
+
+    const message = await loadHydratedMessageForUser(userId, chatId, messageId);
+    if (!message) return reply.status(404).send({ error: 'Message not found' });
+
+    app.io.to(`chat:${chatId}`).emit('message.edited', {
+      type: 'message.edited',
+      payload: {
+        chatId,
+        messageId,
+        content: parsed.data.content,
+        editedAt: new Date(row.edited_at).toISOString(),
+        editCount: Number(row.edit_count)
+      }
+    });
+
+    return reply.send(EditMessageResponseSchema.parse({ message }));
+  });
+
   app.post('/api/v1/chats/:chatId/messages/:messageId/reactions', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
     const userId = request.user.userId;
     const params = ChatMessageParamsSchema.safeParse(request.params ?? {});
@@ -606,7 +938,7 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const messageContext = await getChatMessageContext(chatId, messageId);
-    if (!messageContext || messageContext.hidden_by_moderation || messageContext.sender_status !== 'active') {
+    if (!messageContext || messageContext.hidden_by_moderation || messageContext.sender_status !== 'active' || messageContext.deleted_at) {
       return reply.status(404).send({ error: 'Message not found' });
     }
 
@@ -654,7 +986,7 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const messageContext = await getChatMessageContext(chatId, messageId);
-    if (!messageContext || messageContext.hidden_by_moderation || messageContext.sender_status !== 'active') {
+    if (!messageContext || messageContext.hidden_by_moderation || messageContext.sender_status !== 'active' || messageContext.deleted_at) {
       return reply.status(404).send({ error: 'Message not found' });
     }
 
@@ -697,46 +1029,165 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.delete('/api/v1/chats/:chatId/messages/:messageId', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
+    const userId = request.user.userId;
     const params = ChatMessageParamsSchema.safeParse(request.params ?? {});
     if (!params.success) return reply.status(400).send({ error: formatValidationError(params.error) });
     const { chatId, messageId } = params.data;
-    const isMember = await ensureMembership(request.user.userId, chatId);
+
+    if (
+      replyIfRateLimited(
+        reply,
+        messageDeleteRateLimiter.consume(userId),
+        CHAT_ROUTE_RATE_LIMITS.messageDeletes.error
+      )
+    ) {
+      return;
+    }
+
+    const isMember = await ensureMembership(userId, chatId);
+    if (!isMember) return reply.status(403).send({ error: NOT_A_CHAT_MEMBER_ERROR });
+
     const messageContext = await getChatMessageContext(chatId, messageId);
 
-    if (!messageContext) {
+    if (!messageContext || messageContext.hidden_by_moderation || messageContext.sender_status !== 'active') {
       return reply.status(404).send({ error: 'Message not found' });
     }
 
-    const canDelete = request.user.role === 'admin' || (isMember && messageContext.sender_id === request.user.userId);
-    if (!canDelete) {
+    if (messageContext.sender_id !== userId) {
       return reply.status(403).send({ error: `You don't have permission to perform this action` });
     }
 
-    const reason = request.user.role === 'admin' ? 'Deleted by admin' : 'Deleted by sender';
-    const result = await setMessageModerationState(messageId, request.user.userId, 'hide', reason, {
-      clearContent: true,
-      allowNoopHide: true
-    });
-
-    if ('error' in result) {
-      return reply.status(result.error === 'Message not found' ? 404 : 409).send({ error: result.error });
+    if (Date.now() - new Date(messageContext.created_at).getTime() > 24 * 60 * 60 * 1000) {
+      return reply.status(403).send({ error: 'Message can no longer be deleted' });
     }
 
-    if (result.changed) {
-      const memberMessage = await loadMemberMessageById(messageId);
-      if (memberMessage) {
-        app.io.to(`chat:${chatId}`).emit('message.moderated', {
-          type: 'message.moderated',
+    const client = await pool.connect();
+    let deletedAt: string | null = null;
+    let removedPin = false;
+
+    try {
+      await client.query('BEGIN');
+      const result = await client.query(
+        `UPDATE messages
+         SET deleted_at = NOW(),
+             deleted_by_user_id = $1,
+             content = '',
+             message_type = 'text',
+             metadata = NULL,
+             reply_to_message_id = NULL,
+             reply_to_snapshot = NULL
+         WHERE id = $2
+           AND chat_id = $3
+           AND sender_id = $4
+           AND deleted_at IS NULL
+           AND NOW() - created_at <= interval '24 hours'
+         RETURNING deleted_at`,
+        [userId, messageId, chatId, userId]
+      );
+
+      if (result.rowCount) {
+        deletedAt = new Date((result.rows[0] as { deleted_at: string | Date }).deleted_at).toISOString();
+        const pinDelete = await client.query('DELETE FROM pinned_messages WHERE message_id = $1', [messageId]);
+        removedPin = Boolean(pinDelete.rowCount);
+      }
+
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      request.log.error({ error, chatId, messageId, userId }, 'failed to delete message');
+      return reply.status(500).send({ error: 'Failed to delete message' });
+    } finally {
+      client.release();
+    }
+
+    if (deletedAt) {
+      app.io.to(`chat:${chatId}`).emit('message.deleted', {
+        type: 'message.deleted',
+        payload: {
+          chatId,
+          messageId,
+          deletedAt,
+          deletedByUserId: userId
+        }
+      });
+      if (removedPin) {
+        app.io.to(`chat:${chatId}`).emit('message.unpinned', {
+          type: 'message.unpinned',
           payload: {
             chatId,
-            messageId,
-            action: 'hide',
-            moderatedAt: new Date().toISOString(),
-            message: memberMessage
+            messageId
           }
         });
       }
     }
+
+    return reply.status(204).send();
+  });
+
+  app.post('/api/v1/chats/:chatId/messages/:messageId/star', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
+    const userId = request.user.userId;
+    const params = ChatMessageParamsSchema.safeParse(request.params ?? {});
+    if (!params.success) return reply.status(400).send({ error: formatValidationError(params.error) });
+    const { chatId, messageId } = params.data;
+
+    if (
+      replyIfRateLimited(
+        reply,
+        starRateLimiter.consume(userId),
+        CHAT_ROUTE_RATE_LIMITS.stars.error
+      )
+    ) {
+      return;
+    }
+
+    const isMember = await ensureMembership(userId, chatId);
+    if (!isMember) return reply.status(403).send({ error: NOT_A_CHAT_MEMBER_ERROR });
+
+    const messageContext = await getChatMessageContext(chatId, messageId);
+    if (!messageContext || messageContext.hidden_by_moderation || messageContext.sender_status !== 'active' || messageContext.deleted_at) {
+      return reply.status(404).send({ error: 'Message not found' });
+    }
+
+    await pool.query(
+      `INSERT INTO starred_messages (user_id, message_id)
+       VALUES ($1, $2)
+       ON CONFLICT DO NOTHING`,
+      [userId, messageId]
+    );
+
+    return reply.status(204).send();
+  });
+
+  app.delete('/api/v1/chats/:chatId/messages/:messageId/star', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
+    const userId = request.user.userId;
+    const params = ChatMessageParamsSchema.safeParse(request.params ?? {});
+    if (!params.success) return reply.status(400).send({ error: formatValidationError(params.error) });
+    const { chatId, messageId } = params.data;
+
+    if (
+      replyIfRateLimited(
+        reply,
+        starRateLimiter.consume(userId),
+        CHAT_ROUTE_RATE_LIMITS.stars.error
+      )
+    ) {
+      return;
+    }
+
+    const isMember = await ensureMembership(userId, chatId);
+    if (!isMember) return reply.status(403).send({ error: NOT_A_CHAT_MEMBER_ERROR });
+
+    await pool.query(
+      `DELETE FROM starred_messages
+       WHERE user_id = $1
+         AND message_id = $2
+         AND EXISTS (
+           SELECT 1 FROM messages m
+           WHERE m.id = $2
+             AND m.chat_id = $3
+         )`,
+      [userId, messageId, chatId]
+    );
 
     return reply.status(204).send();
   });
@@ -863,6 +1314,13 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
         [poll, messageId]
       );
       await client.query('UPDATE chats SET updated_at = NOW() WHERE id = $1', [chatId]);
+      await client.query(
+        `UPDATE chat_members
+         SET archived_at = NULL
+         WHERE chat_id = $1
+           AND archived_at IS NOT NULL`,
+        [chatId]
+      );
 
       const persistedMessage = await loadPersistedMessageById(client, messageId);
       if (!persistedMessage) {

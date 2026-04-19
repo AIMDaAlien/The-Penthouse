@@ -28,7 +28,11 @@ const migrations = [
   '019_chat_member_last_read_message.sql',
   '020_polls.sql',
   '021_poll_message_type.sql',
-  '022_message_reactions_replies_pins.sql'
+  '022_message_reactions_replies_pins.sql',
+  '023_message_editing.sql',
+  '024_message_deletion.sql',
+  '025_starred_messages.sql',
+  '026_chat_archive.sql'
 ];
 
 export async function runMigrations(): Promise<void> {

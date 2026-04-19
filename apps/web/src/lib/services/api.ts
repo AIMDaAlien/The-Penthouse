@@ -23,7 +23,9 @@ import type {
 	GifSearchResponse,
 	GifProvider,
 	PollData,
-	PinnedMessage
+	PinnedMessage,
+	EditMessageResponse,
+	StarredMessagesResponse
 } from '@penthouse/contracts';
 import { sessionStore } from '$stores/session.svelte';
 
@@ -131,7 +133,10 @@ export const auth = {
 
 // ── Chats ─────────────────────────────────────────────────────────────────────
 export const chats = {
-	list: () => request<ChatSummary[]>('/api/v1/chats'),
+	list: (params?: { archived?: boolean }) => {
+		const qs = params?.archived !== undefined ? `?archived=${params.archived}` : '';
+		return request<ChatSummary[]>(`/api/v1/chats${qs}`);
+	},
 
 	createDm: (memberId: string) =>
 		request<{ id: string }>('/api/v1/chats/dm', {
@@ -153,14 +158,32 @@ export const chats = {
 			body: JSON.stringify(body)
 		}),
 
+	editMessage: (chatId: string, messageId: string, content: string) =>
+		request<EditMessageResponse>(`/api/v1/chats/${chatId}/messages/${messageId}`, {
+			method: 'PATCH',
+			body: JSON.stringify({ content })
+		}),
+
+	deleteMessage: (chatId: string, messageId: string) =>
+		request<void>(`/api/v1/chats/${chatId}/messages/${messageId}`, { method: 'DELETE' }),
+
 	markRead: (chatId: string, throughMessageId?: string) =>
 		request<MarkChatReadResponse>(`/api/v1/chats/${chatId}/read`, {
 			method: 'POST',
 			body: JSON.stringify(throughMessageId ? { throughMessageId } : {})
 		}),
 
-	deleteMessage: (chatId: string, messageId: string) =>
-		request<void>(`/api/v1/chats/${chatId}/messages/${messageId}`, { method: 'DELETE' }),
+	archive: (chatId: string) =>
+		request<void>(`/api/v1/chats/${chatId}/archive`, { method: 'POST' }),
+
+	unarchive: (chatId: string) =>
+		request<void>(`/api/v1/chats/${chatId}/unarchive`, { method: 'POST' }),
+
+	starMessage: (chatId: string, messageId: string) =>
+		request<void>(`/api/v1/chats/${chatId}/messages/${messageId}/star`, { method: 'POST' }),
+
+	unstarMessage: (chatId: string, messageId: string) =>
+		request<void>(`/api/v1/chats/${chatId}/messages/${messageId}/star`, { method: 'DELETE' }),
 
 	getPreferences: (chatId: string) =>
 		request<ChatPreferencesResponse>(`/api/v1/chats/${chatId}/preferences`),
@@ -173,6 +196,17 @@ export const chats = {
 
 	self: () =>
 		request<ChatSummary>('/api/v1/chats/self', { method: 'POST' })
+};
+
+// ── Me ────────────────────────────────────────────────────────────────────────
+export const me = {
+	starred: (params?: { cursor?: string; limit?: number }) => {
+		const qs = new URLSearchParams();
+		if (params?.cursor) qs.set('cursor', params.cursor);
+		if (params?.limit) qs.set('limit', String(params.limit));
+		const query = qs.toString() ? `?${qs}` : '';
+		return request<StarredMessagesResponse>(`/api/v1/me/starred${query}`);
+	}
 };
 
 // ── Users ─────────────────────────────────────────────────────────────────────

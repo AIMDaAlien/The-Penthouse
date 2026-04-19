@@ -65,14 +65,16 @@ export async function loadGroupedReactionsForMessageIds(
 }
 
 export async function hydrateMessageReactions(db: Queryable, messages: Message[]): Promise<Message[]> {
-  const visibleMessageIds = messages.filter((message) => !message.hidden).map((message) => message.id);
+  const visibleMessageIds = messages
+    .filter((message) => !message.hidden && !message.deletedAt)
+    .map((message) => message.id);
   if (visibleMessageIds.length === 0) {
     return messages;
   }
 
   const grouped = await loadGroupedReactionsForMessageIds(db, visibleMessageIds);
   return messages.map((message) => {
-    if (message.hidden) return message;
+    if (message.hidden || message.deletedAt) return message;
     const reactions = grouped.get(message.id);
     if (!reactions?.length) return message;
     return {
@@ -94,7 +96,8 @@ export async function buildReplySnapshot(
      WHERE m.id = $1
        AND m.chat_id = $2
        AND u.status = 'active'
-       AND COALESCE(m.hidden_by_moderation, FALSE) = FALSE`,
+       AND COALESCE(m.hidden_by_moderation, FALSE) = FALSE
+       AND m.deleted_at IS NULL`,
     [replyToMessageId, chatId]
   );
 

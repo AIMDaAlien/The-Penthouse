@@ -14,6 +14,8 @@ import {
   ChatPreferencesResponseSchema,
   CreateDirectChatRequestSchema,
   CreatePollRequestSchema,
+  EditMessageRequestSchema,
+  EditMessageResponseSchema,
   MarkChatReadRequestSchema,
   PinnedMessageSchema,
   PollDataSchema,
@@ -21,7 +23,9 @@ import {
   SendMessageResponseSchema,
   ChatSummarySchema,
   MessageSchema,
+  MessageTypeSchema,
   PinMessageRequestSchema,
+  StarredMessagesResponseSchema,
   ClientMessageSendEventSchema,
   VotePollRequestSchema
 } from '@penthouse/contracts';
@@ -61,6 +65,33 @@ test('[schema] send: rejects empty content', () => {
     clientMessageId: 'client-msg-001'
   });
   assert.equal(result.success, false, 'content min length is 1');
+});
+
+test('[schema] send: accepts empty audio content when audio metadata is present', () => {
+  const result = SendMessageRequestSchema.safeParse({
+    chatId: 'chat-uuid-1234',
+    content: '',
+    type: 'audio',
+    metadata: {
+      audioUrl: '/uploads/voice-note.webm',
+      durationSeconds: 14.3
+    },
+    clientMessageId: 'client-msg-audio-001'
+  });
+  assert.equal(result.success, true, 'voice notes use uploaded audio metadata instead of text content');
+});
+
+test('[schema] send: rejects audio without an audioUrl', () => {
+  const result = SendMessageRequestSchema.safeParse({
+    chatId: 'chat-uuid-1234',
+    content: '',
+    type: 'audio',
+    metadata: {
+      durationSeconds: 14.3
+    },
+    clientMessageId: 'client-msg-audio-002'
+  });
+  assert.equal(result.success, false, 'audio messages need a browser-accessible audioUrl');
 });
 
 test('[schema] send: rejects content over 4000 chars', () => {
@@ -156,6 +187,7 @@ test('[schema] ChatSummary: accepts valid channel type', () => {
     type: 'channel',
     name: 'General',
     updatedAt: new Date().toISOString(),
+    archivedAt: null,
     unreadCount: 0
   });
   assert.equal(result.success, true, 'channel type is valid');
@@ -237,6 +269,25 @@ test('[schema] chat member read state parses nullable timestamps and markers', (
   assert.equal(result.success, true);
 });
 
+test('[schema] edit message request and response shape are enforced', () => {
+  const request = EditMessageRequestSchema.safeParse({ content: 'Updated take' });
+  const response = EditMessageResponseSchema.safeParse({
+    message: {
+      id: 'msg-uuid',
+      chatId: 'chat-uuid',
+      senderId: 'user-uuid',
+      content: 'Updated take',
+      createdAt: new Date().toISOString(),
+      editedAt: new Date().toISOString(),
+      editCount: 1
+    }
+  });
+
+  assert.equal(request.success, true);
+  assert.equal(response.success, true);
+  assert.equal(EditMessageRequestSchema.safeParse({ content: '' }).success, false);
+});
+
 // ─── realtime socket message send contract ─────────────────────────────────
 
 test('[schema] realtime: rejects message.send without clientMessageId', () => {
@@ -257,6 +308,20 @@ test('[schema] realtime: accepts valid message.send event', () => {
     clientMessageId: 'client-msg-001'
   });
   assert.equal(result.success, true, 'valid socket send event should pass');
+});
+
+test('[schema] realtime: accepts empty audio message.send with audioUrl metadata', () => {
+  const result = ClientMessageSendEventSchema.safeParse({
+    type: 'message.send',
+    chatId: 'chat-uuid',
+    content: '',
+    messageType: 'audio',
+    metadata: {
+      audioUrl: '/uploads/voice-note.webm'
+    },
+    clientMessageId: 'client-msg-audio-003'
+  });
+  assert.equal(result.success, true, 'socket voice-note sends should match REST validation');
 });
 
 // ─── message schema ─────────────────────────────────────────────────────────
@@ -314,6 +379,50 @@ test('[schema] Message: replyTo and grouped reactions are optional but supported
     ]
   });
   assert.equal(result.success, true, 'replyTo and grouped reactions should parse on Message');
+});
+
+test('[schema] Message: voice notes, deletion metadata, and starred state parse', () => {
+  assert.equal(MessageTypeSchema.safeParse('audio').success, true);
+
+  const result = MessageSchema.safeParse({
+    id: 'msg-uuid',
+    chatId: 'chat-uuid',
+    senderId: 'user-uuid',
+    content: '',
+    type: 'audio',
+    metadata: null,
+    createdAt: new Date().toISOString(),
+    editedAt: null,
+    editCount: 0,
+    deletedAt: new Date().toISOString(),
+    deletedByUserId: 'user-uuid',
+    starred: true
+  });
+
+  assert.equal(result.success, true, 'DM Tier A message fields should parse on Message');
+});
+
+test('[schema] starred messages response includes chat context and cursor', () => {
+  const result = StarredMessagesResponseSchema.safeParse({
+    items: [
+      {
+        starredAt: new Date().toISOString(),
+        message: {
+          id: 'msg-uuid',
+          chatId: 'chat-uuid',
+          senderId: 'user-uuid',
+          content: 'Save this',
+          createdAt: new Date().toISOString(),
+          starred: true,
+          chatName: 'General',
+          chatType: 'channel'
+        }
+      }
+    ],
+    nextCursor: null
+  });
+
+  assert.equal(result.success, true);
 });
 
 test('[schema] add reaction request limits emoji length', () => {

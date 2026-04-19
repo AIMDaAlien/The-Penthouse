@@ -127,6 +127,7 @@ This vault is the "what we built and why" map for people joining the project lat
   - backend production smoke registered two fresh users, created a DM, sent a message, and read the message back from `https://api.penthouse.blog`
   - production `JWT_SECRET` and `ALTCHA_HMAC_KEY` were rotated during the alpha deploy, invalidating old sessions by design
   - nightly PostgreSQL dumps now run from TrueNAS cron job `1` at 03:00 into `/mnt/Backup/penthouse-rebuild/backups/postgres/`; restore was tested with a temporary database
+  - TrueNAS stack watchdog tooling now lives at `/mnt/Backup/penthouse-rebuild/app/scripts/truenas-stack-watchdog.sh`; `--boot` retries during host startup, `--once` is suitable for a one-minute cron, and failures write `/mnt/Backup/penthouse-rebuild/uploads/ops/stack-watchdog-status.{json,txt}` with causation-oriented recovery steps
   - known frontend warning: the welcome page still requests `https://fonts.cdnfonts.com/css/erode?weights=400,600`, which returned HTTP 500 during smoke; the page falls back to local serif fonts
 - Android release signing was prepared for the earlier rebuild APK path, but APK distribution is now legacy-only:
   - fresh signing key created outside the repo
