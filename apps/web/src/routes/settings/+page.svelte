@@ -11,6 +11,7 @@
 	let avatarUploading = $state(false);
 	let avatarError = $state('');
 	let fileInput = $state<HTMLInputElement | null>(null);
+	let showSignOutConfirm = $state(false);
 
 	const currentUser = $derived(sessionStore.current?.user);
 
@@ -60,8 +61,7 @@
 	<main class="settings-body">
 		<!-- Profile summary -->
 		{#if currentUser}
-			<div class="profile-card">
-				<!-- Hidden file input for avatar upload -->
+			<div class="profile-section">
 				<input
 					type="file"
 					accept="image/jpeg,image/png,image/webp,image/gif"
@@ -70,35 +70,44 @@
 					onchange={handleAvatarChange}
 				/>
 
-				<button
-					class="avatar-upload-btn"
-					onclick={() => fileInput?.click()}
-					disabled={avatarUploading}
-					aria-label="Change avatar"
-					title="Tap to change avatar"
-				>
-					{#if currentUser.avatarUrl}
-						<img src={currentUser.avatarUrl} alt={currentUser.displayName ?? currentUser.username} class="avatar-img" />
-					{:else}
-						<span class="avatar-initials">
-							{(currentUser.displayName ?? currentUser.username).slice(0, 2).toUpperCase()}
-						</span>
-					{/if}
-					<div class="avatar-overlay" aria-hidden="true">
-						{#if avatarUploading}
-							<span class="avatar-uploading-dot"></span>
+				<!-- Banner (future: click to change) -->
+				<div class="profile-banner" role="img" aria-label="Profile banner">
+					<span class="banner-camera" aria-hidden="true">
+						<Icon name="image" size={18} />
+					</span>
+				</div>
+
+				<div class="profile-lower">
+					<button
+						class="avatar-upload-btn"
+						onclick={() => fileInput?.click()}
+						disabled={avatarUploading}
+						aria-label="Change avatar"
+						title="Tap to change avatar"
+					>
+						{#if currentUser.avatarUrl}
+							<img src={currentUser.avatarUrl} alt={currentUser.displayName ?? currentUser.username} class="avatar-img" />
 						{:else}
-							<Icon name="image" size={16} />
+							<span class="avatar-initials">
+								{(currentUser.displayName ?? currentUser.username).slice(0, 2).toUpperCase()}
+							</span>
+						{/if}
+						<div class="avatar-overlay" aria-hidden="true">
+							{#if avatarUploading}
+								<span class="avatar-uploading-dot"></span>
+							{:else}
+								<Icon name="image" size={16} />
+							{/if}
+						</div>
+					</button>
+
+					<div class="profile-info">
+						<p class="profile-name">{currentUser.displayName ?? currentUser.username}</p>
+						<p class="profile-handle">@{currentUser.username}</p>
+						{#if avatarError}
+							<p class="avatar-error">{avatarError}</p>
 						{/if}
 					</div>
-				</button>
-
-				<div class="profile-info">
-					<p class="profile-name">{currentUser.displayName ?? currentUser.username}</p>
-					<p class="profile-handle">@{currentUser.username}</p>
-					{#if avatarError}
-						<p class="avatar-error">{avatarError}</p>
-					{/if}
 				</div>
 			</div>
 		{/if}
@@ -135,7 +144,7 @@
 		<section class="section">
 			<p class="section-label">Account</p>
 
-			<button class="danger-action" onclick={handleLogout} disabled={loggingOut}>
+			<button class="danger-action" onclick={() => (showSignOutConfirm = true)} disabled={loggingOut}>
 				<Icon name="log-out" size={18} />
 				{loggingOut ? 'Signing out...' : 'Sign out'}
 			</button>
@@ -144,6 +153,23 @@
 		<p class="version-note">The Penthouse · alpha</p>
 	</main>
 </div>
+
+<!-- Sign-out confirmation modal -->
+{#if showSignOutConfirm}
+	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+	<div class="signout-backdrop" onclick={() => (showSignOutConfirm = false)}>
+		<div class="signout-modal" role="dialog" aria-modal="true" aria-label="Sign out confirmation" tabindex="-1" onclick={(e) => e.stopPropagation()}>
+			<p class="signout-title">Sign out?</p>
+			<p class="signout-desc">You'll need to sign back in to access your chats.</p>
+			<div class="signout-actions">
+				<button class="signout-cancel" onclick={() => (showSignOutConfirm = false)}>Cancel</button>
+				<button class="signout-confirm" onclick={handleLogout} disabled={loggingOut}>
+					{loggingOut ? 'Signing out...' : 'Sign out'}
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
 
 <style>
 	.shell {
@@ -198,27 +224,58 @@
 		gap: var(--space-6);
 	}
 
-	/* ── Profile card ── */
+	/* ── Profile section ── */
 	.file-input-hidden {
 		display: none;
 	}
 
-	.profile-card {
+	.profile-section {
+		display: flex;
+		flex-direction: column;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-xl);
+		overflow: hidden;
+	}
+
+	.profile-banner {
+		height: 120px;
+		background: linear-gradient(135deg, #1A1A30 0%, #2A2A45 50%, #1A1A24 100%);
+		position: relative;
+		overflow: hidden;
+		flex-shrink: 0;
+	}
+
+	.banner-camera {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: rgba(255, 255, 255, 0.4);
+		opacity: 0;
+		transition: opacity 0.2s;
+	}
+
+	.profile-banner:hover .banner-camera {
+		opacity: 1;
+	}
+
+	.profile-lower {
 		display: flex;
 		align-items: center;
 		gap: var(--space-4);
-		padding: var(--space-4) var(--space-5);
+		padding: 0 var(--space-5) var(--space-4);
 		background: var(--color-surface);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-xl);
+		margin-top: -28px;
+		padding-top: 0;
 	}
 
 	.avatar-upload-btn {
 		position: relative;
-		width: 56px;
-		height: 56px;
+		width: 60px;
+		height: 60px;
 		border-radius: var(--radius-full);
-		border: 2px solid var(--color-border);
+		border: 3px solid var(--color-surface);
 		background: var(--color-accent-dim);
 		padding: 0;
 		flex-shrink: 0;
@@ -358,14 +415,17 @@
 		margin-top: 2px;
 	}
 
-	/* ── Density toggle ── */
+	/* ── Density toggle (inset neumorphic) ── */
 	.density-toggle {
 		display: flex;
-		background: var(--color-bg);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-lg);
+		background: #0E0E1A;
+		box-shadow: inset 2px 2px 6px rgba(0, 0, 0, 0.6), inset -1px -1px 4px rgba(80, 80, 120, 0.15);
+		border-radius: var(--radius-pill);
 		overflow: hidden;
 		flex-shrink: 0;
+		border: none;
+		padding: 2px;
+		gap: 2px;
 	}
 
 	.density-btn {
@@ -378,7 +438,7 @@
 		cursor: pointer;
 		transition: background 0.15s, color 0.15s;
 		text-shadow: none;
-		border-radius: 0;
+		border-radius: var(--radius-pill);
 	}
 
 	.density-btn:active {
@@ -386,8 +446,85 @@
 	}
 
 	.density-btn.active {
-		background: var(--color-accent-dim);
-		color: var(--color-accent);
+		background: rgba(180, 180, 255, 0.12);
+		color: var(--color-accent-periwinkle);
+		font-weight: 600;
+	}
+
+	/* ── Sign-out modal ── */
+	.signout-backdrop {
+		position: fixed;
+		inset: 0;
+		background: rgba(10, 10, 18, 0.6);
+		backdrop-filter: blur(6px);
+		-webkit-backdrop-filter: blur(6px);
+		z-index: 200;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: var(--space-6);
+	}
+
+	.signout-modal {
+		background: rgba(36, 36, 50, 0.85);
+		backdrop-filter: blur(16px) saturate(1.4);
+		-webkit-backdrop-filter: blur(16px) saturate(1.4);
+		border: 1px solid var(--color-border-solid);
+		border-radius: var(--radius-xl);
+		box-shadow: var(--shadow-card);
+		padding: var(--space-6);
+		width: 100%;
+		max-width: 320px;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+	}
+
+	.signout-title {
+		font-size: var(--text-lg);
+		font-weight: 600;
+		color: var(--color-text-primary);
+		margin: 0;
+	}
+
+	.signout-desc {
+		font-size: var(--text-sm);
+		color: var(--color-text-secondary);
+		margin: 0;
+		line-height: 1.5;
+	}
+
+	.signout-actions {
+		display: flex;
+		gap: var(--space-3);
+		justify-content: flex-end;
+	}
+
+	.signout-cancel {
+		padding: var(--space-2) var(--space-5);
+		background: none;
+		border: 1px solid var(--color-border-solid);
+		border-radius: var(--radius-pill);
+		color: var(--color-text-secondary);
+		font-size: var(--text-sm);
+		font-weight: 500;
+		text-shadow: none;
+	}
+
+	.signout-confirm {
+		padding: var(--space-2) var(--space-5);
+		background: var(--color-danger);
+		border: none;
+		border-radius: var(--radius-pill);
+		color: #fff;
+		font-size: var(--text-sm);
+		font-weight: 600;
+		text-shadow: none;
+		transition: opacity 0.15s;
+	}
+
+	.signout-confirm:disabled {
+		opacity: 0.5;
 	}
 
 	/* ── Danger action ── */

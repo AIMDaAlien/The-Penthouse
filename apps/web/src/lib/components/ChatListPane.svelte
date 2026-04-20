@@ -1,4 +1,4 @@
-<!-- Chat list home page -->
+<!-- Chat list pane — used by (app)/+layout.svelte on both mobile and desktop -->
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
@@ -307,15 +307,17 @@
 			<span class="logo-name">Penthouse</span>
 		</div>
 		<div class="header-actions">
-			<span
-				class="conn-dot"
+			<div
+				class="conn-pill"
 				class:connected={connectionStatus === 'connected'}
 				class:degraded={connectionStatus === 'connecting' || connectionStatus === 'degraded'}
 				class:failed={connectionStatus === 'failed'}
 				title={connectionStatus}
-			></span>
-			<button class="icon-btn" onclick={() => (showNewDmModal = true)} aria-label="New message">
-				<Icon name="compose" size={20} />
+			>
+				<span class="conn-dot"></span>
+			</div>
+			<button class="new-dm-btn" onclick={() => (showNewDmModal = true)} aria-label="New message">
+				<Icon name="plus" size={20} />
 			</button>
 		</div>
 	</header>
@@ -342,6 +344,7 @@
 					class="chat-row"
 					class:muted={chat.notificationsMuted}
 					class:self-chat={isSelf}
+					class:unread={chat.unreadCount > 0 && !chat.notificationsMuted}
 					role="button"
 					tabindex="0"
 					onclick={() => handleChatRowClick(chat)}
@@ -610,14 +613,47 @@
 		gap: var(--space-2);
 	}
 
+	.conn-pill {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 6px 10px;
+		background: var(--color-surface-glass);
+		backdrop-filter: blur(12px);
+		-webkit-backdrop-filter: blur(12px);
+		border: 1px solid rgba(255,255,255,0.05);
+		border-radius: var(--radius-pill);
+	}
+
 	.conn-dot {
-		width: 7px;
-		height: 7px;
+		width: 6px;
+		height: 6px;
 		border-radius: var(--radius-full);
 		background: var(--color-text-secondary);
 		opacity: 0.35;
-		flex-shrink: 0;
 		transition: background 0.3s, opacity 0.3s;
+	}
+
+	.new-dm-btn {
+		width: 36px;
+		height: 36px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: var(--color-surface-glass);
+		backdrop-filter: blur(12px);
+		-webkit-backdrop-filter: blur(12px);
+		border: 1px solid rgba(255,255,255,0.05);
+		color: var(--color-text-primary);
+		border-radius: var(--radius-full);
+		padding: 0;
+		cursor: pointer;
+		transition: background 0.15s, transform 0.15s;
+	}
+
+	.new-dm-btn:hover {
+		background: var(--color-accent-dim);
+		transform: scale(1.05);
 	}
 
 	.conn-dot.connected {
@@ -644,7 +680,7 @@
 		background: none;
 		border: none;
 		color: var(--color-text-secondary);
-		border-radius: var(--radius-lg);
+		border-radius: var(--radius-pill);
 		padding: 0;
 		transition: color 0.15s, background 0.15s;
 		text-shadow: none;
@@ -658,7 +694,8 @@
 	/* ── Chat list ── */
 	.chat-list {
 		flex: 1;
-		padding-bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px));
+		/* Floating nav: 24px bottom offset + 60px height + 24px breathing room */
+		padding-bottom: calc(108px + env(safe-area-inset-bottom, 0px));
 	}
 
 	.state-msg {
@@ -695,7 +732,7 @@
 		background: var(--color-accent-dim);
 		color: var(--color-accent);
 		border: 1px solid rgba(119, 119, 194, 0.35);
-		border-radius: var(--radius-lg);
+		border-radius: var(--radius-pill);
 		padding: var(--space-3) var(--space-5);
 		font-size: var(--text-sm);
 		font-weight: 600;
@@ -710,15 +747,21 @@
 	.chat-row {
 		display: flex;
 		align-items: center;
-		gap: var(--space-3);
+		gap: var(--space-4);
 		width: 100%;
-		padding: var(--space-4) var(--space-5);
-		border-bottom: 1px solid var(--color-border);
+		padding: 16px 24px;
+		border-bottom: none;
 		cursor: pointer;
 		transition: background 0.1s;
 		user-select: none;
 		-webkit-user-select: none;
 		background: none;
+		border-left: 2px solid transparent;
+	}
+	
+	.chat-row.unread {
+		border-left-color: var(--color-accent);
+		background: linear-gradient(90deg, var(--color-accent-dim) 0%, transparent 100%);
 	}
 
 	.chat-row:hover {
@@ -763,8 +806,8 @@
 
 	.channel-icon,
 	.self-icon {
-		width: 48px;
-		height: 48px;
+		width: 50px;
+		height: 50px;
 		border-radius: var(--radius-full);
 		background: var(--color-accent-dim);
 		border: 1px solid var(--color-border);
@@ -819,10 +862,16 @@
 	}
 
 	.chat-time {
-		font-size: var(--text-xs);
+		font-size: 0.6875rem;
+		font-family: var(--font-mono);
 		color: var(--color-text-secondary);
 		white-space: nowrap;
 		flex-shrink: 0;
+		background: var(--color-surface-glass);
+		border: 1px solid var(--color-border);
+		padding: 2px 8px;
+		border-radius: var(--radius-pill);
+		letter-spacing: 0.02em;
 	}
 
 	.chat-subtext {
@@ -862,9 +911,11 @@
 
 	.bottom-sheet {
 		width: 100%;
-		background: var(--color-surface);
+		background: rgba(26, 26, 36, 0.92);
+		backdrop-filter: blur(20px) saturate(1.4);
+		-webkit-backdrop-filter: blur(20px) saturate(1.4);
 		border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-		border-top: 1px solid var(--color-border);
+		border-top: 1px solid var(--color-border-solid);
 		max-height: 82dvh;
 		overflow-y: auto;
 		display: flex;
@@ -904,22 +955,24 @@
 		display: flex;
 		align-items: center;
 		gap: var(--space-3);
-		width: 100%;
-		padding: var(--space-4) var(--space-5);
+		padding: var(--space-3) var(--space-5);
+		margin: 1px var(--space-3);
+		width: calc(100% - var(--space-6));
 		background: none;
 		border: none;
-		border-top: 1px solid var(--color-border);
+		border-radius: var(--radius-pill);
 		color: var(--color-text-primary);
 		font-size: var(--text-base);
 		text-align: left;
 		cursor: pointer;
-		transition: background 0.15s;
+		transition: background 0.12s;
 		font-family: var(--font-sans);
 		text-shadow: none;
+		-webkit-tap-highlight-color: transparent;
 	}
 
 	.sheet-action:hover:not(:disabled) {
-		background: var(--color-accent-dim);
+		background: rgba(255, 255, 255, 0.06);
 	}
 
 	.sheet-action:disabled {
@@ -952,9 +1005,11 @@
 
 	.search-input {
 		width: 100%;
-		background: var(--color-bg);
+		background: var(--color-surface-glass);
+		backdrop-filter: blur(12px);
+		-webkit-backdrop-filter: blur(12px);
 		border: 1px solid var(--color-border);
-		border-radius: var(--radius-lg);
+		border-radius: var(--radius-pill);
 		color: var(--color-text-primary);
 		padding: var(--space-3) var(--space-4) var(--space-3) calc(var(--space-4) + 24px);
 		font-size: var(--text-base);
@@ -1051,22 +1106,23 @@
 	.archived-toggle {
 		display: flex;
 		align-items: center;
-		gap: var(--space-2);
+		gap: var(--space-3);
 		width: 100%;
-		padding: var(--space-3) var(--space-5);
+		padding: var(--space-4) var(--space-6);
 		background: none;
 		border: none;
-		border-top: 1px solid var(--color-border);
 		color: var(--color-text-secondary);
-		font-size: var(--text-sm);
+		font-family: var(--font-mono);
+		font-size: 0.75rem;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
 		cursor: pointer;
-		font-family: var(--font-sans);
 		text-shadow: none;
-		transition: background 0.12s;
+		transition: background 0.12s, color 0.12s;
 	}
 
 	.archived-toggle:hover {
-		background: var(--color-accent-dim);
+		color: var(--color-text-primary);
 	}
 
 	.archived-row {

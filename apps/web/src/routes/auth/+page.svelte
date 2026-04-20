@@ -442,34 +442,43 @@
 	.auth-card {
 		width: 100%;
 		background: var(--color-surface-glass);
-		backdrop-filter: var(--blur-glass);
-		-webkit-backdrop-filter: var(--blur-glass);
+		backdrop-filter: blur(24px) saturate(1.5);
+		-webkit-backdrop-filter: blur(24px) saturate(1.5);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-xl);
 		box-shadow: var(--shadow-card);
 		overflow: hidden;
+		animation: auth-card-appear 350ms ease-out both;
+	}
+
+	@keyframes auth-card-appear {
+		from { opacity: 0; transform: scale(0.97) translateY(8px); }
+		to   { opacity: 1; transform: scale(1) translateY(0); }
 	}
 
 	.mode-tabs {
 		display: flex;
 		border-bottom: 1px solid var(--color-border);
+		padding: var(--space-2) var(--space-3);
+		gap: var(--space-2);
 	}
 
 	.tab {
 		flex: 1;
-		padding: var(--space-4);
+		padding: var(--space-2) var(--space-4);
 		background: none;
 		border: none;
+		border-radius: var(--radius-pill);
 		color: var(--color-text-secondary);
 		font-size: var(--text-sm);
 		font-weight: 500;
 		transition: color 0.15s, background 0.15s;
+		text-shadow: none;
 	}
 
 	.tab.active {
-		color: var(--color-accent);
-		background: rgba(119, 119, 194, 0.08);
-		border-bottom: 2px solid var(--color-accent);
+		color: #fff;
+		background: var(--color-accent);
 	}
 
 	form {
@@ -552,18 +561,19 @@
 	}
 
 	input {
-		background: rgba(0, 0, 0, 0.25);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-md);
+		background: transparent;
+		border: none;
+		border-bottom: 1px solid var(--color-border);
+		border-radius: 0;
 		color: var(--color-text-primary);
-		padding: var(--space-3) var(--space-4);
+		padding: var(--space-2) 0;
 		outline: none;
 		transition: border-color 0.2s;
 		width: 100%;
 	}
 
 	input:focus {
-		border-color: var(--color-border-solid);
+		border-color: var(--color-accent);
 	}
 
 	input:disabled {
@@ -579,19 +589,20 @@
 	}
 
 	.submit-btn {
-		background: var(--color-accent-dim);
-		color: var(--color-accent);
-		border: 1px solid rgba(119, 119, 194, 0.4);
-		border-radius: var(--radius-lg);
+		background: var(--color-accent);
+		color: #fff;
+		border: none;
+		border-radius: var(--radius-pill);
 		padding: var(--space-4);
 		font-weight: var(--weight-bold);
 		font-size: var(--text-base);
 		width: 100%;
-		transition: background 0.2s, opacity 0.15s;
+		transition: opacity 0.15s;
+		text-shadow: none;
 	}
 
 	.submit-btn:not(:disabled):hover {
-		background: rgba(119, 119, 194, 0.25);
+		opacity: 0.88;
 	}
 
 	.submit-btn:disabled {

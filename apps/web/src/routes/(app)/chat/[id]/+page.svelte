@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { browser } from '$app/environment';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { onDestroy, tick } from 'svelte';
@@ -107,6 +108,9 @@
 
 	// Starring
 	let starredMessageIds = $state<Set<string>>(new Set());
+
+	// Send button fly-away animation
+	let sendFlyActive = $state(false);
 
 	// Voice recording
 	let isRecording = $state(false);
@@ -274,6 +278,7 @@
 	// ─── Load messages ────────────────────────────────────────────────────────
 
 	$effect(() => {
+		if (!browser) return;
 		const id = chatId;
 		const initialName = page.url.searchParams.get('name') ?? 'Chat';
 		let cancelled = false;
@@ -529,6 +534,9 @@
 	async function handleSend() {
 		const content = inputText.trim();
 		if (!content || sending) return;
+
+		sendFlyActive = true;
+		setTimeout(() => { sendFlyActive = false; }, 300);
 
 		const clientMessageId = crypto.randomUUID();
 		inputText = '';
@@ -1114,7 +1122,12 @@
 		{:else if error && messages.length === 0}
 			<div class="state-msg error">{error}</div>
 		{:else if messages.length === 0}
-			<div class="state-msg">No messages yet. Say hello!</div>
+			<div class="thread-empty">
+				<div class="thread-empty-book">
+					<span class="thread-empty-label">NO MESSAGES YET</span>
+					<blockquote class="thread-empty-quote">Begin here.<br>Say something true.</blockquote>
+				</div>
+			</div>
 		{:else}
 			<div class="messages-inner">
 				{#each messages as msg (msg.id)}
@@ -1336,7 +1349,7 @@
 				<button class="composer-btn" onclick={cancelRecording} aria-label="Cancel recording" title="Cancel">
 					<Icon name="close" size={18} />
 				</button>
-				<button class="send-btn" onclick={finishRecording} aria-label="Send voice note">
+				<button class="composer-btn" onclick={finishRecording} aria-label="Send voice note">
 					<Icon name="send" size={16} />
 				</button>
 			</div>
@@ -1394,6 +1407,7 @@
 				{:else}
 					<button
 						class="send-btn"
+						class:fly={sendFlyActive}
 						onclick={handleSend}
 						disabled={!inputText.trim() || sending}
 						aria-label="Send message"
@@ -1464,9 +1478,9 @@
 		gap: var(--space-3);
 		padding: var(--space-3) var(--space-4);
 		border-bottom: 1px solid var(--color-border);
-		background: var(--color-surface-glass);
-		backdrop-filter: var(--blur-glass);
-		-webkit-backdrop-filter: var(--blur-glass);
+		background: rgba(18, 18, 28, 0.80);
+		backdrop-filter: blur(20px) saturate(1.4);
+		-webkit-backdrop-filter: blur(20px) saturate(1.4);
 		flex-shrink: 0;
 	}
 
@@ -1480,7 +1494,7 @@
 		border: none;
 		color: var(--color-accent);
 		padding: 0;
-		border-radius: var(--radius-lg);
+		border-radius: var(--radius-pill);
 		transition: background 0.15s;
 		flex-shrink: 0;
 		text-shadow: none;
@@ -1600,13 +1614,14 @@
 	}
 
 	.bubble.mine {
-		background: var(--color-accent);
-		color: #000;
+		background: var(--color-surface-elevated);
+		color: var(--color-text-primary);
+		border-left: 2px solid rgba(112, 112, 218, 0.4);
 		border-bottom-right-radius: var(--radius-sm);
 	}
 
 	.bubble.theirs {
-		background: var(--color-surface-raised);
+		background: var(--color-surface);
 		color: var(--color-text-primary);
 		border-bottom-left-radius: var(--radius-sm);
 	}
@@ -1674,22 +1689,23 @@
 		gap: var(--space-2);
 		padding: var(--space-3) var(--space-4);
 		border-top: 1px solid var(--color-border);
-		background: var(--color-surface);
+		background: transparent;
 	}
 
 	.composer-input {
 		flex: 1;
-		background: var(--color-bg);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-lg);
+		background: transparent;
+		border: none;
+		border-bottom: 1px solid var(--color-border);
+		border-radius: 0;
 		color: var(--color-text-primary);
-		padding: var(--space-3) var(--space-4);
+		padding: var(--space-2) var(--space-1) var(--space-2) 0;
 		resize: none;
 		max-height: 120px;
 		overflow-y: auto;
 		line-height: 1.5;
 		outline: none;
-		transition: border-color 0.15s;
+		transition: border-color 0.2s;
 	}
 
 	.composer-input:focus {
@@ -1699,12 +1715,10 @@
 	.send-btn {
 		width: 40px;
 		height: 40px;
-		border-radius: var(--radius-full);
+		border-radius: var(--radius-pill);
 		background: var(--color-accent);
-		color: #000;
+		color: #fff;
 		border: none;
-		font-size: var(--text-lg);
-		font-weight: 700;
 		flex-shrink: 0;
 		display: flex;
 		align-items: center;
@@ -1720,6 +1734,15 @@
 		opacity: 0.85;
 	}
 
+	.send-btn.fly {
+		animation: send-fly 0.25s cubic-bezier(0.4, 0, 1, 1) both;
+	}
+
+	@keyframes send-fly {
+		0%   { transform: scale(1) translate(0, 0); opacity: 1; }
+		100% { transform: scale(0.6) translate(8px, -8px); opacity: 0; }
+	}
+
 	.state-msg {
 		padding: var(--space-8) var(--space-4);
 		text-align: center;
@@ -1729,6 +1752,42 @@
 
 	.state-msg.error {
 		color: var(--color-danger);
+	}
+
+	/* ── Thread empty state (Left-Aligned Book) ── */
+	.thread-empty {
+		flex: 1;
+		display: flex;
+		align-items: center;
+		padding: 0 var(--space-8);
+	}
+
+	.thread-empty-book {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3);
+		max-width: 280px;
+	}
+
+	.thread-empty-label {
+		font-family: var(--font-mono);
+		font-size: 0.6rem;
+		font-weight: var(--weight-medium);
+		letter-spacing: 0.12em;
+		color: var(--color-text-secondary);
+		opacity: 0.5;
+	}
+
+	.thread-empty-quote {
+		font-family: var(--font-display);
+		font-style: italic;
+		font-size: var(--text-lg);
+		line-height: 1.45;
+		background: linear-gradient(180deg, var(--color-text-primary) 40%, transparent 100%);
+		-webkit-background-clip: text;
+		-webkit-text-fill-color: transparent;
+		background-clip: text;
+		margin: 0;
 	}
 
 	@keyframes pulse {
@@ -1765,8 +1824,8 @@
 	}
 
 	.bubble.mine .reply-quote {
-		border-left-color: rgba(0, 0, 0, 0.35);
-		background: rgba(0, 0, 0, 0.12);
+		border-left-color: rgba(112, 112, 218, 0.5);
+		background: rgba(0, 0, 0, 0.2);
 	}
 
 	.reply-quote-sender {
@@ -1836,22 +1895,24 @@
 		width: 40px;
 		height: 40px;
 		border-radius: var(--radius-full);
-		background: var(--color-bg);
+		background: var(--color-surface-glass);
+		backdrop-filter: blur(12px);
+		-webkit-backdrop-filter: blur(12px);
 		color: var(--color-text-secondary);
-		border: 1px solid var(--color-border);
-		font-size: var(--text-lg);
+		border: 1px solid rgba(255, 255, 255, 0.05);
 		flex-shrink: 0;
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		transition: background 0.15s, border-color 0.15s;
+		transition: background 0.15s, color 0.15s;
 		cursor: pointer;
 		font-family: var(--font-sans);
+		text-shadow: none;
 	}
 
 	.composer-btn:hover:not(:disabled) {
-		background: var(--color-surface);
-		border-color: var(--color-border-solid);
+		background: var(--color-accent-dim);
+		color: var(--color-accent);
 	}
 
 	.composer-btn:disabled {
@@ -1871,16 +1932,22 @@
 
 	.edit-input {
 		width: 100%;
-		background: var(--color-bg);
-		border: 1px solid var(--color-accent);
-		border-radius: var(--radius-md);
+		background: transparent;
+		border: none;
+		border-bottom: 1px solid var(--color-border);
+		border-radius: 0;
 		color: var(--color-text-primary);
-		padding: var(--space-2) var(--space-3);
+		padding: var(--space-2) 0;
 		resize: none;
 		line-height: 1.5;
 		outline: none;
 		font-size: var(--text-sm);
 		font-family: var(--font-sans);
+		transition: border-color 0.2s;
+	}
+
+	.edit-input:focus {
+		border-bottom-color: var(--color-accent);
 	}
 
 	.edit-actions {
@@ -1892,7 +1959,7 @@
 	.edit-cancel-btn, .edit-save-btn {
 		padding: 4px 12px;
 		font-size: var(--text-xs);
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-pill);
 		border: none;
 		cursor: pointer;
 		font-family: var(--font-sans);
@@ -1905,7 +1972,7 @@
 
 	.edit-save-btn {
 		background: var(--color-accent);
-		color: #000;
+		color: #fff;
 		font-weight: 600;
 	}
 
@@ -1927,7 +1994,7 @@
 		gap: var(--space-2);
 		padding: var(--space-3) var(--space-4);
 		border-top: 1px solid var(--color-border);
-		background: var(--color-surface);
+		background: transparent;
 	}
 
 	.recording-dot {
@@ -1940,6 +2007,7 @@
 	}
 
 	.recording-timer {
+		font-family: var(--font-mono);
 		font-size: var(--text-sm);
 		font-weight: 600;
 		color: var(--color-danger);
@@ -1950,5 +2018,17 @@
 		flex: 1;
 		font-size: var(--text-sm);
 		color: var(--color-text-secondary);
+	}
+
+	/* ── Desktop: fill the right pane instead of full viewport ── */
+	@media (hover: hover) and (pointer: fine) {
+		.thread-shell {
+			height: 100%;
+		}
+
+		/* Back button has no meaning when both panes are always visible */
+		.back-btn {
+			display: none;
+		}
 	}
 </style>

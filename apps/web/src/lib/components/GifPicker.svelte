@@ -289,7 +289,10 @@
 		margin-top: auto;
 		width: 100%;
 		max-height: 75dvh;
-		background: var(--color-surface);
+		background: rgba(26, 26, 36, 0.92);
+		backdrop-filter: blur(20px) saturate(1.4);
+		-webkit-backdrop-filter: blur(20px) saturate(1.4);
+		border-top: 1px solid var(--color-border-solid);
 		border-radius: var(--radius-xl) var(--radius-xl) 0 0;
 		display: flex;
 		flex-direction: column;
@@ -313,13 +316,16 @@
 	}
 
 	.picker-close {
-		background: none;
-		border: none;
+		background: var(--color-surface-glass);
+		backdrop-filter: blur(12px);
+		-webkit-backdrop-filter: blur(12px);
+		border: 1px solid rgba(255,255,255,0.05);
+		border-radius: var(--radius-full);
 		color: var(--color-text-secondary);
 		font-size: var(--text-lg);
 		padding: var(--space-1);
 		cursor: pointer;
-		transition: color 0.15s;
+		transition: color 0.15s, background 0.15s;
 		width: 32px;
 		height: 32px;
 		display: flex;
@@ -333,8 +339,8 @@
 
 	.picker-tabs {
 		display: flex;
-		gap: 0;
-		padding: 0 var(--space-4);
+		gap: var(--space-2);
+		padding: var(--space-3) var(--space-4);
 		border-bottom: 1px solid var(--color-border);
 		flex-shrink: 0;
 	}
@@ -344,12 +350,12 @@
 		background: none;
 		border: none;
 		color: var(--color-text-secondary);
-		padding: var(--space-3) var(--space-4);
+		padding: var(--space-2) var(--space-4);
 		font-size: var(--text-sm);
 		font-weight: 500;
 		cursor: pointer;
-		border-bottom: 2px solid transparent;
-		transition: color 0.15s, border-color 0.15s;
+		border-radius: var(--radius-pill);
+		transition: color 0.15s, background 0.15s;
 		font-family: var(--font-sans);
 	}
 
@@ -358,8 +364,8 @@
 	}
 
 	.tab.active {
-		color: var(--color-accent);
-		border-bottom-color: var(--color-accent);
+		color: #fff;
+		background: var(--color-accent);
 	}
 
 	.search-container {
@@ -370,9 +376,11 @@
 
 	.search-input {
 		width: 100%;
-		background: var(--color-bg);
+		background: var(--color-surface-glass);
+		backdrop-filter: blur(12px);
+		-webkit-backdrop-filter: blur(12px);
 		border: 1px solid var(--color-border);
-		border-radius: var(--radius-lg);
+		border-radius: var(--radius-pill);
 		color: var(--color-text-primary);
 		padding: var(--space-3) var(--space-4);
 		font-size: var(--text-base);

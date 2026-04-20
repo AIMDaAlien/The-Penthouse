@@ -35,29 +35,20 @@
 <style>
 	.bottom-nav {
 		position: fixed;
-		bottom: 0;
-		left: 0;
-		right: 0;
-		height: 64px;
+		bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+		left: 24px;
+		right: 24px;
+		height: 60px;
 		display: flex;
 		align-items: stretch;
-		background: var(--color-surface-glass);
-		backdrop-filter: var(--blur-glass);
-		-webkit-backdrop-filter: var(--blur-glass);
-		border-top: 1px solid var(--color-border);
+		background: rgba(18, 18, 28, 0.80);
+		backdrop-filter: blur(24px) saturate(1.6);
+		-webkit-backdrop-filter: blur(24px) saturate(1.6);
+		border: 1px solid var(--color-border-solid);
+		border-radius: var(--radius-xl);
+		box-shadow: 0 20px 40px rgba(0, 0, 0, 0.7), 0 2px 8px rgba(0, 0, 0, 0.5);
 		z-index: 100;
-		padding-bottom: env(safe-area-inset-bottom, 0);
-	}
-
-	/* On desktop, keep nav aligned with the bounded app column */
-	@media (min-width: 600px) {
-		.bottom-nav {
-			left: 50%;
-			transform: translateX(-50%);
-			width: min(480px, 100%);
-			border-left: 1px solid var(--color-border);
-			border-right: 1px solid var(--color-border);
-		}
+		overflow: hidden;
 	}
 
 	.nav-tab {
@@ -73,20 +64,17 @@
 		cursor: pointer;
 		transition: color 0.2s;
 		position: relative;
-		padding: 0;
+		padding: 0 4px;
 	}
 
 	.nav-tab::before {
 		content: '';
 		position: absolute;
-		top: 0;
-		left: 50%;
-		transform: translateX(-50%);
-		width: 0;
-		height: 2px;
-		background: var(--color-accent);
-		border-radius: 0 0 var(--radius-full) var(--radius-full);
-		transition: width 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+		inset: 6px 4px;
+		background: var(--color-accent-dim);
+		border-radius: var(--radius-pill);
+		opacity: 0;
+		transition: opacity 0.2s;
 	}
 
 	.nav-tab.active {
@@ -94,7 +82,7 @@
 	}
 
 	.nav-tab.active::before {
-		width: 32px;
+		opacity: 1;
 	}
 
 	.tab-icon {
@@ -109,9 +97,9 @@
 	}
 
 	.tab-label {
-		font-size: 0.625rem;
+		font-size: 0.6rem;
 		font-weight: 500;
-		letter-spacing: 0.04em;
+		letter-spacing: 0.06em;
 		text-transform: uppercase;
 		font-family: var(--font-sans);
 	}

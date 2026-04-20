@@ -69,8 +69,25 @@
 		});
 	});
 
-	// Show bottom tab nav only on top-level tab pages
+	// Show bottom tab nav only on top-level tab pages (mobile only — desktop uses left pane nav)
+	let isDesktop = $state(false);
+	$effect(() => {
+		if (typeof window !== 'undefined') {
+			const mq = window.matchMedia('(hover: hover) and (pointer: fine)');
+			isDesktop = mq.matches;
+			const handler = (e: MediaQueryListEvent) => { isDesktop = e.matches; };
+			mq.addEventListener('change', handler);
+			return () => mq.removeEventListener('change', handler);
+		}
+	});
+
+	// Routes handled by the (app) two-pane monolith layout
+	const isMonolithRoute = $derived(
+		page.url.pathname === '/' || page.url.pathname.startsWith('/chat/')
+	);
+
 	const showBottomNav = $derived(
+		!isDesktop &&
 		sessionStore.isAuthenticated &&
 		(page.url.pathname === '/' ||
 		 page.url.pathname === '/users' ||
@@ -102,7 +119,7 @@
 	<link rel="manifest" href="/manifest.webmanifest" />
 </svelte:head>
 
-<div class="app-shell" class:app-bounded={page.url.pathname !== '/welcome'}>
+<div class="app-shell" class:app-bounded={page.url.pathname !== '/welcome'} class:app-monolith={isMonolithRoute}>
 	{@render children()}
 
 	{#if showBottomNav}
@@ -119,21 +136,25 @@
 	}
 
 	:global(:root) {
-		/* ── Brand palette (v2) ── */
-		--color-bg:             #12121C;
-		--color-surface:        #1E1E2D;
-		--color-surface-glass:  rgba(30, 30, 45, 0.45);
-		--color-surface-raised: rgba(30, 30, 45, 0.6);
-		--color-border:         rgba(140, 140, 197, 0.2);
-		--color-border-solid:   rgba(140, 140, 197, 0.35);
-		--color-text-primary:   #E2E2EC;
-		--color-text-secondary: #8C8CC5;
-		--color-accent:         #7777C2;
-		--color-accent-dim:     rgba(119, 119, 194, 0.15);
-		--color-accent-hover:   #C6C6E6;
-		--color-danger:         #ff8ca6;
-		--color-danger-dim:     rgba(255, 140, 166, 0.15);
-		--color-success:        #34d399;
+		/* ── Nocturne palette ── */
+		--color-bg:                #12121C;
+		--color-surface:           #1A1A24;
+		--color-surface-elevated:  #242432;
+		--color-surface-glass:     rgba(26, 26, 36, 0.45);
+		--color-surface-raised:    rgba(26, 26, 36, 0.6);
+		--color-border:            rgba(140, 140, 197, 0.2);
+		--color-border-solid:      rgba(140, 140, 197, 0.35);
+		--color-text-primary:      #E2E2EC;
+		--color-text-secondary:    #8C8CC5;
+		--color-accent:            #7070DA;
+		--color-accent-dim:        rgba(112, 112, 218, 0.15);
+		--color-accent-hover:      #C6C6E6;
+		--color-accent-secondary:  #8282C3;
+		--color-accent-light:      #C0C0F0;
+		--color-accent-periwinkle: #B4B4FF;
+		--color-danger:            #D65A4A;
+		--color-danger-dim:        rgba(214, 90, 74, 0.15);
+		--color-success:           #34d399;
 
 		/* ── Typography ── */
 		/* UI body: Ubuntu (falls back to system sans) */
@@ -172,6 +193,7 @@
 		--radius-lg:   20px;
 		--radius-xl:   24px;
 		--radius-full: 9999px;
+		--radius-pill: 9999px;
 
 		/* ── Shadows / Glass ── */
 		--shadow-card: 0 8px 32px 0 rgba(0, 0, 0, 0.35);
@@ -200,8 +222,8 @@
 		min-height: 100dvh;
 		/* Subtle dot-grid ambient texture from v2 */
 		background-image:
-			radial-gradient(rgba(119, 119, 194, 0.35) 0px, transparent 260px),
-			radial-gradient(rgba(80, 80, 150, 0.2) 0px, transparent 400px),
+			radial-gradient(rgba(112, 112, 218, 0.35) 0px, transparent 260px),
+			radial-gradient(rgba(90, 90, 170, 0.2) 0px, transparent 400px),
 			radial-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px);
 		background-size: 100% 100%, 100% 100%, 24px 24px;
 		background-position: top right, bottom left, 0 0;
@@ -216,8 +238,8 @@
 		font-weight: var(--weight-medium);
 		background: var(--color-accent-dim);
 		color: var(--color-accent);
-		border: 1px solid rgba(119, 119, 194, 0.3);
-		border-radius: var(--radius-lg);
+		border: 1px solid rgba(112, 112, 218, 0.3);
+		border-radius: var(--radius-pill);
 		padding: var(--space-3) var(--space-4);
 		transition: background 0.2s, border-color 0.2s, opacity 0.15s;
 		text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
@@ -225,7 +247,7 @@
 
 	:global(button:active) {
 		transform: scale(0.98);
-		background: rgba(119, 119, 194, 0.25);
+		background: rgba(112, 112, 218, 0.25);
 	}
 
 	:global(button:disabled) {
@@ -297,13 +319,30 @@
 		width: 100%;
 	}
 
-	/* ── Desktop: constrain to phone width, centered ── */
+	/* ── Touch/small-screen: constrain to phone width, centered ── */
 	@media (min-width: 600px) {
 		.app-bounded {
 			max-width: 480px;
 			margin: 0 auto;
 			/* Subtle pillar-box to separate app from page background */
 			box-shadow: 0 0 0 1px var(--color-border), 0 0 80px rgba(0, 0, 0, 0.4);
+		}
+	}
+
+	/* ── Desktop (mouse/trackpad): remove phone-column constraint — monolith handles layout ── */
+	@media (min-width: 600px) and (hover: hover) and (pointer: fine) {
+		.app-bounded {
+			max-width: unset;
+			margin: unset;
+			box-shadow: none;
+		}
+	}
+
+	/* ── Desktop monolith routes: full-viewport positioning context ── */
+	@media (hover: hover) and (pointer: fine) {
+		.app-shell.app-monolith {
+			height: 100dvh;
+			overflow: hidden;
 		}
 	}
 

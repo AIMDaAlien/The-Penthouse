@@ -43,7 +43,9 @@
 
 <style>
 	.command-picker {
-		background: var(--color-surface);
+		background: rgba(26, 26, 36, 0.92);
+		backdrop-filter: blur(20px) saturate(1.4);
+		-webkit-backdrop-filter: blur(20px) saturate(1.4);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-xl) var(--radius-xl) var(--radius-md) var(--radius-md);
 		overflow: hidden;
@@ -78,7 +80,7 @@
 	.cmd-icon {
 		width: 28px;
 		height: 28px;
-		border-radius: var(--radius-md);
+		border-radius: var(--radius-pill);
 		background: var(--color-accent-dim);
 		color: var(--color-accent);
 		display: flex;

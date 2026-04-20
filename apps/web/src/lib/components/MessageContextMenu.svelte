@@ -176,9 +176,11 @@
 		left: 0;
 		right: 0;
 		bottom: 0;
-		background: var(--color-surface-2);
+		background: rgba(26, 26, 36, 0.92);
+		backdrop-filter: blur(20px) saturate(1.4);
+		-webkit-backdrop-filter: blur(20px) saturate(1.4);
 		border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-		border-top: 1px solid var(--color-border);
+		border-top: 1px solid var(--color-border-solid);
 		padding: var(--space-2) 0 max(var(--space-4), env(safe-area-inset-bottom));
 		z-index: 201;
 		animation: slide-up 0.22s cubic-bezier(0.32, 0.72, 0, 1);
@@ -262,8 +264,10 @@
 		align-items: center;
 		gap: var(--space-3);
 		padding: var(--space-3) var(--space-5);
+		margin: 1px var(--space-3);
 		background: none;
 		border: none;
+		border-radius: var(--radius-pill);
 		color: var(--color-text-primary);
 		font-size: var(--text-base);
 		font-family: var(--font-sans);
@@ -271,6 +275,7 @@
 		cursor: pointer;
 		transition: background 0.12s;
 		-webkit-tap-highlight-color: transparent;
+		text-shadow: none;
 	}
 
 	.action-btn:active {
@@ -278,6 +283,6 @@
 	}
 
 	.action-btn.danger {
-		color: var(--color-error, #e57373);
+		color: var(--color-danger);
 	}
 </style>

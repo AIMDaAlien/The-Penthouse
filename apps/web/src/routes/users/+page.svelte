@@ -147,7 +147,10 @@
 			<div class="state-msg error">{error}</div>
 		{:else if mode === 'search'}
 			{#if results.length === 0}
-				<div class="state-msg">No users found matching "{searchQuery}"</div>
+				<div class="book-empty-state">
+					<span class="book-subtitle">SEARCH</span>
+					<p class="book-quote">"No souls wander these halls tonight."</p>
+				</div>
 			{:else}
 				<div class="results-header">Found {results.length} user{results.length !== 1 ? 's' : ''}</div>
 				{#each results as user (user.id)}
@@ -157,29 +160,25 @@
 							displayName={user.displayName}
 							avatarUrl={user.avatarUrl ?? null}
 							size="md"
-							showPresence={getStatusColor(user.lastSeenAt) === 'online'}
+							showPresence={false}
 						/>
 						<div class="user-info">
 							<div class="user-name">{user.displayName}</div>
 							<div class="user-meta">@{user.username}</div>
-							<div class="user-last-seen">
-								{#if getStatusColor(user.lastSeenAt) === 'online'}
-									<span class="status-label online">Online</span>
-								{:else if getStatusColor(user.lastSeenAt) === 'away'}
-									<span class="status-label away">Away</span>
-								{:else}
-									<span class="status-label offline">Seen {formatLastSeen(user.lastSeenAt)}</span>
-								{/if}
-							</div>
 						</div>
-						<div class="chevron"><Icon name="chevron-right" size={16} /></div>
+						{#if getStatusColor(user.lastSeenAt) === 'online'}
+							<span class="status-dot online"></span>
+						{/if}
 					</button>
 				{/each}
 			{/if}
 		{:else}
 			<!-- Directory view -->
 			{#if allUsers.length === 0}
-				<div class="state-msg">No users found</div>
+				<div class="book-empty-state">
+					<span class="book-subtitle">DIRECTORY</span>
+					<p class="book-quote">"No souls wander these halls tonight."</p>
+				</div>
 			{:else}
 				<div class="results-header">
 					Showing {offset + 1}–{Math.min(offset + limit, total)} of {total} user{total !== 1 ? 's' : ''}
@@ -191,22 +190,15 @@
 							displayName={user.displayName}
 							avatarUrl={user.avatarUrl ?? null}
 							size="md"
-							showPresence={getStatusColor(user.lastSeenAt) === 'online'}
+							showPresence={false}
 						/>
 						<div class="user-info">
 							<div class="user-name">{user.displayName}</div>
 							<div class="user-meta">@{user.username}</div>
-							<div class="user-last-seen">
-								{#if getStatusColor(user.lastSeenAt) === 'online'}
-									<span class="status-label online">Online</span>
-								{:else if getStatusColor(user.lastSeenAt) === 'away'}
-									<span class="status-label away">Away</span>
-								{:else}
-									<span class="status-label offline">Seen {formatLastSeen(user.lastSeenAt)}</span>
-								{/if}
-							</div>
 						</div>
-						<div class="chevron"><Icon name="chevron-right" size={16} /></div>
+						{#if getStatusColor(user.lastSeenAt) === 'online'}
+							<span class="status-dot online"></span>
+						{/if}
 					</button>
 				{/each}
 
@@ -241,8 +233,11 @@
 		gap: var(--space-3);
 		padding: var(--space-3) var(--space-4);
 		border-bottom: 1px solid var(--color-border);
-		background: var(--color-surface);
+		background: var(--color-surface-glass);
+		backdrop-filter: blur(12px);
+		-webkit-backdrop-filter: blur(12px);
 		flex-shrink: 0;
+		z-index: 10;
 	}
 
 	.back-btn {
@@ -255,7 +250,7 @@
 		border: none;
 		color: var(--color-accent);
 		padding: 0;
-		border-radius: var(--radius-lg);
+		border-radius: var(--radius-pill);
 		cursor: pointer;
 		flex-shrink: 0;
 		transition: background 0.15s;
@@ -277,16 +272,17 @@
 		display: flex;
 		gap: var(--space-2);
 		padding: var(--space-3) var(--space-4);
-		background: var(--color-surface);
-		border-bottom: 1px solid var(--color-border);
+		background: transparent;
+		border-bottom: none;
 		flex-shrink: 0;
 	}
 
 	.search-input {
 		flex: 1;
-		background: var(--color-bg);
+		background: var(--color-surface-glass);
+		backdrop-filter: blur(12px);
 		border: 1px solid var(--color-border);
-		border-radius: var(--radius-md);
+		border-radius: var(--radius-pill);
 		color: var(--color-text-primary);
 		padding: var(--space-2) var(--space-3);
 		font-size: var(--text-sm);
@@ -305,9 +301,9 @@
 	.search-btn {
 		width: 40px;
 		height: 40px;
-		border-radius: var(--radius-md);
+		border-radius: var(--radius-pill);
 		background: var(--color-accent);
-		color: #000;
+		color: #fff;
 		border: none;
 		display: flex;
 		align-items: center;
@@ -330,10 +326,10 @@
 	.users-list {
 		flex: 1;
 		overflow-y: auto;
-		padding: var(--space-3);
+		padding: 0;
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-2);
+		gap: 0;
 	}
 
 	.state-msg {
@@ -367,20 +363,19 @@
 	.user-card {
 		display: flex;
 		align-items: center;
-		gap: var(--space-3);
-		padding: var(--space-3);
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-md);
-		text-align: left;
-		cursor: pointer;
-		transition: background 0.15s, border-color 0.15s;
+		gap: var(--space-4);
 		width: 100%;
+		padding: 16px 24px;
+		border: none;
+		border-bottom: 1px solid var(--color-border);
+		cursor: pointer;
+		transition: background 0.1s;
+		background: none;
+		text-align: left;
 	}
 
 	.user-card:hover {
-		background: var(--color-surface-raised);
-		border-color: var(--color-border-solid);
+		background: var(--color-accent-dim);
 	}
 
 	.user-info {
@@ -427,6 +422,46 @@
 		color: var(--color-text-secondary);
 	}
 
+	.status-dot {
+		width: 8px;
+		height: 8px;
+		border-radius: var(--radius-full);
+		flex-shrink: 0;
+	}
+
+	.status-dot.online {
+		background: var(--color-success);
+	}
+
+	/* Book empty state */
+	.book-empty-state {
+		padding: var(--space-12) var(--space-6);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+		text-align: left;
+	}
+
+	.book-subtitle {
+		font-family: var(--font-mono);
+		font-size: 0.6875rem;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--color-text-secondary);
+	}
+
+	.book-quote {
+		font-family: var(--font-display);
+		font-style: italic;
+		font-size: 1.5rem;
+		color: var(--color-text-primary);
+		margin: 0;
+		line-height: 1.4;
+		background: linear-gradient(180deg, var(--color-text-primary) 0%, rgba(226,226,236,0.3) 100%);
+		-webkit-background-clip: text;
+		-webkit-text-fill-color: transparent;
+	}
+
 	.chevron {
 		flex-shrink: 0;
 		display: flex;
@@ -455,7 +490,7 @@
 		background: var(--color-accent-dim);
 		color: var(--color-accent);
 		border: 1px solid rgba(119, 119, 194, 0.3);
-		border-radius: var(--radius-md);
+		border-radius: var(--radius-pill);
 		font-size: var(--text-xs);
 		cursor: pointer;
 		transition: background 0.15s;

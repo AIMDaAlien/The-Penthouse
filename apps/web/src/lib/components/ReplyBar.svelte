@@ -34,7 +34,7 @@
 		align-items: center;
 		gap: var(--space-2);
 		padding: var(--space-2) var(--space-3);
-		background: var(--color-surface-2);
+		background: var(--color-surface-elevated);
 		border-top: 1px solid var(--color-border);
 		border-left: 3px solid var(--color-accent);
 		min-width: 0;
@@ -88,7 +88,7 @@
 	}
 
 	.dismiss-btn:hover {
-		color: var(--color-text-primary);
-		background: rgba(255, 255, 255, 0.08);
+		color: var(--color-accent);
+		background: var(--color-accent-dim);
 	}
 </style>

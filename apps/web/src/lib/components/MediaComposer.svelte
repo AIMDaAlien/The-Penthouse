@@ -375,8 +375,8 @@
 		padding: var(--space-3) var(--space-4) var(--space-3);
 		border-top: 1px solid var(--color-border);
 		background: var(--color-surface-glass);
-		backdrop-filter: var(--blur-glass);
-		-webkit-backdrop-filter: var(--blur-glass);
+		backdrop-filter: blur(16px) saturate(1.4);
+		-webkit-backdrop-filter: blur(16px) saturate(1.4);
 	}
 
 	/* ── Caption ── */
@@ -462,7 +462,7 @@
 	.error-overlay {
 		position: absolute;
 		inset: 0;
-		background: rgba(255, 140, 166, 0.25);
+		background: rgba(214, 90, 74, 0.2);
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -597,7 +597,7 @@
 		background: none;
 		border: 1px solid var(--color-border);
 		color: var(--color-text-secondary);
-		border-radius: var(--radius-lg);
+		border-radius: var(--radius-pill);
 		text-shadow: none;
 	}
 

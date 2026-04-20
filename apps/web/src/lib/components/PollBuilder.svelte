@@ -182,9 +182,11 @@
 
 	.sheet {
 		width: 100%;
-		background: var(--color-surface);
+		background: rgba(26, 26, 36, 0.92);
+		backdrop-filter: blur(20px) saturate(1.4);
+		-webkit-backdrop-filter: blur(20px) saturate(1.4);
 		border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-		border-top: 1px solid var(--color-border);
+		border-top: 1px solid var(--color-border-solid);
 		max-height: 85dvh;
 		overflow-y: auto;
 		display: flex;
@@ -230,9 +232,11 @@
 	.close-btn {
 		width: 32px;
 		height: 32px;
-		border-radius: var(--radius-lg);
-		background: none;
-		border: none;
+		border-radius: var(--radius-full);
+		background: var(--color-surface-glass);
+		backdrop-filter: blur(12px);
+		-webkit-backdrop-filter: blur(12px);
+		border: 1px solid rgba(255,255,255,0.05);
 		color: var(--color-text-secondary);
 		display: flex;
 		align-items: center;
@@ -274,11 +278,12 @@
 
 	.field-input {
 		width: 100%;
-		background: var(--color-bg);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-lg);
+		background: transparent;
+		border: none;
+		border-bottom: 1px solid var(--color-border);
+		border-radius: 0;
 		color: var(--color-text-primary);
-		padding: var(--space-3) var(--space-4);
+		padding: var(--space-2) 0;
 		font-size: var(--text-base);
 		font-family: var(--font-sans);
 		outline: none;
@@ -287,7 +292,7 @@
 	}
 
 	.field-input:focus {
-		border-color: var(--color-accent);
+		border-bottom-color: var(--color-accent);
 	}
 
 	.field-input:disabled {
@@ -332,7 +337,7 @@
 	.remove-btn {
 		width: 28px;
 		height: 28px;
-		border-radius: var(--radius-md);
+		border-radius: var(--radius-pill);
 		background: none;
 		border: 1px solid var(--color-border);
 		color: var(--color-text-secondary);
@@ -357,7 +362,7 @@
 		gap: var(--space-2);
 		background: none;
 		border: 1px dashed var(--color-border);
-		border-radius: var(--radius-lg);
+		border-radius: var(--radius-pill);
 		color: var(--color-text-secondary);
 		font-size: var(--text-sm);
 		padding: var(--space-2) var(--space-4);
@@ -382,9 +387,9 @@
 
 	.expiry-btn {
 		padding: var(--space-2) var(--space-4);
-		background: var(--color-bg);
+		background: transparent;
 		border: 1px solid var(--color-border);
-		border-radius: var(--radius-lg);
+		border-radius: var(--radius-pill);
 		color: var(--color-text-secondary);
 		font-size: var(--text-sm);
 		cursor: pointer;
@@ -399,9 +404,9 @@
 	}
 
 	.expiry-btn.active {
-		background: var(--color-accent-dim);
+		background: var(--color-accent);
 		border-color: var(--color-accent);
-		color: var(--color-accent);
+		color: #fff;
 		font-weight: 600;
 	}
 
@@ -410,9 +415,9 @@
 		width: 100%;
 		padding: var(--space-4);
 		background: var(--color-accent);
-		color: #000;
+		color: #fff;
 		border: none;
-		border-radius: var(--radius-xl);
+		border-radius: var(--radius-pill);
 		font-size: var(--text-base);
 		font-weight: 700;
 		cursor: pointer;
