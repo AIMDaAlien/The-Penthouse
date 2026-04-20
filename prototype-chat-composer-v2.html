@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Penthouse - Chat Composer v2 (Minimalist Ledger + Frosted Circles)</title>
+<link href="https://fonts.googleapis.com/css2?family=Gelasio:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Ubuntu:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-color: #12121C; --surface-color: #1A1A24; --surface-elevated: #242432;
+    --border-solid: rgba(130, 130, 195, 0.15);
+    --primary: #7070DA; --primary-light: #C0C0F0;
+    --text-primary: #EAEAF2; --text-secondary: #8E8EAD;
+    --font-display: 'Gelasio', serif; --font-body: 'Ubuntu', sans-serif;
+    --radius-pill: 9999px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg-color); color: var(--text-primary); font-family: var(--font-body); padding: 3rem 2rem; display: flex; flex-direction: column; align-items: center; gap: 4rem; }
+  h1 { font-family: var(--font-display); font-weight: 500; color: var(--text-secondary); margin-bottom: 1rem; }
+  .grid { display: grid; grid-template-columns: 1fr; gap: 4rem; width: 100%; max-width: 600px; }
+  
+  .concept { background: var(--bg-color); border: 1px solid var(--border-solid); padding: 3rem 2rem; border-radius: 24px; position: relative; display: flex; flex-direction: column; justify-content: flex-end; }
+  .label { position: absolute; top: -12px; left: 24px; background: var(--primary); color: white; padding: 4px 12px; border-radius: var(--radius-pill); font-size: 0.75rem; font-weight: 500; z-index: 10; }
+  
+  .icon { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+  
+  input { background: none; border: none; color: var(--text-primary); font-family: var(--font-body); font-size: 1.05rem; outline: none; width: 100%; padding: 8px 0; transition: border-color 0.2s; }
+  input::placeholder { color: var(--text-secondary); }
+
+  /* Base Ledger & Frosted Circle Rules */
+  .ledger-input { border-bottom: 1px solid var(--border-solid); }
+  .ledger-input:focus { border-color: var(--primary); }
+  
+  .frosted-btn { 
+    width: 44px; height: 44px; border-radius: 50%; 
+    background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-secondary); cursor: pointer; transition: all 0.2s ease; flex-shrink: 0;
+  }
+  .frosted-btn:hover { background: rgba(255, 255, 255, 0.08); color: var(--text-primary); border-color: rgba(255, 255, 255, 0.15); }
+  .frosted-btn.send { background: rgba(112, 112, 218, 0.15); color: var(--primary-light); border-color: rgba(112, 112, 218, 0.3); }
+  .frosted-btn.send:hover { background: var(--primary); color: white; }
+
+  /* 1. Standard Split */
+  .c1 { display: flex; align-items: flex-end; gap: 16px; }
+  .c1 .left-group { display: flex; gap: 8px; }
+
+  /* 2. Right-Aligned Actions */
+  .c2 { display: flex; flex-direction: column; gap: 16px; }
+  .c2 .bottom-row { display: flex; justify-content: space-between; align-items: center; }
+  .c2 .action-group { display: flex; gap: 8px; }
+
+  /* 3. Bottom Bar Distributed */
+  .c3 { display: flex; flex-direction: column; gap: 20px; }
+  .c3 .action-row { display: flex; justify-content: space-between; align-items: center; width: 100%; }
+
+  /* 4. Left-Aligned Actions */
+  .c4 { display: flex; flex-direction: column; gap: 16px; }
+  .c4 .action-group { display: flex; gap: 8px; }
+
+  /* 5. Floating Frosted Island */
+  .c5-wrapper { background: rgba(36, 36, 50, 0.4); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.05); border-radius: 32px; padding: 16px 24px; display: flex; flex-direction: column; gap: 16px; }
+  .c5 .frosted-btn { background: rgba(255, 255, 255, 0.05); }
+
+  /* 6. Integrated Continuous Ledger */
+  .c6 { position: relative; padding-bottom: 60px; }
+  .c6 .line { position: absolute; bottom: 84px; left: -2rem; right: -2rem; height: 1px; background: var(--border-solid); }
+  .c6 input { border: none; padding-bottom: 12px; }
+  .c6 .action-row { position: absolute; bottom: 24px; left: 0; right: 0; display: flex; justify-content: space-between; }
+  .c6 .left-actions { display: flex; gap: 12px; }
+
+  /* 7. Minimalist Compact (Small buttons, tight integration) */
+  .c7 { display: flex; align-items: center; gap: 12px; }
+  .c7 .frosted-btn { width: 36px; height: 36px; }
+  .c7 .icon { width: 16px; height: 16px; }
+
+</style>
+</head>
+<body>
+  <h1>Composer Concepts: Minimalist Ledger + Frosted Actions</h1>
+  <div class="grid">
+    
+    <div class="concept">
+      <div class="label">1. Standard Split</div>
+      <div class="c1">
+        <div class="left-group">
+          <div class="frosted-btn"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
+          <div class="frosted-btn"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><path d="M9 9h-2a2 2 0 0 0 -2 2v2a2 2 0 0 0 2 2h2v-3h-1"/><path d="M12 9v6"/><path d="M15 9h3v2h-2v1h2v2h-3"/></svg></div>
+          <div class="frosted-btn"><svg class="icon" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg></div>
+        </div>
+        <div style="flex: 1;"><input type="text" class="ledger-input" placeholder="Compose message..."></div>
+        <div class="frosted-btn send"><svg class="icon" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></div>
+      </div>
+    </div>
+
+    <div class="concept">
+      <div class="label">2. Right-Aligned Actions</div>
+      <div class="c2">
+        <input type="text" class="ledger-input" placeholder="Compose message...">
+        <div class="bottom-row">
+          <span style="font-family: var(--font-mono); font-size: 0.7rem; color: var(--text-secondary);">ESC TO CANCEL</span>
+          <div class="action-group">
+            <div class="frosted-btn"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
+            <div class="frosted-btn"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><path d="M9 9h-2a2 2 0 0 0 -2 2v2a2 2 0 0 0 2 2h2v-3h-1"/><path d="M12 9v6"/><path d="M15 9h3v2h-2v1h2v2h-3"/></svg></div>
+            <div class="frosted-btn"><svg class="icon" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg></div>
+            <div class="frosted-btn send"><svg class="icon" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="concept">
+      <div class="label">3. Bottom Bar Distributed</div>
+      <div class="c3">
+        <input type="text" class="ledger-input" placeholder="Compose message...">
+        <div class="action-row">
+          <div class="frosted-btn"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
+          <div class="frosted-btn"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><path d="M9 9h-2a2 2 0 0 0 -2 2v2a2 2 0 0 0 2 2h2v-3h-1"/><path d="M12 9v6"/><path d="M15 9h3v2h-2v1h2v2h-3"/></svg></div>
+          <div class="frosted-btn"><svg class="icon" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg></div>
+          <div style="flex: 1;"></div>
+          <div class="frosted-btn send"><svg class="icon" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="concept">
+      <div class="label">4. Left-Aligned Actions</div>
+      <div class="c4">
+        <input type="text" class="ledger-input" placeholder="Compose message...">
+        <div class="action-group">
+          <div class="frosted-btn"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
+          <div class="frosted-btn"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><path d="M9 9h-2a2 2 0 0 0 -2 2v2a2 2 0 0 0 2 2h2v-3h-1"/><path d="M12 9v6"/><path d="M15 9h3v2h-2v1h2v2h-3"/></svg></div>
+          <div class="frosted-btn"><svg class="icon" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg></div>
+          <div class="frosted-btn send"><svg class="icon" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="concept" style="background: var(--surface-color);">
+      <div class="label">5. Floating Frosted Island</div>
+      <div class="c5 c5-wrapper">
+        <input type="text" class="ledger-input" placeholder="Compose message...">
+        <div style="display: flex; justify-content: space-between;">
+          <div style="display: flex; gap: 8px;">
+            <div class="frosted-btn"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
+            <div class="frosted-btn"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><path d="M9 9h-2a2 2 0 0 0 -2 2v2a2 2 0 0 0 2 2h2v-3h-1"/><path d="M12 9v6"/><path d="M15 9h3v2h-2v1h2v2h-3"/></svg></div>
+            <div class="frosted-btn"><svg class="icon" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg></div>
+          </div>
+          <div class="frosted-btn send"><svg class="icon" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="concept c6">
+      <div class="label">6. Integrated Continuous Ledger</div>
+      <input type="text" placeholder="Compose message...">
+      <div class="line"></div>
+      <div class="action-row">
+        <div class="left-actions">
+          <div class="frosted-btn"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
+          <div class="frosted-btn"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><path d="M9 9h-2a2 2 0 0 0 -2 2v2a2 2 0 0 0 2 2h2v-3h-1"/><path d="M12 9v6"/><path d="M15 9h3v2h-2v1h2v2h-3"/></svg></div>
+          <div class="frosted-btn"><svg class="icon" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg></div>
+        </div>
+        <div class="frosted-btn send"><svg class="icon" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></div>
+      </div>
+    </div>
+
+    <div class="concept">
+      <div class="label">7. Minimalist Compact</div>
+      <div class="c7">
+        <div class="frosted-btn"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
+        <div class="frosted-btn"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><path d="M9 9h-2a2 2 0 0 0 -2 2v2a2 2 0 0 0 2 2h2v-3h-1"/><path d="M12 9v6"/><path d="M15 9h3v2h-2v1h2v2h-3"/></svg></div>
+        <div class="frosted-btn"><svg class="icon" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg></div>
+        <div style="flex: 1;"><input type="text" class="ledger-input" placeholder="Message..."></div>
+        <div class="frosted-btn send"><svg class="icon" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></div>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

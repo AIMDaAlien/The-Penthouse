@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Penthouse - Editorial Empty States</title>
+<link href="https://fonts.googleapis.com/css2?family=Gelasio:ital,wght@0,400;0,500;0,600;1,400;1,500&family=JetBrains+Mono:wght@400;500&family=Ubuntu:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-color: #12121C; --surface-color: #1A1A24; --surface-elevated: #242432;
+    --border-solid: rgba(130, 130, 195, 0.15);
+    --primary: #7070DA; --primary-light: #C0C0F0; 
+    --text-primary: #EAEAF2; --text-secondary: #8E8EAD;
+    --font-display: 'Gelasio', serif; --font-body: 'Ubuntu', sans-serif; --font-mono: 'JetBrains Mono', monospace;
+    --radius-pill: 9999px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg-color); color: var(--text-primary); font-family: var(--font-body); padding: 3rem 2rem; display: flex; flex-direction: column; align-items: center; gap: 4rem; }
+  h1 { font-family: var(--font-display); font-weight: 500; color: var(--text-secondary); margin-bottom: 1rem; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 4rem; width: 100%; max-width: 1200px; }
+  
+  /* Left-Aligned Book Aesthetic */
+  .concept { 
+    background: var(--surface-color); border: 1px solid var(--border-solid); border-radius: 24px; position: relative; height: 400px; 
+    display: flex; flex-direction: column; align-items: flex-start; justify-content: center; padding: 40px 60px;
+    box-shadow: inset 0 2px 20px rgba(255,255,255,0.02); overflow: hidden;
+  }
+  
+  .label { position: absolute; top: 12px; left: 12px; background: var(--primary); color: white; padding: 4px 12px; border-radius: var(--radius-pill); font-size: 0.75rem; font-weight: 500; z-index: 10; font-family: var(--font-mono); }
+  
+  /* The Content Structure */
+  .subtitle { font-family: var(--font-mono); font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.15em; margin-bottom: 16px; display: flex; align-items: center; gap: 12px; opacity: 0.8; }
+  .subtitle::before { content: ''; width: 24px; height: 1px; background: var(--primary); }
+  
+  .quote-container { border-left: 2px solid rgba(112, 112, 218, 0.3); padding-left: 32px; position: relative; }
+  
+  .quote { font-family: var(--font-display); font-style: italic; font-size: 1.8rem; color: var(--text-primary); line-height: 1.4; margin-bottom: 16px; position: relative; }
+  
+  /* Subtle quotation mark watermarks */
+  .quote::before { content: '"'; position: absolute; top: -30px; left: -40px; font-family: var(--font-display); font-size: 6rem; color: rgba(255,255,255,0.03); z-index: 0; pointer-events: none; }
+  
+  .author { font-family: var(--font-body); font-weight: 500; font-size: 0.95rem; color: var(--text-secondary); display: flex; align-items: center; gap: 8px; }
+  .author::before { content: '—'; color: var(--primary-light); }
+
+  /* Concept Variations */
+  .c1 .quote { color: #EAEAF2; }
+  .c2 .quote-container { border-left-color: var(--border-solid); }
+  .c2 .author { font-family: var(--font-mono); font-size: 0.8rem; letter-spacing: 0.05em; }
+  .c3 { background: linear-gradient(135deg, var(--surface-color) 0%, var(--bg-color) 100%); }
+  .c3 .quote { background: linear-gradient(180deg, #FFFFFF 0%, #8E8EAD 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .c4 .quote-container { border-left: none; padding-left: 0; }
+  .c4 .quote::before { display: none; }
+  .c4 .author { border-top: 1px solid var(--border-solid); padding-top: 16px; margin-top: 24px; width: max-content; }
+  .c5 .quote { font-size: 1.6rem; letter-spacing: 0.02em; }
+  .c5 .subtitle::before { width: 12px; height: 12px; border-radius: 50%; border: 1px solid var(--primary); background: transparent; }
+  .c6 .quote { font-weight: 600; font-style: normal; }
+
+</style>
+</head>
+<body>
+  <h1>Left-Aligned Book: Quotes & Authors</h1>
+  <p style="color: var(--text-secondary); text-align: center; max-width: 600px; margin-top: -2rem;">Six variations of the editorial left-aligned layout featuring authentic literary and philosophical quotes for empty states.</p>
+
+  <div class="grid">
+    
+    <div class="concept c1">
+      <div class="label">1. Classic Serif Book</div>
+      <div class="subtitle">DIRECTORY IS EMPTY</div>
+      <div class="quote-container">
+        <div class="quote">Quietness is the beginning of all creation.</div>
+        <div class="author">Hans Arp</div>
+      </div>
+    </div>
+
+    <div class="concept c2">
+      <div class="label">2. Mono Attribution</div>
+      <div class="subtitle">NO CONVERSATIONS YET</div>
+      <div class="quote-container">
+        <div class="quote">We need quiet time to examine our lives openly and honestly.</div>
+        <div class="author">Silvia Hartmann</div>
+      </div>
+    </div>
+
+    <div class="concept c3">
+      <div class="label">3. Gradient Fade Quote</div>
+      <div class="subtitle">SEARCH YIELDED NOTHING</div>
+      <div class="quote-container">
+        <div class="quote">The blank page is an architect's greatest luxury.</div>
+        <div class="author">Frank Lloyd Wright</div>
+      </div>
+    </div>
+
+    <div class="concept c4">
+      <div class="label">4. Unbordered Block</div>
+      <div class="subtitle">ZERO ACTIVITY DETECTED</div>
+      <div class="quote-container">
+        <div class="quote">I have always loved the desert. One sits down on a sand dune, sees nothing, hears nothing.</div>
+        <div class="author">Antoine de Saint-Exupéry</div>
+      </div>
+    </div>
+
+    <div class="concept c5">
+      <div class="label">5. Circular Indicator</div>
+      <div class="subtitle">NO CHANNELS FOUND</div>
+      <div class="quote-container">
+        <div class="quote">Solitude is the place of purification.</div>
+        <div class="author">Martin Buber</div>
+      </div>
+    </div>
+
+    <div class="concept c6">
+      <div class="label">6. Upright Display (Non-Italic)</div>
+      <div class="subtitle">PENDING INVITATIONS</div>
+      <div class="quote-container">
+        <div class="quote">To hear, one must be silent.</div>
+        <div class="author">Ursula K. Le Guin</div>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

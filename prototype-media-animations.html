@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Penthouse - Media Picker Animations</title>
+<link href="https://fonts.googleapis.com/css2?family=Gelasio:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Ubuntu:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-color: #12121C; --surface-color: #1A1A24; --surface-elevated: #242432;
+    --border-solid: rgba(130, 130, 195, 0.15);
+    --primary: #7070DA; --primary-light: #C0C0F0;
+    --danger: #D65A4A;
+    --text-primary: #EAEAF2; --text-secondary: #8E8EAD;
+    --font-display: 'Gelasio', serif; --font-body: 'Ubuntu', sans-serif; --font-mono: 'JetBrains Mono', monospace;
+    --radius-pill: 9999px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg-color); color: var(--text-primary); font-family: var(--font-body); padding: 3rem 2rem; display: flex; flex-direction: column; align-items: center; gap: 4rem; overflow-x: hidden; }
+  h1 { font-family: var(--font-display); font-weight: 500; color: var(--text-secondary); margin-bottom: 1rem; }
+  .grid { display: grid; grid-template-columns: 1fr; gap: 6rem; width: 100%; max-width: 640px; }
+  
+  .concept { background: var(--bg-color); border: 1px solid var(--border-solid); padding: 4rem 2rem 2rem 2rem; border-radius: 24px; position: relative; display: flex; flex-direction: column; justify-content: flex-end; height: 350px; }
+  .label { position: absolute; top: -12px; left: 24px; background: var(--primary); color: white; padding: 4px 12px; border-radius: var(--radius-pill); font-size: 0.75rem; font-weight: 500; z-index: 10; font-family: var(--font-mono); letter-spacing: 0.05em; }
+  
+  .icon { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; transition: all 0.3s ease; }
+  
+  input { background: none; border: none; color: var(--text-primary); font-family: var(--font-body); font-size: 1.05rem; outline: none; width: 100%; padding: 8px 0; border-bottom: 1px solid var(--border-solid); transition: border-color 0.3s; pointer-events: none;}
+  
+  .composer { display: flex; flex-direction: column; gap: 16px; position: relative; }
+  .bottom-row { display: flex; justify-content: space-between; align-items: center; }
+  .action-group { display: flex; gap: 8px; align-items: center; position: relative; }
+
+  .frosted-btn { 
+    width: 44px; height: 44px; border-radius: 50%; 
+    background: rgba(255, 255, 255, 0.02); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-secondary); cursor: pointer; transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); flex-shrink: 0;
+    position: relative; z-index: 20;
+  }
+  .frosted-btn:hover { background: rgba(255, 255, 255, 0.08); color: var(--text-primary); border-color: rgba(255, 255, 255, 0.15); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+  .frosted-btn:active { transform: translateY(0) scale(0.95); }
+  .frosted-btn.send { background: rgba(112, 112, 218, 0.15); color: var(--primary-light); border-color: rgba(112, 112, 218, 0.3); }
+
+  /* Base Popover Styles */
+  .popover {
+    position: absolute; 
+    background: rgba(26, 26, 36, 0.7); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 20px; padding: 16px;
+    box-shadow: 0 24px 48px rgba(0,0,0,0.6);
+    display: flex; gap: 12px; z-index: 10; pointer-events: none;
+  }
+  .mock-img { width: 64px; height: 64px; border-radius: 12px; cursor: pointer; transition: transform 0.2s; border: 1px solid rgba(255,255,255,0.05); }
+
+  /* Concept 1: Elastic Rise */
+  .c1 .popover { bottom: 60px; right: 0; opacity: 0; transform: translateY(20px) scale(0.9); transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); transform-origin: bottom right; }
+  .c1.active .popover { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
+
+  /* Concept 2: Fan Out */
+  .c2 .popover { bottom: 60px; right: 0; opacity: 0; transition: all 0.4s ease; background: transparent; border: none; box-shadow: none; padding: 0; }
+  .c2 .mock-img { position: absolute; bottom: 0; right: 0; opacity: 0; transform: scale(0.5); transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
+  .c2.active .popover { opacity: 1; pointer-events: auto; }
+  .c2.active .mock-img:nth-child(1) { transform: translate(-160px, -20px) scale(1); opacity: 1; transition-delay: 0.1s; }
+  .c2.active .mock-img:nth-child(2) { transform: translate(-80px, -40px) scale(1); opacity: 1; transition-delay: 0.05s; }
+  .c2.active .mock-img:nth-child(3) { transform: translate(0, -60px) scale(1); opacity: 1; transition-delay: 0s; }
+
+  /* Concept 3: Reveal Wipe */
+  .c3 .popover { bottom: 60px; right: 0; clip-path: inset(100% 0 0 0); transition: clip-path 0.5s cubic-bezier(0.77, 0, 0.175, 1); }
+  .c3.active .popover { clip-path: inset(0 0 0 0); pointer-events: auto; }
+
+  /* Concept 4: Expanding Capsule */
+  .c4 .popover { bottom: 6px; right: 6px; width: 44px; height: 44px; border-radius: var(--radius-pill); opacity: 0; overflow: hidden; transition: all 0.4s cubic-bezier(0.86, 0, 0.07, 1); display: flex; justify-content: center; }
+  .c4.active .popover { opacity: 1; width: 280px; height: 96px; pointer-events: auto; }
+  .c4 .content-inner { display: flex; gap: 12px; opacity: 0; transition: opacity 0.3s 0.2s; }
+  .c4.active .content-inner { opacity: 1; }
+
+  /* Concept 5: Liquid Morph (Gooey) */
+  .c5 .action-group { filter: url(#goo); } /* Needs SVG filter in DOM */
+  .c5 .popover { bottom: 8px; right: 8px; width: 40px; height: 40px; border-radius: 50%; opacity: 0; transition: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55); background: var(--primary); display: flex; justify-content: center; align-items: center;}
+  .c5.active .popover { opacity: 1; transform: translate(-20px, -60px) scale(1); width: 260px; height: 96px; border-radius: 24px; pointer-events: auto; background: rgba(112, 112, 218, 0.2); backdrop-filter: blur(12px); border: 1px solid rgba(112, 112, 218, 0.4);}
+  .c5 .content-inner { display: flex; gap: 12px; opacity: 0; transition: opacity 0.3s 0.2s; }
+  .c5.active .content-inner { opacity: 1; }
+
+</style>
+</head>
+<body>
+
+  <!-- Gooey Filter for Concept 5 -->
+  <svg style="visibility: hidden; position: absolute;" width="0" height="0" xmlns="http://www.w3.org/2000/svg" version="1.1">
+    <defs>
+      <filter id="goo">
+        <feGaussianBlur in="SourceGraphic" stdDeviation="8" result="blur" />    
+        <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 19 -9" result="goo" />
+        <feComposite in="SourceGraphic" in2="goo" operator="atop"/>
+      </filter>
+    </defs>
+  </svg>
+
+  <h1>Media Picker Animations</h1>
+  <p style="color: var(--text-secondary); text-align: center; max-width: 600px; margin-top: -2rem;">Click the Media (first) button in each concept to see the popover animation.</p>
+
+  <div class="grid">
+    
+    <div class="concept c1" id="wrap-1">
+      <div class="label">1. Elastic Rise</div>
+      <div class="composer">
+        <input type="text" placeholder="Compose message...">
+        <div class="bottom-row">
+          <div class="action-group">
+            <div class="popover">
+              <div class="mock-img" style="background: linear-gradient(45deg, #2b2b40, #3a3a5a);"></div>
+              <div class="mock-img" style="background: linear-gradient(135deg, #1A1A40, #7070DA);"></div>
+              <div class="mock-img" style="display:flex;align-items:center;justify-content:center;"><svg class="icon" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div>
+            </div>
+            <div class="frosted-btn" onclick="document.getElementById('wrap-1').classList.toggle('active')"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
+            <div class="frosted-btn"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><path d="M9 9h-2a2 2 0 0 0 -2 2v2a2 2 0 0 0 2 2h2v-3h-1"/><path d="M12 9v6"/><path d="M15 9h3v2h-2v1h2v2h-3"/></svg></div>
+            <div class="frosted-btn send"><svg class="icon" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="concept c2" id="wrap-2">
+      <div class="label">2. Fan Out</div>
+      <div class="composer">
+        <input type="text" placeholder="Compose message...">
+        <div class="bottom-row">
+          <div class="action-group">
+            <div class="popover">
+              <div class="mock-img" style="background: linear-gradient(45deg, #2b2b40, #3a3a5a);"></div>
+              <div class="mock-img" style="background: linear-gradient(135deg, #1A1A40, #7070DA);"></div>
+              <div class="mock-img" style="display:flex;align-items:center;justify-content:center; background: var(--surface-elevated);"><svg class="icon" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div>
+            </div>
+            <div class="frosted-btn" onclick="document.getElementById('wrap-2').classList.toggle('active')"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
+            <div class="frosted-btn"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><path d="M9 9h-2a2 2 0 0 0 -2 2v2a2 2 0 0 0 2 2h2v-3h-1"/><path d="M12 9v6"/><path d="M15 9h3v2h-2v1h2v2h-3"/></svg></div>
+            <div class="frosted-btn send"><svg class="icon" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="concept c3" id="wrap-3">
+      <div class="label">3. Reveal Wipe</div>
+      <div class="composer">
+        <input type="text" placeholder="Compose message...">
+        <div class="bottom-row">
+          <div class="action-group">
+            <div class="popover">
+              <div class="mock-img" style="background: linear-gradient(45deg, #2b2b40, #3a3a5a);"></div>
+              <div class="mock-img" style="background: linear-gradient(135deg, #1A1A40, #7070DA);"></div>
+              <div class="mock-img" style="display:flex;align-items:center;justify-content:center;"><svg class="icon" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div>
+            </div>
+            <div class="frosted-btn" onclick="document.getElementById('wrap-3').classList.toggle('active')"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
+            <div class="frosted-btn"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><path d="M9 9h-2a2 2 0 0 0 -2 2v2a2 2 0 0 0 2 2h2v-3h-1"/><path d="M12 9v6"/><path d="M15 9h3v2h-2v1h2v2h-3"/></svg></div>
+            <div class="frosted-btn send"><svg class="icon" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="concept c4" id="wrap-4">
+      <div class="label">4. Expanding Capsule</div>
+      <div class="composer">
+        <input type="text" placeholder="Compose message...">
+        <div class="bottom-row">
+          <div class="action-group">
+            <div class="popover">
+              <div class="content-inner">
+                <div class="mock-img" style="background: linear-gradient(45deg, #2b2b40, #3a3a5a);"></div>
+                <div class="mock-img" style="background: linear-gradient(135deg, #1A1A40, #7070DA);"></div>
+                <div class="mock-img" style="display:flex;align-items:center;justify-content:center;"><svg class="icon" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div>
+              </div>
+            </div>
+            <div class="frosted-btn" onclick="document.getElementById('wrap-4').classList.toggle('active')"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
+            <div class="frosted-btn"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><path d="M9 9h-2a2 2 0 0 0 -2 2v2a2 2 0 0 0 2 2h2v-3h-1"/><path d="M12 9v6"/><path d="M15 9h3v2h-2v1h2v2h-3"/></svg></div>
+            <div class="frosted-btn send"><svg class="icon" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="concept c5" id="wrap-5">
+      <div class="label">5. Liquid Morph</div>
+      <div class="composer">
+        <input type="text" placeholder="Compose message...">
+        <div class="bottom-row">
+          <div class="action-group">
+            <div class="popover">
+              <div class="content-inner">
+                <div class="mock-img" style="background: linear-gradient(45deg, #2b2b40, #3a3a5a); border: none;"></div>
+                <div class="mock-img" style="background: linear-gradient(135deg, #1A1A40, #7070DA); border: none;"></div>
+                <div class="mock-img" style="display:flex;align-items:center;justify-content:center; border: none;"><svg class="icon" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div>
+              </div>
+            </div>
+            <div class="frosted-btn" style="background: var(--surface-color);" onclick="document.getElementById('wrap-5').classList.toggle('active')"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
+            <div class="frosted-btn"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><path d="M9 9h-2a2 2 0 0 0 -2 2v2a2 2 0 0 0 2 2h2v-3h-1"/><path d="M12 9v6"/><path d="M15 9h3v2h-2v1h2v2h-3"/></svg></div>
+            <div class="frosted-btn send"><svg class="icon" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

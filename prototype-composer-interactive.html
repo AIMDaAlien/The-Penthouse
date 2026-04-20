@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Penthouse - Interactive Chat Composer</title>
+<link href="https://fonts.googleapis.com/css2?family=Gelasio:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Ubuntu:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-color: #12121C; --surface-color: #1A1A24; --surface-elevated: #242432;
+    --border-solid: rgba(130, 130, 195, 0.15);
+    --primary: #7070DA; --primary-light: #C0C0F0;
+    --danger: #D65A4A; /* Muted scarlet */
+    --text-primary: #EAEAF2; --text-secondary: #8E8EAD;
+    --font-display: 'Gelasio', serif; --font-body: 'Ubuntu', sans-serif; --font-mono: 'JetBrains Mono', monospace;
+    --radius-pill: 9999px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg-color); color: var(--text-primary); font-family: var(--font-body); padding: 3rem 2rem; display: flex; flex-direction: column; align-items: center; gap: 4rem; overflow-x: hidden; }
+  h1 { font-family: var(--font-display); font-weight: 500; color: var(--text-secondary); margin-bottom: 1rem; }
+  .grid { display: grid; grid-template-columns: 1fr; gap: 6rem; width: 100%; max-width: 640px; }
+  
+  .concept { background: var(--bg-color); border: 1px solid var(--border-solid); padding: 4rem 2rem 2rem 2rem; border-radius: 24px; position: relative; display: flex; flex-direction: column; justify-content: flex-end; height: 350px; }
+  .label { position: absolute; top: -12px; left: 24px; background: var(--primary); color: white; padding: 4px 12px; border-radius: var(--radius-pill); font-size: 0.75rem; font-weight: 500; z-index: 10; font-family: var(--font-mono); letter-spacing: 0.05em; }
+  
+  .icon { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; transition: all 0.3s ease; }
+  
+  input { background: none; border: none; color: var(--text-primary); font-family: var(--font-body); font-size: 1.05rem; outline: none; width: 100%; padding: 8px 0; border-bottom: 1px solid var(--border-solid); transition: border-color 0.3s; }
+  input:focus { border-color: var(--primary); }
+  input::placeholder { color: var(--text-secondary); }
+
+  /* Composer Layout */
+  .composer { display: flex; flex-direction: column; gap: 16px; position: relative; }
+  .bottom-row { display: flex; justify-content: space-between; align-items: center; }
+  .action-group { display: flex; gap: 8px; align-items: center; position: relative; }
+
+  /* Frosted Buttons */
+  .frosted-btn { 
+    width: 44px; height: 44px; border-radius: 50%; 
+    background: rgba(255, 255, 255, 0.02); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-secondary); cursor: pointer; transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); flex-shrink: 0;
+    position: relative;
+  }
+  .frosted-btn:hover { background: rgba(255, 255, 255, 0.08); color: var(--text-primary); border-color: rgba(255, 255, 255, 0.15); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+  .frosted-btn:active { transform: translateY(0) scale(0.95); }
+  
+  /* Send Button */
+  .frosted-btn.send { background: rgba(112, 112, 218, 0.15); color: var(--primary-light); border-color: rgba(112, 112, 218, 0.3); }
+  .frosted-btn.send:hover { background: var(--primary); color: white; border-color: var(--primary); box-shadow: 0 4px 16px rgba(112, 112, 218, 0.4); }
+  .frosted-btn.send.sending .icon { animation: fly 0.6s cubic-bezier(0.55, 0.085, 0.68, 0.53) forwards; }
+  
+  @keyframes fly {
+    0% { transform: translate(0, 0) scale(1); opacity: 1; }
+    100% { transform: translate(24px, -24px) scale(0.5); opacity: 0; }
+  }
+
+  /* Voice Recording State */
+  .frosted-btn.voice-active {
+    background: rgba(214, 90, 74, 0.15); color: var(--danger); border-color: rgba(214, 90, 74, 0.4);
+    animation: pulse-danger 1.5s infinite cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .frosted-btn.voice-active:hover { background: rgba(214, 90, 74, 0.25); border-color: rgba(214, 90, 74, 0.6); color: var(--danger); }
+  
+  @keyframes pulse-danger {
+    0% { box-shadow: 0 0 0 0 rgba(214, 90, 74, 0.4); transform: scale(1); }
+    50% { box-shadow: 0 0 0 8px rgba(214, 90, 74, 0); transform: scale(1.05); }
+    100% { box-shadow: 0 0 0 0 rgba(214, 90, 74, 0); transform: scale(1); }
+  }
+
+  /* Popover Menus (Frosted Glass) */
+  .popover {
+    position: absolute; bottom: calc(100% + 16px); right: 44px; /* Default above the action group */
+    background: rgba(26, 26, 36, 0.65); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 20px; padding: 16px;
+    box-shadow: 0 24px 48px rgba(0,0,0,0.6);
+    opacity: 0; pointer-events: none; transform: translateY(10px) scale(0.95);
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    display: flex; gap: 12px; transform-origin: bottom right; z-index: 50;
+  }
+  .popover.active { opacity: 1; pointer-events: auto; transform: translateY(0) scale(1); }
+  
+  /* Mock media items inside popover */
+  .mock-img { width: 64px; height: 64px; border-radius: 12px; background: var(--surface-elevated); cursor: pointer; transition: transform 0.2s; border: 1px solid rgba(255,255,255,0.05); }
+  .mock-img:hover { transform: scale(1.05); border-color: var(--primary); }
+
+  /* Hint Text */
+  .hint-text { font-family: var(--font-mono); font-size: 0.7rem; color: var(--text-secondary); opacity: 0.5; transition: opacity 0.3s; }
+  input:focus + .bottom-row .hint-text { opacity: 1; color: var(--primary-light); }
+
+</style>
+</head>
+<body>
+  <h1>Composer Interactions</h1>
+  <p style="color: var(--text-secondary); text-align: center; max-width: 600px; margin-top: -2rem;">Right-Aligned Actions • Click buttons to see micro-interactions • Frosted glass aesthetics.</p>
+
+  <div class="grid">
+    
+    <!-- Concept 1: Media Popover -->
+    <div class="concept">
+      <div class="label">1. MEDIA ATTACHMENT</div>
+      <div class="composer">
+        <input type="text" placeholder="Share a vision...">
+        <div class="bottom-row">
+          <span class="hint-text">PRESS ESC TO CANCEL</span>
+          <div class="action-group">
+            <!-- Popover relative to this group -->
+            <div class="popover" id="media-popover">
+              <div class="mock-img" style="background: linear-gradient(45deg, #2b2b40, #3a3a5a);"></div>
+              <div class="mock-img" style="background: linear-gradient(135deg, #1A1A40, #7070DA);"></div>
+              <div class="mock-img" style="display:flex;align-items:center;justify-content:center;"><svg class="icon" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div>
+            </div>
+
+            <div class="frosted-btn" onclick="togglePopover('media-popover')" title="Media">
+              <svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            </div>
+            <div class="frosted-btn" title="GIF">
+              <svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><path d="M9 9h-2a2 2 0 0 0 -2 2v2a2 2 0 0 0 2 2h2v-3h-1"/><path d="M12 9v6"/><path d="M15 9h3v2h-2v1h2v2h-3"/></svg>
+            </div>
+            <div class="frosted-btn" title="Voice Note">
+              <svg class="icon" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+            </div>
+            <div class="frosted-btn send">
+              <svg class="icon" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Concept 2: Voice Recording -->
+    <div class="concept">
+      <div class="label">2. VOICE RECORDING STATE</div>
+      <div class="composer">
+        <input type="text" id="voice-input" placeholder="Compose message...">
+        <div class="bottom-row">
+          <span class="hint-text" id="voice-hint">READY</span>
+          <div class="action-group">
+            <div class="frosted-btn">
+              <svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            </div>
+            <div class="frosted-btn">
+              <svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><path d="M9 9h-2a2 2 0 0 0 -2 2v2a2 2 0 0 0 2 2h2v-3h-1"/><path d="M12 9v6"/><path d="M15 9h3v2h-2v1h2v2h-3"/></svg>
+            </div>
+            <!-- Click to toggle recording -->
+            <div class="frosted-btn" id="voice-btn" onclick="toggleVoice()" title="Hold to record">
+              <svg class="icon" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+            </div>
+            <div class="frosted-btn send">
+              <svg class="icon" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Concept 3: Send Animation -->
+    <div class="concept">
+      <div class="label">3. SEND ANIMATION</div>
+      <div class="composer">
+        <input type="text" id="send-input" placeholder="Type a message..." value="I'll see you at the gallery at 8.">
+        <div class="bottom-row">
+          <span class="hint-text">PRESS ENTER TO SEND</span>
+          <div class="action-group">
+            <div class="frosted-btn">
+              <svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            </div>
+            <div class="frosted-btn">
+              <svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><path d="M9 9h-2a2 2 0 0 0 -2 2v2a2 2 0 0 0 2 2h2v-3h-1"/><path d="M12 9v6"/><path d="M15 9h3v2h-2v1h2v2h-3"/></svg>
+            </div>
+            <div class="frosted-btn">
+              <svg class="icon" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+            </div>
+            <!-- Click to trigger fly away -->
+            <div class="frosted-btn send" id="send-btn" onclick="triggerSend()" title="Send">
+              <svg class="icon" id="send-icon" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    function togglePopover(id) {
+      document.getElementById(id).classList.toggle('active');
+    }
+
+    let isRecording = false;
+    let timerInterval;
+    let seconds = 0;
+    
+    function toggleVoice() {
+      const btn = document.getElementById('voice-btn');
+      const input = document.getElementById('voice-input');
+      const hint = document.getElementById('voice-hint');
+      
+      isRecording = !isRecording;
+      
+      if (isRecording) {
+        btn.classList.add('voice-active');
+        input.value = "";
+        input.placeholder = "Recording Audio...";
+        input.disabled = true;
+        hint.style.color = "var(--danger)";
+        
+        timerInterval = setInterval(() => {
+          seconds++;
+          const mins = Math.floor(seconds / 60);
+          const secs = seconds % 60;
+          hint.innerText = `${mins}:${secs.toString().padStart(2, '0')}`;
+        }, 1000);
+      } else {
+        btn.classList.remove('voice-active');
+        input.placeholder = "Compose message...";
+        input.disabled = false;
+        hint.style.color = "var(--text-secondary)";
+        hint.innerText = "AUDIO SAVED (CLICK TO DISCARD)";
+        clearInterval(timerInterval);
+        seconds = 0;
+      }
+    }
+
+    function triggerSend() {
+      const btn = document.getElementById('send-btn');
+      const input = document.getElementById('send-input');
+      
+      if(btn.classList.contains('sending')) return;
+      
+      btn.classList.add('sending');
+      input.style.opacity = '0.3';
+      
+      // Reset after animation completes
+      setTimeout(() => {
+        btn.classList.remove('sending');
+        input.value = "";
+        input.style.opacity = '1';
+      }, 700); // slightly longer than the CSS animation duration
+    }
+  </script>
+</body>
+</html>

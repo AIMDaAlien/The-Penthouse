@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Penthouse - Settings v2 (Editorial + Frosted Popups + Muted Scarlet)</title>
+<link href="https://fonts.googleapis.com/css2?family=Gelasio:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Ubuntu:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-color: #12121C; --surface-color: #1A1A24; --surface-elevated: #242432;
+    --border-solid: rgba(130, 130, 195, 0.15);
+    --primary: #7070DA; --primary-light: #C0C0F0; 
+    --danger: #D65A4A; /* MUTED SCARLET (30% less sat) */
+    --text-primary: #EAEAF2; --text-secondary: #8E8EAD;
+    --font-display: 'Gelasio', serif; --font-body: 'Ubuntu', sans-serif; --font-mono: 'JetBrains Mono', monospace;
+    --radius-pill: 9999px; --radius-card: 20px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg-color); color: var(--text-primary); font-family: var(--font-body); padding: 3rem 2rem; display: flex; flex-direction: column; align-items: center; gap: 4rem; }
+  h1 { font-family: var(--font-display); font-weight: 500; color: var(--text-secondary); margin-bottom: 1rem; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(450px, 1fr)); gap: 4rem; width: 100%; max-width: 1100px; }
+  
+  .concept { border: 1px solid var(--border-solid); border-radius: 24px; position: relative; overflow: hidden; height: 500px; background: var(--surface-color); }
+  .label { position: absolute; top: 12px; left: 12px; background: var(--primary); color: white; padding: 4px 12px; border-radius: var(--radius-pill); font-size: 0.75rem; font-weight: 500; z-index: 100; }
+  
+  .icon { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+  
+  /* Shared Base Editorial Settings */
+  .page { width: 100%; height: 100%; background: var(--bg-color); padding: 48px 32px; display: flex; flex-direction: column; gap: 40px; position: relative; }
+  .title { font-family: var(--font-display); font-size: 2.5rem; letter-spacing: -0.02em; }
+  .editorial-row { display: flex; flex-direction: column; gap: 8px; border-bottom: 1px solid var(--border-solid); padding-bottom: 24px; }
+  .edit-title { font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.1em; }
+  .user-info { display: flex; flex-direction: column; }
+  .name { font-weight: 600; font-size: 1.1rem; }
+  .handle { color: var(--text-secondary); font-size: 0.85rem; }
+
+  /* Shared Frosted Glass Popup */
+  .frosted-popup { 
+    position: absolute; background: rgba(36, 36, 50, 0.6); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 16px 32px rgba(0,0,0,0.5); z-index: 50; display: flex; align-items: center; gap: 12px;
+  }
+  .btn-danger { color: var(--danger); font-weight: 500; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+
+  /* 1. Classic Editorial + Bottom Right Toast */
+  .c1 .toast { bottom: 24px; right: 24px; padding: 12px 20px; border-radius: var(--radius-pill); }
+  
+  /* 2. Minimal Grid + Bottom Action Sheet */
+  .c2 .sheet { bottom: 12px; left: 12px; right: 12px; padding: 24px; border-radius: 20px; flex-direction: column; gap: 16px; align-items: stretch; }
+  .c2 .sheet-btn { background: rgba(255,255,255,0.05); padding: 12px; border-radius: var(--radius-pill); text-align: center; }
+
+  /* 3. Large Serif + Centered Modal */
+  .c3 .title { font-size: 3rem; }
+  .c3 .modal { top: 50%; left: 50%; transform: translate(-50%, -50%); width: 80%; padding: 32px; border-radius: 24px; flex-direction: column; text-align: center; gap: 24px; }
+  .c3 .btn-row { display: flex; gap: 12px; width: 100%; justify-content: center; }
+
+  /* 4. Two-Column + Side Notification */
+  .c4 .page { flex-direction: row; gap: 24px; padding: 32px; }
+  .c4 .col { flex: 1; display: flex; flex-direction: column; gap: 24px; }
+  .c4 .side-toast { top: 24px; right: 24px; padding: 16px; border-radius: 16px; flex-direction: column; align-items: flex-start; border-left: 2px solid var(--primary); }
+
+  /* 5. Immersive + Full Screen Overlay */
+  .c5 .overlay { inset: 0; background: rgba(18, 18, 28, 0.7); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 16px; }
+
+  /* 6. Asymmetric + Top Banner Toast */
+  .c6 .title { text-align: right; }
+  .c6 .banner { top: 12px; left: 50%; transform: translateX(-50%); padding: 12px 24px; border-radius: var(--radius-pill); white-space: nowrap; }
+
+  /* 7. Monospace Heavy + Floating Bottom Center */
+  .c7 .title { font-family: var(--font-mono); font-size: 1.8rem; border-bottom: 2px solid var(--primary); padding-bottom: 8px; display: inline-block; }
+  .c7 .floating { bottom: 32px; left: 50%; transform: translateX(-50%); padding: 16px 32px; border-radius: var(--radius-pill); background: rgba(214, 90, 74, 0.1); border-color: rgba(214, 90, 74, 0.3); }
+
+</style>
+</head>
+<body>
+  <h1>Settings v2: Editorial + Frosted Modals + Muted Scarlet</h1>
+  <div class="grid">
+    
+    <div class="concept c1">
+      <div class="label">1. Classic Editorial & Toast</div>
+      <div class="page">
+        <div class="title">Settings.</div>
+        <div class="editorial-row">
+          <span class="edit-title">Identity</span>
+          <div style="display: flex; justify-content: space-between;"><div class="user-info"><span class="name">Arthur Kensington</span></div><span style="color: var(--primary);">Edit</span></div>
+        </div>
+        <div class="editorial-row"><div class="btn-danger">Sign Out</div></div>
+        
+        <div class="frosted-popup toast">
+          <svg class="icon" style="color: var(--primary);" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          <span style="font-size: 0.9rem;">Avatar updated successfully.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="concept c2">
+      <div class="label">2. Minimal Grid & Action Sheet</div>
+      <div class="page" style="padding-bottom: 120px;">
+        <div class="title">Settings.</div>
+        <div class="editorial-row" style="border: none;">
+          <span class="edit-title">Density</span>
+          <div style="display: flex; gap: 24px; margin-top: 12px;">
+            <span style="color: var(--primary);">Spacious</span>
+            <span style="color: var(--text-secondary);">Compact</span>
+          </div>
+        </div>
+        
+        <div class="frosted-popup sheet">
+          <span style="font-weight: 500; font-family: var(--font-display); font-size: 1.2rem; text-align: center;">Account Actions</span>
+          <div class="sheet-btn btn-danger" style="justify-content: center;">Sign Out of The Penthouse</div>
+          <div class="sheet-btn" style="color: var(--text-secondary);">Cancel</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="concept c3">
+      <div class="label">3. Large Serif & Centered Modal</div>
+      <div class="page">
+        <div class="title">Preferences</div>
+        <div class="editorial-row"><div class="user-info"><span class="name">Arthur Kensington</span><span class="handle">@arthur</span></div></div>
+        
+        <div class="frosted-popup modal">
+          <svg class="icon" style="color: var(--danger); width: 32px; height: 32px; align-self: center;" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          <div>
+            <div style="font-family: var(--font-display); font-size: 1.4rem; margin-bottom: 8px;">Are you sure?</div>
+            <div style="font-size: 0.9rem; color: var(--text-secondary);">You will need to re-authenticate to enter.</div>
+          </div>
+          <div class="btn-row">
+            <div style="padding: 8px 16px; border-radius: var(--radius-pill); border: 1px solid var(--border-solid);">Cancel</div>
+            <div style="padding: 8px 16px; border-radius: var(--radius-pill); background: var(--danger); color: white;">Sign Out</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="concept c4">
+      <div class="label">4. Two-Column & Side Notification</div>
+      <div class="page">
+        <div class="col">
+          <div class="title" style="font-size: 1.8rem;">General</div>
+          <div class="editorial-row"><span class="edit-title">Density</span><span>Spacious</span></div>
+        </div>
+        <div class="col" style="border-left: 1px solid var(--border-solid); padding-left: 24px;">
+          <div class="title" style="font-size: 1.8rem; color: var(--danger);">Danger</div>
+          <div class="btn-danger">Sign Out</div>
+        </div>
+        
+        <div class="frosted-popup side-toast">
+          <span style="font-weight: 500;">Connection Lost</span>
+          <span style="font-size: 0.8rem; color: var(--text-secondary);">Reconnecting to websocket...</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="concept c5">
+      <div class="label">5. Immersive & Overlay Spinner</div>
+      <div class="page">
+        <div class="title" style="text-align: center; margin-bottom: 24px;">Settings.</div>
+        <div class="editorial-row" style="align-items: center;"><span class="edit-title">Avatar</span><div style="width: 64px; height: 64px; border-radius: 50%; background: var(--surface-elevated);"></div></div>
+        
+        <div class="frosted-popup overlay">
+          <div style="width: 32px; height: 32px; border: 2px solid rgba(255,255,255,0.1); border-top-color: var(--primary); border-radius: 50%; animation: spin 1s linear infinite;"></div>
+          <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+          <span style="font-family: var(--font-mono); font-size: 0.8rem; letter-spacing: 0.05em;">UPLOADING...</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="concept c6">
+      <div class="label">6. Asymmetric & Top Banner</div>
+      <div class="page">
+        <div class="title">Settings.</div>
+        <div class="editorial-row"><span class="edit-title">Display</span><span>Compact</span></div>
+        
+        <div class="frosted-popup banner">
+          <svg class="icon" style="color: var(--text-secondary);" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <span style="font-size: 0.9rem;">Settings synced across devices.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="concept c7">
+      <div class="label">7. Monospace Heavy & Floating Action</div>
+      <div class="page">
+        <div><span class="title">CONFIG_SYS</span></div>
+        <div class="editorial-row"><span class="edit-title">USER_ID</span><span style="font-family: var(--font-mono);">@arthur</span></div>
+        
+        <div class="frosted-popup floating">
+          <div class="btn-danger" style="font-family: var(--font-mono);"><svg class="icon" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> EXECUTE SIGNOUT</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

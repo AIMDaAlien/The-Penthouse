@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Penthouse - Settings Toggles & Profile</title>
+<link href="https://fonts.googleapis.com/css2?family=Gelasio:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Ubuntu:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-color: #12121C; --surface-color: #1A1A24; --surface-elevated: #242432;
+    --border-solid: rgba(130, 130, 195, 0.15);
+    --primary: #7070DA; --primary-light: #C0C0F0; 
+    --danger: #D65A4A; /* Muted scarlet */
+    --text-primary: #EAEAF2; --text-secondary: #8E8EAD;
+    --font-display: 'Gelasio', serif; --font-body: 'Ubuntu', sans-serif; --font-mono: 'JetBrains Mono', monospace;
+    --radius-pill: 9999px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg-color); color: var(--text-primary); font-family: var(--font-body); padding: 3rem 2rem; display: flex; flex-direction: column; align-items: center; gap: 4rem; overflow-x: hidden; }
+  h1 { font-family: var(--font-display); font-weight: 500; color: var(--text-secondary); margin-bottom: 1rem; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 4rem; width: 100%; max-width: 1200px; }
+  
+  .concept { background: var(--bg-color); border: 1px solid var(--border-solid); border-radius: 24px; position: relative; height: 540px; overflow: hidden; display: flex; flex-direction: column; }
+  .label { position: absolute; top: 12px; left: 12px; background: var(--primary); color: white; padding: 4px 12px; border-radius: var(--radius-pill); font-size: 0.75rem; font-weight: 500; z-index: 100; font-family: var(--font-mono); }
+  
+  /* Banner & Avatar */
+  .banner { width: 100%; height: 120px; background: linear-gradient(135deg, var(--surface-elevated), var(--primary-dark, #1A1A40)); position: relative; }
+  .profile-section { padding: 0 24px 24px 24px; position: relative; display: flex; flex-direction: column; }
+  .avatar-wrap { width: 80px; height: 80px; border-radius: 50%; background: var(--surface-color); border: 4px solid var(--bg-color); margin-top: -40px; position: relative; display: flex; align-items: center; justify-content: center; cursor: pointer; overflow: hidden; }
+  .avatar-img { width: 100%; height: 100%; background: linear-gradient(45deg, #2b2b40, #3a3a5a); }
+  .avatar-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.2s; }
+  .avatar-wrap:hover .avatar-overlay { opacity: 1; }
+  
+  .user-info { margin-top: 12px; }
+  .name { font-weight: 600; font-size: 1.2rem; }
+  .handle { color: var(--text-secondary); font-size: 0.9rem; font-family: var(--font-mono); }
+
+  /* Settings Rows */
+  .settings-list { padding: 0 24px; display: flex; flex-direction: column; gap: 24px; flex: 1; }
+  .setting-row { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-solid); padding-bottom: 16px; }
+  .setting-text { display: flex; flex-direction: column; gap: 4px; }
+  .setting-title { font-weight: 500; }
+  .setting-desc { font-size: 0.8rem; color: var(--text-secondary); }
+
+  .btn-danger { color: var(--danger); font-weight: 500; cursor: pointer; display: flex; align-items: center; gap: 8px; padding-top: 12px; }
+
+  /* 1. Standard Pill Toggle */
+  .t1 { width: 48px; height: 26px; background: var(--surface-elevated); border-radius: var(--radius-pill); position: relative; cursor: pointer; border: 1px solid var(--border-solid); transition: all 0.3s; }
+  .t1::after { content: ''; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; background: var(--text-secondary); border-radius: 50%; transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+  .t1.active { background: var(--primary); border-color: var(--primary); }
+  .t1.active::after { left: calc(100% - 22px); background: white; }
+
+  /* 2. Inset Neumorphic Toggle */
+  .t2 { width: 56px; height: 28px; background: var(--surface-color); border-radius: var(--radius-pill); position: relative; cursor: pointer; box-shadow: inset 0 2px 4px rgba(0,0,0,0.4); transition: all 0.3s; }
+  .t2::after { content: ''; position: absolute; top: 2px; left: 2px; width: 24px; height: 24px; background: var(--surface-elevated); border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.5); transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); border: 1px solid rgba(255,255,255,0.05); }
+  .t2.active { background: rgba(112, 112, 218, 0.2); }
+  .t2.active::after { left: calc(100% - 26px); background: var(--primary); border-color: var(--primary-light); }
+
+  /* 3. Checkmark Icon Toggle */
+  .t3 { width: 44px; height: 24px; background: transparent; border-radius: var(--radius-pill); position: relative; cursor: pointer; border: 2px solid var(--text-secondary); transition: all 0.3s; display: flex; align-items: center; }
+  .t3::after { content: ''; position: absolute; top: 3px; left: 4px; width: 14px; height: 14px; background: var(--text-secondary); border-radius: 50%; transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+  .t3 svg { width: 12px; height: 12px; stroke: white; stroke-width: 3; fill: none; position: absolute; left: 6px; opacity: 0; transition: opacity 0.3s; z-index: 2; }
+  .t3.active { border-color: var(--primary); background: var(--primary); }
+  .t3.active::after { left: calc(100% - 18px); background: white; width: 14px; height: 14px; border-radius: 4px; } /* morphs to square */
+  .t3.active svg { opacity: 1; }
+
+  /* 4. Sliding Track Toggle */
+  .t4 { width: 50px; height: 12px; background: var(--surface-elevated); border-radius: var(--radius-pill); position: relative; cursor: pointer; transition: all 0.3s; display: flex; align-items: center; }
+  .t4::after { content: ''; position: absolute; left: 0; width: 24px; height: 24px; background: var(--text-secondary); border-radius: 50%; transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); box-shadow: 0 2px 8px rgba(0,0,0,0.5); }
+  .t4.active { background: rgba(112, 112, 218, 0.4); }
+  .t4.active::after { left: calc(100% - 24px); background: var(--primary); }
+
+  /* 5. Text Morph Toggle */
+  .t5 { padding: 4px 12px; background: transparent; border-radius: var(--radius-pill); cursor: pointer; border: 1px solid var(--border-solid); color: var(--text-secondary); font-family: var(--font-mono); font-size: 0.75rem; transition: all 0.3s; width: 60px; text-align: center; }
+  .t5::after { content: 'OFF'; }
+  .t5.active { background: rgba(112, 112, 218, 0.15); border-color: var(--primary); color: var(--primary-light); }
+  .t5.active::after { content: 'ON'; }
+
+  /* Icon Utilities */
+  .icon { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+
+</style>
+</head>
+<body>
+
+  <h1>Settings: Profile Banner & Toggles</h1>
+  <p style="color: var(--text-secondary); text-align: center; max-width: 600px; margin-top: -2rem;">Showcasing profile layout and 5 distinct toggle switch designs.</p>
+
+  <div class="grid">
+    
+    <!-- 1. Standard Pill -->
+    <div class="concept">
+      <div class="label">1. Standard Pill</div>
+      <div class="banner"></div>
+      <div class="profile-section">
+        <div class="avatar-wrap">
+          <div class="avatar-img"></div>
+          <div class="avatar-overlay"><svg class="icon" style="color:white;" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
+        </div>
+        <div class="user-info"><div class="name">Eleanor James</div><div class="handle">@eleanor</div></div>
+      </div>
+      <div class="settings-list">
+        <div class="setting-row">
+          <div class="setting-text"><span class="setting-title">Read Receipts</span><span class="setting-desc">Show when you've seen a message</span></div>
+          <div class="t1" onclick="this.classList.toggle('active')"></div>
+        </div>
+        <div class="setting-row" style="border: none;">
+          <div class="btn-danger"><svg class="icon" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Sign Out</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. Inset Neumorphic -->
+    <div class="concept">
+      <div class="label">2. Inset Neumorphic</div>
+      <div class="banner"></div>
+      <div class="profile-section">
+        <div class="avatar-wrap">
+          <div class="avatar-img"></div>
+          <div class="avatar-overlay"><svg class="icon" style="color:white;" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
+        </div>
+        <div class="user-info"><div class="name">Eleanor James</div><div class="handle">@eleanor</div></div>
+      </div>
+      <div class="settings-list">
+        <div class="setting-row">
+          <div class="setting-text"><span class="setting-title">Read Receipts</span><span class="setting-desc">Show when you've seen a message</span></div>
+          <div class="t2" onclick="this.classList.toggle('active')"></div>
+        </div>
+        <div class="setting-row" style="border: none;">
+          <div class="btn-danger"><svg class="icon" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Sign Out</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. Checkmark Icon Toggle -->
+    <div class="concept">
+      <div class="label">3. Check/Morph Icon</div>
+      <div class="banner"></div>
+      <div class="profile-section">
+        <div class="avatar-wrap">
+          <div class="avatar-img"></div>
+          <div class="avatar-overlay"><svg class="icon" style="color:white;" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
+        </div>
+        <div class="user-info"><div class="name">Eleanor James</div><div class="handle">@eleanor</div></div>
+      </div>
+      <div class="settings-list">
+        <div class="setting-row">
+          <div class="setting-text"><span class="setting-title">Read Receipts</span><span class="setting-desc">Show when you've seen a message</span></div>
+          <div class="t3" onclick="this.classList.toggle('active')"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+        </div>
+        <div class="setting-row" style="border: none;">
+          <div class="btn-danger"><svg class="icon" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Sign Out</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. Sliding Track Toggle -->
+    <div class="concept">
+      <div class="label">4. Sliding Track</div>
+      <div class="banner"></div>
+      <div class="profile-section">
+        <div class="avatar-wrap">
+          <div class="avatar-img"></div>
+          <div class="avatar-overlay"><svg class="icon" style="color:white;" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
+        </div>
+        <div class="user-info"><div class="name">Eleanor James</div><div class="handle">@eleanor</div></div>
+      </div>
+      <div class="settings-list">
+        <div class="setting-row">
+          <div class="setting-text"><span class="setting-title">Read Receipts</span><span class="setting-desc">Show when you've seen a message</span></div>
+          <div class="t4" onclick="this.classList.toggle('active')"></div>
+        </div>
+        <div class="setting-row" style="border: none;">
+          <div class="btn-danger"><svg class="icon" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Sign Out</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. Text Morph Toggle -->
+    <div class="concept">
+      <div class="label">5. Text Morph</div>
+      <div class="banner"></div>
+      <div class="profile-section">
+        <div class="avatar-wrap">
+          <div class="avatar-img"></div>
+          <div class="avatar-overlay"><svg class="icon" style="color:white;" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
+        </div>
+        <div class="user-info"><div class="name">Eleanor James</div><div class="handle">@eleanor</div></div>
+      </div>
+      <div class="settings-list">
+        <div class="setting-row">
+          <div class="setting-text"><span class="setting-title">Read Receipts</span><span class="setting-desc">Show when you've seen a message</span></div>
+          <div class="t5" onclick="this.classList.toggle('active')"></div>
+        </div>
+        <div class="setting-row" style="border: none;">
+          <div class="btn-danger"><svg class="icon" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Sign Out</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

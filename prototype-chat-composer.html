@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Penthouse - Chat Composer Concepts</title>
+<link href="https://fonts.googleapis.com/css2?family=Gelasio:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Ubuntu:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-color: #12121C; --surface-color: #1A1A24; --surface-elevated: #242432;
+    --border-solid: rgba(130, 130, 195, 0.15);
+    --primary: #7070DA; --primary-light: #C0C0F0; --primary-dark: #1A1A40;
+    --text-primary: #EAEAF2; --text-secondary: #8E8EAD;
+    --font-display: 'Gelasio', serif; --font-body: 'Ubuntu', sans-serif;
+    --radius-pill: 9999px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg-color); color: var(--text-primary); font-family: var(--font-body); padding: 3rem 2rem; display: flex; flex-direction: column; align-items: center; gap: 4rem; }
+  h1 { font-family: var(--font-display); font-weight: 500; color: var(--text-secondary); margin-bottom: 1rem; }
+  .grid { display: grid; grid-template-columns: 1fr; gap: 4rem; width: 100%; max-width: 600px; }
+  
+  .concept { background: var(--bg-color); border: 1px solid var(--border-solid); padding: 2rem; border-radius: 24px; position: relative; }
+  .label { position: absolute; top: -12px; left: 24px; background: var(--primary); color: white; padding: 4px 12px; border-radius: var(--radius-pill); font-size: 0.75rem; font-weight: 500; }
+  
+  .icon { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; cursor: pointer; transition: color 0.2s; }
+  .icon:hover { color: var(--primary); }
+  
+  input { background: none; border: none; color: var(--text-primary); font-family: var(--font-body); font-size: 0.95rem; outline: none; width: 100%; }
+  input::placeholder { color: var(--text-secondary); }
+
+  /* 1. The Floating Pill (All-in-one) */
+  .c1 { display: flex; align-items: center; background: var(--surface-elevated); padding: 8px 8px 8px 24px; border-radius: var(--radius-pill); gap: 16px; }
+  .c1 .actions { display: flex; gap: 12px; color: var(--text-secondary); align-items: center; }
+  .c1 .send { background: var(--primary); color: white; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+
+  /* 2. Left-Action Cluster */
+  .c2 { display: flex; align-items: center; gap: 16px; }
+  .c2 .actions { display: flex; gap: 12px; color: var(--text-secondary); background: var(--surface-color); padding: 12px 16px; border-radius: var(--radius-pill); }
+  .c2 .input-wrap { flex: 1; background: var(--surface-elevated); padding: 12px 24px; border-radius: var(--radius-pill); display: flex; }
+
+  /* 3. Expanding Drawer (Plus icon) */
+  .c3 { display: flex; align-items: center; gap: 12px; background: var(--surface-color); padding: 8px; border-radius: var(--radius-pill); border: 1px solid var(--border-solid); }
+  .c3 .plus { width: 36px; height: 36px; border-radius: 50%; background: var(--surface-elevated); display: flex; align-items: center; justify-content: center; color: var(--text-primary); }
+  .c3 input { padding: 0 12px; }
+
+  /* 4. Minimalist Ledger */
+  .c4 { display: flex; flex-direction: column; gap: 12px; }
+  .c4 input { border-bottom: 1px solid var(--border-solid); padding: 8px 0; border-radius: 0; transition: border-color 0.2s; }
+  .c4 input:focus { border-color: var(--primary); }
+  .c4 .bottom-row { display: flex; justify-content: space-between; color: var(--text-secondary); }
+  .c4 .actions { display: flex; gap: 16px; }
+
+  /* 5. Separated Action Bar (Stacked) */
+  .c5 { display: flex; flex-direction: column; background: var(--surface-color); border-radius: 20px; overflow: hidden; border: 1px solid var(--border-solid); }
+  .c5 input { padding: 16px 20px; background: var(--surface-elevated); }
+  .c5 .action-bar { display: flex; justify-content: space-between; padding: 12px 20px; background: var(--surface-color); color: var(--text-secondary); }
+  .c5 .actions { display: flex; gap: 16px; }
+
+  /* 6. Ghost Mode (Glassmorphic) */
+  .c6 { display: flex; align-items: center; gap: 16px; background: rgba(36, 36, 50, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.05); padding: 12px 24px; border-radius: var(--radius-pill); }
+  .c6 .actions { display: flex; gap: 16px; color: var(--primary-light); opacity: 0.6; transition: opacity 0.2s; }
+  .c6:hover .actions { opacity: 1; }
+
+</style>
+</head>
+<body>
+  <h1>Chat Composer Concepts</h1>
+  <div class="grid">
+    
+    <div class="concept">
+      <div class="label">1. Floating Pill</div>
+      <div class="c1">
+        <input type="text" placeholder="Message Eleanor...">
+        <div class="actions">
+          <svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> <!-- Media -->
+          <svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><path d="M9 9h-2a2 2 0 0 0 -2 2v2a2 2 0 0 0 2 2h2v-3h-1"/><path d="M12 9v6"/><path d="M15 9h3v2h-2v1h2v2h-3"/></svg> <!-- GIF -->
+          <svg class="icon" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg> <!-- Voice -->
+        </div>
+        <div class="send"><svg class="icon" style="color:white; width:16px; height:16px;" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></div>
+      </div>
+    </div>
+
+    <div class="concept">
+      <div class="label">2. Left-Action Cluster</div>
+      <div class="c2">
+        <div class="actions">
+          <svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+          <svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><path d="M9 9h-2a2 2 0 0 0 -2 2v2a2 2 0 0 0 2 2h2v-3h-1"/><path d="M12 9v6"/><path d="M15 9h3v2h-2v1h2v2h-3"/></svg>
+        </div>
+        <div class="input-wrap">
+          <input type="text" placeholder="Type a message...">
+          <svg class="icon" style="color: var(--primary);" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <div class="concept">
+      <div class="label">3. Expanding Drawer</div>
+      <div class="c3">
+        <div class="plus"><svg class="icon" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div>
+        <input type="text" placeholder="Message...">
+        <svg class="icon" style="margin-right: 8px; color: var(--text-secondary);" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+      </div>
+    </div>
+
+    <div class="concept">
+      <div class="label">4. Minimalist Ledger</div>
+      <div class="c4">
+        <input type="text" placeholder="Write your thoughts...">
+        <div class="bottom-row">
+          <div class="actions">
+            <svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            <svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><path d="M9 9h-2a2 2 0 0 0 -2 2v2a2 2 0 0 0 2 2h2v-3h-1"/><path d="M12 9v6"/><path d="M15 9h3v2h-2v1h2v2h-3"/></svg>
+            <svg class="icon" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+          </div>
+          <span style="font-family: var(--font-mono); font-size: 0.75rem;">ENTER TO SEND</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="concept">
+      <div class="label">5. Separated Action Bar</div>
+      <div class="c5">
+        <input type="text" placeholder="Draft message...">
+        <div class="action-bar">
+          <div class="actions">
+            <svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            <svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><path d="M9 9h-2a2 2 0 0 0 -2 2v2a2 2 0 0 0 2 2h2v-3h-1"/><path d="M12 9v6"/><path d="M15 9h3v2h-2v1h2v2h-3"/></svg>
+          </div>
+          <div class="actions">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="concept">
+      <div class="label">6. Ghost Mode</div>
+      <div class="c6">
+        <div class="actions">
+          <svg class="icon" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </div>
+        <input type="text" placeholder="Whisper something...">
+        <div class="actions">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>
