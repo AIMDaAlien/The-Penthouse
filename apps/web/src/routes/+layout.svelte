@@ -87,9 +87,9 @@
 	);
 
 	const showBottomNav = $derived(
-		!isDesktop &&
 		sessionStore.isAuthenticated &&
 		(page.url.pathname === '/' ||
+		 page.url.pathname.startsWith('/chat/') ||
 		 page.url.pathname === '/users' ||
 		 page.url.pathname === '/settings')
 	);
@@ -222,11 +222,9 @@
 		min-height: 100dvh;
 		/* Subtle dot-grid ambient texture from v2 */
 		background-image:
-			radial-gradient(rgba(112, 112, 218, 0.35) 0px, transparent 260px),
-			radial-gradient(rgba(90, 90, 170, 0.2) 0px, transparent 400px),
 			radial-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-		background-size: 100% 100%, 100% 100%, 24px 24px;
-		background-position: top right, bottom left, 0 0;
+		background-size: 24px 24px;
+		background-position: 0 0;
 		background-attachment: fixed;
 	}
 

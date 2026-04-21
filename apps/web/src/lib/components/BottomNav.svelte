@@ -96,6 +96,16 @@
 		transform: translateY(-1px);
 	}
 
+	@media (hover: hover) and (pointer: fine) {
+		.bottom-nav {
+			width: 320px;
+			left: 50%;
+			right: auto;
+			transform: translateX(-50%);
+			bottom: 32px;
+		}
+	}
+
 	.tab-label {
 		font-size: 0.6rem;
 		font-weight: 500;

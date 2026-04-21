@@ -1603,9 +1603,9 @@
 	}
 
 	.bubble {
-		padding: var(--space-2) var(--space-3);
+		padding: 12px 16px;
 		border-radius: var(--radius-md);
-		font-size: var(--text-sm);
+		font-size: 1.05rem;
 		line-height: 1.5;
 		word-break: break-word;
 		overflow-wrap: anywhere; /* break long URLs that have no spaces */
@@ -1713,8 +1713,8 @@
 	}
 
 	.send-btn {
-		width: 40px;
-		height: 40px;
+		width: 48px;
+		height: 48px;
 		border-radius: var(--radius-pill);
 		background: var(--color-accent);
 		color: #fff;
@@ -1803,7 +1803,7 @@
 
 	.gif-message {
 		width: 100%;
-		max-width: 240px;
+		max-width: 400px;
 		height: auto;
 		display: block;
 		object-fit: contain;
@@ -1892,8 +1892,8 @@
 
 	/* ── Composer Buttons ── */
 	.composer-btn {
-		width: 40px;
-		height: 40px;
+		width: 48px;
+		height: 48px;
 		border-radius: var(--radius-full);
 		background: var(--color-surface-glass);
 		backdrop-filter: blur(12px);

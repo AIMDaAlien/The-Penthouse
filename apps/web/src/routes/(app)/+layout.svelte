@@ -75,6 +75,7 @@
 			display: block !important;
 			/* Scoped view transition: only this pane animates between threads */
 			view-transition-name: pane-right;
+			background: var(--color-surface);
 		}
 
 		/* Chat list bottom padding meant for floating nav — not needed in pane */
