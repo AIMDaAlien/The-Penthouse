@@ -71,8 +71,6 @@
 
 <svelte:head>
 	<title>The Penthouse</title>
-	<!-- Erode: logo-only serif — Ubuntu + JetBrains Mono already loaded globally in app.html -->
-	<link href="https://fonts.cdnfonts.com/css/erode" rel="stylesheet" />
 </svelte:head>
 
 <div class="welcome-root" data-theme={theme}>
@@ -190,7 +188,7 @@
 		--text-soft: #9a9ab4;
 		--border: rgba(119, 119, 194, 0.15);
 		--ease: cubic-bezier(0.22, 1, 0.36, 1);
-		--font-erode: 'Erode', Georgia, 'Times New Roman', serif;
+		--font-display: 'Gelasio', Georgia, 'Times New Roman', serif;
 		--font-ubuntu: 'Ubuntu', -apple-system, BlinkMacSystemFont, sans-serif;
 		--font-mono: 'JetBrains Mono', 'SF Mono', monospace;
 	}
@@ -392,7 +390,7 @@
 
 	/* ── Logo ── */
 	.logo {
-		font-family: var(--font-erode);
+		font-family: var(--font-display);
 		margin-bottom: 3rem;
 	}
 
@@ -422,7 +420,7 @@
 	}
 
 	h1 {
-		font-family: var(--font-erode);
+		font-family: var(--font-display);
 		font-weight: 400;
 		font-size: 3.8rem;
 		line-height: 1.05;
@@ -485,7 +483,7 @@
 	}
 
 	.section h2 {
-		font-family: var(--font-erode);
+		font-family: var(--font-display);
 		font-weight: 400;
 		font-size: 2.6rem;
 		margin: 0 0 1.5rem 0;

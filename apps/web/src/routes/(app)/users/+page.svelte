@@ -130,7 +130,7 @@
 			disabled={loading || !searchQuery.trim()}
 			aria-label="Search users"
 		>
-			🔍
+			<Icon name="search" size={18} />
 		</button>
 	</div>
 

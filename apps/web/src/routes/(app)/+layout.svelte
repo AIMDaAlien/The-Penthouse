@@ -108,6 +108,11 @@
 			min-height: 0 !important;
 		}
 
+		/* Back buttons are redundant on desktop — DesktopNav handles top-level navigation */
+		.pane-right :global(.back-btn) {
+			display: none;
+		}
+
 		/* Suppress full-page root transition on desktop — pane-right handles it */
 		:global(::view-transition-old(root)),
 		:global(::view-transition-new(root)) {

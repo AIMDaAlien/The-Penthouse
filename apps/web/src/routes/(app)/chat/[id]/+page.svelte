@@ -279,6 +279,7 @@
 
 	$effect(() => {
 		if (!browser) return;
+		if (!sessionStore.isAuthenticated) return;
 		const id = chatId;
 		const initialName = page.url.searchParams.get('name') ?? 'Chat';
 		let cancelled = false;
