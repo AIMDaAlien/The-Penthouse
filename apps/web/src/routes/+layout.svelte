@@ -83,7 +83,11 @@
 
 	// Routes handled by the (app) two-pane monolith layout
 	const isMonolithRoute = $derived(
-		page.url.pathname === '/' || page.url.pathname.startsWith('/chat/')
+		page.url.pathname === '/' ||
+		page.url.pathname.startsWith('/chat/') ||
+		page.url.pathname === '/users' ||
+		page.url.pathname.startsWith('/users/') ||
+		page.url.pathname === '/settings'
 	);
 
 	const showBottomNav = $derived(

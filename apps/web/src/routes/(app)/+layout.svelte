@@ -1,16 +1,23 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import ChatListPane from '$lib/components/ChatListPane.svelte';
+	import DesktopNav from '$lib/components/DesktopNav.svelte';
 
 	let { children } = $props();
 
-	// Mobile: track whether we're inside a thread to toggle visible pane
-	const isThread = $derived(page.url.pathname.startsWith('/chat/'));
+	// Show right pane on mobile for: threads, users directory, user profiles, settings
+	const showRightPane = $derived(
+		page.url.pathname.startsWith('/chat/') ||
+		page.url.pathname === '/users' ||
+		page.url.pathname.startsWith('/users/') ||
+		page.url.pathname === '/settings'
+	);
 </script>
 
-<div class="monolith" class:show-thread={isThread}>
-	<div class="pane-left" aria-hidden={isThread ? true : undefined}>
+<div class="monolith" class:show-right={showRightPane}>
+	<div class="pane-left" aria-hidden={showRightPane ? true : undefined}>
 		<ChatListPane />
+		<DesktopNav />
 	</div>
 	<div class="pane-right">
 		{@render children()}
@@ -25,11 +32,11 @@
 	}
 
 	/* Hide whichever pane is not active on mobile */
-	.monolith:not(.show-thread) .pane-right {
+	.monolith:not(.show-right) .pane-right {
 		display: none;
 	}
 
-	.monolith.show-thread .pane-left {
+	.monolith.show-right .pane-left {
 		display: none;
 	}
 
@@ -60,10 +67,10 @@
 			border-right: 1px solid var(--color-border);
 			overflow-y: auto;
 			overflow-x: hidden;
-			display: flex;
-			flex-direction: column;
 			/* Always visible on desktop — both panes show */
 			display: flex !important;
+			flex-direction: column;
+			position: relative;
 		}
 
 		.pane-right {
@@ -91,6 +98,14 @@
 		/* Thread shell fills pane height instead of full viewport */
 		.pane-right :global(.thread-shell) {
 			height: 100%;
+		}
+
+		/* Page shells fill pane height on desktop (override 100dvh from page CSS) */
+		.pane-right :global(.users-shell),
+		.pane-right :global(.profile-shell),
+		.pane-right :global(.shell) {
+			height: 100% !important;
+			min-height: 0 !important;
 		}
 
 		/* Suppress full-page root transition on desktop — pane-right handles it */
