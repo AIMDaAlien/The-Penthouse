@@ -550,6 +550,56 @@ export function initRealtime(app: FastifyInstance): Server {
         'socket chat joined'
       );
       replayTypingState(socket, chatId);
+      let readEvent: { seenAt: string | null; seenThroughMessageId: string | null } | null = null;
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const result = await markChatRead(client, chatId, userId);
+        await client.query('COMMIT');
+
+        if (result.advanced) {
+          readEvent = {
+            seenAt: result.lastReadAt,
+            seenThroughMessageId: result.seenThroughMessageId
+          };
+        }
+      } catch (error) {
+        try {
+          await client.query('ROLLBACK');
+        } catch (rollbackError) {
+          app.log.warn(
+            {
+              error: rollbackError,
+              userId,
+              socketId: socket.id,
+              chatId
+            },
+            'failed to roll back read mark on chat join'
+          );
+        }
+        app.log.warn(
+          {
+            error,
+            userId,
+            socketId: socket.id,
+            chatId
+          },
+          'failed to persist read mark on chat join'
+        );
+      } finally {
+        client.release();
+      }
+      if (readEvent) {
+        io.to(`chat:${chatId}`).emit('message.read', {
+          type: 'message.read',
+          payload: {
+            chatId,
+            readerUserId: userId,
+            seenAt: readEvent.seenAt,
+            seenThroughMessageId: readEvent.seenThroughMessageId
+          }
+        });
+      }
       ack?.({ ok: true, chatId });
     });
 
