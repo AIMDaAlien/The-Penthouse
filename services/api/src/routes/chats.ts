@@ -29,6 +29,7 @@ import { hydrateMessageReadReceipts, listChatMemberReadStates, markChatRead } fr
 import { hydrateMessageReactions, loadGroupedReactionsForMessageIds, toPinnedMessage } from '../utils/messageHydration.js';
 import { toMemberMessage } from '../utils/messages.js';
 import { sendPushForNewMessage } from '../push/fcm.js';
+import { sendWebPushForNewMessage } from '../push/web.js';
 import { createPollRecords, loadPollVoteContext, recordPollVote } from '../utils/polls.js';
 import { getUserById } from '../utils/users.js';
 import {
@@ -1340,6 +1341,7 @@ export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
         payload: message
       });
       void sendPushForNewMessage(request.log, chatId, userId, message);
+      void sendWebPushForNewMessage(request.log, chatId, userId, message);
 
       return reply.send(response);
     } catch (error) {

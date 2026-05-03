@@ -25,6 +25,9 @@ const EnvSchema = z.object({
   GIPHY_API_KEY: z.string().default(''),
   KLIPY_API_KEY: z.string().default(''),
   FCM_SERVICE_ACCOUNT_PATH: z.string().default(''),
+  VAPID_PUBLIC_KEY: z.string().default(''),
+  VAPID_PRIVATE_KEY: z.string().default(''),
+  VAPID_SUBJECT: z.string().default(''),
   OPS_BUILD_ID: z.string().default(''),
   OPS_DEPLOYED_AT: z.string().default(''),
   BACKUP_STATUS_PATH: z.string().default('')

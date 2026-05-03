@@ -75,6 +75,9 @@ export async function cleanup() {
     await client.query('DELETE FROM poll_options');
     await client.query('DELETE FROM polls');
     await client.query('DELETE FROM starred_messages');
+    await client.query('DELETE FROM chat_notification_overrides');
+    await client.query('DELETE FROM notification_prefs');
+    await client.query('DELETE FROM push_subscriptions');
     await client.query('DELETE FROM messages');
     await client.query('DELETE FROM device_tokens');
     await client.query('DELETE FROM chat_members');

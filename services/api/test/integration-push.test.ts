@@ -21,11 +21,13 @@ describe('[integration] push delivery', { skip: SKIP }, () => {
   let app: any;
   let helpers: typeof import('./helpers.js');
   let setMessagingClientForTests: typeof import('../src/push/fcm.js').setMessagingClientForTests;
+  let setWebPushSenderForTests: typeof import('../src/push/web.js').setWebPushSenderForTests;
 
   before(async () => {
     process.env.JWT_SECRET ??= 'integration-test-jwt-secret-long-enough';
     helpers = await import('./helpers.js');
     ({ setMessagingClientForTests } = await import('../src/push/fcm.js'));
+    ({ setWebPushSenderForTests } = await import('../src/push/web.js'));
     await helpers.migrate();
   });
 
@@ -36,13 +38,482 @@ describe('[integration] push delivery', { skip: SKIP }, () => {
 
   afterEach(async () => {
     setMessagingClientForTests(null);
+    setWebPushSenderForTests(null);
     await app?.close();
     app = null;
   });
 
   after(async () => {
     setMessagingClientForTests(null);
+    setWebPushSenderForTests(null);
     await helpers.cleanup();
+  });
+
+  test('web push subscription endpoints register, update, and unregister browser subscriptions', async () => {
+    const user = await helpers.registerUser(app, 'web_push_subscriber');
+
+    const unauthenticated = await app.inject({
+      method: 'GET',
+      url: '/api/v1/push/preferences'
+    });
+    assert.equal(unauthenticated.statusCode, 401);
+
+    let response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/push/subscribe',
+      headers: helpers.authHeaders(user.accessToken),
+      payload: {
+        endpoint: 'https://push.example.com/subscriptions/web-push-001',
+        keys: {
+          p256dh: 'first-p256dh',
+          auth: 'first-auth'
+        },
+        userAgent: 'Test Browser'
+      }
+    });
+    assert.equal(response.statusCode, 201);
+    let body = JSON.parse(response.payload);
+    assert.equal(body.endpoint, 'https://push.example.com/subscriptions/web-push-001');
+    assert.equal(body.keys.p256dh, 'first-p256dh');
+    assert.equal(body.userAgent, 'Test Browser');
+
+    response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/push/subscribe',
+      headers: helpers.authHeaders(user.accessToken),
+      payload: {
+        endpoint: 'https://push.example.com/subscriptions/web-push-001',
+        keys: {
+          p256dh: 'updated-p256dh',
+          auth: 'updated-auth'
+        },
+        userAgent: 'Updated Browser'
+      }
+    });
+    assert.equal(response.statusCode, 201);
+    body = JSON.parse(response.payload);
+    assert.equal(body.keys.p256dh, 'updated-p256dh');
+    assert.equal(body.userAgent, 'Updated Browser');
+
+    let rows = await helpers.pool.query(
+      'SELECT endpoint, p256dh, auth, user_agent FROM push_subscriptions WHERE user_id = $1',
+      [user.user.id]
+    );
+    assert.equal(rows.rowCount, 1);
+    assert.equal(rows.rows[0].p256dh, 'updated-p256dh');
+    assert.equal(rows.rows[0].auth, 'updated-auth');
+
+    response = await app.inject({
+      method: 'DELETE',
+      url: '/api/v1/push/subscribe',
+      headers: helpers.authHeaders(user.accessToken),
+      payload: {
+        endpoint: 'https://push.example.com/subscriptions/web-push-001'
+      }
+    });
+    assert.equal(response.statusCode, 204);
+
+    rows = await helpers.pool.query('SELECT 1 FROM push_subscriptions WHERE user_id = $1', [user.user.id]);
+    assert.equal(rows.rowCount, 0);
+  });
+
+  test('web push preferences return defaults, reject invalid timezones, and persist updates', async () => {
+    const user = await helpers.registerUser(app, 'web_push_prefs');
+
+    let response = await app.inject({
+      method: 'GET',
+      url: '/api/v1/push/preferences',
+      headers: helpers.authHeaders(user.accessToken)
+    });
+    assert.equal(response.statusCode, 200);
+    let prefs = JSON.parse(response.payload);
+    assert.equal(prefs.enabled, true);
+    assert.equal(prefs.scopeDefault, 'dm_and_mention');
+    assert.equal(prefs.payloadPrivacy, 'metadata');
+    assert.equal(prefs.quietHoursEnabled, false);
+    assert.equal(prefs.quietHoursStart, null);
+    assert.equal(prefs.quietHoursEnd, null);
+    assert.equal(prefs.quietHoursTz, null);
+
+    response = await app.inject({
+      method: 'PATCH',
+      url: '/api/v1/push/preferences',
+      headers: helpers.authHeaders(user.accessToken),
+      payload: {
+        quietHoursEnabled: true,
+        quietHoursStart: '22:00',
+        quietHoursEnd: '07:00',
+        quietHoursTz: 'Not/A_Zone'
+      }
+    });
+    assert.equal(response.statusCode, 400);
+
+    response = await app.inject({
+      method: 'PATCH',
+      url: '/api/v1/push/preferences',
+      headers: helpers.authHeaders(user.accessToken),
+      payload: {
+        enabled: false,
+        scopeDefault: 'all',
+        payloadPrivacy: 'full',
+        quietHoursEnabled: true,
+        quietHoursStart: '22:00',
+        quietHoursEnd: '07:00:00',
+        quietHoursTz: 'America/New_York'
+      }
+    });
+    assert.equal(response.statusCode, 200);
+    prefs = JSON.parse(response.payload);
+    assert.equal(prefs.enabled, false);
+    assert.equal(prefs.scopeDefault, 'all');
+    assert.equal(prefs.payloadPrivacy, 'full');
+    assert.equal(prefs.quietHoursEnabled, true);
+    assert.equal(prefs.quietHoursStart, '22:00:00');
+    assert.equal(prefs.quietHoursEnd, '07:00:00');
+    assert.equal(prefs.quietHoursTz, 'America/New_York');
+
+    response = await app.inject({
+      method: 'PATCH',
+      url: '/api/v1/push/preferences',
+      headers: helpers.authHeaders(user.accessToken),
+      payload: {
+        quietHoursEnabled: false
+      }
+    });
+    assert.equal(response.statusCode, 200);
+    prefs = JSON.parse(response.payload);
+    assert.equal(prefs.quietHoursEnabled, false);
+    assert.equal(prefs.quietHoursStart, null);
+    assert.equal(prefs.quietHoursEnd, null);
+    assert.equal(prefs.quietHoursTz, null);
+  });
+
+  test('web push chat overrides enforce membership and revert to defaults', async () => {
+    const owner = await helpers.registerUser(app, 'web_push_chat_owner');
+    const outsider = await helpers.registerUser(app, 'web_push_chat_outsider');
+    const chatId = await helpers.createPrivateChannelForUser(owner.user.id, 'Web Push Private');
+
+    let response = await app.inject({
+      method: 'GET',
+      url: `/api/v1/push/chats/${chatId}`,
+      headers: helpers.authHeaders(owner.accessToken)
+    });
+    assert.equal(response.statusCode, 200);
+    let override = JSON.parse(response.payload);
+    assert.equal(override.chatId, chatId);
+    assert.equal(override.scope, null);
+    assert.equal(override.dndOverride, false);
+    assert.equal(override.updatedAt, null);
+
+    response = await app.inject({
+      method: 'GET',
+      url: `/api/v1/push/chats/${chatId}`,
+      headers: helpers.authHeaders(outsider.accessToken)
+    });
+    assert.equal(response.statusCode, 403);
+
+    response = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/push/chats/${chatId}`,
+      headers: helpers.authHeaders(owner.accessToken),
+      payload: {
+        dndOverride: true
+      }
+    });
+    assert.equal(response.statusCode, 400);
+
+    response = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/push/chats/${chatId}`,
+      headers: helpers.authHeaders(owner.accessToken),
+      payload: {
+        scope: 'off',
+        dndOverride: true
+      }
+    });
+    assert.equal(response.statusCode, 200);
+    override = JSON.parse(response.payload);
+    assert.equal(override.scope, 'off');
+    assert.equal(override.dndOverride, true);
+    assert.equal(typeof override.updatedAt, 'string');
+
+    response = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/push/chats/${chatId}`,
+      headers: helpers.authHeaders(owner.accessToken),
+      payload: {
+        dndOverride: false
+      }
+    });
+    assert.equal(response.statusCode, 200);
+    override = JSON.parse(response.payload);
+    assert.equal(override.scope, 'off');
+    assert.equal(override.dndOverride, false);
+
+    response = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/push/chats/${chatId}`,
+      headers: helpers.authHeaders(owner.accessToken)
+    });
+    assert.equal(response.statusCode, 204);
+
+    response = await app.inject({
+      method: 'GET',
+      url: `/api/v1/push/chats/${chatId}`,
+      headers: helpers.authHeaders(owner.accessToken)
+    });
+    assert.equal(response.statusCode, 200);
+    override = JSON.parse(response.payload);
+    assert.equal(override.scope, null);
+    assert.equal(override.dndOverride, false);
+  });
+
+  test('web push sends metadata payloads for subscribed direct-message recipients', async () => {
+    const sent: Array<{ subscription: any; payload: any }> = [];
+    setWebPushSenderForTests(async (subscription, payload) => {
+      sent.push({ subscription, payload: JSON.parse(String(payload)) });
+      return { statusCode: 201, body: '', headers: {} };
+    });
+
+    const sender = await helpers.registerUser(app, 'web_sender_meta');
+    const recipient = await helpers.registerUser(app, 'web_recipient_meta');
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/v1/chats/dm',
+      headers: helpers.authHeaders(sender.accessToken),
+      payload: { memberId: recipient.user.id }
+    });
+    assert.equal(created.statusCode, 200);
+    const chatId = JSON.parse(created.payload).id as string;
+
+    const subscribed = await app.inject({
+      method: 'POST',
+      url: '/api/v1/push/subscribe',
+      headers: helpers.authHeaders(recipient.accessToken),
+      payload: {
+        endpoint: 'https://push.example.com/subscriptions/web-send-meta',
+        keys: {
+          p256dh: 'meta-p256dh',
+          auth: 'meta-auth'
+        }
+      }
+    });
+    assert.equal(subscribed.statusCode, 201);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${chatId}/messages`,
+      headers: helpers.authHeaders(sender.accessToken),
+      payload: {
+        content: 'private hello',
+        clientMessageId: 'web-push-meta-001'
+      }
+    });
+    assert.equal(response.statusCode, 200);
+
+    await waitForCondition(() => sent.length === 1);
+    assert.equal(sent[0].subscription.endpoint, 'https://push.example.com/subscriptions/web-send-meta');
+    assert.equal(sent[0].payload.v, 1);
+    assert.equal(sent[0].payload.type, 'message');
+    assert.equal(sent[0].payload.chatId, chatId);
+    assert.equal(sent[0].payload.senderName, 'web_sender_meta');
+    assert.equal(typeof sent[0].payload.chatName, 'string');
+    assert.equal('body' in sent[0].payload, false);
+    assert.equal('senderAvatar' in sent[0].payload, false);
+  });
+
+  test('web push respects mentions, payload privacy, quiet hours, and per-chat off overrides', async () => {
+    const sent: any[] = [];
+    setWebPushSenderForTests(async (_subscription, payload) => {
+      sent.push(JSON.parse(String(payload)));
+      return { statusCode: 201, body: '', headers: {} };
+    });
+
+    const sender = await helpers.registerUser(app, 'web_sender_scope');
+    const recipient = await helpers.registerUser(app, 'web_recipient_scope');
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/v1/push/subscribe',
+      headers: helpers.authHeaders(recipient.accessToken),
+      payload: {
+        endpoint: 'https://push.example.com/subscriptions/web-scope',
+        keys: {
+          p256dh: 'scope-p256dh',
+          auth: 'scope-auth'
+        }
+      }
+    });
+
+    const recipientChats = await app.inject({
+      method: 'GET',
+      url: '/api/v1/chats',
+      headers: helpers.authHeaders(recipient.accessToken)
+    });
+    const generalChatId = JSON.parse(recipientChats.payload).find((chat: any) => chat.name === 'General').id;
+
+    let response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${generalChatId}/messages`,
+      headers: helpers.authHeaders(sender.accessToken),
+      payload: {
+        content: 'general channel noise',
+        clientMessageId: 'web-push-channel-no-mention-001'
+      }
+    });
+    assert.equal(response.statusCode, 200);
+    await waitForCondition(() => sent.length === 0, 250);
+    assert.equal(sent.length, 0);
+
+    response = await app.inject({
+      method: 'PATCH',
+      url: '/api/v1/push/preferences',
+      headers: helpers.authHeaders(recipient.accessToken),
+      payload: {
+        payloadPrivacy: 'full'
+      }
+    });
+    assert.equal(response.statusCode, 200);
+
+    response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${generalChatId}/messages`,
+      headers: helpers.authHeaders(sender.accessToken),
+      payload: {
+        content: 'hello @web_recipient_scope with preview',
+        clientMessageId: 'web-push-channel-mention-001'
+      }
+    });
+    assert.equal(response.statusCode, 200);
+    await waitForCondition(() => sent.length === 1);
+    assert.equal(sent[0].body, 'hello @web_recipient_scope with preview');
+    assert.equal(sent[0].senderAvatar, null);
+
+    response = await app.inject({
+      method: 'PATCH',
+      url: '/api/v1/push/preferences',
+      headers: helpers.authHeaders(recipient.accessToken),
+      payload: {
+        quietHoursEnabled: true,
+        quietHoursStart: '00:00',
+        quietHoursEnd: '23:59',
+        quietHoursTz: 'UTC'
+      }
+    });
+    assert.equal(response.statusCode, 200);
+
+    response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${generalChatId}/messages`,
+      headers: helpers.authHeaders(sender.accessToken),
+      payload: {
+        content: 'quiet @web_recipient_scope',
+        clientMessageId: 'web-push-quiet-001'
+      }
+    });
+    assert.equal(response.statusCode, 200);
+    await waitForCondition(() => sent.length === 1, 250);
+    assert.equal(sent.length, 1);
+
+    response = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/push/chats/${generalChatId}`,
+      headers: helpers.authHeaders(recipient.accessToken),
+      payload: {
+        scope: 'all',
+        dndOverride: true
+      }
+    });
+    assert.equal(response.statusCode, 200);
+
+    response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${generalChatId}/messages`,
+      headers: helpers.authHeaders(sender.accessToken),
+      payload: {
+        content: 'override channel send',
+        clientMessageId: 'web-push-dnd-override-001'
+      }
+    });
+    assert.equal(response.statusCode, 200);
+    await waitForCondition(() => sent.length === 2);
+
+    response = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/push/chats/${generalChatId}`,
+      headers: helpers.authHeaders(recipient.accessToken),
+      payload: {
+        scope: 'off',
+        dndOverride: true
+      }
+    });
+    assert.equal(response.statusCode, 200);
+
+    response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${generalChatId}/messages`,
+      headers: helpers.authHeaders(sender.accessToken),
+      payload: {
+        content: 'off should suppress @web_recipient_scope',
+        clientMessageId: 'web-push-off-001'
+      }
+    });
+    assert.equal(response.statusCode, 200);
+    await waitForCondition(() => sent.length === 2, 250);
+    assert.equal(sent.length, 2);
+  });
+
+  test('web push removes stale subscriptions on gone responses', async () => {
+    setWebPushSenderForTests(async () => {
+      const error = new Error('gone') as Error & { statusCode?: number };
+      error.statusCode = 410;
+      throw error;
+    });
+
+    const sender = await helpers.registerUser(app, 'web_sender_stale');
+    const recipient = await helpers.registerUser(app, 'web_recipient_stale');
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/v1/chats/dm',
+      headers: helpers.authHeaders(sender.accessToken),
+      payload: { memberId: recipient.user.id }
+    });
+    assert.equal(created.statusCode, 200);
+    const chatId = JSON.parse(created.payload).id as string;
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/v1/push/subscribe',
+      headers: helpers.authHeaders(recipient.accessToken),
+      payload: {
+        endpoint: 'https://push.example.com/subscriptions/web-stale',
+        keys: {
+          p256dh: 'stale-p256dh',
+          auth: 'stale-auth'
+        }
+      }
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/chats/${chatId}/messages`,
+      headers: helpers.authHeaders(sender.accessToken),
+      payload: {
+        content: 'remove stale endpoint',
+        clientMessageId: 'web-push-stale-001'
+      }
+    });
+    assert.equal(response.statusCode, 200);
+
+    await waitForCondition(async () => {
+      const rows = await helpers.pool.query(
+        'SELECT 1 FROM push_subscriptions WHERE endpoint = $1',
+        ['https://push.example.com/subscriptions/web-stale']
+      );
+      return rows.rowCount === 0;
+    });
   });
 
   test('registers, reassigns, and unregisters device tokens per authenticated user', async () => {

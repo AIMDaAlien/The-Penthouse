@@ -4,6 +4,7 @@ import type { Message, MessageType } from '@penthouse/contracts';
 import { SendMessageResponseSchema } from '@penthouse/contracts';
 import { pool } from '../db/pool.js';
 import { sendPushForNewMessage } from '../push/fcm.js';
+import { sendWebPushForNewMessage } from '../push/web.js';
 import { buildReplySnapshot } from './messageHydration.js';
 import { toMemberMessage } from './messages.js';
 import type { Queryable } from './users.js';
@@ -240,6 +241,7 @@ export async function sendChatMessage(options: SendChatMessageOptions) {
     }
 
     void sendPushForNewMessage(options.log, options.chatId, options.senderUserId, message);
+    void sendWebPushForNewMessage(options.log, options.chatId, options.senderUserId, message);
   }
 
   options.io.to(`user:${options.senderUserId}`).emit('message.ack', {

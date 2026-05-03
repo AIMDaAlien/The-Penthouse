@@ -25,6 +25,14 @@ The new rule uses the same source of truth for both unread state and seen state:
 
 Android now has an FCM-backed push path plus the existing local-notification fallback.
 
+As of 2026-05-03, the PWA Web Push backend foundation and send pipeline also exist:
+
+- VAPID env vars are scaffolded for the API and production Compose.
+- UUID-backed tables exist for browser push subscriptions, user notification preferences, and per-chat notification overrides.
+- `/api/v1/push/...` endpoints are wired for subscription registration, global preferences, and per-chat overrides.
+- The backend sender applies DND, default/per-chat scope, payload privacy, and stale subscription cleanup.
+- Browser push delivery is not live yet; frontend service worker/subscription UI and deployed VAPID values are still pending.
+
 That means:
 
 - if Firebase is configured, the backend can send Android push notifications even after the WebView stops receiving socket events

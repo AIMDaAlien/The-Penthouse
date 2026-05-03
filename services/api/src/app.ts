@@ -15,6 +15,7 @@ import { registerPresenceRoutes } from './routes/presence.js';
 import { registerUserRoutes } from './routes/users.js';
 import { registerAdminRoutes } from './routes/admin.js';
 import { registerDistributionRoutes } from './routes/distribution.js';
+import { registerPushRoutes } from './routes/push.js';
 import { registerObservability } from './observability.js';
 import { pool } from './db/pool.js';
 import { getUserById, mapAuthUser } from './utils/users.js';
@@ -150,6 +151,7 @@ export async function createApp() {
   await registerUserRoutes(app);
   await registerAdminRoutes(app);
   await registerMediaRoutes(app);
+  await registerPushRoutes(app);
 
   return app;
 }
