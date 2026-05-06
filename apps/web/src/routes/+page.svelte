@@ -1,31 +1,48 @@
 <script lang="ts">
-	import { sessionStore } from '$stores/session.svelte';
+	import ChatListPane from '$components/ChatListPane.svelte';
+	import BottomNav from '$components/BottomNav.svelte';
 	import { socketStore } from '$stores/socket.svelte';
+	import { goto } from '$app/navigation';
+	import type { ChatSummary } from '@penthouse/contracts';
+
+	// TODO: fetch from API
+	const chats = $state<ChatSummary[]>([
+		{
+			id: '1',
+			type: 'dm',
+			name: 'Alice',
+			updatedAt: new Date().toISOString(),
+			unreadCount: 2,
+			counterpartAvatarUrl: null
+		},
+		{
+			id: '2',
+			type: 'channel',
+			name: 'General',
+			updatedAt: new Date(Date.now() - 3600000).toISOString(),
+			unreadCount: 0
+		}
+	]);
 
 	const statusColor = $derived(
 		socketStore.state === 'connected' ? 'var(--color-success)' :
 		socketStore.state === 'connecting' ? 'var(--color-accent)' :
 		'var(--color-error)'
 	);
+
+	function handleSelectChat(chatId: string) {
+		goto(`/chat/${chatId}`);
+	}
 </script>
 
 <main class="home">
-	<header class="header">
+	<header class="top-bar">
 		<h1>The Penthouse</h1>
-		<div class="status" style:color={statusColor}>
-			● {socketStore.state}
-		</div>
+		<span class="status" style:color={statusColor}>● {socketStore.state}</span>
 	</header>
 
-	<section class="chat-list">
-		<p class="empty">No chats yet.</p>
-	</section>
-
-	<nav class="bottom-nav">
-		<button class="nav-btn active">Chats</button>
-		<button class="nav-btn">Users</button>
-		<button class="nav-btn">Settings</button>
-	</nav>
+	<ChatListPane {chats} onSelectChat={handleSelectChat} />
+	<BottomNav active="chats" />
 </main>
 
 <style>
@@ -36,7 +53,7 @@
 		min-height: 100dvh;
 	}
 
-	.header {
+	.top-bar {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
@@ -55,48 +72,5 @@
 		font-size: var(--text-xs);
 		font-family: var(--font-mono);
 		text-transform: uppercase;
-	}
-
-	.chat-list {
-		flex: 1;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		padding: var(--space-lg);
-	}
-
-	.empty {
-		color: var(--color-text-secondary);
-		font-size: var(--text-sm);
-	}
-
-	.bottom-nav {
-		display: flex;
-		border-top: 1px solid var(--color-border);
-		padding: var(--space-sm);
-		gap: var(--space-sm);
-	}
-
-	.nav-btn {
-		flex: 1;
-		padding: var(--space-sm) var(--space-md);
-		background: none;
-		border: none;
-		border-radius: var(--radius-md);
-		color: var(--color-text-secondary);
-		font-family: var(--font-body);
-		font-size: var(--text-sm);
-		font-weight: var(--weight-medium);
-		cursor: pointer;
-		transition: background 0.15s, color 0.15s;
-	}
-
-	.nav-btn.active {
-		background: var(--color-surface-elevated);
-		color: var(--color-text);
-	}
-
-	.nav-btn:not(:disabled):hover {
-		background: var(--color-surface-elevated);
 	}
 </style>
