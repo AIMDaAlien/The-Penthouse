@@ -50,24 +50,18 @@ Phase 2 bootstrap: contracts are the foundation. Root monorepo is wired. Next: s
 
 **Quality gate:** `npm run typecheck` passes, `npm test` runs (even if empty for now).
 
-### → Claude | `apps/web/`
+### → Kimi (taking Claude's role) | `apps/web/`
 **What:** Bootstrap SvelteKit 2 + Svelte 5 frontend skeleton.
-**Files to create (≤3 at a time):**
-1. `apps/web/package.json` — @sveltejs/kit, @sveltejs/adapter-static, svelte, vite,
-   tailwindcss, @penthouse/contracts (workspace link), socket.io-client
-2. `apps/web/svelte.config.js` — static adapter, CSP config
-3. `apps/web/vite.config.ts` — PWA plugin (@vite-pwa/sveltekit), tailwind
-4. `apps/web/src/app.html` — root HTML
-5. `apps/web/src/routes/+layout.svelte` — root layout
-6. `apps/web/src/routes/+page.svelte` — placeholder landing
-7. `apps/web/tsconfig.json` — SvelteKit tsconfig
+**Status:** In progress — scaffolding `apps/web/` now.
 
 **Diffs + intents to know:**
 - Keep incumbent event contract shapes from `packages/contracts/src/events.ts`.
 - `typing.start/stop` client events stay separate (server broadcasts `typing.update`).
 - Presence uses `online: boolean` (not status enum) for backward compat.
 - Primary canvas: 375px mobile. Desktop additive.
-- Typography: Erode (display), Ubuntu (body), JetBrains Mono (technical).
+- Typography: Gelasio (display), Ubuntu (body), JetBrains Mono (technical).
+- No Tailwind — CSS custom properties only (per incumbent CLAUDE.md).
+- `@vite-pwa/sveltekit` for PWA, `socket.io-client` for realtime.
 
 **Quality gate:** `npm run typecheck` passes, `npm run build` produces static output.
 
