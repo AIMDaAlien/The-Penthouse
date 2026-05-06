@@ -31,7 +31,11 @@
 	let typingUser = $state<string | null>(null);
 	let typingTimer = $state<ReturnType<typeof setTimeout> | null>(null);
 	let replyToMessage = $state<Message | null>(null);
-	let editingMessage = $state<Message | null>(null);
+
+	// Read receipt tracking
+	let visibleMessageIds = $state<Set<string>>(new Set());
+	let markReadTimer = $state<ReturnType<typeof setTimeout> | null>(null);
+	let lastMarkedMessageId = $state<string | null>(null);
 
 	function genClientId(): string {
 		return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -56,6 +60,72 @@
 			if (scrollContainer) scrollContainer.scrollTop = scrollContainer.scrollHeight;
 		});
 	}
+
+	// IntersectionObserver for read receipts
+	function setupObserver() {
+		if (!scrollContainer) return;
+		const observer = new IntersectionObserver(
+			(entries) => {
+				entries.forEach((entry) => {
+					const id = entry.target.getAttribute('data-message-id');
+					if (!id) return;
+					if (entry.isIntersecting) {
+						visibleMessageIds.add(id);
+					} else {
+						visibleMessageIds.delete(id);
+					}
+				});
+				debouncedMarkRead();
+			},
+			{ root: scrollContainer, threshold: 0.5 }
+		);
+
+		// Observe all message bubbles
+		const bubbles = scrollContainer.querySelectorAll('[data-message-id]');
+		bubbles.forEach((el) => observer.observe(el));
+
+		return observer;
+	}
+
+	function debouncedMarkRead() {
+		if (markReadTimer) clearTimeout(markReadTimer);
+		markReadTimer = setTimeout(() => {
+			markFurthestVisibleRead();
+		}, 500);
+	}
+
+	async function markFurthestVisibleRead() {
+		const myId = sessionStore.user?.id;
+		if (!myId || !chatId) return;
+
+		// Find the furthest visible message sent by someone else
+		let furthestMessage: Message | null = null;
+		for (const msg of messages) {
+			if (visibleMessageIds.has(msg.id) && msg.senderId !== myId && !msg.deletedAt) {
+				if (!furthestMessage || new Date(msg.createdAt) > new Date(furthestMessage.createdAt)) {
+					furthestMessage = msg;
+				}
+			}
+		}
+
+		if (!furthestMessage) return;
+		if (furthestMessage.id === lastMarkedMessageId) return;
+
+		lastMarkedMessageId = furthestMessage.id;
+		try {
+			await chats.markRead(chatId, { throughMessageId: furthestMessage.id });
+		} catch {
+			// Silently fail — read receipts are best-effort
+		}
+	}
+
+	// Setup observer when messages change
+	$effect(() => {
+		if (!loading && messages.length > 0 && scrollContainer) {
+			const observer = setupObserver();
+			return () => observer?.disconnect();
+		}
+	});
 
 	$effect(() => {
 		if (socketStore.isConnected && chatId) {
@@ -83,6 +153,23 @@
 				messages = messages.map((m) =>
 					m.clientMessageId === ack.clientMessageId ? { ...m, id: ack.messageId } : m
 				);
+			}),
+			onMessageRead((event) => {
+				const data = event.payload;
+				if (data.chatId !== chatId) return;
+				// Update read receipts for all messages up to seenThroughMessageId
+				messages = messages.map((m) => {
+					if (m.id === data.seenThroughMessageId || m.createdAt <= data.seenAt) {
+						const receipts = m.readReceipts ?? [];
+						if (!receipts.find((r) => r.userId === data.readerUserId)) {
+							return {
+								...m,
+								readReceipts: [...receipts, { userId: data.readerUserId, readAt: data.seenAt }]
+							};
+						}
+					}
+					return m;
+				});
 			}),
 			onMessageEdited((event) => {
 				const data = event.payload;
@@ -182,16 +269,13 @@
 		});
 
 		replyToMessage = null;
-		editingMessage = null;
 	}
 
 	function handleReply(message: Message) {
 		replyToMessage = message;
-		editingMessage = null;
 	}
 
 	function handleReact(messageId: string, emoji: string) {
-		// Optimistic toggle
 		const userId = sessionStore.user?.id;
 		if (!userId) return;
 		messages = messages.map((m) => {
@@ -199,7 +283,6 @@
 			const reactions = m.reactions ?? [];
 			const existing = reactions.find((r) => r.emoji === emoji);
 			if (existing?.userIds.includes(userId)) {
-				// Remove reaction
 				socketStore.emit('message.unreact', { messageId, emoji });
 				return {
 					...m,
@@ -212,7 +295,6 @@
 						.filter((r) => r.userIds.length > 0)
 				};
 			}
-			// Add reaction
 			socketStore.emit('message.react', { messageId, emoji });
 			if (existing) {
 				return {
@@ -276,13 +358,15 @@
 			<p class="state">No messages yet. Say something.</p>
 		{:else}
 			{#each messages as message (message.id)}
-				<MessageBubble
-					{message}
-					onReply={handleReply}
-					onReact={handleReact}
-					onEdit={handleEdit}
-					onDelete={handleDelete}
-				/>
+				<div data-message-id={message.id}>
+					<MessageBubble
+						{message}
+						onReply={handleReply}
+						onReact={handleReact}
+						onEdit={handleEdit}
+						onDelete={handleDelete}
+					/>
+				</div>
 			{/each}
 		{/if}
 		{#if typingUser}

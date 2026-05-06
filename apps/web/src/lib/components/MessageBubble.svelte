@@ -73,6 +73,15 @@
 			{#if message.editedAt}
 				<span class="edited">edited</span>
 			{/if}
+			{#if isMine && !isDeleted}
+				<span class="read-status">
+					{#if message.readReceipts && message.readReceipts.length > 0}
+						✓✓
+					{:else if !message.clientMessageId || message.id !== message.clientMessageId}
+						✓
+					{/if}
+				</span>
+			{/if}
 		</div>
 	</div>
 
@@ -201,6 +210,13 @@
 		font-size: var(--text-xs);
 		opacity: 0.5;
 		font-style: italic;
+	}
+
+	.read-status {
+		font-size: var(--text-xs);
+		opacity: 0.6;
+		margin-left: auto;
+		letter-spacing: -0.1em;
 	}
 
 	.media-image, .media-gif {
