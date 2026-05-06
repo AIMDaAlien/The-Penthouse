@@ -1,0 +1,22 @@
+{
+  "name": "the-penthouse",
+  "version": "4.0.0-alpha.1",
+  "private": true,
+  "description": "The Penthouse v4 clean-room rebuild",
+  "packageManager": "npm@11.12.1",
+  "workspaces": [
+    "apps/*",
+    "services/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "db:start": "docker compose -f infra/docker-compose.yml up -d",
+    "db:stop": "docker compose -f infra/docker-compose.yml down",
+    "typecheck": "npm run --workspaces --if-present typecheck",
+    "test": "npm run --workspaces --if-present test",
+    "validate": "npm run typecheck && npm run test"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
