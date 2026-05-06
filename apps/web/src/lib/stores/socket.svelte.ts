@@ -6,6 +6,10 @@ import type {
 	ServerMessageNewEvent,
 	ServerMessageAckEvent,
 	ServerMessageReadEvent,
+	ServerMessageEditedEvent,
+	ServerMessageDeletedEvent,
+	ServerReactionAddEvent,
+	ServerReactionRemoveEvent,
 	ServerTypingUpdateEvent,
 	ServerPresenceUpdateEvent,
 	ServerPresenceSyncEvent,
@@ -115,16 +119,24 @@ export function onMessageRead(handler: (data: ServerMessageReadEvent) => void) {
 	return socketStore.on<ServerMessageReadEvent>('message.read', handler);
 }
 
+export function onMessageEdited(handler: (data: ServerMessageEditedEvent) => void) {
+	return socketStore.on<ServerMessageEditedEvent>('message.edited', handler);
+}
+
 export function onTypingUpdate(handler: (data: ServerTypingUpdateEvent) => void) {
 	return socketStore.on<ServerTypingUpdateEvent>('typing.update', handler);
 }
 
-export function onPresenceUpdate(handler: (data: ServerPresenceUpdateEvent) => void) {
-	return socketStore.on<ServerPresenceUpdateEvent>('presence.update', handler);
+export function onMessageDeleted(handler: (data: ServerMessageDeletedEvent) => void) {
+	return socketStore.on<ServerMessageDeletedEvent>('message.deleted', handler);
 }
 
-export function onPresenceSync(handler: (data: ServerPresenceSyncEvent) => void) {
-	return socketStore.on<ServerPresenceSyncEvent>('presence.sync', handler);
+export function onReactionAdd(handler: (data: ServerReactionAddEvent) => void) {
+	return socketStore.on<ServerReactionAddEvent>('reaction.add', handler);
+}
+
+export function onReactionRemove(handler: (data: ServerReactionRemoveEvent) => void) {
+	return socketStore.on<ServerReactionRemoveEvent>('reaction.remove', handler);
 }
 
 export function onChatSyncRequired(handler: (data: ServerChatSyncRequiredEvent) => void) {

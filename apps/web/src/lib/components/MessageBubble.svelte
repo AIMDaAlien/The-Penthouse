@@ -1,19 +1,39 @@
 <script lang="ts">
 	import type { Message } from '@penthouse/contracts';
 	import { sessionStore } from '$stores/session.svelte';
+	import ReactionPill from './ReactionPill.svelte';
+	import Icon from './Icon.svelte';
 
 	interface Props {
 		message: Message;
+		onReply?: (message: Message) => void;
+		onReact?: (messageId: string, emoji: string) => void;
+		onEdit?: (message: Message) => void;
+		onDelete?: (messageId: string) => void;
 	}
 
-	let { message }: Props = $props();
+	let { message, onReply, onReact, onEdit, onDelete }: Props = $props();
 
 	const isMine = $derived(message.senderId === sessionStore.user?.id);
 	const isDeleted = $derived(!!message.deletedAt);
+	const canEdit = $derived(isMine && !isDeleted && (message.editCount ?? 0) < 10);
+	const canDelete = $derived(!isDeleted);
+
+	let showMenu = $state(false);
 
 	function formatTime(iso: string): string {
 		return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 	}
+
+	function handleReact(emoji: string) {
+		onReact?.(message.id, emoji);
+	}
+
+	const mediaUrl = $derived(
+		message.metadata && typeof message.metadata === 'object' && !Array.isArray(message.metadata)
+			? (message.metadata as Record<string, unknown>).url as string | undefined
+			: undefined
+	);
 </script>
 
 <div class="bubble-row" class:mine={isMine}>
@@ -21,23 +41,85 @@
 		{#if !isMine}
 			<span class="sender">{message.senderDisplayName ?? message.senderUsername}</span>
 		{/if}
+
+		{#if message.replyTo}
+			<div class="reply-to">
+				<span class="reply-name">{message.replyTo.senderDisplayName ?? 'Unknown'}</span>
+				<p class="reply-content">{message.replyTo.content}</p>
+			</div>
+		{/if}
+
 		{#if isDeleted}
 			<span class="deleted-label">Message deleted</span>
+		{:else if message.type === 'image' && mediaUrl}
+			<img src={mediaUrl} alt="" class="media-image" loading="lazy" />
+		{:else if message.type === 'video' && mediaUrl}
+			<video src={mediaUrl} class="media-video" controls preload="metadata"><track kind="captions" /></video>
+		{:else if message.type === 'audio' && mediaUrl}
+			<audio src={mediaUrl} class="media-audio" controls preload="metadata"></audio>
+		{:else if message.type === 'gif' && mediaUrl}
+			<img src={mediaUrl} alt="GIF" class="media-gif" loading="lazy" />
+		{:else if message.type === 'file' && mediaUrl}
+			<a href={mediaUrl} target="_blank" rel="noopener" class="file-link">
+				<Icon name="image" size={16} />
+				<span>Attachment</span>
+			</a>
 		{:else}
 			<p class="content">{message.content}</p>
 		{/if}
-		<span class="meta">{formatTime(message.createdAt)}</span>
+
+		<div class="meta-row">
+			<span class="meta">{formatTime(message.createdAt)}</span>
+			{#if message.editedAt}
+				<span class="edited">edited</span>
+			{/if}
+		</div>
 	</div>
+
+	{#if !isDeleted}
+		<div class="actions">
+			<button class="action-btn" onclick={() => onReply?.(message)} aria-label="Reply">
+				<Icon name="arrowLeft" size={14} />
+			</button>
+			<button class="action-btn" onclick={() => { showMenu = !showMenu; }} aria-label="More">
+				<Icon name="more" size={14} />
+			</button>
+		</div>
+
+		{#if showMenu}
+			<div class="menu">
+				<button onclick={() => { onReact?.(message.id, '❤️'); showMenu = false; }}>❤️ React</button>
+				<button onclick={() => { onReact?.(message.id, '👍'); showMenu = false; }}>👍 React</button>
+				<button onclick={() => { onReact?.(message.id, '😂'); showMenu = false; }}>😂 React</button>
+				{#if canEdit}
+					<button onclick={() => { onEdit?.(message); showMenu = false; }}>Edit</button>
+				{/if}
+				{#if canDelete}
+					<button class="danger" onclick={() => { onDelete?.(message.id); showMenu = false; }}>Delete</button>
+				{/if}
+			</div>
+		{/if}
+	{/if}
+
+	{#if message.reactions && message.reactions.length > 0}
+		<div class="reactions">
+			{#each message.reactions as reaction (reaction.emoji)}
+				<ReactionPill {reaction} onToggle={(emoji) => handleReact(emoji)} />
+			{/each}
+		</div>
+	{/if}
 </div>
 
 <style>
 	.bubble-row {
 		display: flex;
+		flex-direction: column;
 		padding: var(--space-xs) var(--space-lg);
+		position: relative;
 	}
 
 	.bubble-row.mine {
-		justify-content: flex-end;
+		align-items: flex-end;
 	}
 
 	.bubble {
@@ -68,6 +150,28 @@
 		font-weight: var(--weight-medium);
 	}
 
+	.reply-to {
+		padding: var(--space-xs) var(--space-sm);
+		background: rgba(0, 0, 0, 0.15);
+		border-radius: var(--radius-sm);
+		border-left: 2px solid var(--color-accent);
+	}
+
+	.reply-name {
+		font-size: var(--text-xs);
+		font-weight: var(--weight-medium);
+		color: var(--color-accent);
+	}
+
+	.reply-content {
+		font-size: var(--text-sm);
+		color: var(--color-text-secondary);
+		margin: 0;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
 	.content {
 		font-size: var(--text-base);
 		line-height: 1.4;
@@ -81,11 +185,119 @@
 		opacity: 0.6;
 	}
 
+	.meta-row {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+	}
+
 	.meta {
 		font-size: var(--text-xs);
 		opacity: 0.6;
 		align-self: flex-end;
 	}
 
+	.edited {
+		font-size: var(--text-xs);
+		opacity: 0.5;
+		font-style: italic;
+	}
 
+	.media-image, .media-gif {
+		max-width: 100%;
+		max-height: 300px;
+		border-radius: var(--radius-md);
+		object-fit: cover;
+	}
+
+	.media-video {
+		max-width: 100%;
+		max-height: 300px;
+		border-radius: var(--radius-md);
+	}
+
+	.media-audio {
+		width: 100%;
+		max-width: 260px;
+	}
+
+	.file-link {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-sm);
+		padding: var(--space-sm) var(--space-md);
+		background: var(--color-surface-elevated);
+		border-radius: var(--radius-md);
+		color: var(--color-text);
+		text-decoration: none;
+		font-size: var(--text-sm);
+	}
+
+	.actions {
+		display: flex;
+		gap: var(--space-xs);
+		margin-top: 2px;
+		opacity: 0;
+		transition: opacity 0.15s;
+	}
+
+	.bubble-row:hover .actions {
+		opacity: 1;
+	}
+
+	.action-btn {
+		background: none;
+		border: none;
+		color: var(--color-text-muted);
+		padding: 2px;
+		border-radius: var(--radius-sm);
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+		transition: color 0.15s;
+	}
+
+	.action-btn:hover {
+		color: var(--color-text);
+	}
+
+	.menu {
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
+		background: var(--color-surface-elevated);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		padding: var(--space-xs);
+		margin-top: var(--space-xs);
+		max-width: 120px;
+		box-shadow: var(--shadow-card);
+	}
+
+	.menu button {
+		background: none;
+		border: none;
+		color: var(--color-text);
+		padding: var(--space-sm) var(--space-md);
+		text-align: left;
+		font-size: var(--text-sm);
+		cursor: pointer;
+		border-radius: var(--radius-sm);
+		transition: background 0.1s;
+	}
+
+	.menu button:hover {
+		background: var(--color-surface);
+	}
+
+	.menu button.danger {
+		color: var(--color-error);
+	}
+
+	.reactions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-xs);
+		margin-top: 2px;
+	}
 </style>

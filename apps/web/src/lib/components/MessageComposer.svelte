@@ -1,14 +1,17 @@
 <script lang="ts">
 	import Icon from './Icon.svelte';
+	import ReplyBar from './ReplyBar.svelte';
 
 	interface Props {
 		onSend?: (content: string) => void;
 		onTypingStart?: () => void;
 		onTypingStop?: () => void;
 		disabled?: boolean;
+		replyTo?: { senderName: string; content: string } | null;
+		onCancelReply?: () => void;
 	}
 
-	let { onSend, onTypingStart, onTypingStop, disabled = false }: Props = $props();
+	let { onSend, onTypingStart, onTypingStop, disabled = false, replyTo = null, onCancelReply }: Props = $props();
 
 	let content = $state('');
 	let typingTimer = $state<ReturnType<typeof setTimeout> | null>(null);
@@ -32,28 +35,40 @@
 	}
 </script>
 
-<form class="composer" onsubmit={handleSubmit}>
-	<input
-		type="text"
-		placeholder="Message..."
-		bind:value={content}
-		oninput={handleInput}
-		disabled={disabled}
-	/>
-	<button type="submit" disabled={disabled || !content.trim()} aria-label="Send message">
-		<Icon name="send" size={20} />
-	</button>
-</form>
+<div class="composer-shell">
+	{#if replyTo}
+		<ReplyBar
+			senderName={replyTo.senderName}
+			content={replyTo.content}
+			onCancel={onCancelReply}
+		/>
+	{/if}
+	<form class="composer" onsubmit={handleSubmit}>
+		<input
+			type="text"
+			placeholder={replyTo ? 'Reply...' : 'Message...'}
+			bind:value={content}
+			oninput={handleInput}
+			disabled={disabled}
+		/>
+		<button type="submit" disabled={disabled || !content.trim()} aria-label="Send message">
+			<Icon name="send" size={20} />
+		</button>
+	</form>
+</div>
 
 <style>
+	.composer-shell {
+		border-top: 1px solid var(--color-border);
+		background: var(--color-surface);
+	}
+
 	.composer {
 		display: flex;
 		align-items: center;
 		gap: var(--space-sm);
 		padding: var(--space-sm) var(--space-lg);
 		padding-bottom: calc(var(--space-sm) + env(safe-area-inset-bottom));
-		border-top: 1px solid var(--color-border);
-		background: var(--color-surface);
 	}
 
 	input {

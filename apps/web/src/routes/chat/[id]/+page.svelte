@@ -3,7 +3,21 @@
 	import { goto } from '$app/navigation';
 	import { chats } from '$services/chats';
 	import { sessionStore } from '$stores/session.svelte';
-	import { socketStore, onMessageNew, onMessageAck, onTypingUpdate, joinChat, leaveChat, typingStart, typingStop } from '$stores/socket.svelte';
+	import {
+		socketStore,
+		onMessageNew,
+		onMessageAck,
+		onMessageRead,
+		onMessageEdited,
+		onMessageDeleted,
+		onReactionAdd,
+		onReactionRemove,
+		onTypingUpdate,
+		joinChat,
+		leaveChat,
+		typingStart,
+		typingStop
+	} from '$stores/socket.svelte';
 	import MessageBubble from '$components/MessageBubble.svelte';
 	import MessageComposer from '$components/MessageComposer.svelte';
 	import Icon from '$components/Icon.svelte';
@@ -16,13 +30,13 @@
 	let scrollContainer = $state<HTMLDivElement | null>(null);
 	let typingUser = $state<string | null>(null);
 	let typingTimer = $state<ReturnType<typeof setTimeout> | null>(null);
+	let replyToMessage = $state<Message | null>(null);
+	let editingMessage = $state<Message | null>(null);
 
-	// Generate a client message ID
 	function genClientId(): string {
 		return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 	}
 
-	// Fetch messages
 	async function loadMessages() {
 		loading = true;
 		error = '';
@@ -39,13 +53,10 @@
 
 	function scrollToBottom() {
 		requestAnimationFrame(() => {
-			if (scrollContainer) {
-				scrollContainer.scrollTop = scrollContainer.scrollHeight;
-			}
+			if (scrollContainer) scrollContainer.scrollTop = scrollContainer.scrollHeight;
 		});
 	}
 
-	// Join chat room when connected
 	$effect(() => {
 		if (socketStore.isConnected && chatId) {
 			joinChat(chatId);
@@ -53,52 +64,91 @@
 		}
 	});
 
-	// Load messages on mount / chat change
 	$effect(() => {
-		if (chatId) {
-			loadMessages();
-		}
+		if (chatId) loadMessages();
 	});
 
-	// Listen for new messages
+	// Socket event listeners
 	$effect(() => {
-		const unsub = onMessageNew((event) => {
-			const msg = event.payload;
-			if (msg.chatId !== chatId) return;
-			messages = [...messages, msg];
-			scrollToBottom();
-		});
-		return unsub;
-	});
-
-	// Listen for message acks (dedup)
-	$effect(() => {
-		const unsub = onMessageAck((event) => {
-			const ack = event.payload;
-			if (ack.chatId !== chatId) return;
-			// Replace optimistic message with confirmed
-			messages = messages.map((m) =>
-				m.clientMessageId === ack.clientMessageId ? { ...m, id: ack.messageId } : m
-			);
-		});
-		return unsub;
-	});
-
-	// Typing indicator
-	$effect(() => {
-		const unsub = onTypingUpdate((event) => {
-			const data = event.payload;
-			if (data.chatId !== chatId) return;
-			if (data.status === 'start') {
-				typingUser = data.displayName ?? 'Someone';
-				if (typingTimer) clearTimeout(typingTimer);
-				typingTimer = setTimeout(() => { typingUser = null; }, 3000);
-			} else {
-				typingUser = null;
-				if (typingTimer) clearTimeout(typingTimer);
-			}
-		});
-		return unsub;
+		const unsubs = [
+			onMessageNew((event) => {
+				const msg = event.payload;
+				if (msg.chatId !== chatId) return;
+				messages = [...messages, msg];
+				scrollToBottom();
+			}),
+			onMessageAck((event) => {
+				const ack = event.payload;
+				if (ack.chatId !== chatId) return;
+				messages = messages.map((m) =>
+					m.clientMessageId === ack.clientMessageId ? { ...m, id: ack.messageId } : m
+				);
+			}),
+			onMessageEdited((event) => {
+				const data = event.payload;
+				if (data.chatId !== chatId) return;
+				messages = messages.map((m) =>
+					m.id === data.messageId
+						? { ...m, content: data.content, editedAt: data.editedAt, editCount: data.editCount }
+						: m
+				);
+			}),
+			onMessageDeleted((event) => {
+				const data = event.payload;
+				if (data.chatId !== chatId) return;
+				messages = messages.map((m) =>
+					m.id === data.messageId
+						? { ...m, deletedAt: data.deletedAt, deletedByUserId: data.deletedByUserId }
+						: m
+				);
+			}),
+			onReactionAdd((event) => {
+				const data = event.payload;
+				if (data.chatId !== chatId) return;
+				messages = messages.map((m) => {
+					if (m.id !== data.messageId) return m;
+					const reactions = m.reactions ?? [];
+					const existing = reactions.find((r) => r.emoji === data.emoji);
+					if (existing) {
+						return {
+							...m,
+							reactions: reactions.map((r) =>
+								r.emoji === data.emoji ? { ...r, userIds: [...r.userIds, data.userId] } : r
+							)
+						};
+					}
+					return { ...m, reactions: [...reactions, { emoji: data.emoji, userIds: [data.userId] }] };
+				});
+			}),
+			onReactionRemove((event) => {
+				const data = event.payload;
+				if (data.chatId !== chatId) return;
+				messages = messages.map((m) => {
+					if (m.id !== data.messageId) return m;
+					const reactions = (m.reactions ?? [])
+						.map((r) =>
+							r.emoji === data.emoji
+								? { ...r, userIds: r.userIds.filter((id) => id !== data.userId) }
+								: r
+						)
+						.filter((r) => r.userIds.length > 0);
+					return { ...m, reactions };
+				});
+			}),
+			onTypingUpdate((event) => {
+				const data = event.payload;
+				if (data.chatId !== chatId) return;
+				if (data.status === 'start') {
+					typingUser = data.displayName ?? 'Someone';
+					if (typingTimer) clearTimeout(typingTimer);
+					typingTimer = setTimeout(() => { typingUser = null; }, 3000);
+				} else {
+					typingUser = null;
+					if (typingTimer) clearTimeout(typingTimer);
+				}
+			})
+		];
+		return () => unsubs.forEach((u) => u());
 	});
 
 	function handleSend(content: string) {
@@ -111,7 +161,14 @@
 			content,
 			type: 'text',
 			createdAt: new Date().toISOString(),
-			clientMessageId
+			clientMessageId,
+			...(replyToMessage ? {
+				replyTo: {
+					id: replyToMessage.id,
+					content: replyToMessage.content,
+					senderDisplayName: replyToMessage.senderDisplayName ?? null
+				}
+			} : {})
 		};
 		messages = [...messages, optimistic];
 		scrollToBottom();
@@ -120,17 +177,86 @@
 			chatId,
 			content,
 			clientMessageId,
-			messageType: 'text'
+			messageType: 'text',
+			...(replyToMessage ? { replyToMessageId: replyToMessage.id } : {})
+		});
+
+		replyToMessage = null;
+		editingMessage = null;
+	}
+
+	function handleReply(message: Message) {
+		replyToMessage = message;
+		editingMessage = null;
+	}
+
+	function handleReact(messageId: string, emoji: string) {
+		// Optimistic toggle
+		const userId = sessionStore.user?.id;
+		if (!userId) return;
+		messages = messages.map((m) => {
+			if (m.id !== messageId) return m;
+			const reactions = m.reactions ?? [];
+			const existing = reactions.find((r) => r.emoji === emoji);
+			if (existing?.userIds.includes(userId)) {
+				// Remove reaction
+				socketStore.emit('message.unreact', { messageId, emoji });
+				return {
+					...m,
+					reactions: reactions
+						.map((r) =>
+							r.emoji === emoji
+								? { ...r, userIds: r.userIds.filter((id) => id !== userId) }
+								: r
+						)
+						.filter((r) => r.userIds.length > 0)
+				};
+			}
+			// Add reaction
+			socketStore.emit('message.react', { messageId, emoji });
+			if (existing) {
+				return {
+					...m,
+					reactions: reactions.map((r) =>
+						r.emoji === emoji ? { ...r, userIds: [...r.userIds, userId] } : r
+					)
+				};
+			}
+			return { ...m, reactions: [...reactions, { emoji, userIds: [userId] }] };
 		});
 	}
 
-	function handleTypingStart() {
-		typingStart(chatId);
+	async function handleEdit(message: Message) {
+		const newContent = prompt('Edit message:', message.content);
+		if (!newContent || newContent.trim() === message.content) return;
+		try {
+			await chats.editMessage(message.id, { content: newContent.trim() });
+			messages = messages.map((m) =>
+				m.id === message.id
+					? { ...m, content: newContent.trim(), editedAt: new Date().toISOString() }
+					: m
+			);
+		} catch (err) {
+			alert(err instanceof Error ? err.message : 'Failed to edit');
+		}
 	}
 
-	function handleTypingStop() {
-		typingStop(chatId);
+	async function handleDelete(messageId: string) {
+		if (!confirm('Delete this message?')) return;
+		try {
+			await chats.deleteMessage(messageId);
+			messages = messages.map((m) =>
+				m.id === messageId
+					? { ...m, deletedAt: new Date().toISOString(), deletedByUserId: sessionStore.user?.id }
+					: m
+			);
+		} catch (err) {
+			alert(err instanceof Error ? err.message : 'Failed to delete');
+		}
 	}
+
+	function handleTypingStart() { typingStart(chatId); }
+	function handleTypingStop() { typingStop(chatId); }
 </script>
 
 <div class="thread">
@@ -150,7 +276,13 @@
 			<p class="state">No messages yet. Say something.</p>
 		{:else}
 			{#each messages as message (message.id)}
-				<MessageBubble {message} />
+				<MessageBubble
+					{message}
+					onReply={handleReply}
+					onReact={handleReact}
+					onEdit={handleEdit}
+					onDelete={handleDelete}
+				/>
 			{/each}
 		{/if}
 		{#if typingUser}
@@ -163,6 +295,11 @@
 		onTypingStart={handleTypingStart}
 		onTypingStop={handleTypingStop}
 		disabled={!socketStore.isConnected}
+		replyTo={replyToMessage ? {
+			senderName: replyToMessage.senderDisplayName ?? 'Unknown',
+			content: replyToMessage.content
+		} : null}
+		onCancelReply={() => replyToMessage = null}
 	/>
 </div>
 
