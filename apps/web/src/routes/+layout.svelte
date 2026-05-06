@@ -1,5 +1,19 @@
 <script lang="ts">
 	import '../app.css';
+	import { sessionStore } from '$stores/session.svelte';
+	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
+
+	let { children } = $props();
+
+	// Auth guard: redirect unauthenticated users to /auth
+	$effect(() => {
+		const path = $page.url.pathname;
+		const publicPaths = ['/auth', '/welcome'];
+		if (!sessionStore.isAuthenticated && !publicPaths.includes(path)) {
+			goto('/auth', { replaceState: true });
+		}
+	});
 </script>
 
 <svelte:head>
@@ -7,7 +21,7 @@
 </svelte:head>
 
 <div class="app">
-	<slot />
+	{@render children()}
 </div>
 
 <style>
@@ -16,24 +30,42 @@
 		--color-surface: #1A1A28;
 		--color-surface-elevated: #222236;
 		--color-text: #E8E8F0;
+		--color-text-primary: #E8E8F0;
 		--color-text-secondary: #9494A8;
 		--color-text-muted: #646478;
 		--color-accent: #C9A96E;
 		--color-accent-hover: #D4B87A;
 		--color-border: #2A2A3E;
 		--color-error: #E06C75;
+		--color-danger: #E06C75;
 		--color-success: #98C379;
 		--font-display: 'Gelasio', Georgia, serif;
 		--font-body: 'Ubuntu', system-ui, sans-serif;
+		--font-sans: 'Ubuntu', system-ui, sans-serif;
 		--font-mono: 'JetBrains Mono', monospace;
+		--text-xs: 0.75rem;
+		--text-sm: 0.875rem;
+		--text-base: 1rem;
+		--text-lg: 1.125rem;
+		--text-xl: 1.25rem;
 		--space-xs: 0.25rem;
 		--space-sm: 0.5rem;
 		--space-md: 1rem;
 		--space-lg: 1.5rem;
 		--space-xl: 2rem;
+		--space-2: 0.5rem;
+		--space-3: 0.75rem;
+		--space-4: 1rem;
+		--space-6: 1.5rem;
+		--space-8: 2rem;
 		--radius-sm: 6px;
 		--radius-md: 10px;
 		--radius-lg: 16px;
+		--radius-xl: 20px;
+		--radius-pill: 9999px;
+		--weight-medium: 500;
+		--weight-bold: 700;
+		--shadow-card: 0 4px 24px rgba(0, 0, 0, 0.3);
 	}
 
 	:global(*) {
