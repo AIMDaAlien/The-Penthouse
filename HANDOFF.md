@@ -1,26 +1,27 @@
 # Handoff — 2026-05-06 | Kimi → Next Agent
 
 ## State
-Branch: main | Commit: 3d198fe | Working tree: clean
-Last commit: feat(push): permission banner, settings toggle, service-worker handler, VAPID subscribe
+Branch: main | Commit: d7aa463 | Working tree: clean
+Last commit: feat(web): backfill TypingIndicator, ReadReceipts, readReceipts store, enhanced push subscribe
 
 ## Changed this session
+- `apps/web/src/lib/components/TypingIndicator.svelte` — named avatars + animated dots, horizontal layout, overflow text
+- `apps/web/src/lib/components/ReadReceipts.svelte` — DM slash glyph system, group avatar rail up to 5
+- `apps/web/src/lib/stores/readReceipts.svelte.ts` — marker model store with socket listener, seedFromMessages, getReadersForMessage
+- `apps/web/src/lib/push/subscribe.ts` — SW timeout guard (5s), idempotent resubscribe, SubscribeResult/PushStatus types
+- `apps/web/src/routes/chat/[id]/+page.svelte` — wire TypingIndicator (Map-based multi-typer) and ReadReceipts
+- `apps/web/src/lib/components/PushPermissionBanner.svelte` + `PushSettings.svelte` — adapt to new SubscribeResult
 - `apps/web/src/lib/push/payload.ts` — parse push payload with privacy levels (private/metadata/full)
-- `apps/web/src/lib/push/subscribe.ts` — VAPID subscription, unsubscribe, state helpers
-- `apps/web/src/lib/components/PushPermissionBanner.svelte` — auto-show banner, enable/dismiss flow
-- `apps/web/src/lib/components/PushSettings.svelte` — settings page toggle with granted/denied/unsupported states
 - `apps/web/src/service-worker.ts` — push event handler + notificationclick navigation to chat
 - `apps/web/src/routes/+layout.svelte` — integrate PushPermissionBanner
 - `apps/web/src/routes/settings/+page.svelte` — add Notifications section with PushSettings
 - `apps/web/.env.example` — add PUBLIC_VAPID_PUBLIC_KEY
-- `apps/web/.env` — local dev env with empty VAPID key (gitignored)
-- `apps/web/src/lib/components/BottomNav.svelte` — glassmorphism floating nav redesign
 
 ## Intent
-Frontend push notification stack is complete: banner, settings toggle, service worker handler, and VAPID subscription lifecycle are all wired. Backend endpoints `/api/v1/push/vapid-key`, `/api/v1/push/subscribe`, and `/api/v1/push/unsubscribe` are stubbed in `subscribe.ts` but need Codex implementation. The frontend falls back to `PUBLIC_VAPID_PUBLIC_KEY` env var if the API endpoint is not yet available.
+Frontend is now at parity with the incumbent PWA for all completed features. Chat thread has TypingIndicator (multi-user Map), ReadReceipts (DM slash + group rail), scroll-based read tracking, and a dedicated readReceipts store. Push stack is complete with permission banner, settings toggle, service worker handler, and robust VAPID subscription lifecycle.
 
 ## Your task
-- **Codex**: implement `services/api/` push endpoints so frontend can actually subscribe/unsubscribe and receive push notifications.
+- **Codex**: implement `services/api/` push endpoints (`/push/vapid-key`, `/push/subscribe`, `/push/unsubscribe`) so frontend can actually subscribe and receive push notifications. Also need VAPID key generation.
 - **Claude/Kimi**: Landing page `/+page.svelte` is currently a redirect to `/auth` — needs The Penthouse brand moment. Playwright e2e tests are scaffolded but no specs written.
 
 ## Open questions
