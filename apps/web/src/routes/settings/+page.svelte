@@ -5,6 +5,7 @@
 	import { sessionStore } from '$stores/session.svelte';
 	import Icon from '$components/Icon.svelte';
 	import Avatar from '$components/Avatar.svelte';
+	import PushSettings from '$components/PushSettings.svelte';
 
 	let loggingOut = $state(false);
 	let showConfirm = $state(false);
@@ -71,6 +72,11 @@
 						{saving ? 'Saving...' : 'Save profile'}
 					</button>
 				</div>
+			</section>
+
+			<section class="section">
+				<p class="section-label">Notifications</p>
+				<PushSettings />
 			</section>
 
 			<section class="section">

@@ -1,6 +1,5 @@
 <script lang="ts">
 	import ChatListPane from '$components/ChatListPane.svelte';
-	import BottomNav from '$components/BottomNav.svelte';
 	import { socketStore } from '$stores/socket.svelte';
 	import { goto } from '$app/navigation';
 	import type { ChatSummary } from '@penthouse/contracts';
@@ -42,7 +41,6 @@
 	</header>
 
 	<ChatListPane {chats} onSelectChat={handleSelectChat} />
-	<BottomNav active="chats" />
 </main>
 
 <style>

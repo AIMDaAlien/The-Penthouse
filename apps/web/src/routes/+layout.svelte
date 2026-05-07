@@ -1,8 +1,10 @@
 <script lang="ts">
 	import '../app.css';
 	import { sessionStore } from '$stores/session.svelte';
-	import { goto } from '$app/navigation';
+	import { goto, onNavigate } from '$app/navigation';
 	import { page } from '$app/stores';
+	import BottomNav from '$components/BottomNav.svelte';
+	import PushPermissionBanner from '$components/PushPermissionBanner.svelte';
 
 	let { children } = $props();
 
@@ -14,14 +16,37 @@
 			goto('/auth', { replaceState: true });
 		}
 	});
+
+	// Page transitions via View Transitions API
+	onNavigate((navigation) => {
+		if (!document.startViewTransition) return;
+		return new Promise((resolve) => {
+			document.startViewTransition(async () => {
+				resolve();
+				await navigation.complete;
+			});
+		});
+	});
+
+	const showNav = $derived(
+		sessionStore.isAuthenticated &&
+		($page.url.pathname === '/' ||
+			$page.url.pathname.startsWith('/chat/') ||
+			$page.url.pathname.startsWith('/users') ||
+			$page.url.pathname === '/settings')
+	);
 </script>
 
 <svelte:head>
 	<title>The Penthouse</title>
 </svelte:head>
 
-<div class="app">
+<div class="app" class:has-bottom-nav={showNav}>
+	<PushPermissionBanner />
 	{@render children()}
+	{#if showNav}
+		<BottomNav />
+	{/if}
 </div>
 
 <style>
@@ -88,5 +113,39 @@
 		min-height: 100dvh;
 		display: flex;
 		flex-direction: column;
+	}
+
+	.app.has-bottom-nav {
+		padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+	}
+
+	/* Page transitions */
+	:global(::view-transition-old(root)) {
+		animation: 180ms ease both page-out;
+	}
+
+	:global(::view-transition-new(root)) {
+		animation: 300ms cubic-bezier(0.34, 1.56, 0.64, 1) both page-in;
+	}
+
+	@keyframes page-out {
+		to {
+			opacity: 0;
+			transform: translateX(-10px);
+		}
+	}
+
+	@keyframes page-in {
+		from {
+			opacity: 0;
+			transform: translateX(14px);
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		:global(::view-transition-old(root)),
+		:global(::view-transition-new(root)) {
+			animation: none !important;
+		}
 	}
 </style>

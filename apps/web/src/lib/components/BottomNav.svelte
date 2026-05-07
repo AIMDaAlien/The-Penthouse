@@ -1,55 +1,246 @@
 <script lang="ts">
+	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
 	import Icon from './Icon.svelte';
 
-	interface Props {
-		active?: 'chats' | 'users' | 'settings';
-	}
+	const tabs = [
+		{ href: '/',        icon: 'message'  as const, label: 'Chats'    },
+		{ href: '/users',   icon: 'users'    as const, label: 'People'   },
+		{ href: '/settings',icon: 'settings' as const, label: 'Settings' }
+	];
 
-	let { active = 'chats' }: Props = $props();
+	const pathname = $derived($page.url.pathname);
+
+	const tabStates = $derived(
+		tabs.map((tab) => ({
+			...tab,
+			active:
+				tab.href === '/'
+					? pathname === '/' || pathname.startsWith('/chat/')
+					: pathname === tab.href || pathname.startsWith(tab.href + '/')
+		}))
+	);
+
+	const showFab = $derived(pathname === '/' || pathname.startsWith('/chat/'));
+
+	function handleFab() {
+		goto('/users');
+	}
 </script>
 
-<nav class="bottom-nav">
-	<a href="/" class="nav-item" class:active={active === 'chats'}>
-		<Icon name="message" size={22} />
-		<span>Chats</span>
-	</a>
-	<a href="/users" class="nav-item" class:active={active === 'users'}>
-		<Icon name="users" size={22} />
-		<span>Users</span>
-	</a>
-	<a href="/settings" class="nav-item" class:active={active === 'settings'}>
-		<Icon name="settings" size={22} />
-		<span>Settings</span>
-	</a>
-</nav>
+<div class="nav-wrapper">
+	{#if showFab}
+		<button class="fab" onclick={handleFab} aria-label="Start new chat">
+			<Icon name="plus" size={24} strokeWidth={2.5} />
+		</button>
+	{/if}
+
+	<nav class="bottom-nav" aria-label="Main navigation">
+		{#each tabStates as tab}
+			<a
+				href={tab.href}
+				class="nav-tab"
+				class:active={tab.active}
+				aria-current={tab.active ? 'page' : undefined}
+			>
+				<span class="tab-glow" aria-hidden="true"></span>
+				<span class="tab-indicator" aria-hidden="true"></span>
+				<span class="tab-icon">
+					<Icon name={tab.icon} size={22} strokeWidth={tab.active ? 2.2 : 1.75} />
+				</span>
+				<span class="tab-label">{tab.label}</span>
+			</a>
+		{/each}
+	</nav>
+</div>
 
 <style>
-	.bottom-nav {
+	.nav-wrapper {
+		position: fixed;
+		bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+		left: 16px;
+		right: 16px;
+		z-index: 100;
 		display: flex;
-		border-top: 1px solid var(--color-border);
-		background: var(--color-surface);
-		padding: var(--space-xs) 0 calc(var(--space-xs) + env(safe-area-inset-bottom));
+		flex-direction: column;
+		align-items: flex-end;
+		gap: 12px;
+		pointer-events: none;
 	}
 
-	.nav-item {
+	.fab {
+		pointer-events: auto;
+		width: 52px;
+		height: 52px;
+		border-radius: 50%;
+		background: var(--color-accent);
+		color: #12121C;
+		border: none;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		cursor: pointer;
+		box-shadow:
+			0 4px 14px rgba(201, 169, 110, 0.35),
+			0 0 0 1px rgba(201, 169, 110, 0.2) inset;
+		transition:
+			transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+			box-shadow 0.25s ease,
+			background 0.2s ease;
+		margin-right: 12px;
+	}
+
+	.fab:hover {
+		transform: scale(1.1);
+		box-shadow:
+			0 6px 22px rgba(201, 169, 110, 0.5),
+			0 0 0 1px rgba(201, 169, 110, 0.3) inset;
+	}
+
+	.fab:active {
+		transform: scale(0.94);
+	}
+
+	.bottom-nav {
+		pointer-events: auto;
+		width: 100%;
+		max-width: 400px;
+		margin: 0 auto;
+		height: 64px;
+		display: flex;
+		align-items: stretch;
+		background: rgba(26, 26, 40, 0.85);
+		backdrop-filter: blur(24px) saturate(1.5);
+		-webkit-backdrop-filter: blur(24px) saturate(1.5);
+		border: 1px solid rgba(140, 140, 197, 0.15);
+		border-radius: 24px;
+		box-shadow:
+			0 20px 40px rgba(0, 0, 0, 0.55),
+			0 2px 8px rgba(0, 0, 0, 0.35),
+			0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+		overflow: hidden;
+		position: relative;
+	}
+
+	.nav-tab {
 		flex: 1;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: 2px;
-		padding: var(--space-xs) 0;
-		color: var(--color-text-muted);
+		justify-content: center;
+		gap: 3px;
 		text-decoration: none;
-		font-size: var(--text-xs);
-		font-weight: var(--weight-medium);
-		transition: color 0.15s;
+		color: var(--color-text-muted);
+		position: relative;
+		padding: 0 4px;
+		transition: color 0.3s ease;
+		outline: none;
+		-webkit-tap-highlight-color: transparent;
 	}
 
-	.nav-item.active {
+	.tab-indicator {
+		position: absolute;
+		top: 0;
+		left: 50%;
+		transform: translateX(-50%) scaleX(0);
+		width: 24px;
+		height: 2.5px;
+		background: var(--color-accent);
+		border-radius: 0 0 3px 3px;
+		opacity: 0;
+		transition:
+			transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+			opacity 0.25s ease;
+	}
+
+	.tab-glow {
+		position: absolute;
+		inset: 6px 4px;
+		background: rgba(201, 169, 110, 0.08);
+		border: 1px solid rgba(201, 169, 110, 0.12);
+		border-radius: 16px;
+		opacity: 0;
+		transform: scale(0.9);
+		transition:
+			transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+			opacity 0.3s ease;
+	}
+
+	.nav-tab.active {
 		color: var(--color-accent);
 	}
 
-	.nav-item:not(.active):hover {
-		color: var(--color-text-secondary);
+	.nav-tab.active .tab-indicator {
+		opacity: 1;
+		transform: translateX(-50%) scaleX(1);
+	}
+
+	.nav-tab.active .tab-glow {
+		opacity: 1;
+		transform: scale(1);
+	}
+
+	.tab-icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+		z-index: 1;
+	}
+
+	.nav-tab.active .tab-icon {
+		transform: translateY(-1px) scale(1.1);
+		filter: drop-shadow(0 0 6px rgba(201, 169, 110, 0.25));
+	}
+
+	.tab-label {
+		font-size: 0.6rem;
+		font-weight: 500;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		font-family: var(--font-sans);
+		z-index: 1;
+		transition: font-weight 0.2s ease, transform 0.2s ease;
+	}
+
+	.nav-tab.active .tab-label {
+		font-weight: 700;
+		transform: translateY(-0.5px);
+	}
+
+	@media (hover: hover) and (pointer: fine) {
+		.nav-wrapper {
+			width: 360px;
+			left: 50%;
+			right: auto;
+			transform: translateX(-50%);
+			bottom: 24px;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.fab,
+		.tab-indicator,
+		.tab-glow,
+		.tab-icon,
+		.tab-label,
+		.nav-tab,
+		.bottom-nav {
+			transition: none !important;
+			animation: none !important;
+		}
+
+		.fab:hover {
+			transform: none;
+		}
+
+		.nav-tab.active .tab-icon {
+			transform: none;
+			filter: none;
+		}
+
+		.nav-tab.active .tab-label {
+			transform: none;
+		}
 	}
 </style>
