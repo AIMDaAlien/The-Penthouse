@@ -20,7 +20,10 @@
 	} from '$stores/socket.svelte';
 	import MessageBubble from '$components/MessageBubble.svelte';
 	import MessageComposer from '$components/MessageComposer.svelte';
+	import ReadReceipts from '$components/ReadReceipts.svelte';
+	import TypingIndicator from '$components/TypingIndicator.svelte';
 	import Icon from '$components/Icon.svelte';
+	import { readReceiptsStore } from '$stores/readReceipts.svelte';
 	import type { Message } from '@penthouse/contracts';
 
 	const chatId = $derived($page.params.id ?? '');
@@ -28,7 +31,7 @@
 	let loading = $state(true);
 	let error = $state('');
 	let scrollContainer = $state<HTMLDivElement | null>(null);
-	let typingUser = $state<string | null>(null);
+	let typingUsers = $state<Map<string, string>>(new Map());
 	let typingTimer = $state<ReturnType<typeof setTimeout> | null>(null);
 	let replyToMessage = $state<Message | null>(null);
 
@@ -47,6 +50,7 @@
 		try {
 			const res = await chats.messages(chatId);
 			messages = res.messages;
+			readReceiptsStore.seedFromMessages(chatId, messages);
 			scrollToBottom();
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to load messages';
@@ -226,11 +230,19 @@
 				const data = event.payload;
 				if (data.chatId !== chatId) return;
 				if (data.status === 'start') {
-					typingUser = data.displayName ?? 'Someone';
+					const next = new Map(typingUsers);
+					next.set(data.userId, data.displayName ?? 'Someone');
+					typingUsers = next;
 					if (typingTimer) clearTimeout(typingTimer);
-					typingTimer = setTimeout(() => { typingUser = null; }, 3000);
+					typingTimer = setTimeout(() => {
+						const pruned = new Map(typingUsers);
+						pruned.delete(data.userId);
+						typingUsers = pruned;
+					}, 3000);
 				} else {
-					typingUser = null;
+					const next = new Map(typingUsers);
+					next.delete(data.userId);
+					typingUsers = next;
 					if (typingTimer) clearTimeout(typingTimer);
 				}
 			})
@@ -366,12 +378,21 @@
 						onEdit={handleEdit}
 						onDelete={handleDelete}
 					/>
+					<ReadReceipts
+						messageId={message.id}
+						{chatId}
+						isSentByMe={message.senderId === sessionStore.user?.id}
+						isPending={!!message.clientMessageId && message.id === message.clientMessageId}
+						chatType="dm"
+						usersMap={new Map()}
+						orderedMessageIds={messages.map((m) => m.id)}
+					/>
 				</div>
 			{/each}
 		{/if}
-		{#if typingUser}
-			<p class="typing">{typingUser} is typing...</p>
-		{/if}
+		<div class="typing-zone">
+			<TypingIndicator users={typingUsers} chatType="dm" />
+		</div>
 	</div>
 
 	<MessageComposer
@@ -444,10 +465,8 @@
 		color: var(--color-error);
 	}
 
-	.typing {
+	.typing-zone {
 		padding: 0 var(--space-lg);
-		font-size: var(--text-xs);
-		color: var(--color-text-secondary);
-		font-style: italic;
+		min-height: 28px;
 	}
 </style>

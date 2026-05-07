@@ -17,18 +17,23 @@
 	async function handleAllow() {
 		loading = true;
 		error = '';
-		try {
-			await subscribeToPush();
+		const result = await subscribeToPush();
+		if (result.ok) {
 			permission = 'granted';
 			visible = false;
-		} catch (err) {
-			error = err instanceof Error ? err.message : 'Failed to enable notifications';
-			if (Notification.permission === 'denied') {
-				permission = 'denied';
-			}
-		} finally {
-			loading = false;
+		} else {
+			const reasonMap: Record<string, string> = {
+				unsupported: 'Not supported on this device',
+				denied: 'Permission was denied',
+				'no-vapid-key': 'Server configuration missing',
+				network: 'Server error — try again later',
+				'sw-timeout': 'Service worker not ready',
+				unknown: 'Something went wrong'
+			};
+			error = reasonMap[result.reason] ?? 'Failed to enable notifications';
+			permission = getPushState();
 		}
+		loading = false;
 	}
 
 	function handleDismiss() {

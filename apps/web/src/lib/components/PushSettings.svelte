@@ -20,23 +20,30 @@
 	async function handleToggle() {
 		toggling = true;
 		error = '';
-		try {
-			if (permission === 'granted') {
-				await unsubscribeFromPush();
-				permission = getPushState();
-			} else {
-				const browserPermission = await Notification.requestPermission();
-				if (browserPermission === 'granted') {
-					await subscribeToPush();
-				}
-				permission = getPushState();
+		if (permission === 'granted') {
+			const result = await unsubscribeFromPush();
+			if (!result.ok) {
+				error = result.reason === 'network' ? 'Server error — try again' : 'Failed to disable';
 			}
-		} catch (err) {
-			error = err instanceof Error ? err.message : 'Something went wrong';
 			permission = getPushState();
-		} finally {
-			toggling = false;
+		} else {
+			const browserPermission = await Notification.requestPermission();
+			if (browserPermission === 'granted') {
+				const result = await subscribeToPush();
+				if (!result.ok) {
+					const reasonMap: Record<string, string> = {
+						unsupported: 'Not supported on this device',
+						'no-vapid-key': 'Server configuration missing',
+						network: 'Server error — try again later',
+						'sw-timeout': 'Service worker not ready',
+						unknown: 'Something went wrong'
+					};
+					error = reasonMap[result.reason] ?? 'Failed to enable';
+				}
+			}
+			permission = getPushState();
 		}
+		toggling = false;
 	}
 
 	const isOn = $derived(permission === 'granted');
