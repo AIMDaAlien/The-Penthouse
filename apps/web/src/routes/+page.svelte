@@ -2,26 +2,21 @@
 	import ChatListPane from '$components/ChatListPane.svelte';
 	import { socketStore } from '$stores/socket.svelte';
 	import { goto } from '$app/navigation';
+	import { chats as chatsApi } from '$services/chats';
 	import type { ChatSummary } from '@penthouse/contracts';
 
-	// TODO: fetch from API
-	const chats = $state<ChatSummary[]>([
-		{
-			id: '1',
-			type: 'dm',
-			name: 'Alice',
-			updatedAt: new Date().toISOString(),
-			unreadCount: 2,
-			counterpartAvatarUrl: null
-		},
-		{
-			id: '2',
-			type: 'channel',
-			name: 'General',
-			updatedAt: new Date(Date.now() - 3600000).toISOString(),
-			unreadCount: 0
-		}
-	]);
+	let chats = $state<ChatSummary[]>([]);
+	let loading = $state(true);
+	let error = $state('');
+
+	$effect(() => {
+		loading = true;
+		error = '';
+		chatsApi.list()
+			.then((res) => { chats = res.chats; })
+			.catch((err) => { error = err instanceof Error ? err.message : 'Failed to load chats'; })
+			.finally(() => { loading = false; });
+	});
 
 	const statusColor = $derived(
 		socketStore.state === 'connected' ? 'var(--color-success)' :
@@ -40,7 +35,13 @@
 		<span class="status" style:color={statusColor}>● {socketStore.state}</span>
 	</header>
 
-	<ChatListPane {chats} onSelectChat={handleSelectChat} />
+	{#if loading}
+		<p class="state">Loading conversations...</p>
+	{:else if error}
+		<p class="state error">{error}</p>
+	{:else}
+		<ChatListPane {chats} onSelectChat={handleSelectChat} />
+	{/if}
 </main>
 
 <style>
@@ -70,5 +71,16 @@
 		font-size: var(--text-xs);
 		font-family: var(--font-mono);
 		text-transform: uppercase;
+	}
+
+	.state {
+		text-align: center;
+		padding: var(--space-xl);
+		color: var(--color-text-secondary);
+		font-size: var(--text-sm);
+	}
+
+	.state.error {
+		color: var(--color-error);
 	}
 </style>

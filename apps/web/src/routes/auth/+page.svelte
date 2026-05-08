@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { env } from '$env/dynamic/public';
 	import { goto } from '$app/navigation';
+	import { dev } from '$app/environment';
 	import { onMount } from 'svelte';
 	import { auth } from '$services/auth';
 	import { sessionStore } from '$stores/session.svelte';
@@ -26,7 +27,8 @@
 	const PASSWORD_MIN = 10;
 	const PASSWORD_MAX = 128;
 	const TEST_NOTICE_VERSION = 'alpha-v1';
-	const ALTCHA_URL = env.PUBLIC_ALTCHA_API_URL ?? '';
+	const skipCaptcha = dev || env.PUBLIC_SKIP_CAPTCHA === 'true';
+	const ALTCHA_URL = env.PUBLIC_ALTCHA_API_URL || (env.PUBLIC_API_URL ? `${env.PUBLIC_API_URL}/api/v1/auth/challenge` : '');
 
 	const strength = $derived({
 		minMet: password.length >= PASSWORD_MIN,
@@ -39,7 +41,7 @@
 			strength.minMet && strength.maxOk && strength.noSpace &&
 			password === confirmPassword &&
 			acceptedAlphaNotice &&
-			!!captchaToken
+			(skipCaptcha || !!captchaToken)
 		)
 	);
 
@@ -103,14 +105,14 @@
 				}
 				if (password !== confirmPassword) { error = 'Passwords do not match.'; loading = false; return; }
 				if (!acceptedAlphaNotice) { error = 'Acknowledge the alpha notice to register.'; loading = false; return; }
-				if (altchaFailed) { error = 'CAPTCHA failed. Reload and try again.'; loading = false; return; }
-				if (!captchaToken) { error = 'Complete the CAPTCHA challenge.'; loading = false; return; }
+				if (!skipCaptcha && altchaFailed) { error = 'CAPTCHA failed. Reload and try again.'; loading = false; return; }
+				if (!skipCaptcha && !captchaToken) { error = 'Complete the CAPTCHA challenge.'; loading = false; return; }
 				session = await auth.register({
 					username,
 					...(displayName.trim() ? { displayName: displayName.trim() } : {}),
 					password,
 					inviteCode: 'PENTHOUSE-ALPHA',
-					captchaToken,
+					captchaToken: skipCaptcha ? 'dev' : captchaToken,
 					acceptTestNotice: true,
 					testNoticeVersion: TEST_NOTICE_VERSION
 				});
@@ -172,21 +174,23 @@
 					</div>
 				</div>
 
-				<div class="field">
-					<div class="section-label">Verify you're human</div>
-					<div class="altcha-box" class:failed={altchaFailed}>
-						{#if altchaFailed}
-							<p class="altcha-err">CAPTCHA failed to load. Reload the page.</p>
-						{:else if altchaReady}
-							<altcha-widget bind:this={altchaRef} challengeurl={ALTCHA_URL} hidelogo auto="off"></altcha-widget>
-						{:else}
-							<p class="altcha-loading">Loading verification challenge...</p>
-						{/if}
+				{#if !skipCaptcha}
+					<div class="field">
+						<div class="section-label">Verify you're human</div>
+						<div class="altcha-box" class:failed={altchaFailed}>
+							{#if altchaFailed}
+								<p class="altcha-err">CAPTCHA failed to load. Reload the page.</p>
+							{:else if altchaReady}
+								<altcha-widget bind:this={altchaRef} challengeurl={ALTCHA_URL} hidelogo auto="off"></altcha-widget>
+							{:else}
+								<p class="altcha-loading">Loading verification challenge...</p>
+							{/if}
+						</div>
+						<span class="hint">
+							{#if altchaFailed}CAPTCHA failed. Reload and try again.{:else if altchaStatus === 'verifying'}Verifying...{:else if !captchaToken}Solve the CAPTCHA puzzle{:else}✓ CAPTCHA verified{/if}
+						</span>
 					</div>
-					<span class="hint">
-						{#if altchaFailed}CAPTCHA failed. Reload and try again.{:else if altchaStatus === 'verifying'}Verifying...{:else if !captchaToken}Solve the CAPTCHA puzzle{:else}✓ CAPTCHA verified{/if}
-					</span>
-				</div>
+				{/if}
 
 				<label class="notice-check">
 					<input type="checkbox" bind:checked={acceptedAlphaNotice} disabled={loading} />
@@ -276,7 +280,7 @@
 	}
 
 	.tab.active {
-		color: #fff;
+		color: #12121C;
 		background: var(--color-accent);
 	}
 
@@ -377,7 +381,7 @@
 
 	.submit-btn {
 		background: var(--color-accent);
-		color: #fff;
+		color: #12121C;
 		border: none;
 		border-radius: var(--radius-pill);
 		padding: var(--space-md);

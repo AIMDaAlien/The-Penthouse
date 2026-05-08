@@ -1,6 +1,5 @@
 import { io, type Socket } from 'socket.io-client';
 import { env } from '$env/dynamic/public';
-import { sessionStore } from './session.svelte';
 import type {
 	ClientMessageSendEvent,
 	ServerMessageNewEvent,
@@ -26,18 +25,11 @@ function createSocketStore() {
 	let state = $state<SocketState>('idle');
 	let error = $state<string | null>(null);
 
-	// Auto-connect when authenticated, disconnect on logout
-	$effect(() => {
-		const token = sessionStore.accessToken;
-		if (token && state === 'idle') {
-			connect(token);
-		} else if (!token && socket) {
-			disconnect();
-		}
-	});
+	// Note: auto-connect/disconnect logic lives in +layout.svelte
+	// because $effect can only run inside components, not at module level
 
 	function connect(accessToken: string) {
-		if (socket?.connected) return;
+		if (socket?.connected || state === 'connecting') return;
 
 		state = 'connecting';
 		error = null;

@@ -3,6 +3,14 @@ import { sessionStore } from '$stores/session.svelte';
 import type { AuthResponse } from '@penthouse/contracts';
 
 const API_BASE = env.PUBLIC_API_URL ?? 'http://localhost:3000';
+const AUTHLESS_PATHS = new Set([
+	'/api/v1/auth/challenge',
+	'/api/v1/auth/config',
+	'/api/v1/auth/login',
+	'/api/v1/auth/refresh',
+	'/api/v1/auth/register',
+	'/api/v1/auth/reset-password'
+]);
 
 export class ApiError extends Error {
 	constructor(
@@ -32,7 +40,14 @@ async function tryRefresh(): Promise<AuthResponse> {
 				body: JSON.stringify({ refreshToken }),
 				credentials: 'include'
 			});
-			if (!res.ok) throw new ApiError(res.status, 'REFRESH_FAILED', 'Token refresh failed');
+			if (!res.ok) {
+				const body = await res.json().catch(() => ({}));
+				throw new ApiError(
+					res.status,
+					body.code ?? 'REFRESH_FAILED',
+					body.message ?? `Token refresh failed with HTTP ${res.status}`
+				);
+			}
 			const data = (await res.json()) as AuthResponse;
 			sessionStore.set(data);
 			return data;
@@ -51,20 +66,50 @@ async function doFetch<T>(method: string, path: string, options?: RequestInit): 
 	if (options?.body && typeof options.body === 'string') {
 		headers.set('content-type', 'application/json');
 	}
+	// Let browser set multipart boundary for FormData
+	if (options?.body instanceof FormData) {
+		headers.delete('content-type');
+	}
 
-	const token = sessionStore.accessToken;
+	const isAuthless = AUTHLESS_PATHS.has(path);
+	const token = isAuthless ? null : sessionStore.accessToken;
 	if (token) headers.set('authorization', `Bearer ${token}`);
 
-	let response = await fetch(url, { ...options, method, headers, credentials: 'include' });
+	let response: Response;
+	try {
+		response = await fetch(url, { ...options, method, headers, credentials: 'include' });
+	} catch (err) {
+		throw new ApiError(
+			0,
+			'API_UNREACHABLE',
+			`API server is unreachable at ${API_BASE}. Check that services/api is running on port 3000.`
+		);
+	}
 
 	// Auto-refresh on 401 and retry once
-	if (response.status === 401 && token) {
+	if (response.status === 401 && token && !isAuthless) {
 		try {
 			const refreshed = await tryRefresh();
 			headers.set('authorization', `Bearer ${refreshed.accessToken}`);
-			response = await fetch(url, { ...options, method, headers, credentials: 'include' });
-		} catch {
+			try {
+				response = await fetch(url, { ...options, method, headers, credentials: 'include' });
+			} catch {
+				throw new ApiError(
+					0,
+					'API_UNREACHABLE',
+					`API server became unreachable at ${API_BASE} after refreshing your token.`
+				);
+			}
+		} catch (err) {
 			sessionStore.clear();
+			if (err instanceof ApiError) {
+				throw new ApiError(
+					err.status,
+					`SESSION_REFRESH_${err.code}`,
+					`Saved login could not be refreshed: ${err.message}`
+				);
+			}
+			throw new ApiError(401, 'SESSION_REFRESH_FAILED', 'Saved login could not be refreshed. Sign in again.');
 		}
 	}
 
@@ -84,8 +129,8 @@ async function doFetch<T>(method: string, path: string, options?: RequestInit): 
 export const api = {
 	get: <T>(path: string, options?: RequestInit) => doFetch<T>('GET', path, options),
 	post: <T>(path: string, body?: unknown, options?: RequestInit) =>
-		doFetch<T>('POST', path, { ...options, body: body ? JSON.stringify(body) : undefined }),
+		doFetch<T>('POST', path, { ...options, body: body instanceof FormData || body instanceof Blob || body instanceof ArrayBuffer ? body : body ? JSON.stringify(body) : undefined }),
 	patch: <T>(path: string, body?: unknown, options?: RequestInit) =>
-		doFetch<T>('PATCH', path, { ...options, body: body ? JSON.stringify(body) : undefined }),
+		doFetch<T>('PATCH', path, { ...options, body: body instanceof FormData || body instanceof Blob || body instanceof ArrayBuffer ? body : body ? JSON.stringify(body) : undefined }),
 	delete: <T>(path: string, options?: RequestInit) => doFetch<T>('DELETE', path, options)
 };

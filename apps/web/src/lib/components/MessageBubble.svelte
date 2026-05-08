@@ -18,6 +18,7 @@
 	const isDeleted = $derived(!!message.deletedAt);
 	const canEdit = $derived(isMine && !isDeleted && (message.editCount ?? 0) < 10);
 	const canDelete = $derived(!isDeleted);
+	const isPending = $derived(!!message.clientMessageId && message.id === message.clientMessageId);
 
 	let showMenu = $state(false);
 
@@ -31,7 +32,7 @@
 
 	const mediaUrl = $derived(
 		message.metadata && typeof message.metadata === 'object' && !Array.isArray(message.metadata)
-			? (message.metadata as Record<string, unknown>).url as string | undefined
+			? ((message.metadata as Record<string, unknown>).url ?? (message.metadata as Record<string, unknown>).audioUrl) as string | undefined
 			: undefined
 	);
 </script>
@@ -75,9 +76,11 @@
 			{/if}
 			{#if isMine && !isDeleted}
 				<span class="read-status">
-					{#if message.readReceipts && message.readReceipts.length > 0}
+					{#if isPending}
+						<span class="pending-dot" title="Sending...">◌</span>
+					{:else if message.readReceipts && message.readReceipts.length > 0}
 						✓✓
-					{:else if !message.clientMessageId || message.id !== message.clientMessageId}
+					{:else}
 						✓
 					{/if}
 				</span>
@@ -217,6 +220,16 @@
 		opacity: 0.6;
 		margin-left: auto;
 		letter-spacing: -0.1em;
+	}
+
+	.pending-dot {
+		display: inline-block;
+		animation: pulse 1.2s ease-in-out infinite;
+	}
+
+	@keyframes pulse {
+		0%, 100% { opacity: 0.4; }
+		50% { opacity: 1; }
 	}
 
 	.media-image, .media-gif {

@@ -15,6 +15,14 @@ export default defineConfig({
 		{
 			name: 'chromium',
 			use: { ...devices['Pixel 5'] }
+		},
+		{
+			name: 'firefox',
+			use: { ...devices['Pixel 5'] }
+		},
+		{
+			name: 'webkit',
+			use: { ...devices['iPhone 13'] }
 		}
 	],
 	webServer: {

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import '../app.css';
 	import { sessionStore } from '$stores/session.svelte';
+	import { socketStore } from '$stores/socket.svelte';
 	import { goto, onNavigate } from '$app/navigation';
 	import { page } from '$app/stores';
 	import BottomNav from '$components/BottomNav.svelte';
@@ -14,6 +15,16 @@
 		const publicPaths = ['/auth', '/welcome'];
 		if (!sessionStore.isAuthenticated && !publicPaths.includes(path)) {
 			goto('/auth', { replaceState: true });
+		}
+	});
+
+	// Auto-connect socket when authenticated, disconnect on logout
+	$effect(() => {
+		const token = sessionStore.accessToken;
+		if (token) {
+			socketStore.connect(token);
+		} else {
+			socketStore.disconnect();
 		}
 	});
 

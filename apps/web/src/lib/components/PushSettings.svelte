@@ -4,6 +4,7 @@
 		getPushState,
 		subscribeToPush,
 		unsubscribeFromPush,
+		getCurrentSubscription,
 		hasSubscribedBefore,
 		markUnsubscribed,
 	} from '$lib/push/subscribe';
@@ -13,8 +14,16 @@
 	let toggling = $state(false);
 	let error = $state('');
 
-	onMount(() => {
-		permission = getPushState();
+	onMount(async () => {
+		const state = getPushState();
+		// Permission may be 'granted' even after unsubscribing.
+		// Query the SW for the real subscription state.
+		if (state === 'granted') {
+			const sub = await getCurrentSubscription();
+			permission = sub ? 'granted' : 'default';
+		} else {
+			permission = state;
+		}
 	});
 
 	async function handleToggle() {
@@ -25,7 +34,9 @@
 			if (!result.ok) {
 				error = result.reason === 'network' ? 'Server error — try again' : 'Failed to disable';
 			}
-			permission = getPushState();
+			// Re-query SW to confirm unsubscribed
+			const sub = await getCurrentSubscription();
+			permission = sub ? 'granted' : 'default';
 		} else {
 			const browserPermission = await Notification.requestPermission();
 			if (browserPermission === 'granted') {
@@ -41,7 +52,8 @@
 					error = reasonMap[result.reason] ?? 'Failed to enable';
 				}
 			}
-			permission = getPushState();
+			const sub = await getCurrentSubscription();
+			permission = sub ? 'granted' : browserPermission;
 		}
 		toggling = false;
 	}

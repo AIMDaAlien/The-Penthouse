@@ -24,12 +24,26 @@ registerRoute(
 	new CacheFirst({ cacheName: 'asset-cache' })
 );
 
-self.addEventListener('install', () => {
+self.addEventListener('install', (event) => {
+	event.waitUntil(
+		caches.open('offline-fallback').then((cache) => cache.add('/offline.html'))
+	);
 	self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
 	event.waitUntil(self.clients.claim());
+});
+
+// Offline fallback for navigation requests
+self.addEventListener('fetch', (event) => {
+	if (event.request.mode === 'navigate') {
+		event.respondWith(
+			fetch(event.request).catch(() =>
+				caches.match('/offline.html').then((response) => response ?? new Response('Offline', { status: 503 }))
+			)
+		);
+	}
 });
 
 // ── Push Notifications ──────────────────────────────────────────────────────
@@ -50,11 +64,11 @@ self.addEventListener('push', (event) => {
 	const title = buildNotificationTitle(payload);
 	const body = buildNotificationBody(payload);
 
-	const badge = payload.badge && payload.badge > 1 ? payload.badge : undefined;
+	const badge = payload.badge && payload.badge > 0 ? payload.badge : undefined;
 
 	const options: NotificationOptions = {
 		body,
-		badge: badge ? undefined : undefined, // web badge is rarely supported
+		badge: badge ?? undefined,
 		tag: payload.chatId ? `chat-${payload.chatId}` : 'penthouse-push',
 		requireInteraction: false,
 		silent: false,

@@ -1,17 +1,19 @@
 <script lang="ts">
 	import Icon from './Icon.svelte';
 	import ReplyBar from './ReplyBar.svelte';
+	import AudioRecorder from './AudioRecorder.svelte';
 
 	interface Props {
 		onSend?: (content: string) => void;
 		onTypingStart?: () => void;
 		onTypingStop?: () => void;
+		onAudioRecord?: (blob: Blob, mimeType: string) => void;
 		disabled?: boolean;
 		replyTo?: { senderName: string; content: string } | null;
 		onCancelReply?: () => void;
 	}
 
-	let { onSend, onTypingStart, onTypingStop, disabled = false, replyTo = null, onCancelReply }: Props = $props();
+	let { onSend, onTypingStart, onTypingStop, onAudioRecord, disabled = false, replyTo = null, onCancelReply }: Props = $props();
 
 	let content = $state('');
 	let typingTimer = $state<ReturnType<typeof setTimeout> | null>(null);
@@ -51,6 +53,7 @@
 			oninput={handleInput}
 			disabled={disabled}
 		/>
+		<AudioRecorder onRecord={onAudioRecord} />
 		<button type="submit" disabled={disabled || !content.trim()} aria-label="Send message">
 			<Icon name="send" size={20} />
 		</button>

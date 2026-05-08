@@ -24,6 +24,9 @@
 	import TypingIndicator from '$components/TypingIndicator.svelte';
 	import Icon from '$components/Icon.svelte';
 	import { readReceiptsStore } from '$stores/readReceipts.svelte';
+	import { outboxStore, MAX_RETRIES } from '$stores/outbox.svelte';
+	import { media } from '$services/media';
+	import { env } from '$env/dynamic/public';
 	import type { Message } from '@penthouse/contracts';
 
 	const chatId = $derived($page.params.id ?? '');
@@ -31,8 +34,9 @@
 	let loading = $state(true);
 	let error = $state('');
 	let scrollContainer = $state<HTMLDivElement | null>(null);
+	let observer = $state<IntersectionObserver | null>(null);
 	let typingUsers = $state<Map<string, string>>(new Map());
-	let typingTimer = $state<ReturnType<typeof setTimeout> | null>(null);
+	let typingTimers = $state<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 	let replyToMessage = $state<Message | null>(null);
 
 	// Read receipt tracking
@@ -49,7 +53,19 @@
 		error = '';
 		try {
 			const res = await chats.messages(chatId);
-			messages = res.messages;
+			let loaded = res.messages;
+
+			// Merge pending outbox messages for this chat
+			const pending = outboxStore.items
+				.filter((item) => item.chatId === chatId && item.retries < MAX_RETRIES)
+				.map((item) => outboxToMessage(item));
+
+			if (pending.length > 0) {
+				loaded = [...loaded, ...pending];
+				loaded.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+			}
+
+			messages = loaded;
 			readReceiptsStore.seedFromMessages(chatId, messages);
 			scrollToBottom();
 		} catch (err) {
@@ -59,6 +75,22 @@
 		}
 	}
 
+	function outboxToMessage(item: typeof outboxStore.items[number]): Message {
+		return {
+			id: item.clientMessageId,
+			chatId: item.chatId,
+			senderId: sessionStore.user?.id ?? '',
+			senderDisplayName: sessionStore.user?.displayName ?? '',
+			content: item.content,
+			type: item.messageType as Message['type'],
+			createdAt: new Date(item.timestamp).toISOString(),
+			clientMessageId: item.clientMessageId,
+			...(item.replyToMessageId ? {
+				replyTo: { id: item.replyToMessageId, content: '', senderDisplayName: null }
+			} : {})
+		};
+	}
+
 	function scrollToBottom() {
 		requestAnimationFrame(() => {
 			if (scrollContainer) scrollContainer.scrollTop = scrollContainer.scrollHeight;
@@ -66,31 +98,6 @@
 	}
 
 	// IntersectionObserver for read receipts
-	function setupObserver() {
-		if (!scrollContainer) return;
-		const observer = new IntersectionObserver(
-			(entries) => {
-				entries.forEach((entry) => {
-					const id = entry.target.getAttribute('data-message-id');
-					if (!id) return;
-					if (entry.isIntersecting) {
-						visibleMessageIds.add(id);
-					} else {
-						visibleMessageIds.delete(id);
-					}
-				});
-				debouncedMarkRead();
-			},
-			{ root: scrollContainer, threshold: 0.5 }
-		);
-
-		// Observe all message bubbles
-		const bubbles = scrollContainer.querySelectorAll('[data-message-id]');
-		bubbles.forEach((el) => observer.observe(el));
-
-		return observer;
-	}
-
 	function debouncedMarkRead() {
 		if (markReadTimer) clearTimeout(markReadTimer);
 		markReadTimer = setTimeout(() => {
@@ -123,12 +130,38 @@
 		}
 	}
 
-	// Setup observer when messages change
+	// Create observer once when scrollContainer is available
 	$effect(() => {
-		if (!loading && messages.length > 0 && scrollContainer) {
-			const observer = setupObserver();
-			return () => observer?.disconnect();
-		}
+		if (!scrollContainer) return;
+		
+		const _observer = new IntersectionObserver(
+			(entries) => {
+				entries.forEach((entry) => {
+					const id = entry.target.getAttribute('data-message-id');
+					if (!id) return;
+					if (entry.isIntersecting) {
+						visibleMessageIds.add(id);
+					} else {
+						visibleMessageIds.delete(id);
+					}
+				});
+				debouncedMarkRead();
+			},
+			{ root: scrollContainer, threshold: 0.5 }
+		);
+		observer = _observer;
+		
+		return () => {
+			_observer.disconnect();
+			observer = null;
+		};
+	});
+
+	// Observe new message bubbles as they appear
+	$effect(() => {
+		if (!observer || messages.length === 0) return;
+		const bubbles = scrollContainer?.querySelectorAll('[data-message-id]');
+		bubbles?.forEach((el) => observer!.observe(el));
 	});
 
 	$effect(() => {
@@ -142,25 +175,48 @@
 		if (chatId) loadMessages();
 	});
 
-	// Socket event listeners
+	// Drain outbox when socket connects
 	$effect(() => {
+		if (!socketStore.isConnected || chatId !== $page.params.id) return;
+		const pending = outboxStore.items.filter(
+			(item) => item.chatId === chatId && item.retries < MAX_RETRIES
+		);
+		for (const item of pending) {
+			socketStore.emit('message.send', {
+				chatId: item.chatId,
+				content: item.content,
+				clientMessageId: item.clientMessageId,
+				messageType: item.messageType,
+				...(item.replyToMessageId ? { replyToMessageId: item.replyToMessageId } : {})
+			});
+			outboxStore.markRetry(item.clientMessageId);
+		}
+	});
+
+	// Socket event listeners — reattach on reconnect
+	$effect(() => {
+		const s = socketStore.instance;
+		const currentChatId = chatId;
+		if (!s || !currentChatId) return;
+
 		const unsubs = [
 			onMessageNew((event) => {
 				const msg = event.payload;
-				if (msg.chatId !== chatId) return;
+				if (msg.chatId !== currentChatId) return;
 				messages = [...messages, msg];
 				scrollToBottom();
 			}),
 			onMessageAck((event) => {
 				const ack = event.payload;
-				if (ack.chatId !== chatId) return;
+				if (ack.chatId !== currentChatId) return;
+				outboxStore.remove(ack.clientMessageId);
 				messages = messages.map((m) =>
 					m.clientMessageId === ack.clientMessageId ? { ...m, id: ack.messageId } : m
 				);
 			}),
 			onMessageRead((event) => {
 				const data = event.payload;
-				if (data.chatId !== chatId) return;
+				if (data.chatId !== currentChatId) return;
 				// Update read receipts for all messages up to seenThroughMessageId
 				messages = messages.map((m) => {
 					if (m.id === data.seenThroughMessageId || m.createdAt <= data.seenAt) {
@@ -177,7 +233,8 @@
 			}),
 			onMessageEdited((event) => {
 				const data = event.payload;
-				if (data.chatId !== chatId) return;
+				console.log('[socket] message.edited', data.messageId, data.content.slice(0, 30));
+				if (data.chatId !== currentChatId) return;
 				messages = messages.map((m) =>
 					m.id === data.messageId
 						? { ...m, content: data.content, editedAt: data.editedAt, editCount: data.editCount }
@@ -186,7 +243,8 @@
 			}),
 			onMessageDeleted((event) => {
 				const data = event.payload;
-				if (data.chatId !== chatId) return;
+				console.log('[socket] message.deleted', data.messageId);
+				if (data.chatId !== currentChatId) return;
 				messages = messages.map((m) =>
 					m.id === data.messageId
 						? { ...m, deletedAt: data.deletedAt, deletedByUserId: data.deletedByUserId }
@@ -195,7 +253,7 @@
 			}),
 			onReactionAdd((event) => {
 				const data = event.payload;
-				if (data.chatId !== chatId) return;
+				if (data.chatId !== currentChatId) return;
 				messages = messages.map((m) => {
 					if (m.id !== data.messageId) return m;
 					const reactions = m.reactions ?? [];
@@ -213,7 +271,7 @@
 			}),
 			onReactionRemove((event) => {
 				const data = event.payload;
-				if (data.chatId !== chatId) return;
+				if (data.chatId !== currentChatId) return;
 				messages = messages.map((m) => {
 					if (m.id !== data.messageId) return m;
 					const reactions = (m.reactions ?? [])
@@ -228,22 +286,29 @@
 			}),
 			onTypingUpdate((event) => {
 				const data = event.payload;
-				if (data.chatId !== chatId) return;
+				if (data.chatId !== currentChatId) return;
 				if (data.status === 'start') {
 					const next = new Map(typingUsers);
 					next.set(data.userId, data.displayName ?? 'Someone');
 					typingUsers = next;
-					if (typingTimer) clearTimeout(typingTimer);
-					typingTimer = setTimeout(() => {
-						const pruned = new Map(typingUsers);
-						pruned.delete(data.userId);
-						typingUsers = pruned;
+					const existing = typingTimers.get(data.userId);
+					if (existing) clearTimeout(existing);
+					const timer = setTimeout(() => {
+						typingUsers = new Map(typingUsers);
+						typingUsers.delete(data.userId);
+						typingTimers = new Map(typingTimers);
+						typingTimers.delete(data.userId);
 					}, 3000);
+					typingTimers = new Map(typingTimers);
+					typingTimers.set(data.userId, timer);
 				} else {
 					const next = new Map(typingUsers);
 					next.delete(data.userId);
 					typingUsers = next;
-					if (typingTimer) clearTimeout(typingTimer);
+					const existing = typingTimers.get(data.userId);
+					if (existing) clearTimeout(existing);
+					typingTimers = new Map(typingTimers);
+					typingTimers.delete(data.userId);
 				}
 			})
 		];
@@ -251,6 +316,22 @@
 	});
 
 	function handleSend(content: string) {
+		sendMessage(content, 'text');
+	}
+
+	async function handleAudioRecord(blob: Blob, mimeType: string) {
+		const ext = mimeType.includes('mp4') ? 'm4a' : mimeType.includes('ogg') ? 'ogg' : 'webm';
+		const file = new File([blob], `voice-${Date.now()}.${ext}`, { type: mimeType });
+		try {
+			const upload = await media.upload(file);
+			const audioUrl = upload.url.startsWith('http') ? upload.url : `${env.PUBLIC_API_URL ?? 'http://localhost:3000'}${upload.url}`;
+			sendMessage('', 'audio', { audioUrl });
+		} catch {
+			// Non-critical: audio upload failed
+		}
+	}
+
+	function sendMessage(content: string, messageType: Message['type'], metadata?: Record<string, unknown>) {
 		const clientMessageId = genClientId();
 		const optimistic: Message = {
 			id: clientMessageId,
@@ -258,7 +339,8 @@
 			senderId: sessionStore.user?.id ?? '',
 			senderDisplayName: sessionStore.user?.displayName ?? '',
 			content,
-			type: 'text',
+			type: messageType,
+			metadata: metadata ?? null,
 			createdAt: new Date().toISOString(),
 			clientMessageId,
 			...(replyToMessage ? {
@@ -272,11 +354,25 @@
 		messages = [...messages, optimistic];
 		scrollToBottom();
 
+		if (!socketStore.isConnected) {
+			outboxStore.add({
+				clientMessageId,
+				chatId,
+				content,
+				messageType,
+				metadata,
+				...(replyToMessage ? { replyToMessageId: replyToMessage.id } : {})
+			});
+			replyToMessage = null;
+			return;
+		}
+
 		socketStore.emit('message.send', {
 			chatId,
 			content,
 			clientMessageId,
-			messageType: 'text',
+			messageType,
+			metadata,
 			...(replyToMessage ? { replyToMessageId: replyToMessage.id } : {})
 		});
 
@@ -399,7 +495,7 @@
 		onSend={handleSend}
 		onTypingStart={handleTypingStart}
 		onTypingStop={handleTypingStop}
-		disabled={!socketStore.isConnected}
+		onAudioRecord={handleAudioRecord}
 		replyTo={replyToMessage ? {
 			senderName: replyToMessage.senderDisplayName ?? 'Unknown',
 			content: replyToMessage.content
