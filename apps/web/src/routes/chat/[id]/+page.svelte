@@ -97,6 +97,14 @@
 		});
 	}
 
+	const SCROLL_THRESHOLD = 100; // px from bottom to trigger auto-scroll
+
+	function isNearBottom(): boolean {
+		if (!scrollContainer) return true;
+		const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
+		return scrollHeight - scrollTop - clientHeight < SCROLL_THRESHOLD;
+	}
+
 	// IntersectionObserver for read receipts
 	function debouncedMarkRead() {
 		if (markReadTimer) clearTimeout(markReadTimer);
@@ -204,7 +212,10 @@
 				const msg = event.payload;
 				if (msg.chatId !== currentChatId) return;
 				messages = [...messages, msg];
-				scrollToBottom();
+				// Auto-scroll only if user is near bottom or the message is from current user
+				if (isNearBottom() || msg.senderId === sessionStore.user?.id) {
+					scrollToBottom();
+				}
 			}),
 			onMessageAck((event) => {
 				const ack = event.payload;
