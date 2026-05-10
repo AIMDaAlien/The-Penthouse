@@ -10,7 +10,8 @@ import type {
 	MarkChatReadResponse,
 	ChatSummary,
 	ChatPreferencesRequest,
-	ChatPreferencesResponse
+	ChatPreferencesResponse,
+	CreateDirectChatRequest
 } from '@penthouse/contracts';
 
 export const chats = {
@@ -41,5 +42,9 @@ export const chats = {
 
 	updatePreferences(chatId: string, data: ChatPreferencesRequest): Promise<ChatPreferencesResponse> {
 		return api.patch<ChatPreferencesResponse>(`/api/v1/chats/${chatId}/preferences`, data);
+	},
+
+	createDM(data: CreateDirectChatRequest): Promise<{ chatId: string }> {
+		return api.post<{ chatId: string }>('/api/v1/chats/dm', data);
 	}
 };

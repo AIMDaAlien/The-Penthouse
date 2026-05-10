@@ -1,19 +1,21 @@
 <script lang="ts">
 	import ChatListPane from '$components/ChatListPane.svelte';
+	import Icon from '$components/Icon.svelte';
 	import { socketStore } from '$stores/socket.svelte';
+	import { chatsStore } from '$stores/chats.svelte';
+	import { foldersStore } from '$stores/folders.svelte';
 	import { goto } from '$app/navigation';
-	import { chats as chatsApi } from '$services/chats';
-	import type { ChatSummary } from '@penthouse/contracts';
 
-	let chats = $state<ChatSummary[]>([]);
 	let loading = $state(true);
 	let error = $state('');
 
 	$effect(() => {
 		loading = true;
 		error = '';
-		chatsApi.list()
-			.then((res) => { chats = res.chats; })
+		Promise.all([
+			chatsStore.load(),
+			foldersStore.load()
+		])
 			.catch((err) => { error = err instanceof Error ? err.message : 'Failed to load chats'; })
 			.finally(() => { loading = false; });
 	});
@@ -27,21 +29,47 @@
 	function handleSelectChat(chatId: string) {
 		goto(`/chat/${chatId}`);
 	}
+
+	async function handleMoveToFolder(chatId: string, folderId: string | null, currentFolderId?: string) {
+		if (folderId) {
+			await foldersStore.moveChat(folderId, chatId, currentFolderId);
+		} else if (currentFolderId) {
+			await foldersStore.removeChat(currentFolderId, chatId);
+		}
+	}
 </script>
 
 <main class="home">
-	<header class="top-bar">
-		<h1>The Penthouse</h1>
-		<span class="status" style:color={statusColor}>● {socketStore.state}</span>
-	</header>
+	<!-- Mobile-only header + list -->
+	<div class="mobile-only">
+		<header class="top-bar">
+			<h1>The Penthouse</h1>
+			<span class="status" style:color={statusColor}>● {socketStore.state}</span>
+		</header>
 
-	{#if loading}
-		<p class="state">Loading conversations...</p>
-	{:else if error}
-		<p class="state error">{error}</p>
-	{:else}
-		<ChatListPane {chats} onSelectChat={handleSelectChat} />
-	{/if}
+		{#if loading}
+			<p class="state">Loading conversations…</p>
+		{:else if error}
+			<p class="state error">{error}</p>
+		{:else}
+			<ChatListPane
+				chats={chatsStore.chats}
+				folders={foldersStore.folders}
+				onSelectChat={handleSelectChat}
+				onCreateFolder={(name) => foldersStore.create(name)}
+				onMoveToFolder={handleMoveToFolder}
+			/>
+		{/if}
+	</div>
+
+	<!-- Desktop-only placeholder -->
+	<div class="desktop-only">
+		<div class="welcome">
+			<Icon name="message" size={48} />
+			<h2>Select a conversation</h2>
+			<p>Choose a chat from the sidebar to start messaging.</p>
+		</div>
+	</div>
 </main>
 
 <style>
@@ -82,5 +110,47 @@
 
 	.state.error {
 		color: var(--color-error);
+	}
+
+	.desktop-only {
+		display: none;
+	}
+
+	.welcome {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: var(--space-md);
+		color: var(--color-text-muted);
+		text-align: center;
+		padding: var(--space-xl);
+	}
+
+	.welcome h2 {
+		font-family: var(--font-display);
+		font-size: var(--text-xl);
+		font-weight: 600;
+		color: var(--color-text-secondary);
+	}
+
+	.welcome p {
+		font-size: var(--text-sm);
+		max-width: 280px;
+	}
+
+	/* Desktop: hide mobile content, show placeholder */
+	@media (min-width: 768px) {
+		.mobile-only {
+			display: none;
+		}
+		.desktop-only {
+			display: flex;
+			flex: 1;
+		}
+		.home {
+			min-height: 0;
+		}
 	}
 </style>

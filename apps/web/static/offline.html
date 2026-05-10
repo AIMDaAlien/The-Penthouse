@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>The Penthouse — Offline</title>
+	<style>
+		:root {
+			--bg: #12121C;
+			--surface: #1A1A28;
+			--text: #E8E8F0;
+			--muted: #9494A8;
+			--accent: #C9A96E;
+			--border: #2A2A3E;
+		}
+		* { box-sizing: border-box; margin: 0; padding: 0; }
+		body {
+			background: var(--bg);
+			color: var(--text);
+			font-family: 'Ubuntu', system-ui, sans-serif;
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			min-height: 100dvh;
+			padding: 2rem;
+			text-align: center;
+		}
+		.logo {
+			font-family: 'Gelasio', Georgia, serif;
+			font-size: 1.5rem;
+			color: var(--accent);
+			margin-bottom: 2rem;
+		}
+		h1 {
+			font-size: 1.25rem;
+			font-weight: 500;
+			margin-bottom: 0.75rem;
+		}
+		p {
+			color: var(--muted);
+			font-size: 0.9375rem;
+			line-height: 1.5;
+			max-width: 320px;
+			margin-bottom: 2rem;
+		}
+		button {
+			background: var(--accent);
+			color: #12121C;
+			border: none;
+			border-radius: 9999px;
+			padding: 0.75rem 1.5rem;
+			font-size: 1rem;
+			font-weight: 600;
+			cursor: pointer;
+		}
+		button:hover { opacity: 0.88; }
+	</style>
+</head>
+<body>
+	<div class="logo">The Penthouse</div>
+	<h1>You are offline</h1>
+	<p>Your messages are queued and will be sent when the connection is restored.</p>
+	<button onclick="location.reload()">Try again</button>
+</body>
+</html>

@@ -8,7 +8,7 @@ export default defineConfig({
 	workers: process.env.CI ? 1 : undefined,
 	reporter: 'list',
 	use: {
-		baseURL: 'http://localhost:4173',
+		baseURL: 'http://localhost:5174',
 		trace: 'on-first-retry'
 	},
 	projects: [
@@ -25,8 +25,8 @@ export default defineConfig({
 			use: { ...devices['iPhone 13'] }
 		}
 	],
-	webServer: {
+	/* webServer: {
 		command: 'npm run preview',
 		port: 4173
-	}
+	} */
 });

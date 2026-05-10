@@ -5,24 +5,36 @@
 		subscribeToPush,
 		unsubscribeFromPush,
 		getCurrentSubscription,
-		hasSubscribedBefore,
-		markUnsubscribed,
 	} from '$lib/push/subscribe';
+	import { pushService } from '$services/push';
 	import Icon from './Icon.svelte';
 
 	let permission = $state('unsupported');
 	let toggling = $state(false);
 	let error = $state('');
+	let prefs = $state<{
+		enabled: boolean;
+		scopeDefault: string;
+		payloadPrivacy: string;
+		quietHoursEnabled: boolean;
+	} | null>(null);
+	let saving = $state(false);
+	let prefsError = $state('');
 
 	onMount(async () => {
 		const state = getPushState();
-		// Permission may be 'granted' even after unsubscribing.
-		// Query the SW for the real subscription state.
 		if (state === 'granted') {
 			const sub = await getCurrentSubscription();
 			permission = sub ? 'granted' : 'default';
 		} else {
 			permission = state;
+		}
+		if (permission === 'granted') {
+			try {
+				prefs = await pushService.getPreferences();
+			} catch {
+				// Non-critical
+			}
 		}
 	});
 
@@ -34,7 +46,6 @@
 			if (!result.ok) {
 				error = result.reason === 'network' ? 'Server error — try again' : 'Failed to disable';
 			}
-			// Re-query SW to confirm unsubscribed
 			const sub = await getCurrentSubscription();
 			permission = sub ? 'granted' : 'default';
 		} else {
@@ -55,7 +66,38 @@
 			const sub = await getCurrentSubscription();
 			permission = sub ? 'granted' : browserPermission;
 		}
+		if (permission === 'granted' && !prefs) {
+			try {
+				prefs = await pushService.getPreferences();
+			} catch {
+				// Non-critical
+			}
+		}
 		toggling = false;
+	}
+
+	async function savePrefs() {
+		if (!prefs) return;
+		saving = true;
+		prefsError = '';
+		try {
+			const updated = await pushService.updatePreferences({
+				enabled: prefs.enabled,
+				scopeDefault: prefs.scopeDefault as any,
+				payloadPrivacy: prefs.payloadPrivacy as any,
+				quietHoursEnabled: prefs.quietHoursEnabled
+			});
+			prefs = {
+				enabled: updated.enabled,
+				scopeDefault: updated.scopeDefault,
+				payloadPrivacy: updated.payloadPrivacy,
+				quietHoursEnabled: updated.quietHoursEnabled
+			};
+		} catch (err) {
+			prefsError = err instanceof Error ? err.message : 'Failed to save';
+		} finally {
+			saving = false;
+		}
 	}
 
 	const isOn = $derived(permission === 'granted');
@@ -100,6 +142,31 @@
 	</div>
 	{#if error}
 		<p class="error">{error}</p>
+	{/if}
+
+	{#if isOn && prefs}
+		<div class="prefs">
+			<div class="pref-row">
+				<label for="scope">Notify me about</label>
+				<select id="scope" bind:value={prefs.scopeDefault} onchange={savePrefs} disabled={saving}>
+					<option value="all">All messages</option>
+					<option value="dm_and_mention">DMs & mentions</option>
+					<option value="dm_only">DMs only</option>
+					<option value="off">Nothing</option>
+				</select>
+			</div>
+			<div class="pref-row">
+				<label for="privacy">Preview privacy</label>
+				<select id="privacy" bind:value={prefs.payloadPrivacy} onchange={savePrefs} disabled={saving}>
+					<option value="full">Show preview</option>
+					<option value="metadata">Sender only</option>
+					<option value="private">Hide content</option>
+				</select>
+			</div>
+			{#if prefsError}
+				<p class="error">{prefsError}</p>
+			{/if}
+		</div>
 	{/if}
 </div>
 
@@ -202,6 +269,43 @@
 		font-size: var(--text-sm);
 		color: var(--color-error);
 		margin-top: var(--space-xs);
+	}
+
+	.prefs {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-md);
+		padding-top: var(--space-md);
+		border-top: 1px solid var(--color-border);
+		margin-top: var(--space-sm);
+	}
+
+	.pref-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-md);
+	}
+
+	.pref-row label {
+		font-size: var(--text-sm);
+		color: var(--color-text-secondary);
+	}
+
+	.pref-row select {
+		background: var(--color-bg);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		color: var(--color-text);
+		padding: var(--space-xs) var(--space-sm);
+		font-size: var(--text-sm);
+		font-family: inherit;
+		cursor: pointer;
+	}
+
+	.pref-row select:focus {
+		outline: none;
+		border-color: var(--color-accent);
 	}
 
 	@media (prefers-reduced-motion: reduce) {

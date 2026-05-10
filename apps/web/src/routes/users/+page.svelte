@@ -1,9 +1,14 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { users } from '$services/users';
+	import { chats } from '$services/chats';
+	import { socketStore, onPresenceUpdate, onPresenceSync } from '$stores/socket.svelte';
 	import Icon from '$components/Icon.svelte';
 	import Avatar from '$components/Avatar.svelte';
 	import type { MemberDetail } from '@penthouse/contracts';
+
+	type PresenceState = 'available' | 'busy' | 'dnd' | 'afk' | 'offline';
+	type UserPresence = { state: PresenceState; note?: string; lastSeenAt?: string };
 
 	let searchQuery = $state('');
 	let results = $state<MemberDetail[]>([]);
@@ -11,6 +16,7 @@
 	let loading = $state(false);
 	let error = $state('');
 	let mode = $state<'directory' | 'search'>('directory');
+	let userPresence = $state<Record<string, UserPresence>>({});
 
 	async function loadDirectory() {
 		loading = true;
@@ -48,8 +54,13 @@
 		if (e.key === 'Enter') handleSearch();
 	}
 
-	function goToProfile(userId: string) {
-		goto(`/users/${userId}`);
+	async function startDM(userId: string) {
+		try {
+			const res = await chats.createDM({ memberId: userId });
+			goto(`/chat/${res.chatId}`);
+		} catch (err) {
+			error = err instanceof Error ? err.message : 'Failed to start chat';
+		}
 	}
 
 	function formatLastSeen(lastSeenAt: string | null | undefined): string {
@@ -68,9 +79,45 @@
 		return date.toLocaleDateString();
 	}
 
+	function presenceLabel(presence: UserPresence | undefined, fallbackLastSeen?: string | null): string {
+		if (!presence) return formatLastSeen(fallbackLastSeen);
+		if (presence.state === 'offline') return formatLastSeen(presence.lastSeenAt ?? fallbackLastSeen);
+		return presence.state.charAt(0).toUpperCase() + presence.state.slice(1);
+	}
+
 	// Load on mount
 	$effect(() => {
 		loadDirectory();
+	});
+
+	// Presence tracking
+	$effect(() => {
+		const s = socketStore.instance;
+		if (!s) return;
+		const unsubs = [
+			onPresenceSync((sync) => {
+				const merged: Record<string, UserPresence> = { ...userPresence };
+				for (const [userId, data] of Object.entries(sync)) {
+					merged[userId] = {
+						state: data.state,
+						note: data.note,
+						lastSeenAt: data.lastSeenAt
+					};
+				}
+				userPresence = merged;
+			}),
+			onPresenceUpdate((update) => {
+				userPresence = {
+					...userPresence,
+					[update.userId]: {
+						state: update.state,
+						note: update.note,
+						lastSeenAt: update.timestamp
+					}
+				};
+			})
+		];
+		return () => unsubs.forEach((u) => u());
 	});
 </script>
 
@@ -106,22 +153,30 @@
 			<p class="state">No users yet.</p>
 		{:else if mode === 'search'}
 			{#each results as user (user.id)}
-				<button class="user-card" onclick={() => goToProfile(user.id)}>
+				<button class="user-card" onclick={() => startDM(user.id)}>
 					<Avatar url={user.avatarUrl} name={user.displayName} size={40} />
 					<div class="user-info">
 						<p class="user-name">{user.displayName}</p>
-						<p class="user-meta">@{user.username} · {formatLastSeen(user.lastSeenAt)}</p>
+						<p class="user-meta">@{user.username} · {presenceLabel(userPresence[user.id], user.lastSeenAt)}</p>
+						{#if userPresence[user.id]?.note}
+							<p class="presence-note">{userPresence[user.id].note}</p>
+						{/if}
 					</div>
+					<span class="presence-dot {userPresence[user.id]?.state ?? 'offline'}" aria-label={userPresence[user.id]?.state ?? 'offline'}></span>
 				</button>
 			{/each}
 		{:else}
 			{#each allUsers as user (user.id)}
-				<button class="user-card" onclick={() => goToProfile(user.id)}>
+				<button class="user-card" onclick={() => startDM(user.id)}>
 					<Avatar url={user.avatarUrl} name={user.displayName} size={40} />
 					<div class="user-info">
 						<p class="user-name">{user.displayName}</p>
-						<p class="user-meta">@{user.username} · {formatLastSeen(user.lastSeenAt)}</p>
+						<p class="user-meta">@{user.username} · {presenceLabel(userPresence[user.id], user.lastSeenAt)}</p>
+						{#if userPresence[user.id]?.note}
+							<p class="presence-note">{userPresence[user.id].note}</p>
+						{/if}
 					</div>
+					<span class="presence-dot {userPresence[user.id]?.state ?? 'offline'}" aria-label={userPresence[user.id]?.state ?? 'offline'}></span>
 				</button>
 			{/each}
 		{/if}
@@ -261,4 +316,26 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 	}
+
+	.presence-note {
+		font-size: var(--text-xs);
+		color: var(--color-text-muted);
+		font-style: italic;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.presence-dot {
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		flex-shrink: 0;
+	}
+
+	.presence-dot.available { background: #22c55e; }
+	.presence-dot.busy { background: #eab308; }
+	.presence-dot.dnd { background: #ef4444; }
+	.presence-dot.afk { background: #f97316; }
+	.presence-dot.offline { background: #9ca3af; }
 </style>

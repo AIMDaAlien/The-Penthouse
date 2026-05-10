@@ -3,6 +3,7 @@
 	import { auth } from '$services/auth';
 	import { users } from '$services/users';
 	import { sessionStore } from '$stores/session.svelte';
+	import { socketStore } from '$stores/socket.svelte';
 	import Icon from '$components/Icon.svelte';
 	import Avatar from '$components/Avatar.svelte';
 	import PushSettings from '$components/PushSettings.svelte';
@@ -13,7 +14,26 @@
 	let saveError = $state('');
 	let displayName = $state(sessionStore.user?.displayName ?? '');
 
+	let presenceState = $state(socketStore.presenceState);
+	let presenceNote = $state(socketStore.presenceNote);
+	let autoAfk = $state(socketStore.autoAfkEnabled);
+
 	const currentUser = $derived(sessionStore.user);
+	const presenceOptions = [
+		{ value: 'available', label: 'Available' },
+		{ value: 'busy', label: 'Busy' },
+		{ value: 'dnd', label: 'DND' },
+		{ value: 'afk', label: 'AFK' },
+		{ value: 'offline', label: 'Offline' }
+	] as const;
+
+	function handlePresenceChange() {
+		socketStore.setPresence(presenceState, presenceNote.trim() || undefined);
+	}
+
+	function handleAutoAfkToggle() {
+		socketStore.autoAfkEnabled = autoAfk;
+	}
 
 	async function handleSaveProfile() {
 		saving = true;
@@ -71,6 +91,39 @@
 					<button class="btn-secondary" onclick={handleSaveProfile} disabled={saving}>
 						{saving ? 'Saving...' : 'Save profile'}
 					</button>
+				</div>
+			</section>
+
+			<section class="section">
+				<p class="section-label">Presence</p>
+				<div class="setting-card">
+					<div class="field">
+						<label for="presence-state">Status</label>
+						<select id="presence-state" bind:value={presenceState} onchange={handlePresenceChange}>
+							{#each presenceOptions as opt}
+								<option value={opt.value}>{opt.label}</option>
+							{/each}
+						</select>
+					</div>
+					<div class="field">
+						<label for="presence-note">Note</label>
+						<input
+							id="presence-note"
+							type="text"
+							bind:value={presenceNote}
+							maxlength="100"
+							placeholder="What's on your mind?"
+							onchange={handlePresenceChange}
+						/>
+					</div>
+					<label class="toggle-row">
+						<span>Auto-AFK when idle</span>
+						<input
+							type="checkbox"
+							bind:checked={autoAfk}
+							onchange={handleAutoAfkToggle}
+						/>
+					</label>
 				</div>
 			</section>
 
@@ -209,7 +262,8 @@
 		font-weight: var(--weight-medium);
 	}
 
-	.field input {
+	.field input,
+	.field select {
 		background: transparent;
 		border: none;
 		border-bottom: 1px solid var(--color-border);
@@ -222,11 +276,39 @@
 		width: 100%;
 	}
 
-	.field input:focus { border-color: var(--color-accent); }
+	.field select {
+		appearance: none;
+		background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+		background-repeat: no-repeat;
+		background-position: right 0 center;
+		padding-right: var(--space-lg);
+		cursor: pointer;
+	}
+
+	.field input:focus,
+	.field select:focus { border-color: var(--color-accent); }
 
 	.field-error {
 		font-size: var(--text-sm);
 		color: var(--color-error);
+	}
+
+	.toggle-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		font-size: var(--text-sm);
+		color: var(--color-text);
+		cursor: pointer;
+		gap: var(--space-md);
+	}
+
+	.toggle-row input[type="checkbox"] {
+		width: 20px;
+		height: 20px;
+		accent-color: var(--color-accent);
+		cursor: pointer;
+		flex-shrink: 0;
 	}
 
 	.btn-secondary {

@@ -6,6 +6,7 @@
 	import { page } from '$app/stores';
 	import BottomNav from '$components/BottomNav.svelte';
 	import PushPermissionBanner from '$components/PushPermissionBanner.svelte';
+	import DesktopShell from '$components/DesktopShell.svelte';
 
 	let { children } = $props();
 
@@ -54,7 +55,13 @@
 
 <div class="app" class:has-bottom-nav={showNav}>
 	<PushPermissionBanner />
-	{@render children()}
+	{#if showNav}
+		<DesktopShell>
+			{@render children()}
+		</DesktopShell>
+	{:else}
+		{@render children()}
+	{/if}
 	{#if showNav}
 		<BottomNav />
 	{/if}
@@ -128,6 +135,12 @@
 
 	.app.has-bottom-nav {
 		padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+	}
+
+	@media (min-width: 768px) {
+		.app.has-bottom-nav {
+			padding-bottom: 0;
+		}
 	}
 
 	/* Page transitions */

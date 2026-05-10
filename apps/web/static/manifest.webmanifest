@@ -1,0 +1,11 @@
+{
+  "name": "The Penthouse",
+  "short_name": "Penthouse",
+  "description": "A privacy-focused messaging app as dynamic as your personality",
+  "theme_color": "#12121c",
+  "background_color": "#12121c",
+  "display": "standalone",
+  "orientation": "portrait",
+  "scope": "/",
+  "start_url": "/"
+}

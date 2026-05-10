@@ -218,6 +218,12 @@
 		}
 	}
 
+	@media (min-width: 768px) {
+		.nav-wrapper {
+			display: none;
+		}
+	}
+
 	@media (prefers-reduced-motion: reduce) {
 		.fab,
 		.tab-indicator,

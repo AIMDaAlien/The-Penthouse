@@ -3,6 +3,14 @@
 	import { sessionStore } from '$stores/session.svelte';
 	import ReactionPill from './ReactionPill.svelte';
 	import Icon from './Icon.svelte';
+	import MarkdownText from './MarkdownText.svelte';
+	import EmojiPicker from './EmojiPicker.svelte';
+	import AudioPlayer from './AudioPlayer.svelte';
+
+	interface Emote {
+		name: string;
+		url: string;
+	}
 
 	interface Props {
 		message: Message;
@@ -10,9 +18,11 @@
 		onReact?: (messageId: string, emoji: string) => void;
 		onEdit?: (message: Message) => void;
 		onDelete?: (messageId: string) => void;
+		onPin?: (messageId: string) => void;
+		emotes?: Emote[];
 	}
 
-	let { message, onReply, onReact, onEdit, onDelete }: Props = $props();
+	let { message, onReply, onReact, onEdit, onDelete, onPin, emotes = [] }: Props = $props();
 
 	const isMine = $derived(message.senderId === sessionStore.user?.id);
 	const isDeleted = $derived(!!message.deletedAt);
@@ -21,6 +31,7 @@
 	const isPending = $derived(!!message.clientMessageId && message.id === message.clientMessageId);
 
 	let showMenu = $state(false);
+	let showEmojiPicker = $state(false);
 
 	function formatTime(iso: string): string {
 		return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -32,7 +43,7 @@
 
 	const mediaUrl = $derived(
 		message.metadata && typeof message.metadata === 'object' && !Array.isArray(message.metadata)
-			? ((message.metadata as Record<string, unknown>).url ?? (message.metadata as Record<string, unknown>).audioUrl) as string | undefined
+			? ((message.metadata as Record<string, unknown>).url ?? (message.metadata as Record<string, unknown>).audioUrl ?? (message.metadata as Record<string, unknown>).stickerUrl) as string | undefined
 			: undefined
 	);
 </script>
@@ -56,19 +67,21 @@
 			<img src={mediaUrl} alt="" class="media-image" loading="lazy" />
 		{:else if message.type === 'video' && mediaUrl}
 			<video src={mediaUrl} class="media-video" controls preload="metadata"><track kind="captions" /></video>
-		{:else if message.type === 'audio' && mediaUrl}
-			<audio src={mediaUrl} class="media-audio" controls preload="metadata"></audio>
-		{:else if message.type === 'gif' && mediaUrl}
-			<img src={mediaUrl} alt="GIF" class="media-gif" loading="lazy" />
-		{:else if message.type === 'file' && mediaUrl}
-			<a href={mediaUrl} target="_blank" rel="noopener" class="file-link">
-				<Icon name="image" size={16} />
-				<span>Attachment</span>
-			</a>
-		{:else}
-			<p class="content">{message.content}</p>
-		{/if}
+			{:else if message.type === 'audio' && mediaUrl}
+				<AudioPlayer src={mediaUrl} />
+			{:else if message.type === 'gif' && mediaUrl}
+				<img src={mediaUrl} alt="GIF" class="media-gif" loading="lazy" />
+			{:else if message.type === 'sticker' && mediaUrl}
+				<img src={mediaUrl} alt="Sticker" class="media-sticker" loading="lazy" />
+			{:else if message.type === 'file' && mediaUrl}
+				<a href={mediaUrl} target="_blank" rel="noopener" class="file-link">
+					<Icon name="image" size={16} />
+					<span>Attachment</span>
+				</a>
+			{:else}
+				<div class="content"><MarkdownText text={message.content} {emotes} /></div>
 
+			{/if}
 		<div class="meta-row">
 			<span class="meta">{formatTime(message.createdAt)}</span>
 			{#if message.editedAt}
@@ -93,16 +106,23 @@
 			<button class="action-btn" onclick={() => onReply?.(message)} aria-label="Reply">
 				<Icon name="arrowLeft" size={14} />
 			</button>
-			<button class="action-btn" onclick={() => { showMenu = !showMenu; }} aria-label="More">
+			<button class="action-btn" onclick={() => { showEmojiPicker = !showEmojiPicker; showMenu = false; }} aria-label="React">
+				<Icon name="emoji" size={14} />
+			</button>
+			<button class="action-btn" onclick={() => { showMenu = !showMenu; showEmojiPicker = false; }} aria-label="More">
 				<Icon name="more" size={14} />
 			</button>
 		</div>
 
+		{#if showEmojiPicker}
+			<div class="emoji-picker-popup">
+				<EmojiPicker onSelect={handleReact} onClose={() => showEmojiPicker = false} />
+			</div>
+		{/if}
+
 		{#if showMenu}
 			<div class="menu">
-				<button onclick={() => { onReact?.(message.id, '❤️'); showMenu = false; }}>❤️ React</button>
-				<button onclick={() => { onReact?.(message.id, '👍'); showMenu = false; }}>👍 React</button>
-				<button onclick={() => { onReact?.(message.id, '😂'); showMenu = false; }}>😂 React</button>
+				<button onclick={() => { onPin?.(message.id); showMenu = false; }}>Pin</button>
 				{#if canEdit}
 					<button onclick={() => { onEdit?.(message); showMenu = false; }}>Edit</button>
 				{/if}
@@ -245,9 +265,11 @@
 		border-radius: var(--radius-md);
 	}
 
-	.media-audio {
-		width: 100%;
-		max-width: 260px;
+	.media-sticker {
+		max-width: 160px;
+		max-height: 160px;
+		border-radius: var(--radius-md);
+		object-fit: contain;
 	}
 
 	.file-link {
@@ -321,6 +343,20 @@
 
 	.menu button.danger {
 		color: var(--color-error);
+	}
+
+	.emoji-picker-popup {
+		position: absolute;
+		z-index: 10;
+		margin-top: 2px;
+	}
+
+	.bubble-row.mine .emoji-picker-popup {
+		right: var(--space-lg);
+	}
+
+	.bubble-row:not(.mine) .emoji-picker-popup {
+		left: var(--space-lg);
 	}
 
 	.reactions {
