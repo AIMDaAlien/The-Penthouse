@@ -27,6 +27,7 @@
 	import { outboxStore, MAX_RETRIES } from '$stores/outbox.svelte';
 	import { media } from '$services/media';
 	import { env } from '$env/dynamic/public';
+	import { voiceStore } from '$stores/voice.svelte';
 	import type { Message } from '@penthouse/contracts';
 
 	const chatId = $derived($page.params.id ?? '');
@@ -38,6 +39,22 @@
 	let typingUsers = $state<Map<string, string>>(new Map());
 	let typingTimers = $state<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 	let replyToMessage = $state<Message | null>(null);
+
+	// PTT keyboard handler
+	if (typeof window !== 'undefined') {
+		window.addEventListener('keydown', (e) => {
+			if (e.code === 'Space' && voiceStore.pttMode && !e.repeat && !['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) {
+				e.preventDefault();
+				voiceStore.setPttActive(true);
+			}
+		});
+		window.addEventListener('keyup', (e) => {
+			if (e.code === 'Space' && voiceStore.pttMode) {
+				e.preventDefault();
+				voiceStore.setPttActive(false);
+			}
+		});
+	}
 
 	// Read receipt tracking
 	let visibleMessageIds = $state<Set<string>>(new Set());
@@ -466,7 +483,79 @@
 			<Icon name="arrowLeft" size={20} />
 		</button>
 		<h1>Chat</h1>
+		{#if voiceStore.joined}
+			<div class="voice-controls">
+				<button
+					class="voice-btn"
+					onclick={() => voiceStore.setMuted(!voiceStore.muted)}
+					aria-label={voiceStore.muted ? 'Unmute' : 'Mute'}
+					title={voiceStore.muted ? 'Unmute' : 'Mute'}
+				>
+					<Icon name={voiceStore.muted ? 'mute' : 'mic'} size={18} />
+				</button>
+				<button
+					class="voice-btn"
+					class:active={voiceStore.deafened}
+					onclick={() => voiceStore.setDeafened(!voiceStore.deafened)}
+					aria-label={voiceStore.deafened ? 'Undeafen' : 'Deafen'}
+					title={voiceStore.deafened ? 'Undeafen' : 'Deafen'}
+				>
+					<Icon name={voiceStore.deafened ? 'deafen' : 'headphones'} size={18} />
+				</button>
+				<button
+					class="voice-btn"
+					class:active={voiceStore.pttMode}
+					onclick={() => voiceStore.setPttMode(!voiceStore.pttMode)}
+					aria-label={voiceStore.pttMode ? 'Switch to open mic' : 'Switch to push-to-talk'}
+					title={voiceStore.pttMode ? 'PTT on (Spacebar to talk)' : 'PTT off'}
+				>
+					<Icon name="ptt" size={18} />
+				</button>
+				<button
+					class="voice-btn voice-leave"
+					onclick={() => voiceStore.leave()}
+					aria-label="Leave voice"
+				>
+					<Icon name="close" size={18} />
+				</button>
+			</div>
+		{:else}
+			<button
+				class="voice-btn"
+				onclick={() => voiceStore.join(chatId)}
+				aria-label="Join voice"
+			>
+				<Icon name="mic" size={18} />
+				<span>Voice</span>
+			</button>
+		{/if}
 	</header>
+
+	{#if voiceStore.joined}
+		<div class="voice-participants">
+			<span
+				class="voice-pill self"
+				class:speaking={voiceStore.speaking}
+				class:muted={voiceStore.muted}
+				class:ptt-active={voiceStore.pttMode && voiceStore.pttActive}
+			>
+				You {#if voiceStore.muted}(muted){/if}
+				{#if voiceStore.pttMode}(PTT){/if}
+			</span>
+			{#each voiceStore.participants as p (p.userId)}
+				<span
+					class="voice-pill"
+					class:speaking={p.speaking}
+					class:muted={p.muted}
+					class:deafened={p.deafened}
+				>
+					{p.displayName}
+					{#if p.muted}(muted){/if}
+					{#if p.deafened}(deafened){/if}
+				</span>
+			{/each}
+		</div>
+	{/if}
 
 	<div class="messages" bind:this={scrollContainer}>
 		{#if loading}
@@ -549,6 +638,96 @@
 		font-family: var(--font-display);
 		font-size: var(--text-lg);
 		font-weight: 600;
+	}
+
+	.voice-controls {
+		display: flex;
+		align-items: center;
+		gap: var(--space-xs);
+		margin-left: auto;
+	}
+
+	.voice-btn {
+		display: flex;
+		align-items: center;
+		gap: var(--space-xs);
+		padding: var(--space-xs) var(--space-sm);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-pill);
+		background: var(--color-surface-elevated);
+		color: var(--color-text-secondary);
+		font-size: var(--text-sm);
+		cursor: pointer;
+		transition: background 0.1s, color 0.1s, border-color 0.1s;
+	}
+
+	.voice-btn:hover {
+		background: var(--color-accent);
+		color: var(--color-bg);
+		border-color: var(--color-accent);
+	}
+
+	.voice-btn.active {
+		background: var(--color-accent);
+		color: var(--color-bg);
+		border-color: var(--color-accent);
+	}
+
+	.voice-btn.voice-leave {
+		background: var(--color-error);
+		color: var(--color-bg);
+		border-color: var(--color-error);
+	}
+
+	.voice-btn.voice-leave:hover {
+		opacity: 0.85;
+	}
+
+	.voice-participants {
+		display: flex;
+		align-items: center;
+		gap: var(--space-xs);
+		padding: var(--space-xs) var(--space-lg);
+		border-bottom: 1px solid var(--color-border);
+		background: var(--color-surface);
+		overflow-x: auto;
+	}
+
+	.voice-pill {
+		display: inline-flex;
+		align-items: center;
+		padding: var(--space-xs) var(--space-sm);
+		border-radius: var(--radius-pill);
+		background: var(--color-accent);
+		color: var(--color-bg);
+		font-size: var(--text-xs);
+		font-weight: 600;
+		white-space: nowrap;
+		transition: box-shadow 0.15s;
+	}
+
+	.voice-pill.muted {
+		background: var(--color-surface-elevated);
+		color: var(--color-text-muted);
+	}
+
+	.voice-pill.deafened {
+		opacity: 0.5;
+		text-decoration: line-through;
+	}
+
+	.voice-pill.speaking {
+		animation: voice-pulse 1s ease-in-out infinite;
+		box-shadow: 0 0 8px var(--color-success);
+	}
+
+	.voice-pill.ptt-active {
+		box-shadow: 0 0 6px var(--color-accent);
+	}
+
+	@keyframes voice-pulse {
+		0%, 100% { box-shadow: 0 0 4px var(--color-success); }
+		50% { box-shadow: 0 0 12px var(--color-success); }
 	}
 
 	.messages {
