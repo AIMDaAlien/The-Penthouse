@@ -120,10 +120,10 @@ export function registerSocket(io: Server, fastify: FastifyInstance) {
       socket.emit('chat.joined', { type: 'chat.joined', payload: { chatId } });
     }));
 
-    socket.on('chat.leave', (payload) => {
+    socket.on('chat.leave', (payload) => guarded(socket, async () => {
       const parsed = ClientLeaveChatEventSchema.parse({ type: 'chat.leave', ...payload });
       socket.leave(`chat:${parsed.chatId}`);
-    });
+    }));
 
     socket.on('typing.start', (payload) => guarded(socket, async () => {
       const parsed = ClientTypingStartEventSchema.parse({ type: 'typing.start', ...payload });
@@ -414,7 +414,7 @@ export function registerSocket(io: Server, fastify: FastifyInstance) {
       });
     }));
 
-    socket.on('voice.leave', (payload) => {
+    socket.on('voice.leave', (payload) => guarded(socket, async () => {
       const parsed = { type: 'voice.leave', ...payload } as { chatId: string };
       const chatId = parsed.chatId;
       const roomKey = `voice:${chatId}`;
@@ -433,69 +433,89 @@ export function registerSocket(io: Server, fastify: FastifyInstance) {
         type: 'voice.user_left',
         payload: { userId: socket.data.userId }
       });
-    });
+    }));
 
     socket.on('voice.signal', (payload) => {
-      const parsed = payload as { targetUserId: string; data: Record<string, unknown> };
-      io.to(`user:${parsed.targetUserId}`).emit('voice.signal', {
-        type: 'voice.signal',
-        payload: { fromUserId: socket.data.userId, data: parsed.data }
-      });
+      try {
+        const parsed = payload as { targetUserId: string; data: Record<string, unknown> };
+        io.to(`user:${parsed.targetUserId}`).emit('voice.signal', {
+          type: 'voice.signal',
+          payload: { fromUserId: socket.data.userId, data: parsed.data }
+        });
+      } catch (error) {
+        fastify.log.warn({ error, userId: socket.data.userId }, 'voice.signal relay failed');
+      }
     });
 
     socket.on('voice.mute', (payload) => {
-      const parsed = payload as { muted: boolean };
-      const rooms = Array.from(socket.rooms).filter((r) => r.startsWith('voice:'));
-      for (const roomKey of rooms) {
-        const chatId = roomKey.slice(6);
-        const room = voiceRooms.get(chatId);
-        if (room) {
-          const meta = room.get(socket.data.userId);
-          if (meta) meta.muted = parsed.muted;
+      try {
+        const parsed = payload as { muted: boolean };
+        const rooms = Array.from(socket.rooms).filter((r) => r.startsWith('voice:'));
+        for (const roomKey of rooms) {
+          const chatId = roomKey.slice(6);
+          const room = voiceRooms.get(chatId);
+          if (room) {
+            const meta = room.get(socket.data.userId);
+            if (meta) meta.muted = parsed.muted;
+          }
+          socket.to(roomKey).emit('voice.mute', {
+            type: 'voice.mute',
+            payload: { userId: socket.data.userId, muted: parsed.muted }
+          });
         }
-        socket.to(roomKey).emit('voice.mute', {
-          type: 'voice.mute',
-          payload: { userId: socket.data.userId, muted: parsed.muted }
-        });
+      } catch (error) {
+        fastify.log.warn({ error, userId: socket.data.userId }, 'voice.mute relay failed');
       }
     });
 
     socket.on('voice.deafen', (payload) => {
-      const parsed = payload as { deafened: boolean };
-      const rooms = Array.from(socket.rooms).filter((r) => r.startsWith('voice:'));
-      for (const roomKey of rooms) {
-        const chatId = roomKey.slice(6);
-        const room = voiceRooms.get(chatId);
-        if (room) {
-          const meta = room.get(socket.data.userId);
-          if (meta) meta.deafened = parsed.deafened;
+      try {
+        const parsed = payload as { deafened: boolean };
+        const rooms = Array.from(socket.rooms).filter((r) => r.startsWith('voice:'));
+        for (const roomKey of rooms) {
+          const chatId = roomKey.slice(6);
+          const room = voiceRooms.get(chatId);
+          if (room) {
+            const meta = room.get(socket.data.userId);
+            if (meta) meta.deafened = parsed.deafened;
+          }
+          socket.to(roomKey).emit('voice.deafen', {
+            type: 'voice.deafen',
+            payload: { userId: socket.data.userId, deafened: parsed.deafened }
+          });
         }
-        socket.to(roomKey).emit('voice.deafen', {
-          type: 'voice.deafen',
-          payload: { userId: socket.data.userId, deafened: parsed.deafened }
-        });
+      } catch (error) {
+        fastify.log.warn({ error, userId: socket.data.userId }, 'voice.deafen relay failed');
       }
     });
 
     socket.on('voice.ptt', (payload) => {
-      const parsed = payload as { active: boolean };
-      const rooms = Array.from(socket.rooms).filter((r) => r.startsWith('voice:'));
-      for (const roomKey of rooms) {
-        socket.to(roomKey).emit('voice.ptt', {
-          type: 'voice.ptt',
-          payload: { userId: socket.data.userId, active: parsed.active }
-        });
+      try {
+        const parsed = payload as { active: boolean };
+        const rooms = Array.from(socket.rooms).filter((r) => r.startsWith('voice:'));
+        for (const roomKey of rooms) {
+          socket.to(roomKey).emit('voice.ptt', {
+            type: 'voice.ptt',
+            payload: { userId: socket.data.userId, active: parsed.active }
+          });
+        }
+      } catch (error) {
+        fastify.log.warn({ error, userId: socket.data.userId }, 'voice.ptt relay failed');
       }
     });
 
     socket.on('voice.speaking', (payload) => {
-      const parsed = payload as { speaking: boolean };
-      const rooms = Array.from(socket.rooms).filter((r) => r.startsWith('voice:'));
-      for (const roomKey of rooms) {
-        socket.to(roomKey).emit('voice.speaking', {
-          type: 'voice.speaking',
-          payload: { userId: socket.data.userId, speaking: parsed.speaking }
-        });
+      try {
+        const parsed = payload as { speaking: boolean };
+        const rooms = Array.from(socket.rooms).filter((r) => r.startsWith('voice:'));
+        for (const roomKey of rooms) {
+          socket.to(roomKey).emit('voice.speaking', {
+            type: 'voice.speaking',
+            payload: { userId: socket.data.userId, speaking: parsed.speaking }
+          });
+        }
+      } catch (error) {
+        fastify.log.warn({ error, userId: socket.data.userId }, 'voice.speaking relay failed');
       }
     });
   });

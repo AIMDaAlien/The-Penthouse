@@ -22,7 +22,7 @@ export function rateLimit(maxAttempts: number, windowMs = 15 * 60_000) {
     }
 
     bucket.count += 1;
-    if (bucket.count > 1000) {
+    if (bucket.count > maxAttempts) {
       const retryAfter = Math.ceil((bucket.resetAt - now) / 1000);
       reply.header('Retry-After', String(retryAfter));
       throw new AppError('RATE_LIMITED', 429, 'Too many attempts');
