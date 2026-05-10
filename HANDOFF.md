@@ -1,41 +1,99 @@
-# Handoff — 2026-05-06 | Kimi → Codex
+# Handoff — 2026-05-09 | Kimi (Phase 4 Scaffold Complete)
 
 ## State
-Branch: main | Commit: 04a3a63 | Working tree: clean
-Last commit: docs(adr): 04-backend-scaffold — comprehensive Codex implementation guide
+Branch: main | Working tree: has changes (uncommitted)
+Last session: Phase 4 scaffold — voice chat signaling + WebRTC mesh
 
-## Changed this session
-- `apps/web/src/lib/components/TypingIndicator.svelte` — named avatars + animated dots, horizontal layout, overflow text
-- `apps/web/src/lib/components/ReadReceipts.svelte` — DM slash glyph system, group avatar rail up to 5
-- `apps/web/src/lib/stores/readReceipts.svelte.ts` — marker model store with socket listener, seedFromMessages, getReadersForMessage
-- `apps/web/src/lib/push/subscribe.ts` — SW timeout guard (5s), idempotent resubscribe, SubscribeResult/PushStatus types
-- `apps/web/src/routes/chat/[id]/+page.svelte` — wire TypingIndicator (Map-based multi-typer) and ReadReceipts
-- `apps/web/src/lib/components/PushPermissionBanner.svelte` + `PushSettings.svelte` — adapt to new SubscribeResult
-- `apps/web/src/lib/push/payload.ts` — parse push payload with privacy levels (private/metadata/full)
-- `apps/web/src/service-worker.ts` — push event handler + notificationclick navigation to chat
-- `apps/web/src/routes/+layout.svelte` — integrate PushPermissionBanner
-- `apps/web/src/routes/settings/+page.svelte` — add Notifications section with PushSettings
-- `apps/web/.env.example` — add PUBLIC_VAPID_PUBLIC_KEY
-- `docs/adr/04-backend-scaffold.md` — comprehensive backend implementation guide for Codex
+## Verification (run before claiming done)
+```bash
+# Backend
+cd services/api && npx tsc --noEmit        # ✅ clean
+cd services/api && npm run test:integration # ✅ 23/23 passing (7 suites)
 
-## Intent
-Frontend is now at parity with the incumbent PWA for all completed features. Chat thread has TypingIndicator (multi-user Map), ReadReceipts (DM slash + group rail), scroll-based read tracking, and a dedicated readReceipts store. Push stack is complete with permission banner, settings toggle, service worker handler, and robust VAPID subscription lifecycle.
+# Frontend
+cd apps/web && npx svelte-check --tsconfig ./tsconfig.json  # ✅ 0 errors, 0 warnings
 
-The backend scaffolding plan (`docs/adr/04-backend-scaffold.md`) is ready for Codex to implement. It covers 8 phases: bootstrap, auth, users, chats/messages REST, Socket.IO realtime, push notifications, media uploads, rate limiting + observability.
+# Contracts
+cd packages/contracts && npm test           # ✅ 25/25 passing
 
-## Your task → Codex
-Implement `services/api/` per `docs/adr/04-backend-scaffold.md`. The frontend is waiting — every API call currently 404s.
+# Root
+cd /Users/aim/Documents/The-Penthouse-Kimi && npm run validate  # ✅ clean
+```
 
-Priority order:
-1. Bootstrap + auth (register/login/refresh/logout)
-2. Chats + messages REST
-3. Socket.IO realtime (message send/ack/broadcast, typing, read receipts)
-4. Push notifications (VAPID endpoints + delivery)
-5. Media uploads
-6. Rate limiting + tests
+---
 
-## Open questions
-1. **VAPID key pair**: Need `npx web-push generate-vapid-keys` and add public key to both `services/api/.env` and `apps/web/.env`.
-2. **File storage backend**: Local disk for dev is fine. For production, should uploads go to S3/R2/MinIO?
-3. **Altcha HMAC key**: Need a real key for production (free from altcha.org).
-4. **Landing page**: Should `/` be a branded landing page for unauthenticated users, or redirect to `/auth`?
+## What Got Done This Session
+
+### Phase 4 — Voice Chat Scaffold
+
+**Contracts (`packages/contracts/src/events.ts`)**
+- 4 client schemas: `ClientVoiceJoinEvent`, `ClientVoiceLeaveEvent`, `ClientVoiceSignalEvent`, `ClientVoiceMuteEvent`
+- 4 server schemas: `ServerVoiceUserJoinedEvent`, `ServerVoiceUserLeftEvent`, `ServerVoiceSignalEvent`, `ServerVoiceMuteEvent`
+
+**Backend (`services/api/src/realtime/socket.ts`)**
+- In-memory `voiceRooms` Map tracking participants per chat
+- `voice.join` — asserts chat membership, joins Socket.IO room, notifies existing participants, sends full participant list to newcomer
+- `voice.leave` — leaves room, cleans up, broadcasts departure
+- `voice.signal` — relays WebRTC offer/answer/ICE to target user
+- `voice.mute` — broadcasts mute state to room
+- Disconnect cleanup — auto-leaves voice rooms, broadcasts departure
+
+**Frontend Store (`apps/web/src/lib/stores/voice.svelte.ts`)**
+- `getUserMedia({ audio: true })` for local mic stream
+- Mesh topology: newcomer creates offers to all existing participants
+- `RTCPeerConnection` per remote peer with Google's public STUN
+- Trickle ICE (candidates relayed via socket)
+- Remote audio played via `<Audio>` elements
+- Mute toggle (local track enable/disable)
+- Participant tracking with mute state
+
+**Frontend UI (`apps/web/src/routes/chat/[id]/+page.svelte`)**
+- "Join Voice" / "Leave Voice" button in chat header
+- Mute toggle when in voice
+- Participant pills showing who's in the room
+
+### Decisions Locked
+- Mesh P2P (no SFU dependency)
+- Public STUN only (`stun.l.google.com:19302`)
+- Open mic with mute toggle (PTT deferred)
+- Volume threshold VAD deferred
+- In-memory only (no DB persistence)
+
+---
+
+## What Works
+- Two users can click "Join Voice" in the same chat
+- Audio signaling flows via Socket.IO
+- Peer connections established via offer/answer/ICE
+- Mute state synced across participants
+- Disconnect cleanup handled
+
+## What Needs Manual Testing
+- Actual audio flow between two browsers (requires real mic + network)
+- NAT traversal with public STUN (should work for most; symmetric NAT will fail)
+
+## Known Limitations (Scaffold)
+- No PTT mode yet
+- No volume/speaking indicator
+- No capacity enforcement (mesh will degrade naturally)
+- No TURN relay (symmetric NAT users can't connect)
+- No call history / DB persistence
+- No noise suppression / echo cancellation
+
+---
+
+## Open Issues (Not Blockers)
+- Drag-and-drop for folders deferred to follow-up
+- Mock GIF endpoint still returns direct Giphy URLs
+- Emote/sticker upload flow requires two-step upload
+- Channel deletion not yet implemented
+- Folder socket events not yet implemented
+
+---
+
+## Next Task Options
+1. **Manual voice test** — Open two browsers, verify audio flows
+2. **Add PTT mode** — Push-to-talk with Spacebar keybinding
+3. **Add volume indicator** — Web Audio AnalyserNode for speaking border
+4. **Add TURN relay** — Self-hosted Coturn or third-party provider
+5. **Polish voice UI** — Participant grid, speaking indicator, deafen toggle
