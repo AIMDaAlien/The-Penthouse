@@ -47,7 +47,16 @@ export async function registerChannelRoutes(fastify: FastifyInstance) {
       );
     }
 
-    return { channel: serializeChannel(channel) };
+    const serialized = serializeChannel(channel);
+    const syncEvent = {
+      type: 'chat.sync_required',
+      payload: { chatId: parentChatId, reason: 'channel.created' }
+    };
+    for (const member of parentMembers) {
+      fastify.io.to(`user:${member.userId}`).emit('chat.sync_required', syncEvent);
+    }
+
+    return { channel: serialized };
   });
 
   fastify.get('/api/v1/chats/:id/channels', { preHandler: fastify.authenticate }, async (request) => {

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { chats } from '$services/chats';
@@ -13,6 +14,7 @@
 		onReactionAdd,
 		onReactionRemove,
 		onTypingUpdate,
+		onChatSyncRequired,
 		joinChat,
 		leaveChat,
 		typingStart,
@@ -20,9 +22,11 @@
 	} from '$stores/socket.svelte';
 	import MessageBubble from '$components/MessageBubble.svelte';
 	import MessageComposer from '$components/MessageComposer.svelte';
+	import ChannelList from '$components/ChannelList.svelte';
 	import ReadReceipts from '$components/ReadReceipts.svelte';
 	import TypingIndicator from '$components/TypingIndicator.svelte';
 	import Icon from '$components/Icon.svelte';
+	import { channelsStore } from '$stores/channels.svelte';
 	import { readReceiptsStore } from '$stores/readReceipts.svelte';
 	import { outboxStore, MAX_RETRIES } from '$stores/outbox.svelte';
 	import { media } from '$services/media';
@@ -39,6 +43,8 @@
 	let typingUsers = $state<Map<string, string>>(new Map());
 	let typingTimers = $state<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 	let replyToMessage = $state<Message | null>(null);
+	let creatingChannel = $state(false);
+	let newChannelName = $state('');
 
 	// PTT keyboard handler
 	if (typeof window !== 'undefined') {
@@ -65,16 +71,16 @@
 		return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 	}
 
-	async function loadMessages() {
+	async function loadMessages(targetChatId = chatId) {
 		loading = true;
 		error = '';
 		try {
-			const res = await chats.messages(chatId);
+			const res = await chats.messages(targetChatId);
 			let loaded = res.messages;
 
 			// Merge pending outbox messages for this chat
 			const pending = outboxStore.items
-				.filter((item) => item.chatId === chatId && item.retries < MAX_RETRIES)
+				.filter((item) => item.chatId === targetChatId && item.retries < MAX_RETRIES)
 				.map((item) => outboxToMessage(item));
 
 			if (pending.length > 0) {
@@ -83,7 +89,7 @@
 			}
 
 			messages = loaded;
-			readReceiptsStore.seedFromMessages(chatId, messages);
+			readReceiptsStore.seedFromMessages(targetChatId, messages);
 			scrollToBottom();
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to load messages';
@@ -197,7 +203,28 @@
 	});
 
 	$effect(() => {
-		if (chatId) loadMessages();
+		const currentChatId = chatId;
+		if (!currentChatId) return;
+		untrack(() => {
+			loadMessages(currentChatId);
+			channelsStore.load(currentChatId);
+		});
+	});
+
+	$effect(() => {
+		const currentChatId = chatId;
+		const socket = socketStore.instance;
+		if (!socket || !currentChatId) return;
+		return onChatSyncRequired((event) => {
+			const eventChatId = event.payload.chatId;
+			const isCurrentParent = eventChatId === currentChatId;
+			const isCurrentChannel = channelsStore.channels.some(
+				(channel) => channel.id === currentChatId && channel.parentChatId === eventChatId
+			);
+			if (isCurrentParent || isCurrentChannel) {
+				channelsStore.load(currentChatId, { force: true });
+			}
+		});
 	});
 
 	// Drain outbox when socket connects
@@ -475,6 +502,14 @@
 
 	function handleTypingStart() { typingStart(chatId); }
 	function handleTypingStop() { typingStop(chatId); }
+
+	async function handleCreateChannel() {
+		const name = newChannelName.trim();
+		if (!name) return;
+		await channelsStore.create(chatId, name);
+		newChannelName = '';
+		creatingChannel = false;
+	}
 </script>
 
 <div class="thread">
@@ -530,6 +565,25 @@
 			</button>
 		{/if}
 	</header>
+
+	<ChannelList
+		channels={channelsStore.channels}
+		activeChannelId={chatId}
+		onSelect={(channelId) => goto(`/chat/${channelId}`)}
+		onCreate={() => creatingChannel = true}
+	/>
+
+	{#if creatingChannel}
+		<form class="channel-form" onsubmit={(e) => { e.preventDefault(); handleCreateChannel(); }}>
+			<input
+				type="text"
+				placeholder="Channel name"
+				bind:value={newChannelName}
+			/>
+			<button type="submit">Create</button>
+			<button type="button" onclick={() => { creatingChannel = false; newChannelName = ''; }}>Cancel</button>
+		</form>
+	{/if}
 
 	{#if voiceStore.joined}
 		<div class="voice-participants">
@@ -608,7 +662,9 @@
 	.thread {
 		display: flex;
 		flex-direction: column;
-		min-height: 100dvh;
+		flex: 1;
+		min-height: 0;
+		height: 100%;
 	}
 
 	.header {
@@ -691,6 +747,48 @@
 		border-bottom: 1px solid var(--color-border);
 		background: var(--color-surface);
 		overflow-x: auto;
+	}
+
+	.channel-form {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+		padding: var(--space-sm) var(--space-lg);
+		border-bottom: 1px solid var(--color-border);
+		background: var(--color-surface);
+	}
+
+	.channel-form input {
+		flex: 1;
+		min-width: 0;
+		background: var(--color-bg);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		color: var(--color-text);
+		font-size: var(--text-sm);
+		padding: var(--space-sm) var(--space-md);
+	}
+
+	.channel-form input:focus {
+		outline: none;
+		border-color: var(--color-accent);
+	}
+
+	.channel-form button {
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		background: var(--color-surface-elevated);
+		color: var(--color-text);
+		font-size: var(--text-sm);
+		padding: var(--space-sm) var(--space-md);
+		cursor: pointer;
+	}
+
+	.channel-form button[type="submit"] {
+		background: var(--color-accent);
+		border-color: var(--color-accent);
+		color: var(--color-bg);
+		font-weight: var(--weight-bold);
 	}
 
 	.voice-pill {

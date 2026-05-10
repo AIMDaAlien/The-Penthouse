@@ -1,13 +1,17 @@
 import { test, expect } from '@playwright/test';
 
+async function switchToRegister(page: import('@playwright/test').Page) {
+  await page.getByRole('button', { name: 'Create account' }).click();
+  await expect(page.locator('#display-name')).toBeVisible();
+}
+
 test.describe('Auth Flow E2E', () => {
   test('register, login, logout, session persistence', async ({ page }) => {
     const username = `auth_test_${Math.random().toString(36).slice(2, 8)}`;
 
     // 2.1 Register
     await page.goto('/auth');
-    await page.locator('button.tab').filter({ hasText: 'Create account' }).click();
-    await expect(page.locator('#display-name')).toBeVisible();
+    await switchToRegister(page);
     await page.locator('#username').fill(username);
     await page.locator('#display-name').fill('Auth Bot');
     await page.locator('#password').fill('TestPassword123!');
@@ -42,8 +46,7 @@ test.describe('Auth Flow E2E', () => {
 
     // Register first user
     await page.goto('/auth');
-    await page.locator('button.tab').filter({ hasText: 'Create account' }).click();
-    await expect(page.locator('#display-name')).toBeVisible();
+    await switchToRegister(page);
     await page.locator('#username').fill(username);
     await page.locator('#display-name').fill('Dup Bot');
     await page.locator('#password').fill('TestPassword123!');
@@ -54,8 +57,7 @@ test.describe('Auth Flow E2E', () => {
 
     // Try duplicate
     await page.goto('/auth');
-    await page.locator('button.tab').filter({ hasText: 'Create account' }).click();
-    await expect(page.locator('#display-name')).toBeVisible();
+    await switchToRegister(page);
     await page.locator('#username').fill(username);
     await page.locator('#display-name').fill('Dup Bot 2');
     await page.locator('#password').fill('TestPassword123!');
@@ -69,8 +71,7 @@ test.describe('Auth Flow E2E', () => {
 
   test('weak password rejected', async ({ page }) => {
     await page.goto('/auth');
-    await page.locator('button.tab').filter({ hasText: 'Create account' }).click();
-    await expect(page.locator('#display-name')).toBeVisible();
+    await switchToRegister(page);
     await page.locator('#username').fill(`weak_${Date.now()}`);
     await page.locator('#display-name').fill('Weak Bot');
     await page.locator('#password').fill('short');
@@ -88,8 +89,7 @@ test.describe('Auth Flow E2E', () => {
 
   test('no CAPTCHA in dev mode', async ({ page }) => {
     await page.goto('/auth');
-    await page.locator('button.tab').filter({ hasText: 'Create account' }).click();
-    await expect(page.locator('#display-name')).toBeVisible();
+    await switchToRegister(page);
     // Should NOT see verify you're human text
     await expect(page.getByText(/verify you.re human/i)).not.toBeVisible();
     await expect(page.getByText(/captcha/i)).not.toBeVisible();

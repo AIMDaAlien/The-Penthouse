@@ -1,6 +1,9 @@
 <script lang="ts">
 	import '../app.css';
 	import { sessionStore } from '$stores/session.svelte';
+	import { channelsStore } from '$stores/channels.svelte';
+	import { chatsStore } from '$stores/chats.svelte';
+	import { foldersStore } from '$stores/folders.svelte';
 	import { socketStore } from '$stores/socket.svelte';
 	import { goto, onNavigate } from '$app/navigation';
 	import { page } from '$app/stores';
@@ -9,6 +12,7 @@
 	import DesktopShell from '$components/DesktopShell.svelte';
 
 	let { children } = $props();
+	let activeUserId = $state(sessionStore.user?.id ?? null);
 
 	// Auth guard: redirect unauthenticated users to /auth
 	$effect(() => {
@@ -29,6 +33,16 @@
 		}
 	});
 
+	// Clear user-scoped state on login/logout/user switches.
+	$effect(() => {
+		const nextUserId = sessionStore.user?.id ?? null;
+		if (nextUserId === activeUserId) return;
+		chatsStore.reset();
+		foldersStore.reset();
+		channelsStore.reset();
+		activeUserId = nextUserId;
+	});
+
 	// Page transitions via View Transitions API
 	onNavigate((navigation) => {
 		if (!document.startViewTransition) return;
@@ -40,10 +54,17 @@
 		});
 	});
 
-	const showNav = $derived(
+	const showShell = $derived(
 		sessionStore.isAuthenticated &&
 		($page.url.pathname === '/' ||
 			$page.url.pathname.startsWith('/chat/') ||
+			$page.url.pathname.startsWith('/users') ||
+			$page.url.pathname === '/settings')
+	);
+
+	const showBottomNav = $derived(
+		sessionStore.isAuthenticated &&
+		($page.url.pathname === '/' ||
 			$page.url.pathname.startsWith('/users') ||
 			$page.url.pathname === '/settings')
 	);
@@ -53,16 +74,16 @@
 	<title>The Penthouse</title>
 </svelte:head>
 
-<div class="app" class:has-bottom-nav={showNav}>
+<div class="app" class:has-bottom-nav={showBottomNav}>
 	<PushPermissionBanner />
-	{#if showNav}
+	{#if showShell}
 		<DesktopShell>
 			{@render children()}
 		</DesktopShell>
 	{:else}
 		{@render children()}
 	{/if}
-	{#if showNav}
+	{#if showBottomNav}
 		<BottomNav />
 	{/if}
 </div>
@@ -128,13 +149,15 @@
 	}
 
 	.app {
+		--bottom-nav-offset: 0px;
 		min-height: 100dvh;
 		display: flex;
 		flex-direction: column;
 	}
 
 	.app.has-bottom-nav {
-		padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+		--bottom-nav-offset: calc(88px + env(safe-area-inset-bottom, 0px));
+		padding-bottom: var(--bottom-nav-offset);
 	}
 
 	@media (min-width: 768px) {

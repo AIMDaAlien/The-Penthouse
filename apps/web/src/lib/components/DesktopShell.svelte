@@ -22,10 +22,10 @@
 	);
 
 	$effect(() => {
-		if (isDesktopRoute && chatsStore.chats.length === 0 && !chatsStore.loading) {
+		if (isDesktopRoute && !chatsStore.loaded && !chatsStore.loading) {
 			chatsStore.load();
 		}
-		if (isDesktopRoute && foldersStore.folders.length === 0 && !foldersStore.loading) {
+		if (isDesktopRoute && !foldersStore.loaded && !foldersStore.loading) {
 			foldersStore.load();
 		}
 	});
@@ -83,7 +83,7 @@
 <style>
 	.shell {
 		display: flex;
-		min-height: 100dvh;
+		min-height: calc(100dvh - var(--bottom-nav-offset, 0px));
 		flex-direction: column;
 	}
 
@@ -101,6 +101,10 @@
 
 	/* Desktop split-pane layout */
 	@media (min-width: 768px) {
+		.shell {
+			min-height: 100dvh;
+		}
+
 		.shell.is-desktop-route {
 			flex-direction: row;
 		}

@@ -8,25 +8,36 @@ export interface FolderWithItems extends ChatFolder {
 function createFoldersStore() {
 	let folders = $state<FolderWithItems[]>([]);
 	let loading = $state(false);
+	let loaded = $state(false);
 	let error = $state('');
+	let pending: Promise<void> | null = null;
 
-	async function load() {
-		if (loading) return;
-		loading = true;
-		error = '';
-		try {
-			const res = await foldersApi.list();
-			folders = res.folders;
-		} catch (err) {
-			error = err instanceof Error ? err.message : 'Failed to load folders';
-		} finally {
-			loading = false;
-		}
+	function load(options: { force?: boolean } = {}) {
+		if (loading && pending) return pending;
+		if (loaded && !options.force) return Promise.resolve();
+
+		pending = (async () => {
+			loading = true;
+			error = '';
+			try {
+				const res = await foldersApi.list();
+				folders = res.folders;
+			} catch (err) {
+				error = err instanceof Error ? err.message : 'Failed to load folders';
+			} finally {
+				loaded = true;
+				loading = false;
+				pending = null;
+			}
+		})();
+
+		return pending;
 	}
 
 	async function create(name: string, icon?: string, color?: string) {
 		const res = await foldersApi.create({ name, icon, color });
 		folders = [...folders, { ...res.folder, items: [] }];
+		loaded = true;
 		return res.folder;
 	}
 
@@ -78,9 +89,18 @@ function createFoldersStore() {
 		).sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt.localeCompare(b.createdAt));
 	}
 
+	function reset() {
+		folders = [];
+		loading = false;
+		loaded = false;
+		error = '';
+		pending = null;
+	}
+
 	return {
 		get folders() { return folders; },
 		get loading() { return loading; },
+		get loaded() { return loaded; },
 		get error() { return error; },
 		load,
 		create,
@@ -89,6 +109,7 @@ function createFoldersStore() {
 		moveChat,
 		removeChat,
 		reorder,
+		reset,
 	};
 }
 
