@@ -150,6 +150,11 @@ function createVoiceStore() {
 					p.userId === data.payload.userId ? { ...p, muted: data.payload.muted } : p
 				);
 			}),
+			socketStore.on<{ payload: { userId: string; deafened: boolean } }>('voice.deafen', (data) => {
+				participants = participants.map((p) =>
+					p.userId === data.payload.userId ? { ...p, deafened: data.payload.deafened } : p
+				);
+			}),
 			socketStore.on<{ payload: { userId: string; speaking: boolean } }>('voice.speaking', (data) => {
 				participants = participants.map((p) =>
 					p.userId === data.payload.userId ? { ...p, speaking: data.payload.speaking } : p

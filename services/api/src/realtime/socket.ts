@@ -75,7 +75,7 @@ export function registerSocket(io: Server, fastify: FastifyInstance) {
 
       void initializePresence(socket, userId, count);
 
-      socket.on('disconnect', () => {
+      socket.on('disconnecting', () => {
         // Clean up voice rooms
         for (const roomKey of socket.rooms) {
           if (roomKey.startsWith('voice:')) {
