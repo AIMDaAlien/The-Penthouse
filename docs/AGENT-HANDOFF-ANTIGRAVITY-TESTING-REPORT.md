@@ -133,4 +133,60 @@ svelte-check found 0 errors and 0 warnings
 - [x] All 24 integration tests passing
 - [x] Frontend typecheck clean
 
-**Stage 3 messaging is READY for manual QA pass.**
+---
+
+## Stage 5 — Push Notifications Verification
+
+### 5.1 Permission Banner — PASS ✅
+- `PushPermissionBanner` visible for new users.
+- Clicking "Enable" triggers native browser permission prompt (`Notification.requestPermission()`).
+- Successfully verified permission transition from `default` → `granted`.
+
+### 5.2 Settings Toggle — PASS ✅
+- Navigated to `Settings` > `Notifications`.
+- Toggling "Push notifications" successfully subscribes/unsubscribes user.
+- UI updates reflect state change immediately ("Enabled — you'll get alerts..." / "Disabled — enable to stay updated").
+- Subscription successfully registered on backend (verified via browser state).
+
+---
+
+## Stage 6 — System Resilience (Offline/Reconnect)
+
+### 6.1 Offline Detection — PASS ✅
+- Simulated offline mode via Network Throttling.
+- App title updates to "The Penthouse — Offline".
+- Full-page offline fallback (`offline.html`) correctly renders upon navigation while offline.
+
+### 6.2 Message Queueing — PASS ✅
+- Sending messages while offline correctly queues them in UI.
+- `MessageBubble` shows "Sending..." indicator (◌ icon).
+- Upon restoring connection (reconnect), messages automatically send and transition to "Sent" (✓) state.
+
+---
+
+## Stage 7 — Accessibility & UX
+
+### 7.1 Landmark Structure — PASS ✅
+- `<main>` landmark verified in `DesktopShell.svelte`.
+- `<aside>` landmark verified for navigation sidebar.
+
+### 7.2 ARIA Labels — PASS ✅
+- Interaction buttons (Enable/Disable push) have descriptive `aria-label`.
+- Textarea/Input fields have proper accessible names.
+
+### 7.3 Keyboard Navigation — PASS ✅
+- Basic Tabbing through main controls functional.
+- Focus indicators visible on interactive elements.
+
+---
+
+## Overall Assessment
+
+- [x] All critical paths functional (v4 Release Candidate 1)
+- [x] Real-time messaging & Read receipts verified
+- [x] Offline resilience & PWA fallback verified
+- [x] Push notification lifecycle verified
+- [x] Accessibility basics verified
+
+**AntiGravity Protocol v1 COMPLETE. v4.0.0-alpha.1 is STABLE.**
+
