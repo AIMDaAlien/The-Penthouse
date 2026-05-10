@@ -1,5 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { AppError } from '../utils/error-responses.js';
+import { env } from '../config/env.js';
 
 type Bucket = {
   count: number;
@@ -10,6 +11,7 @@ const buckets = new Map<string, Bucket>();
 
 export function rateLimit(maxAttempts: number, windowMs = 15 * 60_000) {
   return async (request: FastifyRequest, reply: FastifyReply) => {
+    if (env.DISABLE_RATE_LIMIT) return;
     const forwarded = request.headers['x-forwarded-for'];
     const ip = Array.isArray(forwarded) ? forwarded[0] : forwarded?.split(',')[0] ?? request.ip;
     const key = `${request.method}:${request.url}:${ip}`;
