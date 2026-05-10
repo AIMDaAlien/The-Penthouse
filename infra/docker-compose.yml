@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: penthouse-kimi-postgres
+    environment:
+      POSTGRES_USER: penthouse
+      POSTGRES_PASSWORD: penthouse
+      POSTGRES_DB: penthouse
+    ports:
+      - "5434:5432"
+    volumes:
+      - penthouse_kimi_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U penthouse -d penthouse"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  penthouse_kimi_pgdata:
