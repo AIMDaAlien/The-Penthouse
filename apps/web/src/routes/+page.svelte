@@ -1,6 +1,5 @@
 <script lang="ts">
 	import ChatListPane from '$components/ChatListPane.svelte';
-	import Icon from '$components/Icon.svelte';
 	import { socketStore } from '$stores/socket.svelte';
 	import { chatsStore } from '$stores/chats.svelte';
 	import { foldersStore } from '$stores/folders.svelte';
@@ -40,7 +39,7 @@
 </script>
 
 <main class="home">
-	<!-- Mobile-only header + list -->
+	<!-- Mobile: header + chat list -->
 	<div class="mobile-only">
 		<header class="top-bar">
 			<h1>The Penthouse</h1>
@@ -62,12 +61,16 @@
 		{/if}
 	</div>
 
-	<!-- Desktop-only placeholder -->
+	<!-- Desktop: editorial empty state (inside pane-right) -->
 	<div class="desktop-only">
-		<div class="welcome">
-			<Icon name="message" size={48} />
-			<h2>Select a conversation</h2>
-			<p>Choose a chat from the sidebar to start messaging.</p>
+		<div class="select-placeholder">
+			<div class="empty-book">
+				<span class="empty-label">DIRECTORY IS EMPTY</span>
+				<blockquote class="empty-quote">
+					All distances are the same<br>to the person who longs.
+				</blockquote>
+				<cite class="empty-cite">— Rainer Maria Rilke</cite>
+			</div>
 		</div>
 	</div>
 </main>
@@ -116,31 +119,7 @@
 		display: none;
 	}
 
-	.welcome {
-		flex: 1;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		gap: var(--space-md);
-		color: var(--color-text-muted);
-		text-align: center;
-		padding: var(--space-xl);
-	}
-
-	.welcome h2 {
-		font-family: var(--font-display);
-		font-size: var(--text-xl);
-		font-weight: 600;
-		color: var(--color-text-secondary);
-	}
-
-	.welcome p {
-		font-size: var(--text-sm);
-		max-width: 280px;
-	}
-
-	/* Desktop: hide mobile content, show placeholder */
+	/* Desktop: hide mobile content, show editorial placeholder */
 	@media (min-width: 768px) {
 		.mobile-only {
 			display: none;
@@ -151,6 +130,57 @@
 		}
 		.home {
 			min-height: 0;
+			height: 100%;
+		}
+	}
+
+	.select-placeholder {
+		height: 100%;
+		display: flex;
+		align-items: center;
+		min-height: 100dvh;
+		padding: 0 48px;
+	}
+
+	.empty-book {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+		max-width: 320px;
+	}
+
+	.empty-label {
+		font-family: var(--font-mono);
+		font-size: 0.65rem;
+		font-weight: var(--weight-medium);
+		letter-spacing: 0.12em;
+		color: var(--color-text-secondary);
+		opacity: 0.6;
+	}
+
+	.empty-quote {
+		font-family: var(--font-display);
+		font-style: italic;
+		font-size: var(--text-xl);
+		line-height: 1.4;
+		background: linear-gradient(180deg, var(--color-text-primary) 40%, transparent 100%);
+		-webkit-background-clip: text;
+		-webkit-text-fill-color: transparent;
+		background-clip: text;
+		margin: 0;
+	}
+
+	.empty-cite {
+		font-family: var(--font-mono);
+		font-size: var(--text-xs);
+		font-style: normal;
+		color: var(--color-text-secondary);
+		opacity: 0.5;
+	}
+
+	@media (hover: hover) and (pointer: fine) {
+		.select-placeholder {
+			min-height: unset;
 		}
 	}
 </style>

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { focusTrap } from '$lib/actions/focusTrap';
 	import { goto } from '$app/navigation';
 	import { auth } from '$services/auth';
 	import { users } from '$services/users';
@@ -7,6 +8,9 @@
 	import Icon from '$components/Icon.svelte';
 	import Avatar from '$components/Avatar.svelte';
 	import PushSettings from '$components/PushSettings.svelte';
+	import { wallpapers } from '$services/wallpapers';
+	import { wallpapersStore } from '$stores/wallpapers.svelte';
+	import { getTheme, setTheme, type Theme } from '$utils/theme';
 
 	let loggingOut = $state(false);
 	let showConfirm = $state(false);
@@ -14,11 +18,23 @@
 	let saveError = $state('');
 	let displayName = $state(sessionStore.user?.displayName ?? '');
 
+	// Wallpaper form state
+	let wallpaperUrl = $state('');
+	let wallpaperColor = $state('');
+	let wallpaperOpacity = $state('1');
+	let savingWallpaper = $state(false);
+	let wallpaperError = $state('');
+
 	let presenceState = $state(socketStore.presenceState);
 	let presenceNote = $state(socketStore.presenceNote);
 	let autoAfk = $state(socketStore.autoAfkEnabled);
+	let theme = $state<Theme>(getTheme());
 
 	const currentUser = $derived(sessionStore.user);
+
+	$effect(() => {
+		if (sessionStore.isAuthenticated) wallpapersStore.load();
+	});
 	const presenceOptions = [
 		{ value: 'available', label: 'Available' },
 		{ value: 'busy', label: 'Busy' },
@@ -56,6 +72,36 @@
 		finally {
 			sessionStore.clear();
 			goto('/auth', { replaceState: true });
+		}
+	}
+
+	async function handleSaveWallpaper() {
+		savingWallpaper = true;
+		wallpaperError = '';
+		try {
+			const res = await wallpapers.create({
+				isGlobal: true,
+				...(wallpaperUrl.trim() ? { wallpaperUrl: wallpaperUrl.trim() } : {}),
+				...(wallpaperColor.trim() ? { wallpaperColor: wallpaperColor.trim() } : {}),
+				opacity: wallpaperOpacity
+			});
+			wallpapersStore.addWallpaper(res.wallpaper);
+			wallpaperUrl = '';
+			wallpaperColor = '';
+			wallpaperOpacity = '1';
+		} catch (err) {
+			wallpaperError = err instanceof Error ? err.message : 'Failed to save wallpaper';
+		} finally {
+			savingWallpaper = false;
+		}
+	}
+
+	async function handleRemoveWallpaper(id: string) {
+		try {
+			await wallpapers.remove(id);
+			wallpapersStore.removeWallpaper(id);
+		} catch {
+			// ignore
 		}
 	}
 </script>
@@ -133,6 +179,41 @@
 			</section>
 
 			<section class="section">
+				<p class="section-label">Wallpaper</p>
+				<div class="setting-card">
+					<div class="field">
+						<label for="wallpaper-url">Image URL</label>
+						<input id="wallpaper-url" type="text" bind:value={wallpaperUrl} placeholder="https://example.com/bg.jpg" />
+					</div>
+					<div class="field">
+						<label for="wallpaper-color">Fallback color</label>
+						<input id="wallpaper-color" type="text" bind:value={wallpaperColor} placeholder="#1a1a2e" />
+					</div>
+					<div class="field">
+						<label for="wallpaper-opacity">Opacity ({wallpaperOpacity})</label>
+						<input id="wallpaper-opacity" type="range" min="0.1" max="1" step="0.1" bind:value={wallpaperOpacity} />
+					</div>
+					{#if wallpaperError}<p class="field-error">{wallpaperError}</p>{/if}
+					<button class="btn-secondary" onclick={handleSaveWallpaper} disabled={savingWallpaper || (!wallpaperUrl.trim() && !wallpaperColor.trim())}>
+						{savingWallpaper ? 'Saving...' : 'Set global wallpaper'}
+					</button>
+					{#if wallpapersStore.wallpapers.length > 0}
+						<div class="wallpaper-list">
+							{#each wallpapersStore.wallpapers as w (w.id)}
+								<div class="wallpaper-item">
+									<span class="wallpaper-preview" style:background={w.wallpaperColor ?? 'var(--color-surface)'} style:background-image={w.wallpaperUrl ? `url(${w.wallpaperUrl})` : 'none'}></span>
+									<span class="wallpaper-meta">{w.isGlobal ? 'Global' : 'Chat'} · opacity {w.opacity}</span>
+									<button class="wallpaper-delete" onclick={() => handleRemoveWallpaper(w.id)} aria-label="Remove wallpaper">
+										<Icon name="x" size={14} />
+									</button>
+								</div>
+							{/each}
+						</div>
+					{/if}
+				</div>
+			</section>
+
+			<section class="section">
 				<p class="section-label">Account</p>
 				<button class="danger-btn" onclick={() => showConfirm = true} disabled={loggingOut}>
 					<Icon name="log-out" size={18} />
@@ -148,7 +229,7 @@
 {#if showConfirm}
 	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
 	<div class="modal-backdrop" role="presentation" tabindex="-1" onclick={() => showConfirm = false} onkeydown={(e) => e.key === 'Escape' && (showConfirm = false)}>
-		<div class="modal" role="dialog" aria-modal="true" tabindex="-1" onclick={(e) => e.stopPropagation()}>
+		<div class="modal" role="dialog" aria-modal="true" tabindex="-1" onclick={(e) => e.stopPropagation()} use:focusTrap={{ onEscape: () => showConfirm = false }}>
 			<p class="modal-title">Sign out?</p>
 			<p class="modal-desc">You'll need to sign back in to access your chats.</p>
 			<div class="modal-actions">
@@ -421,4 +502,53 @@
 
 	.btn-confirm:hover { opacity: 0.85; }
 	.btn-confirm:disabled { opacity: 0.5; }
+
+	.wallpaper-list {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-sm);
+	}
+
+	.wallpaper-item {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+		padding: var(--space-sm);
+		background: var(--color-bg);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+	}
+
+	.wallpaper-preview {
+		width: 40px;
+		height: 40px;
+		border-radius: var(--radius-sm);
+		background-size: cover;
+		background-position: center;
+		flex-shrink: 0;
+		border: 1px solid var(--color-border);
+	}
+
+	.wallpaper-meta {
+		flex: 1;
+		font-size: var(--text-sm);
+		color: var(--color-text-secondary);
+	}
+
+	.wallpaper-delete {
+		background: none;
+		border: none;
+		color: var(--color-text-muted);
+		cursor: pointer;
+		padding: var(--space-xs);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: var(--radius-sm);
+		transition: color 0.15s;
+	}
+
+	.wallpaper-delete:hover {
+		color: var(--color-error);
+	}
 </style>

@@ -15,6 +15,8 @@
 		onReactionRemove,
 		onTypingUpdate,
 		onChatSyncRequired,
+		onMessagePinned,
+		onMessageUnpinned,
 		joinChat,
 		leaveChat,
 		typingStart,
@@ -27,11 +29,15 @@
 	import TypingIndicator from '$components/TypingIndicator.svelte';
 	import Icon from '$components/Icon.svelte';
 	import { channelsStore } from '$stores/channels.svelte';
+	import { chatsStore } from '$stores/chats.svelte';
 	import { readReceiptsStore } from '$stores/readReceipts.svelte';
 	import { outboxStore, MAX_RETRIES } from '$stores/outbox.svelte';
 	import { media } from '$services/media';
 	import { env } from '$env/dynamic/public';
 	import { voiceStore } from '$stores/voice.svelte';
+	import { wallpapersStore } from '$stores/wallpapers.svelte';
+	import { emotesStore } from '$stores/emotes.svelte';
+	import { stickersStore } from '$stores/stickers.svelte';
 	import type { Message } from '@penthouse/contracts';
 
 	const chatId = $derived($page.params.id ?? '');
@@ -45,6 +51,11 @@
 	let replyToMessage = $state<Message | null>(null);
 	let creatingChannel = $state(false);
 	let newChannelName = $state('');
+	let pinnedMessages = $state<{ messageId: string; content: string; senderDisplayName: string | null }[]>([]);
+	let showSearch = $state(false);
+	let searchQuery = $state('');
+	let searchResults = $state<Message[]>([]);
+	let searching = $state(false);
 
 	// PTT keyboard handler
 	if (typeof window !== 'undefined') {
@@ -95,6 +106,19 @@
 			error = err instanceof Error ? err.message : 'Failed to load messages';
 		} finally {
 			loading = false;
+		}
+	}
+
+	async function loadPins(targetChatId = chatId) {
+		try {
+			const res = await chats.listPins(targetChatId);
+			pinnedMessages = res.pins.map((p) => ({
+				messageId: p.messageId,
+				content: p.content,
+				senderDisplayName: p.senderDisplayName ?? null
+			}));
+		} catch {
+			pinnedMessages = [];
 		}
 	}
 
@@ -207,7 +231,11 @@
 		if (!currentChatId) return;
 		untrack(() => {
 			loadMessages(currentChatId);
+			loadPins(currentChatId);
 			channelsStore.load(currentChatId);
+			wallpapersStore.load();
+			emotesStore.load();
+			stickersStore.loadPacks();
 		});
 	});
 
@@ -339,6 +367,20 @@
 					return { ...m, reactions };
 				});
 			}),
+			onMessagePinned((event) => {
+				const data = event.payload;
+				if (data.chatId !== currentChatId) return;
+				pinnedMessages = [...pinnedMessages, {
+					messageId: data.messageId,
+					content: data.content,
+					senderDisplayName: data.senderDisplayName ?? null
+				}];
+			}),
+			onMessageUnpinned((event) => {
+				const data = event.payload;
+				if (data.chatId !== currentChatId) return;
+				pinnedMessages = pinnedMessages.filter((p) => p.messageId !== data.messageId);
+			}),
 			onTypingUpdate((event) => {
 				const data = event.payload;
 				if (data.chatId !== currentChatId) return;
@@ -372,6 +414,14 @@
 
 	function handleSend(content: string) {
 		sendMessage(content, 'text');
+	}
+
+	function handleGifSelect(gif: { url: string; previewUrl: string; width?: number; height?: number }) {
+		sendMessage('', 'gif', { url: gif.url });
+	}
+
+	function handleStickerSelect(sticker: { url: string; name: string }) {
+		sendMessage('', 'sticker', { url: sticker.url });
 	}
 
 	async function handleAudioRecord(blob: Blob, mimeType: string) {
@@ -500,8 +550,46 @@
 		}
 	}
 
+	async function handlePin(messageId: string) {
+		try {
+			await chats.pinMessage(chatId, { messageId });
+		} catch (err) {
+			alert(err instanceof Error ? err.message : 'Failed to pin');
+		}
+	}
+
+	async function handleUnpin(messageId: string) {
+		try {
+			await chats.unpinMessage(chatId, messageId);
+		} catch (err) {
+			alert(err instanceof Error ? err.message : 'Failed to unpin');
+		}
+	}
+
 	function handleTypingStart() { typingStart(chatId); }
 	function handleTypingStop() { typingStop(chatId); }
+
+	async function handleSearch() {
+		if (!searchQuery.trim()) {
+			searchResults = [];
+			return;
+		}
+		searching = true;
+		try {
+			const res = await chats.searchMessages(chatId, searchQuery.trim());
+			searchResults = res.messages;
+		} catch (err) {
+			searchResults = [];
+		} finally {
+			searching = false;
+		}
+	}
+
+	function closeSearch() {
+		showSearch = false;
+		searchQuery = '';
+		searchResults = [];
+	}
 
 	async function handleCreateChannel() {
 		const name = newChannelName.trim();
@@ -510,6 +598,22 @@
 		newChannelName = '';
 		creatingChannel = false;
 	}
+
+	const chatName = $derived(
+		chatsStore.chats.find((c) => c.id === chatId)?.name ??
+		channelsStore.channels.find((c) => c.id === chatId)?.name ??
+		'Chat'
+	);
+
+	const activeWallpaper = $derived(wallpapersStore.getForChat(chatId));
+	const wallpaperStyle = $derived(() => {
+		const w = activeWallpaper;
+		if (!w) return '';
+		let style = '';
+		if (w.wallpaperUrl) style += `background-image: url(${w.wallpaperUrl});`;
+		if (w.wallpaperColor) style += `background-color: ${w.wallpaperColor};`;
+		return style;
+	});
 </script>
 
 <div class="thread">
@@ -517,7 +621,15 @@
 		<button class="back-btn" onclick={() => goto('/')} aria-label="Back">
 			<Icon name="arrowLeft" size={20} />
 		</button>
-		<h1>Chat</h1>
+		<h1>{chatName}</h1>
+		<button
+			class="search-toggle"
+			onclick={() => showSearch = !showSearch}
+			aria-label="Search messages"
+			aria-expanded={showSearch}
+		>
+			<Icon name="search" size={18} />
+		</button>
 		{#if voiceStore.joined}
 			<div class="voice-controls">
 				<button
@@ -575,8 +687,10 @@
 
 	{#if creatingChannel}
 		<form class="channel-form" onsubmit={(e) => { e.preventDefault(); handleCreateChannel(); }}>
+				<label for="new-channel-name" class="visually-hidden">Channel name</label>
 			<input
-				type="text"
+					id="new-channel-name"
+					type="text"
 				placeholder="Channel name"
 				bind:value={newChannelName}
 			/>
@@ -611,7 +725,66 @@
 		</div>
 	{/if}
 
-	<div class="messages" bind:this={scrollContainer}>
+	{#if pinnedMessages.length > 0}
+		<div class="pinned-banner" role="region" aria-label="Pinned messages">
+			{#each pinnedMessages as pin (pin.messageId)}
+				<div class="pinned-item">
+					<span class="pinned-icon">📌</span>
+					<span class="pinned-text">{pin.content}</span>
+					<button
+						class="pinned-unpin"
+						onclick={() => handleUnpin(pin.messageId)}
+						aria-label="Unpin message"
+						type="button"
+					>
+						<Icon name="x" size={14} />
+					</button>
+				</div>
+			{/each}
+		</div>
+	{/if}
+
+	{#if showSearch}
+		<div class="search-panel">
+			<div class="search-header">
+				<input
+					type="text"
+					placeholder="Search messages..."
+					bind:value={searchQuery}
+					onkeydown={(e) => e.key === 'Enter' && handleSearch()}
+					autofocus
+				/>
+				<button onclick={handleSearch} aria-label="Search">
+					<Icon name="search" size={16} />
+				</button>
+				<button onclick={closeSearch} aria-label="Close search">
+					<Icon name="close" size={16} />
+				</button>
+			</div>
+			{#if searching}
+				<p class="state">Searching...</p>
+			{:else if searchResults.length === 0 && searchQuery.trim()}
+				<p class="state">No results</p>
+			{:else}
+				<div class="search-results">
+					{#each searchResults as message (message.id)}
+						<div class="search-result">
+							<MessageBubble
+								{message}
+								onReply={handleReply}
+								onReact={handleReact}
+								onEdit={handleEdit}
+								onDelete={handleDelete}
+								onPin={handlePin}
+							/>
+						</div>
+					{/each}
+				</div>
+			{/if}
+		</div>
+	{/if}
+
+	<div class="messages" bind:this={scrollContainer} style={wallpaperStyle()}>
 		{#if loading}
 			<p class="state">Loading messages...</p>
 		{:else if error}
@@ -627,6 +800,7 @@
 						onReact={handleReact}
 						onEdit={handleEdit}
 						onDelete={handleDelete}
+						onPin={handlePin}
 					/>
 					<ReadReceipts
 						messageId={message.id}
@@ -828,6 +1002,52 @@
 		50% { box-shadow: 0 0 12px var(--color-success); }
 	}
 
+	.pinned-banner {
+		background: var(--color-surface-elevated);
+		border-bottom: 1px solid var(--color-border);
+		padding: var(--space-sm) var(--space-lg);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-xs);
+	}
+
+	.pinned-item {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+		font-size: var(--text-sm);
+		color: var(--color-text-secondary);
+	}
+
+	.pinned-icon {
+		flex-shrink: 0;
+	}
+
+	.pinned-text {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.pinned-unpin {
+		background: none;
+		border: none;
+		color: var(--color-text-muted);
+		cursor: pointer;
+		padding: var(--space-xs);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: var(--radius-sm);
+		transition: color 0.15s;
+	}
+
+	.pinned-unpin:hover {
+		color: var(--color-error);
+	}
+
 	.messages {
 		flex: 1;
 		overflow-y: auto;
@@ -836,6 +1056,9 @@
 		flex-direction: column;
 		gap: var(--space-xs);
 		min-height: 0;
+		background-size: cover;
+		background-position: center;
+		background-repeat: no-repeat;
 	}
 
 	.state {
@@ -852,5 +1075,86 @@
 	.typing-zone {
 		padding: 0 var(--space-lg);
 		min-height: 28px;
+	}
+
+	.search-toggle {
+		background: none;
+		border: none;
+		color: var(--color-text-secondary);
+		cursor: pointer;
+		padding: var(--space-sm);
+		border-radius: var(--radius-md);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		transition: background 0.15s, color 0.15s;
+		margin-left: auto;
+	}
+	.search-toggle:hover {
+		background: var(--color-surface-elevated);
+		color: var(--color-text);
+	}
+
+	.search-panel {
+		background: var(--color-surface);
+		border-bottom: 1px solid var(--color-border);
+		display: flex;
+		flex-direction: column;
+		max-height: 60vh;
+		min-height: 0;
+	}
+
+	.search-header {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+		padding: var(--space-sm) var(--space-lg);
+		border-bottom: 1px solid var(--color-border);
+	}
+
+	.search-header input {
+		flex: 1;
+		background: var(--color-bg);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-pill);
+		padding: var(--space-sm) var(--space-md);
+		color: var(--color-text);
+		font-size: var(--text-base);
+		font-family: inherit;
+		outline: none;
+	}
+	.search-header input:focus {
+		border-color: var(--color-accent);
+	}
+
+	.search-header button {
+		background: none;
+		border: none;
+		color: var(--color-text-secondary);
+		cursor: pointer;
+		padding: var(--space-sm);
+		border-radius: var(--radius-md);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		transition: background 0.15s, color 0.15s;
+	}
+	.search-header button:hover {
+		background: var(--color-surface-elevated);
+		color: var(--color-text);
+	}
+
+	.search-results {
+		overflow-y: auto;
+		flex: 1;
+		min-height: 0;
+		padding: var(--space-sm) var(--space-lg);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-xs);
+	}
+
+	.search-result {
+		border-radius: var(--radius-md);
 	}
 </style>

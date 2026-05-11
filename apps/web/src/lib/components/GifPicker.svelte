@@ -1,76 +1,111 @@
 <script lang="ts">
-	import { api } from '$services/api';
+	import { gifsStore } from '$stores/gifs.svelte';
+	import { focusTrap } from '$lib/actions/focusTrap';
 
 	interface Props {
 		onSelect: (gif: { url: string; previewUrl: string; width?: number; height?: number }) => void;
-		onClose: () => void;
+		onClose?: () => void;
+		embedded?: boolean;
 	}
 
-	let { onSelect, onClose }: Props = $props();
+	let { onSelect, onClose, embedded = false }: Props = $props();
 
 	let query = $state('');
-	let results = $state<Array<{ id: string; url: string; previewUrl: string; title: string; width?: number; height?: number }>>([]);
-	let loading = $state(false);
+	let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
-	async function search() {
-		loading = true;
-		try {
-			const data = await api.get<{ results: Array<Record<string, unknown>> }>(
-				`/api/v1/gifs/search?q=${encodeURIComponent(query)}&limit=20`
-			);
-			results = data.results.map((r: Record<string, unknown>) => ({
-				id: String(r.id),
-				url: String(r.url),
-				previewUrl: String(r.previewUrl),
-				title: String(r.title ?? ''),
-				width: typeof r.width === 'number' ? r.width : undefined,
-				height: typeof r.height === 'number' ? r.height : undefined
-			}));
-		} finally {
-			loading = false;
-		}
+	function performSearch() {
+		gifsStore.load(query, 20);
 	}
 
-	function handleKeydown(e: KeyboardEvent) {
-		if (e.key === 'Enter') search();
-		if (e.key === 'Escape') onClose();
+	function debouncedSearch() {
+		if (debounceTimer) clearTimeout(debounceTimer);
+		debounceTimer = setTimeout(() => {
+			performSearch();
+		}, 300);
+	}
+
+	function handleSelect(gif: { url: string; previewUrl: string; width?: number; height?: number; title?: string | null }) {
+		onSelect({ url: gif.url, previewUrl: gif.previewUrl, width: gif.width ?? undefined, height: gif.height ?? undefined });
+		onClose?.();
 	}
 
 	$effect(() => {
-		search();
+		debouncedSearch();
+		return () => {
+			if (debounceTimer) clearTimeout(debounceTimer);
+		};
+	});
+
+	$effect(() => {
+		gifsStore.load('', 20);
 	});
 </script>
 
-<div class="gif-picker">
-	<div class="header">
-		<input
-			type="text"
-			placeholder="Search GIFs..."
-			bind:value={query}
-			onkeydown={handleKeydown}
-		/>
-		<button class="close-btn" onclick={onClose} aria-label="Close">
-			<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2">
-				<path d="M1 1l12 12M13 1L1 13" />
-			</svg>
-		</button>
-	</div>
-
-	{#if loading}
-		<div class="loading">Loading...</div>
+<div
+	class="gif-picker"
+	class:embedded
+	aria-label="GIF picker"
+	use:focusTrap={{ onEscape: onClose, initialFocus: true }}
+>
+	{#if !embedded}
+		<div class="header">
+			<input
+				type="text"
+				placeholder="Search GIFs..."
+				bind:value={query}
+				aria-label="Search GIFs"
+			/>
+			<button class="close-btn" onclick={() => onClose?.()} aria-label="Close GIF picker">
+				<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2">
+					<path d="M1 1l12 12M13 1L1 13" />
+				</svg>
+			</button>
+		</div>
 	{:else}
-		<div class="grid">
-			{#each results as gif (gif.id)}
-				<button
-					class="gif-btn"
-					onclick={() => onSelect({ url: gif.url, previewUrl: gif.previewUrl, width: gif.width, height: gif.height })}
-					aria-label={gif.title || 'GIF'}
-				>
-					<img src={gif.previewUrl} alt={gif.title} loading="lazy" />
-				</button>
-			{/each}
+		<div class="search-wrap">
+			<input
+				type="text"
+				placeholder="Search GIFs..."
+				bind:value={query}
+				aria-label="Search GIFs"
+			/>
 		</div>
 	{/if}
+
+	<div class="content">
+		{#if gifsStore.loading}
+			<div class="spinner-wrap">
+				<div class="spinner" aria-hidden="true"></div>
+				<span class="spinner-text">Loading...</span>
+			</div>
+		{:else if gifsStore.loaded && gifsStore.results.length === 0}
+			<div class="empty">No results</div>
+		{:else}
+			<div class="grid" role="list">
+				{#each gifsStore.results as gif (gif.id)}
+					<button
+						class="gif-btn"
+						onclick={() =>
+							handleSelect({
+								url: gif.url,
+								previewUrl: gif.previewUrl,
+								width: gif.width ?? undefined,
+								height: gif.height ?? undefined,
+								title: gif.title
+							})}
+						aria-label="Select GIF: {gif.title ?? 'Untitled'}"
+						role="listitem"
+					>
+						<img
+							src={gif.previewUrl}
+							alt={gif.title ?? ''}
+							loading="lazy"
+						/>
+					</button>
+				{/each}
+			</div>
+		{/if}
+	</div>
 </div>
 
 <style>
@@ -78,58 +113,86 @@
 		background: var(--color-surface-elevated);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-lg);
-		box-shadow: var(--shadow-card);
-		width: 320px;
+		padding: var(--space-md);
 		max-height: 400px;
+		overflow-y: auto;
 		display: flex;
 		flex-direction: column;
-		overflow: hidden;
+		width: 320px;
+	}
+
+	.gif-picker.embedded {
+		background: transparent;
+		border: none;
+		border-radius: 0;
+		padding: 0;
+		width: 100%;
+		max-height: 360px;
 	}
 
 	.header {
 		display: flex;
 		align-items: center;
 		gap: var(--space-sm);
-		padding: var(--space-sm) var(--space-md);
-		border-bottom: 1px solid var(--color-border);
+		margin-bottom: var(--space-md);
+		flex-shrink: 0;
 	}
 
-	.header input {
+	.header input,
+	.search-wrap input {
 		flex: 1;
 		background: var(--color-bg);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-pill);
-		padding: var(--space-xs) var(--space-sm);
+		padding: var(--space-sm) var(--space-md);
 		color: var(--color-text);
 		font-size: var(--text-sm);
 		outline: none;
 	}
-	.header input:focus { border-color: var(--color-accent); }
+
+	.header input:focus,
+	.search-wrap input:focus {
+		border-color: var(--color-accent);
+	}
+
+	.search-wrap {
+		margin-bottom: var(--space-md);
+		flex-shrink: 0;
+	}
+
+	.search-wrap input {
+		width: 100%;
+		box-sizing: border-box;
+	}
 
 	.close-btn {
 		background: none;
 		border: none;
-		color: var(--color-text-muted);
+		color: var(--color-text-secondary);
 		cursor: pointer;
 		padding: var(--space-xs);
 		border-radius: var(--radius-sm);
 		transition: background 0.1s;
+		flex-shrink: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
 	}
-	.close-btn:hover { background: var(--color-surface); }
 
-	.loading {
-		padding: var(--space-lg);
-		text-align: center;
-		color: var(--color-text-secondary);
-		font-size: var(--text-sm);
+	.close-btn:hover {
+		background: var(--color-surface);
+	}
+
+	.content {
+		flex: 1;
+		min-height: 0;
+		overflow-y: auto;
 	}
 
 	.grid {
 		display: grid;
-		grid-template-columns: repeat(2, 1fr);
-		gap: var(--space-xs);
-		padding: var(--space-sm);
-		overflow-y: auto;
+		grid-template-columns: repeat(3, 1fr);
+		gap: var(--space-sm);
 	}
 
 	.gif-btn {
@@ -139,14 +202,64 @@
 		cursor: pointer;
 		border-radius: var(--radius-md);
 		overflow: hidden;
-		aspect-ratio: 16 / 9;
+		aspect-ratio: 16 / 10;
 		transition: transform 0.1s;
 	}
-	.gif-btn:hover { transform: scale(1.02); }
+
+	.gif-btn:hover {
+		transform: scale(1.02);
+	}
 
 	.gif-btn img {
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
+		display: block;
+	}
+
+	.spinner-wrap {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		padding: var(--space-lg);
+		gap: var(--space-sm);
+	}
+
+	.spinner {
+		width: 24px;
+		height: 24px;
+		border: 2px solid var(--color-border);
+		border-top-color: var(--color-accent);
+		border-radius: 50%;
+		animation: spin 0.8s linear infinite;
+	}
+
+	.spinner-text {
+		color: var(--color-text-secondary);
+		font-size: var(--text-sm);
+	}
+
+	.empty {
+		padding: var(--space-lg);
+		text-align: center;
+		color: var(--color-text-secondary);
+		font-size: var(--text-sm);
+	}
+
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
+	}
+
+	@media (max-width: 767px) {
+		.gif-picker:not(.embedded) {
+			width: calc(100vw - 2 * var(--space-lg));
+		}
+
+		.grid {
+			grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+		}
 	}
 </style>

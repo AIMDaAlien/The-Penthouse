@@ -208,17 +208,8 @@
 		transform: translateY(-0.5px);
 	}
 
+	/* Hide on desktop (mouse/trackpad) — DesktopNav replaces this */
 	@media (hover: hover) and (pointer: fine) {
-		.nav-wrapper {
-			width: 360px;
-			left: 50%;
-			right: auto;
-			transform: translateX(-50%);
-			bottom: 24px;
-		}
-	}
-
-	@media (min-width: 768px) {
 		.nav-wrapper {
 			display: none;
 		}

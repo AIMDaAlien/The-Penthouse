@@ -19,6 +19,7 @@ import { registerCustomEmoteRoutes } from './features/customEmotes/routes.js';
 import { registerGifRoutes } from './features/gifs/routes.js';
 import { registerChatFolderRoutes } from './features/chatFolders/routes.js';
 import { registerChannelRoutes } from './features/channels/routes.js';
+import { registerWallpaperRoutes } from './routes/wallpapers.js';
 
 export async function buildApp() {
   const fastify = Fastify({
@@ -51,6 +52,7 @@ export async function buildApp() {
   await registerGifRoutes(fastify);
   await registerChatFolderRoutes(fastify);
   await registerChannelRoutes(fastify);
+  await registerWallpaperRoutes(fastify);
 
   const io = new Server(fastify.server, {
     cors: {

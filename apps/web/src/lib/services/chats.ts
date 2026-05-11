@@ -11,7 +11,10 @@ import type {
 	ChatSummary,
 	ChatPreferencesRequest,
 	ChatPreferencesResponse,
-	CreateDirectChatRequest
+	CreateDirectChatRequest,
+	PinMessageRequest,
+	PinResponse,
+	ListPinsResponse
 } from '@penthouse/contracts';
 
 export const chats = {
@@ -22,6 +25,9 @@ export const chats = {
 	messages(chatId: string, { before }: { before?: string } = {}): Promise<{ messages: Message[] }> {
 		const qs = before ? `?before=${before}` : '';
 		return api.get<{ messages: Message[] }>(`/api/v1/chats/${chatId}/messages${qs}`);
+	},
+	searchMessages(chatId: string, query: string): Promise<{ messages: Message[] }> {
+		return api.get<{ messages: Message[] }>(`/api/v1/chats/${chatId}/messages/search?q=${encodeURIComponent(query)}`);
 	},
 
 	sendMessage(chatId: string, data: SendMessageRequest): Promise<SendMessageResponse> {
@@ -46,5 +52,17 @@ export const chats = {
 
 	createDM(data: CreateDirectChatRequest): Promise<{ chatId: string }> {
 		return api.post<{ chatId: string }>('/api/v1/chats/dm', data);
+	},
+
+	pinMessage(chatId: string, data: PinMessageRequest): Promise<PinResponse> {
+		return api.post<PinResponse>(`/api/v1/chats/${chatId}/pins`, data);
+	},
+
+	unpinMessage(chatId: string, messageId: string): Promise<void> {
+		return api.delete<void>(`/api/v1/chats/${chatId}/pins/${messageId}`);
+	},
+
+	listPins(chatId: string): Promise<ListPinsResponse> {
+		return api.get<ListPinsResponse>(`/api/v1/chats/${chatId}/pins`);
 	}
 };

@@ -2,9 +2,8 @@
 	import Icon from './Icon.svelte';
 	import ReplyBar from './ReplyBar.svelte';
 	import AudioRecorder from './AudioRecorder.svelte';
-	import GifPicker from './GifPicker.svelte';
-	import EmotePicker from './EmotePicker.svelte';
-	import StickerPicker from './StickerPicker.svelte';
+	import UnifiedPicker from './UnifiedPicker.svelte';
+	import EmojiEmoteAutocomplete from './EmojiEmoteAutocomplete.svelte';
 
 	interface Props {
 		onSend?: (content: string) => void;
@@ -26,25 +25,68 @@
 	let selectedFile = $state<File | null>(null);
 	let fileInput = $state<HTMLInputElement | null>(null);
 	let previewUrl = $state<string | null>(null);
-	let showGifPicker = $state(false);
-	let showEmotePicker = $state(false);
-	let showStickerPicker = $state(false);
+	let showPicker = $state(false);
+	let showAutocomplete = $state(false);
+	let autocompleteQuery = $state('');
+	let textInput = $state<HTMLInputElement | null>(null);
 
 	function insertAtCursor(insertion: string) {
-		// Simple append for now; could be enhanced with cursor position
-		content += insertion;
+		const input = textInput;
+		if (!input) {
+			content += insertion;
+			return;
+		}
+		const start = input.selectionStart ?? content.length;
+		const end = input.selectionEnd ?? content.length;
+		content = content.slice(0, start) + insertion + content.slice(end);
+		const newPos = start + insertion.length;
+		requestAnimationFrame(() => {
+			input.selectionStart = newPos;
+			input.selectionEnd = newPos;
+			input.focus();
+		});
 	}
 
-	function closePickers() {
-		showGifPicker = false;
-		showEmotePicker = false;
-		showStickerPicker = false;
+	function closePicker() {
+		showPicker = false;
 	}
 
-	function togglePicker(name: 'gif' | 'emote' | 'sticker') {
-		showGifPicker = name === 'gif' ? !showGifPicker : false;
-		showEmotePicker = name === 'emote' ? !showEmotePicker : false;
-		showStickerPicker = name === 'sticker' ? !showStickerPicker : false;
+	function updateAutocomplete() {
+		const input = textInput;
+		if (!input) { showAutocomplete = false; return; }
+		const cursorPos = input.selectionStart ?? content.length;
+		const textBeforeCursor = content.slice(0, cursorPos);
+		const match = textBeforeCursor.match(/:([a-zA-Z0-9_+-]*)$/);
+		if (match && match[1].length >= 1) {
+			autocompleteQuery = match[1];
+			showAutocomplete = true;
+		} else {
+			showAutocomplete = false;
+		}
+	}
+
+	function handleAutocompleteSelect(replacement: string) {
+		const input = textInput;
+		if (!input) return;
+		const cursorPos = input.selectionStart ?? content.length;
+		const textBeforeCursor = content.slice(0, cursorPos);
+		const textAfterCursor = content.slice(cursorPos);
+		const match = textBeforeCursor.match(/:([a-zA-Z0-9_+-]*)$/);
+		if (match) {
+			const newTextBefore = textBeforeCursor.slice(0, -match[0].length) + replacement;
+			content = newTextBefore + textAfterCursor;
+			const newCursorPos = newTextBefore.length;
+			requestAnimationFrame(() => {
+				input.selectionStart = newCursorPos;
+				input.selectionEnd = newCursorPos;
+				input.focus();
+			});
+		}
+		showAutocomplete = false;
+	}
+
+	function closeAutocomplete() {
+		showAutocomplete = false;
 	}
 
 	function handleInput() {
@@ -118,8 +160,9 @@
 			type="text"
 			placeholder={replyTo ? 'Reply...' : 'Message...'}
 			bind:value={content}
-			oninput={handleInput}
+			oninput={() => { handleInput(); updateAutocomplete(); }}
 			disabled={disabled}
+			bind:this={textInput}
 		/>
 		<input
 			type="file"
@@ -131,14 +174,15 @@
 		<button type="button" class="attach-btn" onclick={() => fileInput?.click()} disabled={disabled} aria-label="Attach media">
 			<Icon name="image" size={20} />
 		</button>
-		<button type="button" class="tool-btn" onclick={() => togglePicker('gif')} disabled={disabled} aria-label="Choose GIF">
-			<Icon name="play" size={18} />
-		</button>
-		<button type="button" class="tool-btn" onclick={() => togglePicker('emote')} disabled={disabled} aria-label="Choose emote">
-			<Icon name="emoji" size={20} />
-		</button>
-		<button type="button" class="tool-btn" onclick={() => togglePicker('sticker')} disabled={disabled} aria-label="Choose sticker">
-			<Icon name="square" size={18} />
+		<button
+			type="button"
+			class="tool-btn"
+			onclick={() => (showPicker = !showPicker)}
+			disabled={disabled}
+			aria-label="Open media picker"
+			aria-expanded={showPicker}
+		>
+			<Icon name="plus" size={20} />
 		</button>
 		<AudioRecorder onRecord={onAudioRecord} />
 		<button type="submit" disabled={disabled || (!content.trim() && !selectedFile)} aria-label="Send message">
@@ -146,36 +190,30 @@
 		</button>
 	</form>
 
-	{#if showGifPicker}
+	{#if showPicker}
 		<div class="picker-popup">
-			<GifPicker
-				onSelect={(gif) => {
+			<UnifiedPicker
+				onEmojiSelect={(char) => insertAtCursor(char)}
+				onEmoteSelect={(name) => insertAtCursor(name)}
+				onGifSelect={(gif) => {
 					onGifSelect?.(gif);
-					closePickers();
+					closePicker();
 				}}
-				onClose={closePickers}
-			/>
-		</div>
-	{/if}
-	{#if showEmotePicker}
-		<div class="picker-popup">
-			<EmotePicker
-				onSelect={(name) => {
-					insertAtCursor(name);
-					showEmotePicker = false;
-				}}
-				onClose={closePickers}
-			/>
-		</div>
-	{/if}
-	{#if showStickerPicker}
-		<div class="picker-popup">
-			<StickerPicker
-				onSelect={(sticker) => {
+				onStickerSelect={(sticker) => {
 					onStickerSelect?.(sticker);
-					closePickers();
+					closePicker();
 				}}
-				onClose={closePickers}
+				onClose={closePicker}
+			/>
+		</div>
+	{/if}
+
+	{#if showAutocomplete}
+		<div class="autocomplete-wrapper">
+			<EmojiEmoteAutocomplete
+				query={autocompleteQuery}
+				onSelect={handleAutocompleteSelect}
+				onClose={closeAutocomplete}
 			/>
 		</div>
 	{/if}
@@ -196,7 +234,7 @@
 		padding-bottom: calc(var(--space-sm) + env(safe-area-inset-bottom));
 	}
 
-	input {
+	input[type="text"] {
 		flex: 1;
 		background: var(--color-bg);
 		border: 1px solid var(--color-border);
@@ -208,10 +246,10 @@
 		outline: none;
 	}
 
-	input:focus { border-color: var(--color-accent); }
-	input:disabled { opacity: 0.5; }
+	input[type="text"]:focus { border-color: var(--color-accent); }
+	input[type="text"]:disabled { opacity: 0.5; }
 
-	button {
+	button[type="submit"] {
 		width: 40px;
 		height: 40px;
 		border-radius: 50%;
@@ -226,12 +264,12 @@
 		flex-shrink: 0;
 	}
 
-	button:disabled {
+	button[type="submit"]:disabled {
 		opacity: 0.35;
 		cursor: not-allowed;
 	}
 
-	button:not(:disabled):hover {
+	button[type="submit"]:not(:disabled):hover {
 		opacity: 0.85;
 	}
 
@@ -306,5 +344,24 @@
 		bottom: calc(100% + var(--space-sm));
 		left: var(--space-lg);
 		z-index: 20;
+	}
+
+	.autocomplete-wrapper {
+		position: absolute;
+		bottom: calc(100% + var(--space-xs));
+		left: var(--space-lg);
+		z-index: 30;
+	}
+
+	@media (max-width: 767px) {
+		.picker-popup {
+			left: var(--space-sm);
+			right: var(--space-sm);
+		}
+
+		.autocomplete-wrapper {
+			left: var(--space-sm);
+			right: var(--space-sm);
+		}
 	}
 </style>

@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, ilike, isNull, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import {
   ChatPreferencesRequestSchema,
@@ -109,6 +109,29 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
     const query = request.query as { before?: string };
     const { chatId } = await assertChatMember(params.id, request.authUser!.userId);
     return { messages: await listMessages(chatId, request.authUser!.userId, query.before) };
+  });
+
+  fastify.get('/api/v1/chats/:id/messages/search', { preHandler: fastify.authenticate }, async (request) => {
+    const params = request.params as { id: string };
+    const query = request.query as { q?: string };
+    const { chatId } = await assertChatMember(params.id, request.authUser!.userId);
+    const searchTerm = (query.q ?? '').trim();
+    if (!searchTerm) return { messages: [] };
+
+    const rows = await db.select({ id: messages.id })
+      .from(messages)
+      .where(and(
+        eq(messages.chatId, chatId),
+        ilike(messages.content, `%${searchTerm}%`)
+      ))
+      .orderBy(desc(messages.createdAt))
+      .limit(50);
+
+    const hydrated = [];
+    for (const row of rows) {
+      hydrated.push(await hydrateMessage(row.id, request.authUser!.userId));
+    }
+    return { messages: hydrated };
   });
 
   fastify.get('/api/v1/chats/:id/members', { preHandler: fastify.authenticate }, async (request) => {

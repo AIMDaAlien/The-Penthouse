@@ -46,6 +46,8 @@
 		display: inline-block;
 		vertical-align: middle;
 		margin: 0 1px;
+		height: 1.1em;
+		width: auto;
 	}
 	.markdown-text :global(a) {
 		color: var(--color-accent);

@@ -804,6 +804,69 @@ export const RemoveFolderItemRequestSchema = z.object({
   chatId: z.string().uuid()
 });
 
+export const UserWallpaperSchema = z.object({
+  id: z.string().uuid(),
+  userId: z.string().uuid(),
+  chatId: z.string().uuid().nullable().optional(),
+  isGlobal: z.boolean(),
+  wallpaperUrl: z.string().nullable().optional(),
+  wallpaperColor: z.string().nullable().optional(),
+  opacity: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string()
+});
+
+export const CreateWallpaperRequestSchema = z.object({
+  chatId: z.string().uuid().optional(),
+  isGlobal: z.boolean().default(false),
+  wallpaperUrl: z.string().url().optional(),
+  wallpaperColor: z.string().optional(),
+  opacity: z.string().default('1')
+});
+
+export const ListWallpapersResponseSchema = z.object({
+  wallpapers: z.array(UserWallpaperSchema)
+});
+
+export const EmoteSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  url: z.string(),
+  width: z.number().int(),
+  height: z.number().int(),
+  isAnimated: z.boolean(),
+  createdAt: z.string()
+});
+
+export const ListEmotesResponseSchema = z.object({
+  emotes: z.array(EmoteSchema)
+});
+
+export const StickerPackSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  thumbnailUrl: z.string().nullable(),
+  isPublic: z.boolean(),
+  createdAt: z.string()
+});
+
+export const StickerSchema = z.object({
+  id: z.string().uuid(),
+  packId: z.string().uuid(),
+  name: z.string(),
+  url: z.string(),
+  sortOrder: z.number().int(),
+  createdAt: z.string()
+});
+
+export const ListStickerPacksResponseSchema = z.object({
+  packs: z.array(StickerPackSchema)
+});
+
+export const ListStickersResponseSchema = z.object({
+  stickers: z.array(StickerSchema)
+});
+
 export type RegisterRequest = z.infer<typeof RegisterRequestSchema>;
 export type AltchaChallenge = z.infer<typeof AltchaChallengeSchema>;
 export type LoginRequest = z.infer<typeof LoginRequestSchema>;
@@ -895,3 +958,12 @@ export type CreateChannelRequest = z.infer<typeof CreateChannelRequestSchema>;
 export type ListChannelsResponse = z.infer<typeof ListChannelsResponseSchema>;
 export type AddFolderItemRequest = z.infer<typeof AddFolderItemRequestSchema>;
 export type RemoveFolderItemRequest = z.infer<typeof RemoveFolderItemRequestSchema>;
+export type UserWallpaper = z.infer<typeof UserWallpaperSchema>;
+export type CreateWallpaperRequest = z.infer<typeof CreateWallpaperRequestSchema>;
+export type ListWallpapersResponse = z.infer<typeof ListWallpapersResponseSchema>;
+export type Emote = z.infer<typeof EmoteSchema>;
+export type ListEmotesResponse = z.infer<typeof ListEmotesResponseSchema>;
+export type StickerPack = z.infer<typeof StickerPackSchema>;
+export type Sticker = z.infer<typeof StickerSchema>;
+export type ListStickerPacksResponse = z.infer<typeof ListStickerPacksResponseSchema>;
+export type ListStickersResponse = z.infer<typeof ListStickersResponseSchema>;

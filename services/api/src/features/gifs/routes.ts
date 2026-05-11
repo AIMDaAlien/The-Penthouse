@@ -6,82 +6,75 @@ const GifSearchQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20).optional()
 });
 
-/**
- * Mock GIF search results for development.
- * Replace with Tenor/Giphy proxy when API keys are available.
- */
-const MOCK_GIFS = [
-  {
-    id: 'mock-1',
-    url: 'https://media.giphy.com/media/3o7TKSjRrfIPjeiVyM/giphy.gif',
-    previewUrl: 'https://media.giphy.com/media/3o7TKSjRrfIPjeiVyM/giphy.gif',
-    renderMode: 'image' as const,
-    title: 'Thumbs up',
-    width: 480,
-    height: 270,
-    provider: 'giphy' as const
-  },
-  {
-    id: 'mock-2',
-    url: 'https://media.giphy.com/media/l0HlNQ03J5JxX6lva/giphy.gif',
-    previewUrl: 'https://media.giphy.com/media/l0HlNQ03J5JxX6lva/giphy.gif',
-    renderMode: 'image' as const,
-    title: 'Happy dance',
-    width: 480,
-    height: 360,
-    provider: 'giphy' as const
-  },
-  {
-    id: 'mock-3',
-    url: 'https://media.giphy.com/media/26ufnwz3wDUli7GU0/giphy.gif',
-    previewUrl: 'https://media.giphy.com/media/26ufnwz3wDUli7GU0/giphy.gif',
-    renderMode: 'image' as const,
-    title: 'Mind blown',
-    width: 480,
-    height: 270,
-    provider: 'giphy' as const
-  },
-  {
-    id: 'mock-4',
-    url: 'https://media.giphy.com/media/26xBwdIuRJiAIqHwA/giphy.gif',
-    previewUrl: 'https://media.giphy.com/media/26xBwdIuRJiAIqHwA/giphy.gif',
-    renderMode: 'image' as const,
-    title: 'Cool',
-    width: 480,
-    height: 270,
-    provider: 'giphy' as const
-  },
-  {
-    id: 'mock-5',
-    url: 'https://media.giphy.com/media/3o7TKMt1VVNkHV2PaE/giphy.gif',
-    previewUrl: 'https://media.giphy.com/media/3o7TKMt1VVNkHV2PaE/giphy.gif',
-    renderMode: 'image' as const,
-    title: 'Wink',
-    width: 480,
-    height: 360,
-    provider: 'giphy' as const
-  }
-];
+interface GiphyImage {
+  url: string;
+  width: string;
+  height: string;
+}
+
+interface GiphyGif {
+  id: string;
+  title: string;
+  images: {
+    original: GiphyImage;
+    fixed_height: GiphyImage;
+    fixed_height_downsampled: GiphyImage;
+    preview_gif?: GiphyImage;
+  };
+}
+
+const GIPHY_API_KEY = 'H2jGWv5wskQcoU1gMU2f3YuLCYYLHqjN';
+const GIPHY_SEARCH_URL = 'https://api.giphy.com/v1/gifs/search';
 
 export async function registerGifRoutes(fastify: FastifyInstance) {
   fastify.get('/api/v1/gifs/search', { preHandler: fastify.authenticate }, async (request) => {
     const query = GifSearchQuerySchema.parse(request.query);
     const limit = query.limit ?? 20;
+    const searchTerm = query.q ?? '';
 
-    // TODO: Replace with real Tenor/Giphy proxy when API keys are configured
-    // For now return deterministic subset based on query string
-    const searchLower = (query.q ?? '').toLowerCase();
-    let results = MOCK_GIFS;
-    if (searchLower) {
-      results = MOCK_GIFS.filter((g) =>
-        g.title.toLowerCase().includes(searchLower)
-      );
-      if (results.length === 0) results = MOCK_GIFS;
+    try {
+      const url = new URL(GIPHY_SEARCH_URL);
+      url.searchParams.set('api_key', GIPHY_API_KEY);
+      url.searchParams.set('q', searchTerm);
+      url.searchParams.set('limit', String(limit));
+      url.searchParams.set('offset', '0');
+      url.searchParams.set('rating', 'g');
+      url.searchParams.set('lang', 'en');
+
+      const response = await fetch(url.toString(), {
+        headers: { Accept: 'application/json' }
+      });
+
+      if (!response.ok) {
+        fastify.log.warn({ status: response.status }, 'Giphy API error');
+        return { provider: 'giphy' as const, results: [] };
+      }
+
+      const data = await response.json() as { data: GiphyGif[] };
+      const results = (data.data ?? []).map((gif): {
+        id: string;
+        url: string;
+        previewUrl: string;
+        renderMode: 'image';
+        title: string | null;
+        width: number;
+        height: number;
+        provider: 'giphy';
+      } => ({
+        id: gif.id,
+        url: gif.images.original.url,
+        previewUrl: gif.images.fixed_height_downsampled?.url ?? gif.images.fixed_height.url,
+        renderMode: 'image' as const,
+        title: gif.title || null,
+        width: Number(gif.images.fixed_height.width) || 480,
+        height: Number(gif.images.fixed_height.height) || 360,
+        provider: 'giphy' as const
+      }));
+
+      return { provider: 'giphy' as const, results };
+    } catch (err) {
+      fastify.log.warn({ err }, 'Giphy fetch failed');
+      return { provider: 'giphy' as const, results: [] };
     }
-
-    return {
-      provider: 'giphy' as const,
-      results: results.slice(0, limit)
-    };
   });
 }

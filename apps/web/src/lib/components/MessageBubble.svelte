@@ -5,6 +5,7 @@
 	import Icon from './Icon.svelte';
 	import MarkdownText from './MarkdownText.svelte';
 	import EmojiPicker from './EmojiPicker.svelte';
+	import { focusTrap } from '$lib/actions/focusTrap';
 	import AudioPlayer from './AudioPlayer.svelte';
 
 	interface Emote {
@@ -115,13 +116,13 @@
 		</div>
 
 		{#if showEmojiPicker}
-			<div class="emoji-picker-popup">
+			<div class="emoji-picker-popup" use:focusTrap={{ onEscape: () => showEmojiPicker = false }}>
 				<EmojiPicker onSelect={handleReact} onClose={() => showEmojiPicker = false} />
 			</div>
 		{/if}
 
 		{#if showMenu}
-			<div class="menu">
+			<div class="menu" use:focusTrap={{ onEscape: () => showMenu = false }}>
 				<button onclick={() => { onPin?.(message.id); showMenu = false; }}>Pin</button>
 				{#if canEdit}
 					<button onclick={() => { onEdit?.(message); showMenu = false; }}>Edit</button>
@@ -266,8 +267,8 @@
 	}
 
 	.media-sticker {
-		max-width: 160px;
-		max-height: 160px;
+		max-width: 240px;
+		max-height: 240px;
 		border-radius: var(--radius-md);
 		object-fit: contain;
 	}

@@ -6,6 +6,8 @@
 
 	let { onSelect, onClose }: Props = $props();
 
+	let customEmoji = $state('');
+
 	const emojis = [
 		'👍', '👎', '❤️', '😂', '😮', '😢', '😡', '🎉',
 		'🔥', '👏', '🙌', '🤔', '👀', '✅', '❌', '⭐',
@@ -13,7 +15,26 @@
 		'😍', '🥳', '😭', '🤯', '🫡', '🥹', '🫶', '💀',
 		'✨', '🍀', '🎯', '📌', '🔔', '💡', '📎', '🗑️'
 	];
+
+	function handleCustomInput(e: Event) {
+		const value = (e.target as HTMLInputElement).value;
+		// Extract the first emoji character if present
+		const emojiMatch = value.match(/\p{Emoji_Presentation}/u);
+		if (emojiMatch) {
+			onSelect(emojiMatch[0]);
+			customEmoji = '';
+			onClose?.();
+		}
+	}
+
+	function handleKeyDown(e: KeyboardEvent) {
+		if (e.key === 'Escape') {
+			onClose?.();
+		}
+	}
 </script>
+
+<svelte:window onkeydown={handleKeyDown} />
 
 <div class="picker">
 	<div class="grid">
@@ -28,6 +49,15 @@
 			</button>
 		{/each}
 	</div>
+	<div class="custom-row">
+		<input
+			type="text"
+			placeholder="Paste any emoji…"
+			bind:value={customEmoji}
+			oninput={handleCustomInput}
+			aria-label="Custom emoji reaction"
+		/>
+	</div>
 </div>
 
 <style>
@@ -37,6 +67,7 @@
 		border-radius: var(--radius-md);
 		padding: var(--space-sm);
 		box-shadow: var(--shadow-card);
+		min-width: 240px;
 	}
 	.grid {
 		display: grid;
@@ -58,5 +89,27 @@
 	}
 	.emoji-btn:hover {
 		background: var(--color-surface);
+	}
+	.custom-row {
+		margin-top: var(--space-sm);
+		padding-top: var(--space-sm);
+		border-top: 1px solid var(--color-border);
+	}
+	.custom-row input {
+		width: 100%;
+		background: var(--color-bg);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		padding: var(--space-xs) var(--space-sm);
+		color: var(--color-text);
+		font-size: var(--text-base);
+		outline: none;
+	}
+	.custom-row input:focus {
+		border-color: var(--color-accent);
+	}
+	.custom-row input::placeholder {
+		color: var(--color-text-muted);
+		font-size: var(--text-sm);
 	}
 </style>

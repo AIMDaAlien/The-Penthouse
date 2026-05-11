@@ -1,115 +1,185 @@
 <script lang="ts">
-	import { api } from '$services/api';
-
-	interface Sticker {
-		id: string;
-		packId: string;
-		name: string;
-		url: string;
-	}
-
-	interface StickerPack {
-		id: string;
-		name: string;
-		thumbnailUrl: string | null;
-		isPublic: boolean;
-	}
+	import { focusTrap } from '$lib/actions/focusTrap';
+	import { stickersStore } from '$stores/stickers.svelte';
+	import { media } from '$services/media';
+	import type { StickerPack } from '@penthouse/contracts';
 
 	interface Props {
 		onSelect: (sticker: { url: string; name: string }) => void;
-		onClose: () => void;
+		onClose?: () => void;
+		embedded?: boolean;
 	}
 
-	let { onSelect, onClose }: Props = $props();
+	let { onSelect, onClose, embedded = false }: Props = $props();
 
-	let packs = $state<StickerPack[]>([]);
-	let stickersByPack = $state<Record<string, Sticker[]>>({});
 	let activePackId = $state<string | null>(null);
-	let loading = $state(true);
+	let uploadLoading = $state(false);
+	let uploadError = $state('');
+	let fileInput: HTMLInputElement | null = null;
+	let uploadTargetPackId = $state<string | null>(null);
 
 	$effect(() => {
-		api.get<{ packs?: Array<Record<string, unknown>> }>('/api/v1/sticker-packs')
-			.then((data) => {
-				packs = (data.packs ?? []).map((p: Record<string, unknown>) => ({
-					id: String(p.id),
-					name: String(p.name),
-					thumbnailUrl: p.thumbnailUrl ? String(p.thumbnailUrl) : null,
-					isPublic: Boolean(p.isPublic)
-				}));
-				if (packs.length > 0) {
-					activePackId = packs[0].id;
-					loadStickers(packs[0].id);
-				}
-			})
-			.finally(() => loading = false);
+		stickersStore.loadPacks().then(() => {
+			const first = stickersStore.packs[0];
+			if (first) {
+				activePackId = first.id;
+				stickersStore.loadStickers(first.id);
+			}
+		});
 	});
-
-	async function loadStickers(packId: string) {
-		if (stickersByPack[packId]) return;
-		const data = await api.get<{ stickers?: Array<Record<string, unknown>> }>(`/api/v1/sticker-packs/${packId}/stickers`);
-		stickersByPack[packId] = (data.stickers ?? []).map((s: Record<string, unknown>) => ({
-			id: String(s.id),
-			packId: String(s.packId),
-			name: String(s.name),
-			url: String(s.url)
-		}));
-	}
 
 	function setActivePack(packId: string) {
 		activePackId = packId;
-		loadStickers(packId);
+		stickersStore.loadStickers(packId);
 	}
 
-	function handleKeydown(e: KeyboardEvent) {
-		if (e.key === 'Escape') onClose();
+	function handleSelect(sticker: { url: string; name: string }) {
+		onSelect(sticker);
+		onClose?.();
+	}
+
+	async function handleCreatePack() {
+		const name = window.prompt('Pack name:');
+		if (!name || !name.trim()) return;
+		try {
+			const pack = await stickersStore.createPack(name.trim());
+			activePackId = pack.id;
+		} catch (err) {
+			uploadError = err instanceof Error ? err.message : 'Failed to create pack';
+		}
+	}
+
+	function triggerUpload(packId: string) {
+		uploadTargetPackId = packId;
+		fileInput?.click();
+	}
+
+	async function handleFileChange(e: Event) {
+		const target = e.target as HTMLInputElement;
+		const file = target.files?.[0];
+		if (!file || !uploadTargetPackId) return;
+
+		const name = window.prompt('Sticker name:', file.name.replace(/\.[^.]+$/, ''));
+		if (!name || !name.trim()) {
+			target.value = '';
+			return;
+		}
+
+		uploadLoading = true;
+		uploadError = '';
+
+		try {
+			const uploadRes = await media.upload(file);
+			await stickersStore.addSticker(uploadTargetPackId, { name: name.trim(), mediaUploadId: uploadRes.id });
+		} catch (err) {
+			uploadError = err instanceof Error ? err.message : 'Upload failed';
+		} finally {
+			uploadLoading = false;
+			target.value = '';
+			uploadTargetPackId = null;
+		}
+	}
+
+	function activePackStickers(): import('@penthouse/contracts').Sticker[] {
+		return activePackId ? stickersStore.stickersByPack[activePackId] ?? [] : [];
+	}
+
+	function activePack(): StickerPack | undefined {
+		return stickersStore.packs.find((p) => p.id === activePackId);
 	}
 </script>
 
-<div class="sticker-picker" onkeydown={handleKeydown} role="dialog" tabindex="-1">
-	<div class="header">
-		<span class="title">Stickers</span>
-		<button class="close-btn" onclick={onClose} aria-label="Close">
-			<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2">
-				<path d="M1 1l12 12M13 1L1 13" />
-			</svg>
-		</button>
-	</div>
-
-	{#if loading}
-		<div class="loading">Loading...</div>
-	{:else if packs.length === 0}
-		<div class="empty">No sticker packs yet.</div>
-	{:else}
-		<div class="pack-tabs">
-			{#each packs as pack (pack.id)}
-				<button
-					class="pack-tab"
-					class:active={activePackId === pack.id}
-					onclick={() => setActivePack(pack.id)}
-					aria-label={pack.name}
-				>
-					{#if pack.thumbnailUrl}
-						<img src={pack.thumbnailUrl} alt={pack.name} width={28} height={28} />
-					{:else}
-						<span class="tab-label">{pack.name.slice(0, 2)}</span>
-					{/if}
+<div
+	class="sticker-picker"
+	class:embedded
+	role="dialog"
+	aria-label="Sticker picker"
+	tabindex="-1"
+	use:focusTrap={{ onEscape: () => onClose?.() }}
+>
+	{#if !embedded}
+		<div class="header">
+			<span class="title">Stickers</span>
+			{#if onClose}
+				<button class="close-btn" onclick={onClose} aria-label="Close sticker picker" type="button">
+					<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2">
+						<path d="M1 1l12 12M13 1L1 13" />
+					</svg>
 				</button>
-			{/each}
-		</div>
-
-		<div class="grid">
-			{#if activePackId && stickersByPack[activePackId]}
-				{#each stickersByPack[activePackId] as sticker (sticker.id)}
-					<button
-						class="sticker-btn"
-						onclick={() => onSelect({ url: sticker.url, name: sticker.name })}
-						aria-label={`Sticker ${sticker.name}`}
-					>
-						<img src={sticker.url} alt={sticker.name} loading="lazy" />
-					</button>
-				{/each}
 			{/if}
 		</div>
+	{/if}
+
+	{#if stickersStore.loading}
+		<div class="status">Loading...</div>
+	{:else if stickersStore.error}
+		<div class="status error">{stickersStore.error}</div>
+	{:else if stickersStore.packs.length === 0}
+		<div class="status">No sticker packs yet.</div>
+	{:else}
+		<div class="tab-bar" role="tablist" aria-label="Sticker packs">
+			{#each stickersStore.packs as pack (pack.id)}
+				<button
+					class="tab"
+					class:active={activePackId === pack.id}
+					role="tab"
+					aria-selected={activePackId === pack.id}
+					id="tab-{pack.id}"
+					aria-controls="panel-{pack.id}"
+					onclick={() => setActivePack(pack.id)}
+					type="button"
+				>
+					{pack.name}
+				</button>
+			{/each}
+			<button class="tab add-tab" onclick={handleCreatePack} type="button" aria-label="Create new pack">+</button>
+		</div>
+
+		{#if activePackId}
+			<div
+				class="tabpanel"
+				role="tabpanel"
+				id="panel-{activePackId}"
+				aria-labelledby="tab-{activePackId}"
+			>
+				{#if activePackStickers().length === 0}
+					<div class="status">No stickers in this pack yet.</div>
+				{:else}
+					<div class="grid">
+						{#each activePackStickers() as sticker (sticker.id)}
+							<button
+								class="sticker-btn"
+								onclick={() => handleSelect({ url: sticker.url, name: sticker.name })}
+								aria-label="Send sticker {sticker.name}"
+								type="button"
+							>
+								<img src={sticker.url} alt={sticker.name} loading="lazy" />
+							</button>
+						{/each}
+					</div>
+				{/if}
+
+				<input
+					type="file"
+					accept="image/*"
+					class="file-input"
+					bind:this={fileInput}
+					onchange={handleFileChange}
+				/>
+				<button
+					class="upload-btn"
+					onclick={() => activePackId && triggerUpload(activePackId)}
+					disabled={uploadLoading}
+					type="button"
+				>
+					{uploadLoading ? 'Uploading...' : 'Upload sticker'}
+				</button>
+			</div>
+		{/if}
+	{/if}
+
+	{#if uploadError}
+		<div class="status error">{uploadError}</div>
 	{/if}
 </div>
 
@@ -118,20 +188,29 @@
 		background: var(--color-surface-elevated);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-lg);
-		box-shadow: var(--shadow-card);
-		width: 320px;
+		padding: var(--space-md);
 		max-height: 400px;
+		overflow-y: auto;
 		display: flex;
 		flex-direction: column;
-		overflow: hidden;
+		width: calc(100vw - 2 * var(--space-lg));
+	}
+
+	.sticker-picker.embedded {
+		background: transparent;
+		border: none;
+		border-radius: 0;
+		padding: 0;
+		width: 100%;
+		max-height: 360px;
 	}
 
 	.header {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		padding: var(--space-sm) var(--space-md);
-		border-bottom: 1px solid var(--color-border);
+		margin-bottom: var(--space-sm);
+		flex-shrink: 0;
 	}
 
 	.title {
@@ -143,64 +222,68 @@
 	.close-btn {
 		background: none;
 		border: none;
-		color: var(--color-text-muted);
+		color: var(--color-text-secondary);
 		cursor: pointer;
 		padding: var(--space-xs);
 		border-radius: var(--radius-sm);
 		transition: background 0.1s;
-	}
-	.close-btn:hover { background: var(--color-surface); }
-
-	.loading, .empty {
-		padding: var(--space-lg);
-		text-align: center;
-		color: var(--color-text-secondary);
-		font-size: var(--text-sm);
-	}
-
-	.pack-tabs {
-		display: flex;
-		gap: var(--space-xs);
-		padding: var(--space-sm);
-		border-bottom: 1px solid var(--color-border);
-		overflow-x: auto;
-	}
-
-	.pack-tab {
-		width: 36px;
-		height: 36px;
-		border-radius: var(--radius-md);
-		background: none;
-		border: 2px solid transparent;
-		cursor: pointer;
-		padding: 2px;
 		display: flex;
 		align-items: center;
 		justify-content: center;
+	}
+	.close-btn:hover {
+		background: var(--color-surface);
+	}
+
+	.tab-bar {
+		display: flex;
+		gap: var(--space-xs);
+		padding-bottom: var(--space-sm);
+		border-bottom: 1px solid var(--color-border);
+		margin-bottom: var(--space-sm);
+		overflow-x: auto;
 		flex-shrink: 0;
-		transition: border-color 0.15s;
 	}
-	.pack-tab.active {
-		border-color: var(--color-accent);
-	}
-	.pack-tab img {
-		width: 28px;
-		height: 28px;
-		object-fit: contain;
-		border-radius: var(--radius-sm);
-	}
-	.tab-label {
-		font-size: var(--text-xs);
+
+	.tab {
+		background: transparent;
 		color: var(--color-text-secondary);
+		border: none;
+		border-radius: var(--radius-pill);
+		padding: var(--space-xs) var(--space-sm);
+		font-size: var(--text-sm);
 		font-weight: var(--weight-medium);
+		cursor: pointer;
+		white-space: nowrap;
+		transition: background 0.1s, color 0.1s;
+		flex-shrink: 0;
+	}
+	.tab.active {
+		background: var(--color-accent);
+		color: var(--color-bg);
+	}
+	.tab:hover:not(.active) {
+		background: var(--color-surface);
+	}
+
+	.add-tab {
+		font-weight: var(--weight-bold);
+		min-width: 32px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.tabpanel {
+		flex: 1;
+		min-height: 0;
+		overflow-y: auto;
 	}
 
 	.grid {
 		display: grid;
-		grid-template-columns: repeat(4, 1fr);
-		gap: var(--space-xs);
-		padding: var(--space-sm);
-		overflow-y: auto;
+		grid-template-columns: repeat(3, 1fr);
+		gap: var(--space-sm);
 	}
 
 	.sticker-btn {
@@ -209,7 +292,7 @@
 		padding: var(--space-xs);
 		cursor: pointer;
 		border-radius: var(--radius-md);
-		transition: background 0.1s, transform 0.1s;
+		transition: background 0.1s;
 		aspect-ratio: 1;
 		display: flex;
 		align-items: center;
@@ -217,12 +300,69 @@
 	}
 	.sticker-btn:hover {
 		background: var(--color-surface);
-		transform: scale(1.05);
 	}
 
 	.sticker-btn img {
-		max-width: 100%;
-		max-height: 100%;
+		width: 100%;
+		height: auto;
 		object-fit: contain;
+	}
+
+	.status {
+		padding: var(--space-lg);
+		text-align: center;
+		color: var(--color-text-secondary);
+		font-size: var(--text-sm);
+	}
+
+	.error {
+		color: var(--color-error, #ef4444);
+	}
+
+	.file-input {
+		display: none;
+	}
+
+	.upload-btn {
+		width: 100%;
+		margin-top: var(--space-sm);
+		background: var(--color-accent);
+		color: var(--color-bg);
+		border: none;
+		border-radius: var(--radius-pill);
+		padding: var(--space-sm) var(--space-md);
+		font-size: var(--text-sm);
+		font-weight: var(--weight-medium);
+		cursor: pointer;
+		transition: opacity 0.1s;
+	}
+	.upload-btn:hover {
+		opacity: 0.9;
+	}
+	.upload-btn:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+
+	@media (min-width: 768px) {
+		.sticker-picker:not(.embedded) {
+			width: 360px;
+		}
+
+		.grid {
+			grid-template-columns: repeat(4, 1fr);
+		}
+
+		.sticker-btn img {
+			max-width: 72px;
+			max-height: 72px;
+		}
+	}
+
+	@media (max-width: 767px) {
+		.sticker-btn img {
+			max-width: 80px;
+			max-height: 80px;
+		}
 	}
 </style>
