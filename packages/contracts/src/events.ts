@@ -21,9 +21,12 @@ export const ClientTypingStopEventSchema = z.object({
   chatId: z.string()
 });
 
+export const PresenceStateSchema = z.enum(['available', 'busy', 'dnd', 'afk', 'offline']);
+
 export const ClientPresenceUpdateEventSchema = z.object({
   type: z.literal('presence.update'),
-  online: z.boolean()
+  state: PresenceStateSchema,
+  note: z.string().max(100).optional()
 });
 
 export const ClientMessageSendEventSchema = z.object({
@@ -152,7 +155,9 @@ export const ServerMessagePinnedEventSchema = z.object({
     chatId: z.string(),
     messageId: z.string(),
     pinnedByUserId: z.string(),
-    pinnedAt: z.string()
+    pinnedAt: z.string(),
+    content: z.string(),
+    senderDisplayName: z.string().nullable().optional()
   })
 });
 
@@ -177,11 +182,16 @@ export const ServerTypingUpdateEventSchema = z.object({
 
 export const ServerPresenceUpdateEventSchema = z.object({
   userId: z.string(),
-  online: z.boolean(),
+  state: PresenceStateSchema,
+  note: z.string().optional(),
   timestamp: z.string()
 });
 
-export const ServerPresenceSyncEventSchema = z.record(z.string(), z.boolean());
+export const ServerPresenceSyncEventSchema = z.record(z.string(), z.object({
+  state: PresenceStateSchema,
+  note: z.string().optional(),
+  lastSeenAt: z.string().optional()
+}));
 
 export const ServerChatSyncRequiredEventSchema = z.object({
   type: z.literal('chat.sync_required'),
@@ -191,10 +201,96 @@ export const ServerChatSyncRequiredEventSchema = z.object({
   })
 });
 
+export const ClientVoiceJoinEventSchema = z.object({
+  type: z.literal('voice.join'),
+  chatId: z.string()
+});
+
+export const ClientVoiceLeaveEventSchema = z.object({
+  type: z.literal('voice.leave'),
+  chatId: z.string()
+});
+
+export const ClientVoiceSignalEventSchema = z.object({
+  type: z.literal('voice.signal'),
+  targetUserId: z.string(),
+  data: z.record(z.string(), z.unknown())
+});
+
+export const ClientVoiceMuteEventSchema = z.object({
+  type: z.literal('voice.mute'),
+  muted: z.boolean()
+});
+
+export const ClientVoicePttEventSchema = z.object({
+  type: z.literal('voice.ptt'),
+  active: z.boolean()
+});
+
+export const ClientVoiceDeafenEventSchema = z.object({
+  type: z.literal('voice.deafen'),
+  deafened: z.boolean()
+});
+
+export const ServerVoiceUserJoinedEventSchema = z.object({
+  type: z.literal('voice.user_joined'),
+  payload: z.object({
+    userId: z.string(),
+    displayName: z.string()
+  })
+});
+
+export const ServerVoiceUserLeftEventSchema = z.object({
+  type: z.literal('voice.user_left'),
+  payload: z.object({
+    userId: z.string()
+  })
+});
+
+export const ServerVoiceSignalEventSchema = z.object({
+  type: z.literal('voice.signal'),
+  payload: z.object({
+    fromUserId: z.string(),
+    data: z.record(z.string(), z.unknown())
+  })
+});
+
+export const ServerVoiceMuteEventSchema = z.object({
+  type: z.literal('voice.mute'),
+  payload: z.object({
+    userId: z.string(),
+    muted: z.boolean()
+  })
+});
+
+export const ServerVoiceSpeakingEventSchema = z.object({
+  type: z.literal('voice.speaking'),
+  payload: z.object({
+    userId: z.string(),
+    speaking: z.boolean()
+  })
+});
+
+export const ServerVoiceStateEventSchema = z.object({
+  type: z.literal('voice.state'),
+  payload: z.object({
+    participants: z.array(z.object({
+      userId: z.string(),
+      displayName: z.string(),
+      muted: z.boolean(),
+      deafened: z.boolean().optional(),
+      speaking: z.boolean().optional()
+    }))
+  })
+});
+
 export type ClientPresenceUpdateEvent = z.infer<typeof ClientPresenceUpdateEventSchema>;
 export type ClientMessageSendEvent = z.infer<typeof ClientMessageSendEventSchema>;
 export type ServerPresenceUpdateEvent = z.infer<typeof ServerPresenceUpdateEventSchema>;
 export type ServerPresenceSyncEvent = z.infer<typeof ServerPresenceSyncEventSchema>;
+export type ServerMessageNewEvent = z.infer<typeof ServerMessageNewEventSchema>;
+export type ServerMessageAckEvent = z.infer<typeof ServerMessageAckEventSchema>;
+export type ServerMessageReadEvent = z.infer<typeof ServerMessageReadEventSchema>;
 export type ServerMessageEditedEvent = z.infer<typeof ServerMessageEditedEventSchema>;
 export type ServerMessageDeletedEvent = z.infer<typeof ServerMessageDeletedEventSchema>;
 export type ServerPollVotedEvent = z.infer<typeof ServerPollVotedEventSchema>;
@@ -202,3 +298,18 @@ export type ServerReactionAddEvent = z.infer<typeof ServerReactionAddEventSchema
 export type ServerReactionRemoveEvent = z.infer<typeof ServerReactionRemoveEventSchema>;
 export type ServerMessagePinnedEvent = z.infer<typeof ServerMessagePinnedEventSchema>;
 export type ServerMessageUnpinnedEvent = z.infer<typeof ServerMessageUnpinnedEventSchema>;
+export type ServerTypingUpdateEvent = z.infer<typeof ServerTypingUpdateEventSchema>;
+export type ServerChatSyncRequiredEvent = z.infer<typeof ServerChatSyncRequiredEventSchema>;
+export type ServerMessageModeratedEvent = z.infer<typeof ServerMessageModeratedEventSchema>;
+export type ClientVoiceJoinEvent = z.infer<typeof ClientVoiceJoinEventSchema>;
+export type ClientVoiceLeaveEvent = z.infer<typeof ClientVoiceLeaveEventSchema>;
+export type ClientVoiceSignalEvent = z.infer<typeof ClientVoiceSignalEventSchema>;
+export type ClientVoiceMuteEvent = z.infer<typeof ClientVoiceMuteEventSchema>;
+export type ClientVoicePttEvent = z.infer<typeof ClientVoicePttEventSchema>;
+export type ClientVoiceDeafenEvent = z.infer<typeof ClientVoiceDeafenEventSchema>;
+export type ServerVoiceUserJoinedEvent = z.infer<typeof ServerVoiceUserJoinedEventSchema>;
+export type ServerVoiceUserLeftEvent = z.infer<typeof ServerVoiceUserLeftEventSchema>;
+export type ServerVoiceSignalEvent = z.infer<typeof ServerVoiceSignalEventSchema>;
+export type ServerVoiceMuteEvent = z.infer<typeof ServerVoiceMuteEventSchema>;
+export type ServerVoiceSpeakingEvent = z.infer<typeof ServerVoiceSpeakingEventSchema>;
+export type ServerVoiceStateEvent = z.infer<typeof ServerVoiceStateEventSchema>;

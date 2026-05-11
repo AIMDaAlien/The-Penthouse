@@ -71,7 +71,7 @@ UPLOAD_MAX_MB=20
 ADMIN_BOOTSTRAP_USERNAME=
 
 # ── External APIs ─────────────────────────────────────────────────────────────
-GIPHY_API_KEY=H2jGWv5wskQcoU1gMU2f3YuLCYYLHqjN
+GIPHY_API_KEY=
 KLIPY_API_KEY=
 
 # ── TrueNAS absolute paths (adjust to your pool/dataset layout) ───────────────

@@ -1,5 +1,7 @@
 # TrueNAS Deployment
 
+> V4 alpha note: the codebase is now the v4 Svelte 5/Fastify/Drizzle rebuild, but TrueNAS deployment still uses the preserved incumbent Compose and Caddy files.
+
 If TrueNAS remains unstable, see `docs/TEMP_CLOUD_HOSTING_OPTIONS.md` for the temporary cloud-hosting fallback research. Short version: Oracle Cloud Always Free is the best free lift-and-shift candidate; cheap VPS is the lowest-drama non-free fallback.
 
 This rebuild can use the same broad shape as your old TrueNAS setup:
@@ -12,7 +14,7 @@ This rebuild can use the same broad shape as your old TrueNAS setup:
 The two real differences from the old branch are:
 
 1. the rebuild needs PostgreSQL
-2. push notifications need a Firebase Admin key on the server
+2. web push needs VAPID keys when push is enabled
 3. the public site now serves the PWA as the default and keeps APKs under legacy downloads only if recovered
 
 ## What carried over from the old setup
@@ -36,7 +38,7 @@ Keep the rebuild in its own dataset tree so it does not collide with the old app
 - downloads: `/mnt/Backup/penthouse-rebuild/downloads`
 - caddy data: `/mnt/Backup/penthouse-rebuild/caddy-data`
 - caddy config: `/mnt/Backup/penthouse-rebuild/caddy-config`
-- firebase key: `/mnt/Backup/penthouse-rebuild/secrets/firebase-admin.json`
+- optional firebase key if Android FCM is reactivated later: `/mnt/Backup/penthouse-rebuild/secrets/firebase-admin.json`
 
 On TrueNAS itself, the rebuild Caddy container should follow the same host-port shape as the old live stack:
 
@@ -88,11 +90,13 @@ Then fill in the real values:
 - `LEGACY_APK_DOWNLOAD_PATH`
 - `LEGACY_APK_STATUS`
 - `GIPHY_API_KEY`
-- `KLIPY_API_KEY`
+- `VAPID_PUBLIC_KEY`
+- `VAPID_PRIVATE_KEY`
+- `VAPID_SUBJECT`
 - `TRUENAS_DOWNLOADS_PATH`
-- `FCM_SERVICE_ACCOUNT_FILE`
+- `FCM_SERVICE_ACCOUNT_FILE` only if Android FCM is reactivated later
 
-Copy the Firebase Admin JSON file into the secrets path named in `.env.truenas`.
+Only copy a Firebase Admin JSON file into the secrets path if Android FCM is reactivated later.
 
 ## Put legacy APKs in the legacy downloads directory
 
@@ -294,7 +298,7 @@ curl -fsSL http://YOUR_TRUENAS_IP:3001/api/v1/health
 
 ## Mobile build note
 
-For release builds, the Android app must point to the public API:
+Android release builds are deferred to beta. If Android legacy continuity is explicitly reactivated, the app must point to the public API:
 
 ```bash
 export VITE_API_URL="https://api.penthouse.blog"
@@ -314,7 +318,7 @@ If those are not present, the release build will still complete, but the output 
 
 Only build a signed APK/AAB if Android legacy continuity is explicitly needed. The PWA remains the default public release surface.
 
-The rebuild Android baseline is now:
+The historical Android baseline was:
 
 - `versionCode 100`
 - `versionName 2.0.0-alpha.1`
@@ -332,6 +336,6 @@ Reuse the old model:
 Add the rebuild-specific pieces:
 
 - PostgreSQL persistence
-- Firebase Admin key
-- public API URL for Android release builds
+- VAPID keys for web push
+- optional Firebase Admin key only if Android FCM is reactivated later
 - a public downloads directory that can hold recovered legacy APKs under `downloads/legacy/`

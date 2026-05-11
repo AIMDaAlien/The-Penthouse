@@ -94,6 +94,16 @@ Status: in progress
 
 ## Current status
 
+- V4 alpha cutover supersedes the v2.1 PWA branch as the current release target.
+- The original v2.1 PWA stability goals are complete enough to be historical context, not the active roadmap.
+- Current alpha verification now centers on v4 source plus the incumbent v3 deployment shape:
+  - root `npm run validate`
+  - root `npm run test`
+  - web build
+  - API build
+  - API Docker build
+  - local and production Compose sanity
+- Android APK release is deferred to beta; the scripts remain for continuity.
 - Backend notice-gating is implemented.
 - Mobile/client notice UX is implemented.
 - Android push is now proven on Google Play-backed runtime paths.

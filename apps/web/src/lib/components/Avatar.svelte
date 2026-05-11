@@ -1,108 +1,54 @@
 <script lang="ts">
-	import { presenceStore } from '$stores/presence.svelte';
-
 	interface Props {
-		userId: string;
-		displayName: string;
-		avatarUrl?: string | null;
-		size?: 'sm' | 'md' | 'lg';
-		showPresence?: boolean;
+		url?: string | null;
+		name: string;
+		size?: number;
 	}
 
-	let { userId, displayName, avatarUrl, size = 'md', showPresence = true } = $props();
-
-	const sizeClasses: Record<string, string> = {
-		sm: 'avatar-sm',
-		md: 'avatar-md',
-		lg: 'avatar-lg'
-	};
+	let { url, name, size = 40 }: Props = $props();
 
 	const initials = $derived(
-		(displayName || '')
+		name
 			.split(' ')
-			.map((n: string) => n[0])
+			.map((w) => w[0])
+			.filter(Boolean)
+			.slice(0, 2)
 			.join('')
 			.toUpperCase()
-			.slice(0, 2)
 	);
 
-	const isOnline = $derived(presenceStore.userPresenceMap.get(userId) ?? false);
+	const hue = $derived(
+		name.split('').reduce((sum, c) => sum + c.charCodeAt(0), 0) % 360
+	);
 </script>
 
-<div class="avatar-container {sizeClasses[size]}">
-	<div class="avatar">
-		{#if avatarUrl}
-			<img src={avatarUrl} alt={displayName} />
-		{:else}
-			<span class="initials">{initials}</span>
-		{/if}
+{#if url}
+	<img src={url} alt={name} class="avatar" style:width="{size}px" style:height="{size}px" />
+{:else}
+	<div
+		class="avatar fallback"
+		style:width="{size}px"
+		style:height="{size}px"
+		style:background={`hsl(${hue} 50% 35%)`}
+	>
+		{initials}
 	</div>
-	{#if showPresence && isOnline}
-		<div class="presence-indicator" title={isOnline ? 'Online' : 'Offline'}></div>
-	{/if}
-</div>
+{/if}
 
 <style>
-	.avatar-container {
-		position: relative;
-		display: inline-block;
-	}
-
-	.avatar-container.avatar-sm {
-		width: 32px;
-		height: 32px;
-	}
-
-	.avatar-container.avatar-md {
-		width: 48px;
-		height: 48px;
-	}
-
-	.avatar-container.avatar-lg {
-		width: 64px;
-		height: 64px;
-	}
-
 	.avatar {
-		width: 100%;
-		height: 100%;
 		border-radius: 50%;
-		background: var(--color-accent-dim);
+		object-fit: cover;
+		flex-shrink: 0;
+	}
+
+	.fallback {
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		overflow: hidden;
-		border: 2px solid var(--color-border);
-		font-weight: 600;
-		color: var(--color-accent);
-		font-size: 0.875rem;
-	}
-
-	.avatar img {
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
-	}
-
-	.presence-indicator {
-		position: absolute;
-		bottom: 0;
-		right: 0;
-		width: 30%;
-		aspect-ratio: 1;
-		border-radius: 50%;
-		background: var(--color-success);
-		border: 2px solid var(--color-bg);
-		box-shadow: 0 0 8px rgba(52, 211, 153, 0.5);
-	}
-
-	.avatar-container.avatar-sm .presence-indicator {
-		width: 28%;
-		border-width: 1.5px;
-	}
-
-	.avatar-container.avatar-lg .presence-indicator {
-		width: 28%;
-		border-width: 2.5px;
+		color: #fff;
+		font-size: calc(var(--size, 40px) * 0.4);
+		font-weight: var(--weight-bold);
+		font-family: var(--font-body);
 	}
 </style>

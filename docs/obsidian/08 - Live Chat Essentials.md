@@ -110,3 +110,28 @@ The chat stack now also supports 1:1 direct messages without introducing a secon
 - one DM thread exists per member pair
 - DMs stay mixed into the normal chat list and reuse typing, read state, media, GIF, and moderation behavior
 - if a counterpart is later removed or banned, the remaining member can still read history but the DM becomes read-only
+
+## V4 alpha chat expansion
+
+V4 keeps the single chat system and adds more room-level tools:
+
+- child channels under top-level chats
+- pinned message banner
+- message search inside the chat route
+- any-emoji reactions and custom-emote reactions
+- sticker messages and sticker picker
+- markdown rendering for rich text messages
+- audio notes with waveform playback
+- per-chat wallpapers
+- folder assignment for organizing chats
+- availability states beyond online/offline: available, busy, dnd, afk, and offline
+
+Key current files:
+
+- `services/api/src/routes/chats.ts`
+- `services/api/src/features/channels/routes.ts`
+- `services/api/src/features/chatFolders/routes.ts`
+- `services/api/src/features/customEmotes/routes.ts`
+- `apps/web/src/routes/chat/[id]/+page.svelte`
+- `apps/web/src/lib/components/MessageComposer.svelte`
+- `apps/web/src/lib/components/UnifiedPicker.svelte`

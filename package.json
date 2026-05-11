@@ -1,9 +1,9 @@
 {
   "name": "the-penthouse",
-  "version": "2.1.0-alpha.1",
+  "version": "4.0.0-alpha.1",
   "private": true,
-  "description": "The Penthouse clean-room rebuild monorepo",
-  "packageManager": "npm@11.8.0",
+  "description": "The Penthouse v4 private chat platform",
+  "packageManager": "npm@11.12.1",
   "workspaces": [
     "apps/*",
     "services/*",

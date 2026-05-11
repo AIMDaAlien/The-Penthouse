@@ -1,155 +1,124 @@
-import { randomUUID } from 'node:crypto';
+import { and, eq, gt, isNull } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
-import { AuthResponseSchema, SessionSummarySchema, type SessionSummary } from '@penthouse/contracts';
-import { createOpaqueToken, hashToken, refreshExpiryDate, signAccessToken } from './security.js';
-import { getUserById, mapAuthUser, type Queryable } from './users.js';
+import { db } from '../db/pool.js';
+import { refreshTokens, sessionDevices, users } from '../db/schema.js';
+import { env } from '../config/env.js';
+import { randomToken, sha256 } from './crypto.js';
+import { durationToDate } from './time.js';
+import { unauthorized } from './error-responses.js';
+import type { AuthContext } from '../types.js';
 
-const SESSION_DEVICE_LABEL_MAX_LENGTH = 120;
-const SESSION_CONTEXT_MAX_LENGTH = 32;
+export async function createSession(fastify: FastifyInstance, user: typeof users.$inferSelect) {
+  const [device] = await db.insert(sessionDevices).values({
+    userId: user.id,
+    deviceLabel: 'Web browser',
+    appContext: 'pwa'
+  }).returning();
 
-export type SessionMetadata = {
-  deviceLabel: string;
-  appContext: string | null;
-  hasPushToken: boolean;
-};
-
-type SessionRow = {
-  id: string;
-  created_at: string;
-  last_used_at: string;
-  device_label: string;
-  app_context: string | null;
-  has_push_token: boolean;
-};
-
-function sanitizeText(value: unknown, maxLength: number): string | null {
-  if (typeof value !== 'string') return null;
-  const normalized = value.trim().replace(/\s+/g, ' ');
-  if (!normalized) return null;
-  return normalized.slice(0, maxLength);
-}
-
-function fallbackDeviceLabel(userAgent: string): string {
-  const normalized = userAgent.toLowerCase();
-  if (normalized.includes('android')) return 'Android app';
-  if (normalized.includes('iphone') || normalized.includes('ipad') || normalized.includes('ios')) return 'iOS app';
-  return 'Web browser';
-}
-
-export function getSessionMetadataFromRequest(request: { headers: Record<string, unknown> }): SessionMetadata {
-  const userAgent = typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : '';
-  const appContext = sanitizeText(request.headers['x-penthouse-app-context'], SESSION_CONTEXT_MAX_LENGTH);
-  const explicitDeviceLabel = sanitizeText(request.headers['x-penthouse-device-label'], SESSION_DEVICE_LABEL_MAX_LENGTH);
-  const hasPushTokenHeader = sanitizeText(request.headers['x-penthouse-push-present'], 8);
-
-  return {
-    deviceLabel: explicitDeviceLabel ?? fallbackDeviceLabel(userAgent),
-    appContext,
-    hasPushToken: hasPushTokenHeader === '1' || hasPushTokenHeader === 'true'
-  };
-}
-
-export function mergeSessionMetadata(
-  preferred: Partial<SessionMetadata>,
-  fallback: Partial<SessionMetadata> = {}
-): SessionMetadata {
-  return {
-    deviceLabel: preferred.deviceLabel?.trim() || fallback.deviceLabel?.trim() || 'Unknown device',
-    appContext: preferred.appContext?.trim() || fallback.appContext?.trim() || null,
-    hasPushToken: typeof preferred.hasPushToken === 'boolean'
-      ? preferred.hasPushToken
-      : Boolean(fallback.hasPushToken)
-  };
-}
-
-export function mapSessionSummary(row: SessionRow, currentSessionId: string | null): SessionSummary {
-  return SessionSummarySchema.parse({
-    id: row.id,
-    createdAt: new Date(row.created_at).toISOString(),
-    lastUsedAt: new Date(row.last_used_at).toISOString(),
-    deviceLabel: row.device_label,
-    appContext: row.app_context,
-    hasPushToken: Boolean(row.has_push_token),
-    current: currentSessionId === row.id
+  const refreshToken = randomToken(48);
+  await db.insert(refreshTokens).values({
+    userId: user.id,
+    sessionDeviceId: device.id,
+    tokenHash: sha256(refreshToken),
+    expiresAt: durationToDate(env.JWT_REFRESH_EXPIRY)
   });
+
+  const accessToken = await fastify.jwt.sign({
+    userId: user.id,
+    username: user.username,
+    sessionDeviceId: device.id,
+    role: user.role
+  }, { expiresIn: env.JWT_ACCESS_EXPIRY });
+
+  return { accessToken, refreshToken, sessionDeviceId: device.id };
 }
 
-export async function issueRecoveryCode(client: Queryable, userId: string, recoveryCode: string): Promise<void> {
-  await client.query('UPDATE users SET recovery_code_hash = $1 WHERE id = $2', [
-    hashToken(recoveryCode.replaceAll('-', '')),
-    userId
-  ]);
-}
+export async function rotateRefreshToken(fastify: FastifyInstance, refreshToken: string) {
+  const tokenHash = sha256(refreshToken);
+  const [candidate] = await db.select({
+    refreshToken: refreshTokens,
+    user: users
+  })
+    .from(refreshTokens)
+    .innerJoin(users, eq(refreshTokens.userId, users.id))
+    .where(eq(refreshTokens.tokenHash, tokenHash))
+    .limit(1);
 
-export async function createAuthResponse(
-  app: FastifyInstance,
-  client: Queryable,
-  userId: string,
-  recoveryCode?: string,
-  sessionMetadata?: Partial<SessionMetadata>
-) {
-  const user = await getUserById(client, userId);
-  if (!user) {
-    throw new Error(`Missing user ${userId} while issuing auth response`);
-  }
+  if (!candidate) throw unauthorized('Refresh token was not found; saved login is stale', 'REFRESH_TOKEN_NOT_FOUND');
+  if (candidate.refreshToken.revokedAt) throw unauthorized('Refresh token was revoked; sign in again', 'REFRESH_TOKEN_REVOKED');
+  if (candidate.refreshToken.rotatedAt) throw unauthorized('Refresh token was already used; sign in again', 'REFRESH_TOKEN_ROTATED');
+  if (candidate.refreshToken.expiresAt <= new Date()) throw unauthorized('Refresh token expired; sign in again', 'REFRESH_TOKEN_EXPIRED');
+  if (candidate.user.status !== 'active') throw unauthorized('User account is not active', 'USER_INACTIVE');
 
-  const sessionId = randomUUID();
-  const metadata = mergeSessionMetadata(sessionMetadata ?? {});
-  const accessToken = await signAccessToken(app, user.id, user.username, sessionId);
-  const refreshToken = createOpaqueToken();
-  const refreshTokenHash = hashToken(refreshToken);
-  const expiresAt = refreshExpiryDate();
+  const [row] = await db.select({
+    refreshToken: refreshTokens,
+    user: users
+  })
+    .from(refreshTokens)
+    .innerJoin(users, eq(refreshTokens.userId, users.id))
+    .where(and(
+      eq(refreshTokens.tokenHash, tokenHash),
+      isNull(refreshTokens.revokedAt),
+      isNull(refreshTokens.rotatedAt),
+      gt(refreshTokens.expiresAt, new Date())
+    ))
+    .limit(1);
 
-  await client.query(
-    `INSERT INTO refresh_tokens(id, user_id, token_hash, expires_at, last_used_at, device_label, app_context, has_push_token)
-     VALUES($1, $2, $3, $4, NOW(), $5, $6, $7)`,
-    [
-      sessionId,
-      user.id,
-      refreshTokenHash,
-      expiresAt.toISOString(),
-      metadata.deviceLabel,
-      metadata.appContext,
-      metadata.hasPushToken
-    ]
-  );
+  if (!row) throw unauthorized('Refresh token is not usable; sign in again', 'REFRESH_TOKEN_INVALID');
 
-  return AuthResponseSchema.parse({
-    user: mapAuthUser(user),
-    accessToken,
-    refreshToken,
-    ...(recoveryCode ? { recoveryCode } : {})
+  const nextRefreshToken = randomToken(48);
+  const nextHash = sha256(nextRefreshToken);
+
+  await db.transaction(async (tx) => {
+    await tx.update(refreshTokens)
+      .set({ rotatedAt: new Date(), rotatedToTokenHash: nextHash })
+      .where(eq(refreshTokens.id, row.refreshToken.id));
+
+    await tx.insert(refreshTokens).values({
+      userId: row.user.id,
+      sessionDeviceId: row.refreshToken.sessionDeviceId,
+      tokenHash: nextHash,
+      expiresAt: durationToDate(env.JWT_REFRESH_EXPIRY)
+    });
+
+    if (row.refreshToken.sessionDeviceId) {
+      await tx.update(sessionDevices)
+        .set({ lastUsedAt: new Date() })
+        .where(eq(sessionDevices.id, row.refreshToken.sessionDeviceId));
+    }
   });
+
+  const accessToken = await fastify.jwt.sign({
+    userId: row.user.id,
+    username: row.user.username,
+    sessionDeviceId: row.refreshToken.sessionDeviceId,
+    role: row.user.role
+  }, { expiresIn: env.JWT_ACCESS_EXPIRY });
+
+  return { user: row.user, accessToken, refreshToken: nextRefreshToken };
 }
 
-export async function listSessionsForUser(
-  client: Queryable,
-  userId: string,
-  currentSessionId: string | null
-): Promise<SessionSummary[]> {
-  const result = await client.query(
-    `SELECT id, created_at, last_used_at, device_label, app_context, has_push_token
-     FROM refresh_tokens
-     WHERE user_id = $1
-       AND expires_at > NOW()
-     ORDER BY CASE WHEN id = $2 THEN 0 ELSE 1 END, last_used_at DESC, created_at DESC`,
-    [userId, currentSessionId]
-  );
-
-  return result.rows.map((row) => mapSessionSummary(row as SessionRow, currentSessionId));
+export async function revokeRefreshToken(refreshToken: string) {
+  await db.update(refreshTokens)
+    .set({ revokedAt: new Date() })
+    .where(eq(refreshTokens.tokenHash, sha256(refreshToken)));
 }
 
-export async function touchCurrentSessionPushState(
-  client: Queryable,
-  sessionId: string | null,
-  hasPushToken: boolean
-): Promise<void> {
-  if (!sessionId) return;
+export async function revokeSessionDevice(sessionDeviceId: string) {
+  await db.update(refreshTokens)
+    .set({ revokedAt: new Date() })
+    .where(eq(refreshTokens.sessionDeviceId, sessionDeviceId));
+}
 
-  await client.query(
-    `UPDATE refresh_tokens
-     SET has_push_token = $1
-     WHERE id = $2`,
-    [hasPushToken, sessionId]
-  );
+export async function assertActiveSession(context: AuthContext) {
+  if (!context.sessionDeviceId) return;
+
+  const [row] = await db.select({ id: sessionDevices.id, userId: users.id, status: users.status })
+    .from(sessionDevices)
+    .innerJoin(users, eq(sessionDevices.userId, users.id))
+    .where(and(eq(sessionDevices.id, context.sessionDeviceId), eq(users.id, context.userId)))
+    .limit(1);
+
+  if (!row) throw unauthorized('Session device was not found; saved login is stale', 'SESSION_DEVICE_NOT_FOUND');
+  if (row.status !== 'active') throw unauthorized('User account is not active', 'USER_INACTIVE');
 }

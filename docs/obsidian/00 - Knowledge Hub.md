@@ -24,12 +24,19 @@ This vault is the "what we built and why" map for people joining the project lat
 13. [[13 - MVP Stability Plan v2]]
 14. [[14 - Opencode Handoff]] (historical snapshot)
 
-### PWA rebuild (v2.1 — current branch)
+### V4 cutover (current alpha)
 
-15. [[15 - PWA Rebuild]] — why the frontend was rebuilt as a PWA and what the baseline covers
-16. [[16 - Wave A - Live Chat on the PWA]] — typing indicators, presence, read receipts, GIF, muting
-17. [[17 - Wave B - Rich Messaging]] — reactions, reply/quote, delete, pins, icon refresh
-18. [[18 - Wave C - Community Features]] — slash commands, polls, note to self
+15. [[20 - V4 Feature Additions]] — alpha feature inventory and paths
+16. [[21 - V4 Architecture Changes]] — Drizzle, contracts, SvelteKit, deployment compatibility
+17. [[22 - V4 Cutover Log]] — what was overwritten, preserved, and adjusted
+18. [[23 - V4 Deployment Changes]] — env and Compose changes for v4 alpha
+
+### PWA rebuild (v2.1 — historical branch)
+
+19. [[15 - PWA Rebuild]] — why the frontend was rebuilt as a PWA and what the baseline covered
+20. [[16 - Wave A - Live Chat on the PWA]] — typing indicators, presence, read receipts, GIF, muting
+21. [[17 - Wave B - Rich Messaging]] — reactions, reply/quote, delete, pins, icon refresh
+22. [[18 - Wave C - Community Features]] — slash commands, polls, note to self
 
 ## Source docs in repo
 
@@ -39,7 +46,21 @@ This vault is the "what we built and why" map for people joining the project lat
 - [[../../services/api/docs/RELIABILITY_DRILL|Reliability Drill Runbook]]
 - [[../../antigravity/customizations|Antigravity customizations]]
 
-## Current status (as of 2026-04-15)
+## Current status (as of 2026-05-10)
+
+- V4 cutover is the current alpha target.
+- The frontend is Svelte 5/SvelteKit, the API is Fastify, data access is Drizzle, and shared contracts remain in `packages/contracts`.
+- The incumbent v3 deployment shape is preserved:
+  - `infra/compose/`
+  - `infra/docker-compose.yml`
+  - `services/api/Dockerfile`
+  - `scripts/`
+  - `antigravity/`
+- New v4 alpha features include custom emotes, stickers, unified picker, Giphy search, voice notes, chat folders, child channels, wallpapers, message search, pinned messages, deep availability, markdown, and dark/light/system theme.
+- Voice chat is scaffolded but deferred to beta.
+- Android release scripts remain, but v4 alpha is PWA-first.
+
+## Historical status (as of 2026-04-15)
 
 - Rebuild baseline is in place:
   - Vue + Capacitor

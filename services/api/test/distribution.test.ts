@@ -1,22 +1,13 @@
-import test from 'node:test';
 import assert from 'node:assert/strict';
+import test from 'node:test';
 
-process.env.DATABASE_URL ??= 'postgresql://penthouse:penthouse@127.0.0.1:5432/penthouse_test';
-process.env.JWT_SECRET ??= 'distribution-test-jwt-secret-long-enough';
-process.env.CORS_ORIGIN = 'https://penthouse.blog';
 process.env.PUBLIC_APP_URL = 'https://penthouse.blog/';
 process.env.LEGACY_APK_DOWNLOAD_PATH = '/downloads/legacy/the-penthouse.apk';
 process.env.LEGACY_APK_STATUS = 'unavailable';
-process.env.UPLOAD_DIR ??= '/tmp/penthouse-distribution-test-uploads';
 
-async function loadApp() {
-  const { createApp } = await import('../src/app.js');
-  return createApp;
-}
-
-test('[unit] app distribution declares the PWA as the default source of truth', async () => {
-  const createApp = await loadApp();
-  const app = await createApp();
+test('app distribution declares the PWA as the default source of truth', async () => {
+  const { buildApp } = await import('../src/app.js');
+  const app = await buildApp();
 
   try {
     const response = await app.inject({

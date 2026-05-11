@@ -12,12 +12,45 @@ The rebuild goal is stability first, with a strict order of implementation to pr
 
 ## Locked baseline
 
+Current v4 alpha baseline:
+
+- Frontend: Svelte 5 + SvelteKit PWA
+- Backend: Fastify + PostgreSQL + Socket.IO
+- Data: Drizzle ORM with feature-scoped schema modules
+- Shared contracts: `packages/contracts` with Zod
+- Deployment: incumbent Docker Compose + Caddy shape
+- Process: verify-first evidence, serial gated workflow, explicit owner/reviewer/arbiter
+
+Historical v2 baseline:
+
 - Mobile app: Vue 3 + Vite + Capacitor (Android-first)
 - Backend: Fastify + PostgreSQL
 - Shared contracts: `packages/contracts`
 - Process: verify-first evidence, serial gated workflow, explicit owner/reviewer/arbiter
 
 ## Timeline of concrete progress
+
+### 2026-05-10 - V4 alpha cutover branch
+
+Highlights:
+- Merged the v4 clean-room rebuild over the incumbent repo source directories:
+  - `apps/web/`
+  - `services/api/`
+  - `packages/contracts/`
+- Preserved the incumbent deployment shape:
+  - `infra/compose/`
+  - `infra/docker-compose.yml`
+  - `services/api/Dockerfile`
+  - `scripts/`
+  - `antigravity/`
+  - deployment docs and Obsidian project memory
+- Kept npm as the package manager because the incumbent root already used npm metadata and `package-lock.json`.
+- Removed the stale `pnpm-workspace.yaml`.
+- Moved Giphy access to `GIPHY_API_KEY` instead of a source constant.
+- Preserved `GET /api/v1/app-distribution` for deployment clients and legacy APK policy.
+
+Current blocker:
+- The branch still needs the full validation checklist before it is pushed as the incumbent release line.
 
 ### 2026-03-04 - Stage B/C backend hardening
 

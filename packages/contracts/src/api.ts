@@ -149,8 +149,7 @@ export const PasswordResetRequestSchema = z.object({
 
 export const UserRoleSchema = z.enum(['admin', 'member']);
 export const UserStatusSchema = z.enum(['active', 'removed', 'banned']);
-// 'poll' added for Wave C; 'audio' supports voice notes over the existing upload pipeline.
-export const MessageTypeSchema = z.enum(['text', 'image', 'video', 'gif', 'file', 'poll', 'audio']);
+export const MessageTypeSchema = z.enum(['text', 'image', 'video', 'gif', 'file', 'poll', 'audio', 'sticker']);
 export const ModerationActionSchema = z.enum(['hide', 'unhide']);
 export const RegistrationModeSchema = z.enum(['invite_only', 'closed']);
 export const MediaKindSchema = z.enum(['image', 'video', 'file']);
@@ -381,7 +380,6 @@ export const MemberDetailSchema = MemberSummarySchema.extend({
   lastSeenAt: z.string().nullable().optional()
 });
 
-// Tier 1: User search and directory schemas
 export const UserSearchRequestSchema = z.object({
   q: z.string().min(1).max(AUTH_CONSTRAINTS.userSearchQueryMax),
   limit: z.number().int().min(1).max(50).default(20).optional()
@@ -463,7 +461,7 @@ export const SendMessageRequestSchema = z.object({
   replyToMessageId: z.string().uuid().optional(),
   clientMessageId: z.string().min(8).max(128)
 }).superRefine((value, ctx) => {
-  if (value.type !== 'audio' && value.content.length < 1) {
+  if (value.type !== 'audio' && value.type !== 'sticker' && value.content.length < 1) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['content'],
@@ -482,6 +480,21 @@ export const SendMessageRequestSchema = z.object({
         code: z.ZodIssueCode.custom,
         path: ['metadata', 'audioUrl'],
         message: 'audioUrl is required for audio messages'
+      });
+    }
+  }
+
+  if (value.type === 'sticker') {
+    const metadata = value.metadata;
+    const stickerUrl = metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+      ? (metadata as Record<string, unknown>).stickerUrl
+      : null;
+
+    if (typeof stickerUrl !== 'string' || stickerUrl.length < 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['metadata', 'stickerUrl'],
+        message: 'stickerUrl is required for sticker messages'
       });
     }
   }
@@ -532,6 +545,30 @@ export const MarkChatReadResponseSchema = z.object({
 
 export const PinMessageRequestSchema = z.object({
   messageId: z.string().uuid()
+});
+
+export const PinResponseSchema = z.object({
+  chatId: z.string(),
+  messageId: z.string(),
+  pinnedByUserId: z.string(),
+  pinnedAt: z.string(),
+  content: z.string(),
+  senderDisplayName: z.string().nullable().optional()
+});
+
+export const ListPinsResponseSchema = z.object({
+  pins: z.array(PinResponseSchema.extend({
+    message: z.object({
+      id: z.string(),
+      chatId: z.string(),
+      senderId: z.string(),
+      senderDisplayName: z.string().nullable().optional(),
+      senderAvatarUrl: z.string().nullable().optional(),
+      content: z.string(),
+      type: MessageTypeSchema,
+      createdAt: z.string()
+    })
+  }))
 });
 
 export const StarredMessageEntrySchema = z.object({
@@ -696,6 +733,140 @@ export const AdminTempPasswordResponseSchema = z.object({
   temporaryPassword: z.string()
 });
 
+export const ChatFolderSchema = z.object({
+  id: z.string().uuid(),
+  userId: z.string().uuid(),
+  name: z.string(),
+  icon: z.string().nullable().optional(),
+  color: z.string().nullable().optional(),
+  sortOrder: z.number().int().default(0),
+  createdAt: z.string(),
+  updatedAt: z.string()
+});
+
+export const ChatFolderItemSchema = z.object({
+  folderId: z.string().uuid(),
+  chatId: z.string().uuid(),
+  sortOrder: z.number().int().default(0),
+  createdAt: z.string()
+});
+
+export const CreateFolderRequestSchema = z.object({
+  name: z.string().trim().min(1).max(64),
+  icon: z.string().max(32).optional(),
+  color: z.string().max(32).optional()
+});
+
+export const UpdateFolderRequestSchema = z.object({
+  name: z.string().trim().min(1).max(64).optional(),
+  icon: z.string().max(32).optional(),
+  color: z.string().max(32).optional(),
+  sortOrder: z.number().int().optional()
+}).refine((v) => Object.keys(v).length > 0, {
+  message: 'At least one field must be provided'
+});
+
+export const FolderReorderItemSchema = z.object({
+  id: z.string().uuid(),
+  sortOrder: z.number().int()
+});
+
+export const ReorderFoldersRequestSchema = z.object({
+  folders: z.array(FolderReorderItemSchema).min(1)
+});
+
+export const ListFoldersResponseSchema = z.object({
+  folders: z.array(ChatFolderSchema.extend({
+    items: z.array(ChatFolderItemSchema)
+  }))
+});
+
+export const ChannelSchema = z.object({
+  id: z.string().uuid(),
+  parentChatId: z.string().uuid(),
+  name: z.string(),
+  createdAt: z.string()
+});
+
+export const CreateChannelRequestSchema = z.object({
+  name: z.string().trim().min(1).max(64)
+});
+
+export const ListChannelsResponseSchema = z.object({
+  channels: z.array(ChannelSchema)
+});
+
+export const AddFolderItemRequestSchema = z.object({
+  chatId: z.string().uuid()
+});
+
+export const RemoveFolderItemRequestSchema = z.object({
+  chatId: z.string().uuid()
+});
+
+export const UserWallpaperSchema = z.object({
+  id: z.string().uuid(),
+  userId: z.string().uuid(),
+  chatId: z.string().uuid().nullable().optional(),
+  isGlobal: z.boolean(),
+  wallpaperUrl: z.string().nullable().optional(),
+  wallpaperColor: z.string().nullable().optional(),
+  opacity: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string()
+});
+
+export const CreateWallpaperRequestSchema = z.object({
+  chatId: z.string().uuid().optional(),
+  isGlobal: z.boolean().default(false),
+  wallpaperUrl: z.string().url().optional(),
+  wallpaperColor: z.string().optional(),
+  opacity: z.string().default('1')
+});
+
+export const ListWallpapersResponseSchema = z.object({
+  wallpapers: z.array(UserWallpaperSchema)
+});
+
+export const EmoteSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  url: z.string(),
+  width: z.number().int(),
+  height: z.number().int(),
+  isAnimated: z.boolean(),
+  createdAt: z.string()
+});
+
+export const ListEmotesResponseSchema = z.object({
+  emotes: z.array(EmoteSchema)
+});
+
+export const StickerPackSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  thumbnailUrl: z.string().nullable(),
+  isPublic: z.boolean(),
+  createdAt: z.string()
+});
+
+export const StickerSchema = z.object({
+  id: z.string().uuid(),
+  packId: z.string().uuid(),
+  name: z.string(),
+  url: z.string(),
+  sortOrder: z.number().int(),
+  createdAt: z.string()
+});
+
+export const ListStickerPacksResponseSchema = z.object({
+  packs: z.array(StickerPackSchema)
+});
+
+export const ListStickersResponseSchema = z.object({
+  stickers: z.array(StickerSchema)
+});
+
 export type RegisterRequest = z.infer<typeof RegisterRequestSchema>;
 export type AltchaChallenge = z.infer<typeof AltchaChallengeSchema>;
 export type LoginRequest = z.infer<typeof LoginRequestSchema>;
@@ -754,6 +925,8 @@ export type PinnedMessage = z.infer<typeof PinnedMessageSchema>;
 export type MarkChatReadRequest = z.infer<typeof MarkChatReadRequestSchema>;
 export type MarkChatReadResponse = z.infer<typeof MarkChatReadResponseSchema>;
 export type PinMessageRequest = z.infer<typeof PinMessageRequestSchema>;
+export type PinResponse = z.infer<typeof PinResponseSchema>;
+export type ListPinsResponse = z.infer<typeof ListPinsResponseSchema>;
 export type StarredMessageEntry = z.infer<typeof StarredMessageEntrySchema>;
 export type StarredMessagesResponse = z.infer<typeof StarredMessagesResponseSchema>;
 export type ArchiveChatResponse = z.infer<typeof ArchiveChatResponseSchema>;
@@ -769,9 +942,28 @@ export type CreateInviteRequest = z.infer<typeof CreateInviteRequestSchema>;
 export type RegistrationModeResponse = z.infer<typeof RegistrationModeResponseSchema>;
 export type UpdateRegistrationModeRequest = z.infer<typeof UpdateRegistrationModeRequestSchema>;
 export type AuthConfigResponse = z.infer<typeof AuthConfigResponseSchema>;
-
-// Tier 1: User search and directory types
 export type UserSearchRequest = z.infer<typeof UserSearchRequestSchema>;
 export type UserSearchResponse = z.infer<typeof UserSearchResponseSchema>;
 export type ListUsersRequest = z.infer<typeof ListUsersRequestSchema>;
 export type ListUsersResponse = z.infer<typeof ListUsersResponseSchema>;
+export type ChatFolder = z.infer<typeof ChatFolderSchema>;
+export type ChatFolderItem = z.infer<typeof ChatFolderItemSchema>;
+export type CreateFolderRequest = z.infer<typeof CreateFolderRequestSchema>;
+export type UpdateFolderRequest = z.infer<typeof UpdateFolderRequestSchema>;
+export type FolderReorderItem = z.infer<typeof FolderReorderItemSchema>;
+export type ReorderFoldersRequest = z.infer<typeof ReorderFoldersRequestSchema>;
+export type ListFoldersResponse = z.infer<typeof ListFoldersResponseSchema>;
+export type Channel = z.infer<typeof ChannelSchema>;
+export type CreateChannelRequest = z.infer<typeof CreateChannelRequestSchema>;
+export type ListChannelsResponse = z.infer<typeof ListChannelsResponseSchema>;
+export type AddFolderItemRequest = z.infer<typeof AddFolderItemRequestSchema>;
+export type RemoveFolderItemRequest = z.infer<typeof RemoveFolderItemRequestSchema>;
+export type UserWallpaper = z.infer<typeof UserWallpaperSchema>;
+export type CreateWallpaperRequest = z.infer<typeof CreateWallpaperRequestSchema>;
+export type ListWallpapersResponse = z.infer<typeof ListWallpapersResponseSchema>;
+export type Emote = z.infer<typeof EmoteSchema>;
+export type ListEmotesResponse = z.infer<typeof ListEmotesResponseSchema>;
+export type StickerPack = z.infer<typeof StickerPackSchema>;
+export type Sticker = z.infer<typeof StickerSchema>;
+export type ListStickerPacksResponse = z.infer<typeof ListStickerPacksResponseSchema>;
+export type ListStickersResponse = z.infer<typeof ListStickersResponseSchema>;

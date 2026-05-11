@@ -1,216 +1,70 @@
-/**
- * Integration test helpers.
- *
- * Provides a test-ready Fastify app with a stub Socket.IO instance,
- * plus DB cleanup and user registration utilities.
- *
- * Requires DATABASE_URL and JWT_SECRET in the environment.
- */
-import { createApp } from '../src/app.js';
-import { env } from '../src/config/env.js';
+import assert from 'node:assert/strict';
+import { buildApp } from '../src/app.js';
 import { pool } from '../src/db/pool.js';
-import { runMigrations } from '../src/db/migrate.js';
-import type { FastifyInstance } from 'fastify';
-import { randomUUID } from 'node:crypto';
-import { createChallenge, solveChallenge } from 'altcha-lib';
-import { resetAltchaReplayState } from '../src/utils/altcha.js';
-import { maybeBootstrapAdmin } from '../src/utils/users.js';
-import { assertSafeTestDatabase } from './safe-db.js';
 
-export async function buildTestApp() {
-  assertSafeTestDatabase();
-  await maybeBootstrapAdmin(pool);
-  const app = await createApp();
+let registerRemoteAddressCounter = 1;
 
-  const emitted: Array<{ room: string | null; event: string; data: unknown }> = [];
-  const roomJoins: Array<{ sourceRoom: string; targetRoom: string }> = [];
-
-  // Stub Socket.IO so route handlers that call app.io.to(...).emit(...) don't crash
-  app.decorate('io', {
-    to(room: string) {
-      return {
-        emit(event: string, data: unknown) {
-          emitted.push({ room, event, data });
-        }
-      };
-    },
-    in(sourceRoom: string) {
-      return {
-        async fetchSockets() {
-          return [];
-        },
-        socketsJoin(targetRoom: string) {
-          roomJoins.push({ sourceRoom, targetRoom });
-        }
-      };
-    },
-    emit(event: string, data: unknown) {
-      emitted.push({ room: null, event, data });
-    },
-    sockets: {
-      adapter: {
-        rooms: new Map<string, Set<string>>()
-      },
-      sockets: new Map<string, { data: { userId?: string } }>()
-    }
-  } as any);
-
-  return { app, emitted, roomJoins };
+export async function resetDb() {
+  await pool.query(`
+    TRUNCATE
+      push_notifications,
+      chat_notification_overrides,
+      notification_prefs,
+      push_subscriptions,
+      pinned_messages,
+      message_reactions,
+      stickers,
+      sticker_packs,
+      custom_emotes,
+      user_wallpapers,
+      chat_folder_items,
+      chat_folders,
+      media_uploads,
+      message_moderation_events,
+      message_deletions,
+      message_edits,
+      messages,
+      direct_chats,
+      chat_members,
+      chats,
+      refresh_tokens,
+      session_devices,
+      server_settings,
+      signup_invites,
+      users
+    RESTART IDENTITY CASCADE
+  `);
+  await pool.query("INSERT INTO server_settings (key, value) VALUES ('registration_mode', 'invite_only')");
+  await pool.query("INSERT INTO signup_invites (code, label, max_uses) VALUES ('PENTHOUSE-ALPHA', 'Default alpha invite', 999999)");
+  await pool.query("INSERT INTO chats (type, name, system_key) VALUES ('channel', 'General', 'general')");
 }
 
-export async function migrate() {
-  assertSafeTestDatabase();
-  await runMigrations();
+export async function testApp() {
+  const app = await buildApp();
+  return app;
 }
 
-export async function cleanup() {
-  assertSafeTestDatabase();
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error('cleanup() refused in production');
-  }
-  resetAltchaReplayState();
-  const client = await pool.connect();
-  try {
-    await client.query('DELETE FROM poll_votes');
-    await client.query('DELETE FROM poll_options');
-    await client.query('DELETE FROM polls');
-    await client.query('DELETE FROM starred_messages');
-    await client.query('DELETE FROM chat_notification_overrides');
-    await client.query('DELETE FROM notification_prefs');
-    await client.query('DELETE FROM push_subscriptions');
-    await client.query('DELETE FROM messages');
-    await client.query('DELETE FROM device_tokens');
-    await client.query('DELETE FROM chat_members');
-    await client.query('DELETE FROM chats');
-    await client.query('DELETE FROM refresh_tokens');
-    await client.query('DELETE FROM media_uploads');
-    await client.query('DELETE FROM users');
-    await client.query(`DELETE FROM signup_invites`);
-    await client.query(
-      `INSERT INTO signup_invites(id, code, label, max_uses, uses)
-       VALUES (gen_random_uuid(), 'PENTHOUSE-ALPHA', 'Test invite', 999999, 0)`
-    );
-    await client.query(
-      `INSERT INTO server_settings (key, value, updated_at)
-       VALUES ('registration_mode', 'invite_only', NOW())
-       ON CONFLICT (key) DO UPDATE SET value = 'invite_only', updated_at = NOW()`
-    );
-  } finally {
-    client.release();
-  }
-}
-
-let injectedClientCounter = 1;
-
-function nextInjectedRemoteAddress(): string {
-  const counter = injectedClientCounter++;
-  const thirdOctet = Math.floor((counter - 1) / 250);
-  const fourthOctet = ((counter - 1) % 250) + 1;
-  return `10.0.${thirdOctet}.${fourthOctet}`;
-}
-
-export async function registerUser(app: FastifyInstance, username: string) {
-  const captchaToken = await createCaptchaToken();
-  const res = await app.inject({
+export async function registerUser(app: Awaited<ReturnType<typeof buildApp>>, username: string) {
+  const addressCounter = registerRemoteAddressCounter++;
+  const response = await app.inject({
     method: 'POST',
     url: '/api/v1/auth/register',
-    remoteAddress: nextInjectedRemoteAddress(),
+    remoteAddress: `10.42.${Math.floor(addressCounter / 250)}.${(addressCounter % 250) + 1}`,
     payload: {
       username,
-      password: 'supersecurepassword',
+      displayName: username,
+      password: 'password-1234',
       inviteCode: 'PENTHOUSE-ALPHA',
-      captchaToken,
+      captchaToken: 'dev-token',
       acceptTestNotice: true,
       testNoticeVersion: 'alpha-v1'
     }
   });
-  if (res.statusCode !== 201) {
-    throw new Error(`Register failed (${res.statusCode}): ${res.payload}`);
-  }
-  return JSON.parse(res.payload) as {
-    user: {
-      id: string;
-      username: string;
-      displayName: string;
-      avatarUrl: string | null;
-      role: 'admin' | 'member';
-      mustChangePassword: boolean;
-      mustAcceptTestNotice: boolean;
-      requiredTestNoticeVersion: string;
-      acceptedTestNoticeVersion: string | null;
-    };
-    accessToken: string;
-    refreshToken: string;
-    recoveryCode?: string;
-  };
+  assert.equal(response.statusCode, 200, response.body);
+  return response.json() as { accessToken: string; refreshToken: string; user: { id: string } };
 }
 
-export async function createCaptchaToken(): Promise<string> {
-  const challenge = await createChallenge({
-    hmacKey: env.ALTCHA_HMAC_KEY,
-    expires: new Date(Date.now() + env.ALTCHA_CHALLENGE_EXPIRE_MS),
-    maxNumber: env.ALTCHA_MAX_NUMBER
-  });
-  const { promise } = solveChallenge(
-    challenge.challenge,
-    challenge.salt,
-    challenge.algorithm,
-    challenge.maxnumber ?? env.ALTCHA_MAX_NUMBER
-  );
-  const solution = await promise;
-
-  if (!solution) {
-    throw new Error('Failed to solve ALTCHA challenge for test setup');
-  }
-
-  return Buffer.from(
-    JSON.stringify({
-      ...challenge,
-      number: solution.number
-    }),
-    'utf8'
-  ).toString('base64');
+export async function authHeader(app: Awaited<ReturnType<typeof buildApp>>, username = 'aim') {
+  const session = await registerUser(app, username);
+  return { authorization: `Bearer ${session.accessToken}` };
 }
-
-export async function loginUser(app: FastifyInstance, username: string, password: string) {
-  const res = await app.inject({
-    method: 'POST',
-    url: '/api/v1/auth/login',
-    remoteAddress: nextInjectedRemoteAddress(),
-    payload: { username, password }
-  });
-
-  if (res.statusCode !== 200) {
-    throw new Error(`Login failed (${res.statusCode}): ${res.payload}`);
-  }
-
-  return JSON.parse(res.payload) as {
-    user: {
-      id: string;
-      username: string;
-      displayName: string;
-      avatarUrl: string | null;
-      role: 'admin' | 'member';
-      mustChangePassword: boolean;
-      mustAcceptTestNotice: boolean;
-      requiredTestNoticeVersion: string;
-      acceptedTestNoticeVersion: string | null;
-    };
-    accessToken: string;
-    refreshToken: string;
-    recoveryCode?: string;
-  };
-}
-
-export function authHeaders(accessToken: string) {
-  return { authorization: `Bearer ${accessToken}` };
-}
-
-export async function createPrivateChannelForUser(userId: string, name = 'Private Test Room') {
-  const chatId = randomUUID();
-  await pool.query("INSERT INTO chats(id, type, name) VALUES($1, 'channel', $2)", [chatId, name]);
-  await pool.query('INSERT INTO chat_members(chat_id, user_id) VALUES($1, $2)', [chatId, userId]);
-  return chatId;
-}
-
-export { pool };

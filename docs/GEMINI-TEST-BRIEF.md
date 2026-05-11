@@ -65,7 +65,7 @@ npx playwright test e2e/suite-chat.spec.ts --headed
 
 | Test | Why |
 |---|---|
-| `suite-gif.spec.ts` — trending load | Requires `GIPHY_API_KEY=H2jGWv5wskQcoU1gMU2f3YuLCYYLHqjN` in `services/api/.env` (already set) |
+| `suite-gif.spec.ts` — trending load | Requires `GIPHY_API_KEY=<your-key>` in `services/api/.env` |
 | Pin tests | `test.skip()` fires if the pin button isn't exposed via long-press context menu in this build |
 | Reply tests | `test.skip()` fires if the reply button isn't exposed via the message context menu |
 | Presence inactivity tests | 65+ second tests in `presence.spec.ts` — skip unless you have time |

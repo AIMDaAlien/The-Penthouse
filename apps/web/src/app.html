@@ -9,19 +9,18 @@
 		<meta name="theme-color" content="#12121C" />
 		<link rel="preconnect" href="https://fonts.googleapis.com" />
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
-		<!-- Gelasio: logo/display serif (elegant, refined) -->
-		<!-- Ubuntu: UI body font -->
-		<!-- JetBrains Mono: settings/code -->
 		<link
-			href="https://fonts.googleapis.com/css2?family=Gelasio:wght@400;500;600;700&family=Ubuntu:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap"
+			href="https://fonts.googleapis.com/css2?family=Gelasio:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&family=Ubuntu:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap"
 			rel="stylesheet"
 		/>
 		<script>
-			if ('serviceWorker' in navigator) {
-				window.addEventListener('load', () => {
-					navigator.serviceWorker.register('/sw.js', { scope: '/' });
-				});
-			}
+			(function () {
+				var theme = localStorage.getItem('penthouse-theme') || 'system';
+				var resolved = theme === 'system'
+					? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+					: theme;
+				document.documentElement.setAttribute('data-theme', resolved);
+			})();
 		</script>
 		%sveltekit.head%
 	</head>

@@ -1,64 +1,63 @@
 <script lang="ts">
-	import { goto, onNavigate } from '$app/navigation';
-	import { page } from '$app/state';
-	import { onMount } from 'svelte';
+	import '../app.css';
 	import { sessionStore } from '$stores/session.svelte';
+	import { channelsStore } from '$stores/channels.svelte';
+	import { wallpapersStore } from '$stores/wallpapers.svelte';
+	import { emotesStore } from '$stores/emotes.svelte';
+	import { stickersStore } from '$stores/stickers.svelte';
+	import { gifsStore } from '$stores/gifs.svelte';
+	import { chatsStore } from '$stores/chats.svelte';
+	import { foldersStore } from '$stores/folders.svelte';
 	import { socketStore } from '$stores/socket.svelte';
-	import { presenceStore } from '$stores/presence.svelte';
-	import { readReceiptsStore } from '$stores/readReceipts.svelte';
-	import BottomNav from '$lib/components/BottomNav.svelte';
+	import { goto, onNavigate } from '$app/navigation';
+	import { page } from '$app/stores';
+	import BottomNav from '$components/BottomNav.svelte';
+	import PushPermissionBanner from '$components/PushPermissionBanner.svelte';
+	import DesktopShell from '$components/DesktopShell.svelte';
+	import { initTheme } from '$utils/theme';
 
 	let { children } = $props();
+	let activeUserId = $state(sessionStore.user?.id ?? null);
 
-	// Auth guard: redirect unauthenticated users to /welcome (public landing)
+	// Initialize theme before first paint (script in app.html handles FOUC)
 	$effect(() => {
-		const isAuthRoute = page.url.pathname.startsWith('/auth');
-		const isWelcomeRoute = page.url.pathname === '/welcome';
-		if (!sessionStore.isAuthenticated && !isAuthRoute && !isWelcomeRoute) {
-			goto('/welcome');
-		}
-		if (sessionStore.isAuthenticated && (isAuthRoute || isWelcomeRoute)) {
-			goto('/');
+		initTheme();
+	});
+
+	// Auth guard: redirect unauthenticated users to /auth
+	$effect(() => {
+		const path = $page.url.pathname;
+		const publicPaths = ['/auth', '/welcome'];
+		if (!sessionStore.isAuthenticated && !publicPaths.includes(path)) {
+			goto('/auth', { replaceState: true });
 		}
 	});
 
-	const connectionStatus = $derived(socketStore.state);
-	const statusLabel = $derived.by(() => {
-		switch (connectionStatus) {
-			case 'connected':
-				return 'Connected';
-			case 'connecting':
-				return 'Connecting...';
-			case 'degraded':
-				return 'Reconnecting...';
-			case 'failed':
-				return 'Offline';
-			case 'idle':
-				return 'Idle';
-			default:
-				return 'Unknown';
-		}
-	});
-	const statusDot = $derived.by(() => {
-		switch (connectionStatus) {
-			case 'connected':
-				return '🟢';
-			case 'connecting':
-				return '🟡';
-			case 'degraded':
-				return '🟡';
-			case 'failed':
-				return '🔴';
-			case 'idle':
-				return '⚪';
-			default:
-				return '⚪';
+	// Auto-connect socket when authenticated, disconnect on logout
+	$effect(() => {
+		const token = sessionStore.accessToken;
+		if (token) {
+			socketStore.connect(token);
+		} else {
+			socketStore.disconnect();
 		}
 	});
 
-	// Initialize presence socket listeners when connected
+	// Clear user-scoped state on login/logout/user switches.
+	$effect(() => {
+		const nextUserId = sessionStore.user?.id ?? null;
+		if (nextUserId === activeUserId) return;
+		chatsStore.reset();
+		foldersStore.reset();
+		channelsStore.reset();
+		wallpapersStore.reset();
+		emotesStore.reset();
+		stickersStore.reset();
+		gifsStore.reset();
+		activeUserId = nextUserId;
+	});
 
-	// View transitions — slide/fade between pages
+	// Page transitions via View Transitions API
 	onNavigate((navigation) => {
 		if (!document.startViewTransition) return;
 		return new Promise((resolve) => {
@@ -69,283 +68,175 @@
 		});
 	});
 
-	// Show bottom tab nav only on top-level tab pages (mobile only — desktop uses left pane nav)
-	let isDesktop = $state(false);
-	$effect(() => {
-		if (typeof window !== 'undefined') {
-			const mq = window.matchMedia('(hover: hover) and (pointer: fine)');
-			isDesktop = mq.matches;
-			const handler = (e: MediaQueryListEvent) => { isDesktop = e.matches; };
-			mq.addEventListener('change', handler);
-			return () => mq.removeEventListener('change', handler);
-		}
-	});
-
-	// Routes handled by the (app) two-pane monolith layout
-	const isMonolithRoute = $derived(
-		page.url.pathname === '/' ||
-		page.url.pathname.startsWith('/chat/') ||
-		page.url.pathname === '/users' ||
-		page.url.pathname.startsWith('/users/') ||
-		page.url.pathname === '/settings'
+	const showShell = $derived(
+		sessionStore.isAuthenticated &&
+		($page.url.pathname === '/' ||
+			$page.url.pathname.startsWith('/chat/') ||
+			$page.url.pathname.startsWith('/users') ||
+			$page.url.pathname === '/settings')
 	);
 
 	const showBottomNav = $derived(
 		sessionStore.isAuthenticated &&
-		(page.url.pathname === '/' ||
-		 page.url.pathname.startsWith('/chat/') ||
-		 page.url.pathname === '/users' ||
-		 page.url.pathname === '/settings')
+		($page.url.pathname === '/' ||
+			$page.url.pathname.startsWith('/users') ||
+			$page.url.pathname === '/settings')
 	);
-
-	// Auto-connect socket for authenticated users on page load / hard reload
-	$effect(() => {
-		if (sessionStore.isAuthenticated && socketStore.state === 'idle') {
-			socketStore.connect(sessionStore.accessToken ?? '');
-		}
-	});
-
-	// Initialize read receipts socket listeners when connected
-	$effect(() => {
-		if (connectionStatus === 'connected') {
-			readReceiptsStore.initializeSocketListeners();
-		}
-	});
-	$effect(() => {
-		if (connectionStatus === 'connected') {
-			presenceStore.initializeSocketListeners();
-		}
-	});
 </script>
 
 <svelte:head>
-	<meta name="theme-color" content="#12121C" />
-	<link rel="manifest" href="/manifest.webmanifest" />
+	<title>The Penthouse</title>
 </svelte:head>
 
-<div class="app-shell" class:app-bounded={page.url.pathname !== '/welcome'} class:app-monolith={isMonolithRoute}>
-	{@render children()}
-
+<div class="app" class:has-bottom-nav={showBottomNav}>
+	<PushPermissionBanner />
+	{#if showShell}
+		<DesktopShell>
+			{@render children()}
+		</DesktopShell>
+	{:else}
+		{@render children()}
+	{/if}
 	{#if showBottomNav}
 		<BottomNav />
 	{/if}
 </div>
 
 <style>
-	/* ── Reset ── */
+	:global(:root) {
+		/* Dark theme (default) */
+		--color-bg: #12121C;
+		--color-surface: #1A1A28;
+		--color-surface-elevated: #222236;
+		--color-text: #E8E8F0;
+		--color-text-primary: #E8E8F0;
+		--color-text-secondary: #9494A8;
+		--color-text-muted: #646478;
+		--color-accent: #C9A96E;
+		--color-accent-hover: #D4B87A;
+		--color-border: #2A2A3E;
+		--color-error: #E06C75;
+		--color-danger: #E06C75;
+		--color-success: #98C379;
+		--font-display: 'Gelasio', Georgia, serif;
+		--font-body: 'Ubuntu', system-ui, sans-serif;
+		--font-sans: 'Ubuntu', system-ui, sans-serif;
+		--font-mono: 'JetBrains Mono', monospace;
+		--text-xs: 0.75rem;
+		--text-sm: 0.875rem;
+		--text-base: 1rem;
+		--text-lg: 1.125rem;
+		--text-xl: 1.25rem;
+		--space-xs: 0.25rem;
+		--space-sm: 0.5rem;
+		--space-md: 1rem;
+		--space-lg: 1.5rem;
+		--space-xl: 2rem;
+		--space-2: 0.5rem;
+		--space-3: 0.75rem;
+		--space-4: 1rem;
+		--space-6: 1.5rem;
+		--space-8: 2rem;
+		--radius-sm: 6px;
+		--radius-md: 10px;
+		--radius-lg: 16px;
+		--radius-xl: 20px;
+		--radius-pill: 9999px;
+		--weight-medium: 500;
+		--weight-bold: 700;
+		--shadow-card: 0 4px 24px rgba(0, 0, 0, 0.3);
+	}
+
+	:global([data-theme="light"]) {
+		--color-bg: #F5F5F7;
+		--color-surface: #FFFFFF;
+		--color-surface-elevated: #FFFFFF;
+		--color-text: #1A1A2E;
+		--color-text-primary: #1A1A2E;
+		--color-text-secondary: #6B6B80;
+		--color-text-muted: #9A9AAF;
+		--color-accent: #B8944F;
+		--color-accent-hover: #A8843F;
+		--color-border: #E0E0E8;
+		--color-error: #D73A3A;
+		--color-danger: #D73A3A;
+		--color-success: #2D8A3E;
+		--shadow-card: 0 4px 24px rgba(0, 0, 0, 0.08);
+	}
+
 	:global(*) {
 		box-sizing: border-box;
 		margin: 0;
 		padding: 0;
 	}
 
-	:global(:root) {
-		/* ── Nocturne palette ── */
-		--color-bg:                #12121C;
-		--color-surface:           #1A1A24;
-		--color-surface-elevated:  #242432;
-		--color-surface-glass:     rgba(26, 26, 36, 0.45);
-		--color-surface-raised:    rgba(26, 26, 36, 0.6);
-		--color-border:            rgba(140, 140, 197, 0.2);
-		--color-border-solid:      rgba(140, 140, 197, 0.35);
-		--color-text-primary:      #E2E2EC;
-		--color-text-secondary:    #8C8CC5;
-		--color-accent:            #7070DA;
-		--color-accent-dim:        rgba(112, 112, 218, 0.15);
-		--color-accent-hover:      #C6C6E6;
-		--color-accent-secondary:  #8282C3;
-		--color-accent-light:      #C0C0F0;
-		--color-accent-periwinkle: #B4B4FF;
-		--color-danger:            #D65A4A;
-		--color-danger-dim:        rgba(214, 90, 74, 0.15);
-		--color-success:           #34d399;
-
-		/* ── Typography ── */
-		/* UI body: Ubuntu (falls back to system sans) */
-		--font-sans:    'Ubuntu', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-		/* Display/logo: Gelasio (elegant refined serif) */
-		--font-display: 'Gelasio', Georgia, 'Times New Roman', serif;
-		/* Settings/code: JetBrains Mono */
-		--font-mono:    'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
-
-		/* Font sizes */
-		--text-xs:   0.75rem;
-		--text-sm:   0.875rem;
-		--text-base: 1rem;
-		--text-lg:   1.125rem;
-		--text-xl:   1.25rem;
-		--text-2xl:  1.5rem;
-
-		/* Font weights (Ubuntu variable axis) */
-		--weight-light:    300;
-		--weight-regular:  400;
-		--weight-medium:   500;
-		--weight-bold:     700;
-
-		/* ── Spacing ── */
-		--space-1: 0.25rem;
-		--space-2: 0.5rem;
-		--space-3: 0.75rem;
-		--space-4: 1rem;
-		--space-5: 1.25rem;
-		--space-6: 1.5rem;
-		--space-8: 2rem;
-
-		/* ── Radii ── */
-		--radius-sm:   6px;
-		--radius-md:   12px;
-		--radius-lg:   20px;
-		--radius-xl:   24px;
-		--radius-full: 9999px;
-		--radius-pill: 9999px;
-
-		/* ── Shadows / Glass ── */
-		--shadow-card: 0 8px 32px 0 rgba(0, 0, 0, 0.35);
-		--blur-glass:  blur(40px);
-
-		/* Apply base */
-		font-family: var(--font-sans);
-		font-weight: var(--weight-regular);
+	:global(body) {
 		background: var(--color-bg);
-		color: var(--color-text-primary);
-		font-size: var(--text-base);
+		color: var(--color-text);
+		font-family: var(--font-body);
+		font-size: 16px;
 		line-height: 1.5;
 		-webkit-font-smoothing: antialiased;
 		-moz-osx-font-smoothing: grayscale;
 	}
 
-	/* ── Body / HTML ── */
-	:global(html, body) {
-		height: 100%;
-		width: 100%;
-		/* No overflow:hidden here — chat list and other pages need window scroll.
-		   The chat thread page manages its own scroll inside .thread-shell. */
-	}
-
-	:global(body) {
+	.app {
+		--bottom-nav-offset: 0px;
 		min-height: 100dvh;
-		/* Subtle dot-grid ambient texture from v2 */
-		background-image:
-			radial-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-		background-size: 24px 24px;
-		background-position: 0 0;
-		background-attachment: fixed;
+		display: flex;
+		flex-direction: column;
 	}
 
-	/* ── Buttons ── */
-	:global(button) {
-		cursor: pointer;
-		font-family: var(--font-sans);
-		font-size: inherit;
-		font-weight: var(--weight-medium);
-		background: var(--color-accent-dim);
-		color: var(--color-accent);
-		border: 1px solid rgba(112, 112, 218, 0.3);
-		border-radius: var(--radius-pill);
-		padding: var(--space-3) var(--space-4);
-		transition: background 0.2s, border-color 0.2s, opacity 0.15s;
-		text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+	.app.has-bottom-nav {
+		--bottom-nav-offset: calc(88px + env(safe-area-inset-bottom, 0px));
+		padding-bottom: var(--bottom-nav-offset);
 	}
 
-	:global(button:active) {
-		transform: scale(0.98);
-		background: rgba(112, 112, 218, 0.25);
+	:global(.visually-hidden) {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
 	}
 
-	:global(button:disabled) {
-		opacity: 0.5;
-		pointer-events: none;
+	@media (min-width: 768px) {
+		.app.has-bottom-nav {
+			padding-bottom: 0;
+		}
 	}
 
-	/* ── Inputs ── */
-	:global(input, textarea, select) {
-		font-family: var(--font-sans);
-		font-size: inherit;
-	}
-
-	/* ── Glass panel utility ── */
-	:global(.glass) {
-		background: var(--color-surface-glass);
-		backdrop-filter: var(--blur-glass);
-		-webkit-backdrop-filter: var(--blur-glass);
-		border: 1px solid var(--color-border);
-		box-shadow: var(--shadow-card);
-		border-radius: var(--radius-xl);
-	}
-
-	/* ── Settings pages: mono font ── */
-	:global([data-settings]) {
-		font-family: var(--font-mono);
-		font-size: var(--text-sm);
-	}
-
-	/* ── Nav height token ── */
-	:global(:root) {
-		--nav-height: 64px;
-	}
-
-	/* ── View transitions ── */
+	/* Page transitions */
 	:global(::view-transition-old(root)) {
-		animation: 160ms ease both vt-out;
+		animation: 180ms ease both page-out;
 	}
 
 	:global(::view-transition-new(root)) {
-		animation: 260ms cubic-bezier(0.34, 1.56, 0.64, 1) both vt-in;
+		animation: 300ms cubic-bezier(0.34, 1.56, 0.64, 1) both page-in;
 	}
 
-	@keyframes vt-out {
-		to { opacity: 0; transform: translateY(-5px); }
-	}
-
-	@keyframes vt-in {
-		from { opacity: 0; transform: translateY(8px); }
-	}
-
-	/* ── Reduced motion ── */
-	@media (prefers-reduced-motion: reduce) {
-		:global(*) {
-			animation-duration: 0.01ms !important;
-			transition-duration: 0.01ms !important;
+	@keyframes page-out {
+		to {
+			opacity: 0;
+			transform: translateX(-10px);
 		}
+	}
 
+	@keyframes page-in {
+		from {
+			opacity: 0;
+			transform: translateX(14px);
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
 		:global(::view-transition-old(root)),
 		:global(::view-transition-new(root)) {
 			animation: none !important;
 		}
 	}
-
-	/* ── App shell ── */
-	.app-shell {
-		position: relative;
-		min-height: 100dvh;
-		width: 100%;
-	}
-
-	/* ── Touch/small-screen: constrain to phone width, centered ── */
-	@media (min-width: 600px) {
-		.app-bounded {
-			max-width: 480px;
-			margin: 0 auto;
-			/* Subtle pillar-box to separate app from page background */
-			box-shadow: 0 0 0 1px var(--color-border), 0 0 80px rgba(0, 0, 0, 0.4);
-		}
-	}
-
-	/* ── Desktop (mouse/trackpad): remove phone-column constraint — monolith handles layout ── */
-	@media (min-width: 600px) and (hover: hover) and (pointer: fine) {
-		.app-bounded {
-			max-width: unset;
-			margin: unset;
-			box-shadow: none;
-		}
-	}
-
-	/* ── Desktop monolith routes: full-viewport positioning context ── */
-	@media (hover: hover) and (pointer: fine) {
-		.app-shell.app-monolith {
-			height: 100dvh;
-			overflow: hidden;
-		}
-	}
-
 </style>

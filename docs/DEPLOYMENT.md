@@ -1,5 +1,7 @@
 # Deployment Guide
 
+> V4 alpha note: this repo now ships the v4 Svelte 5/Fastify/Drizzle rebuild while preserving the incumbent Docker Compose and Caddy deployment shape.
+
 This project is deployable without Expo or EAS. The current public source of truth is the SvelteKit PWA at the root site, and the backend already has a Docker-friendly shape.
 
 ## Plain-English deployment shape
@@ -40,7 +42,7 @@ For new installs, use the PWA. Treat Android APK work as legacy continuity unles
 - `penthouse.blog` or another root domain for the landing/download site
 - `api.penthouse.blog` or another API subdomain
 - a Linux host with Docker and Docker Compose
-- Firebase Admin key on the server host
+- optional Firebase Admin key only if Android FCM work is reactivated later
 - production values for:
   - `JWT_SECRET`
   - `DATABASE_URL`
@@ -49,8 +51,9 @@ For new installs, use the PWA. Treat Android APK work as legacy continuity unles
   - `LEGACY_APK_DOWNLOAD_PATH`
   - `LEGACY_APK_STATUS`
   - `GIPHY_API_KEY`
-  - `KLIPY_API_KEY`
-  - `FCM_SERVICE_ACCOUNT_PATH`
+  - `VAPID_PUBLIC_KEY`
+  - `VAPID_PRIVATE_KEY`
+  - `VAPID_SUBJECT`
 
 ## Backend deployment
 
@@ -89,12 +92,14 @@ Important values:
 - `LEGACY_APK_STATUS`
   - keep `unavailable` until the legacy APK file exists on the host
 - `GIPHY_API_KEY`
-- `KLIPY_API_KEY`
+- `VAPID_PUBLIC_KEY`
+- `VAPID_PRIVATE_KEY`
+- `VAPID_SUBJECT`
 - `PUBLIC_DOWNLOADS_PATH`
   - host path containing:
     - `legacy/the-penthouse.apk` only if the legacy APK has been recovered
 - `FCM_SERVICE_ACCOUNT_FILE`
-  - host path to the Firebase Admin JSON file
+  - optional host path to the Firebase Admin JSON file for deferred Android FCM work
 
 ### 2. Start the production stack
 

@@ -6,7 +6,7 @@ const TimeStringSchema = z
 
 export const NotificationScopeDefaultSchema = z.enum(['off', 'dm_only', 'dm_and_mention', 'all']);
 export const ChatNotificationOverrideScopeSchema = z.enum(['off', 'mentions_only', 'all']);
-export const PushPayloadPrivacySchema = z.enum(['metadata', 'full']);
+export const PushPayloadPrivacySchema = z.enum(['private', 'metadata', 'full']);
 
 export const PushSubscriptionSchema = z.object({
   id: z.string().uuid(),

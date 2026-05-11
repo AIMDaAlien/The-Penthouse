@@ -1,37 +1,21 @@
-/**
- * REST API client.
- * All requests go through here. Types imported from @penthouse/contracts.
- * OWNED BY: Claude (apps/web)
- */
-import { PUBLIC_API_URL } from '$env/static/public';
-import type {
-	AuthResponse,
-	LoginRequest,
-	RegisterRequest,
-	ChatSummary,
-	Message,
-	SendMessageRequest,
-	SendMessageResponse,
-	MarkChatReadResponse,
-	ChatPreferencesRequest,
-	ChatPreferencesResponse,
-	MemberDetail,
-	UserSearchResponse,
-	ListUsersResponse,
-	UpdateProfileRequest,
-	UploadResponse,
-	GifSearchResponse,
-	GifProvider,
-	PollData,
-	PinnedMessage,
-	EditMessageResponse,
-	StarredMessagesResponse
-} from '@penthouse/contracts';
+import { env } from '$env/dynamic/public';
 import { sessionStore } from '$stores/session.svelte';
+import type { AuthResponse } from '@penthouse/contracts';
 
-class ApiError extends Error {
+const API_BASE = env.PUBLIC_API_URL ?? 'http://localhost:3000';
+const AUTHLESS_PATHS = new Set([
+	'/api/v1/auth/challenge',
+	'/api/v1/auth/config',
+	'/api/v1/auth/login',
+	'/api/v1/auth/refresh',
+	'/api/v1/auth/register',
+	'/api/v1/auth/reset-password'
+]);
+
+export class ApiError extends Error {
 	constructor(
-		public status: number,
+		public readonly status: number,
+		public readonly code: string,
 		message: string
 	) {
 		super(message);
@@ -39,29 +23,34 @@ class ApiError extends Error {
 	}
 }
 
-// ── Token refresh ─────────────────────────────────────────────────────────────
-// One shared promise deduplicates concurrent 401s so we don't flood the
-// refresh endpoint when multiple requests fail simultaneously.
+// Deduplicate concurrent token refreshes
 let _refreshPromise: Promise<AuthResponse> | null = null;
 
 async function tryRefresh(): Promise<AuthResponse> {
 	if (_refreshPromise) return _refreshPromise;
 
-	const refreshToken = sessionStore.current?.refreshToken;
-	if (!refreshToken) throw new ApiError(401, 'No refresh token available');
+	const refreshToken = sessionStore.refreshToken;
+	if (!refreshToken) throw new ApiError(401, 'AUTH_REQUIRED', 'No refresh token available');
 
 	_refreshPromise = (async () => {
 		try {
-			// Raw fetch — can't call request() here or we risk infinite recursion.
-			const res = await fetch(`${PUBLIC_API_URL}/api/v1/auth/refresh`, {
+			const res = await fetch(`${API_BASE}/api/v1/auth/refresh`, {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ refreshToken })
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ refreshToken }),
+				credentials: 'include'
 			});
-			if (!res.ok) throw new ApiError(res.status, 'Token refresh failed');
-			const newSession = (await res.json()) as AuthResponse;
-			sessionStore.set(newSession);
-			return newSession;
+			if (!res.ok) {
+				const body = await res.json().catch(() => ({}));
+				throw new ApiError(
+					res.status,
+					body.code ?? 'REFRESH_FAILED',
+					body.message ?? `Token refresh failed with HTTP ${res.status}`
+				);
+			}
+			const data = (await res.json()) as AuthResponse;
+			sessionStore.set(data);
+			return data;
 		} finally {
 			_refreshPromise = null;
 		}
@@ -70,262 +59,78 @@ async function tryRefresh(): Promise<AuthResponse> {
 	return _refreshPromise;
 }
 
-// ── Core request ──────────────────────────────────────────────────────────────
+async function doFetch<T>(method: string, path: string, options?: RequestInit): Promise<T> {
+	const url = `${API_BASE}${path}`;
+	const headers = new Headers(options?.headers);
 
-async function doFetch(path: string, options: RequestInit, token: string | null): Promise<Response> {
-	const headers: Record<string, string> = {
-		'Content-Type': 'application/json',
-		...(options.headers as Record<string, string>)
-	};
-	if (token) headers['Authorization'] = `Bearer ${token}`;
-	return fetch(`${PUBLIC_API_URL}${path}`, { ...options, headers });
-}
+	if (options?.body && typeof options.body === 'string') {
+		headers.set('content-type', 'application/json');
+	}
+	// Let browser set multipart boundary for FormData
+	if (options?.body instanceof FormData) {
+		headers.delete('content-type');
+	}
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-	let res = await doFetch(path, options, sessionStore.accessToken);
+	const isAuthless = AUTHLESS_PATHS.has(path);
+	const token = isAuthless ? null : sessionStore.accessToken;
+	if (token) headers.set('authorization', `Bearer ${token}`);
 
-	// Auto-refresh on 401, then retry once
-	if (res.status === 401) {
+	let response: Response;
+	try {
+		response = await fetch(url, { ...options, method, headers, credentials: 'include' });
+	} catch (err) {
+		throw new ApiError(
+			0,
+			'API_UNREACHABLE',
+			`API server is unreachable at ${API_BASE}. Check that services/api is running on port 3000.`
+		);
+	}
+
+	// Auto-refresh on 401 and retry once
+	if (response.status === 401 && token && !isAuthless) {
 		try {
-			const newSession = await tryRefresh();
-			res = await doFetch(path, options, newSession.accessToken);
-		} catch {
-			// Refresh failed — drop session; layout auth guard will redirect to /auth
+			const refreshed = await tryRefresh();
+			headers.set('authorization', `Bearer ${refreshed.accessToken}`);
+			try {
+				response = await fetch(url, { ...options, method, headers, credentials: 'include' });
+			} catch {
+				throw new ApiError(
+					0,
+					'API_UNREACHABLE',
+					`API server became unreachable at ${API_BASE} after refreshing your token.`
+				);
+			}
+		} catch (err) {
 			sessionStore.clear();
-			throw new ApiError(401, 'Session expired. Please sign in again.');
+			if (err instanceof ApiError) {
+				throw new ApiError(
+					err.status,
+					`SESSION_REFRESH_${err.code}`,
+					`Saved login could not be refreshed: ${err.message}`
+				);
+			}
+			throw new ApiError(401, 'SESSION_REFRESH_FAILED', 'Saved login could not be refreshed. Sign in again.');
 		}
 	}
 
-	if (!res.ok) {
-		const body = await res.json().catch(() => ({ error: res.statusText }));
-		throw new ApiError(res.status, body.error ?? res.statusText);
+	if (!response.ok) {
+		const body = await response.json().catch(() => ({}));
+		throw new ApiError(
+			response.status,
+			body.code ?? 'UNKNOWN_ERROR',
+			body.message ?? `HTTP ${response.status}`
+		);
 	}
 
-	// 204 No Content — return undefined rather than calling .json() on an empty body
-	if (res.status === 204) return undefined as unknown as T;
-
-	return res.json() as Promise<T>;
+	if (response.status === 204) return undefined as T;
+	return response.json() as Promise<T>;
 }
 
-// ── Auth ──────────────────────────────────────────────────────────────────────
-export const auth = {
-	login: (body: LoginRequest) =>
-		request<AuthResponse>('/api/v1/auth/login', {
-			method: 'POST',
-			body: JSON.stringify(body)
-		}),
-
-	register: (body: RegisterRequest) =>
-		request<AuthResponse>('/api/v1/auth/register', {
-			method: 'POST',
-			body: JSON.stringify(body)
-		}),
-
-	logout: () =>
-		request<void>('/api/v1/auth/logout', { method: 'POST' }),
-
-	refresh: (refreshToken: string) =>
-		request<AuthResponse>('/api/v1/auth/refresh', {
-			method: 'POST',
-			body: JSON.stringify({ refreshToken })
-		})
+export const api = {
+	get: <T>(path: string, options?: RequestInit) => doFetch<T>('GET', path, options),
+	post: <T>(path: string, body?: unknown, options?: RequestInit) =>
+		doFetch<T>('POST', path, { ...options, body: body instanceof FormData || body instanceof Blob || body instanceof ArrayBuffer ? body : body ? JSON.stringify(body) : undefined }),
+	patch: <T>(path: string, body?: unknown, options?: RequestInit) =>
+		doFetch<T>('PATCH', path, { ...options, body: body instanceof FormData || body instanceof Blob || body instanceof ArrayBuffer ? body : body ? JSON.stringify(body) : undefined }),
+	delete: <T>(path: string, options?: RequestInit) => doFetch<T>('DELETE', path, options)
 };
-
-// ── Chats ─────────────────────────────────────────────────────────────────────
-export const chats = {
-	list: (params?: { archived?: boolean }) => {
-		const qs = params?.archived !== undefined ? `?archived=${params.archived}` : '';
-		return request<ChatSummary[]>(`/api/v1/chats${qs}`);
-	},
-
-	createDm: (memberId: string) =>
-		request<{ id: string }>('/api/v1/chats/dm', {
-			method: 'POST',
-			body: JSON.stringify({ memberId })
-		}),
-
-	messages: (chatId: string, params?: { before?: string; limit?: number }) => {
-		const qs = new URLSearchParams();
-		if (params?.before) qs.set('before', params.before);
-		if (params?.limit) qs.set('limit', String(params.limit));
-		const query = qs.toString() ? `?${qs}` : '';
-		return request<Message[]>(`/api/v1/chats/${chatId}/messages${query}`);
-	},
-
-	send: (chatId: string, body: SendMessageRequest) =>
-		request<SendMessageResponse>(`/api/v1/chats/${chatId}/messages`, {
-			method: 'POST',
-			body: JSON.stringify(body)
-		}),
-
-	editMessage: (chatId: string, messageId: string, content: string) =>
-		request<EditMessageResponse>(`/api/v1/chats/${chatId}/messages/${messageId}`, {
-			method: 'PATCH',
-			body: JSON.stringify({ content })
-		}),
-
-	deleteMessage: (chatId: string, messageId: string) =>
-		request<void>(`/api/v1/chats/${chatId}/messages/${messageId}`, { method: 'DELETE' }),
-
-	markRead: (chatId: string, throughMessageId?: string) =>
-		request<MarkChatReadResponse>(`/api/v1/chats/${chatId}/read`, {
-			method: 'POST',
-			body: JSON.stringify(throughMessageId ? { throughMessageId } : {})
-		}),
-
-	archive: (chatId: string) =>
-		request<void>(`/api/v1/chats/${chatId}/archive`, { method: 'POST' }),
-
-	unarchive: (chatId: string) =>
-		request<void>(`/api/v1/chats/${chatId}/unarchive`, { method: 'POST' }),
-
-	starMessage: (chatId: string, messageId: string) =>
-		request<void>(`/api/v1/chats/${chatId}/messages/${messageId}/star`, { method: 'POST' }),
-
-	unstarMessage: (chatId: string, messageId: string) =>
-		request<void>(`/api/v1/chats/${chatId}/messages/${messageId}/star`, { method: 'DELETE' }),
-
-	getPreferences: (chatId: string) =>
-		request<ChatPreferencesResponse>(`/api/v1/chats/${chatId}/preferences`),
-
-	setPreferences: (chatId: string, body: ChatPreferencesRequest) =>
-		request<ChatPreferencesResponse>(`/api/v1/chats/${chatId}/preferences`, {
-			method: 'POST',
-			body: JSON.stringify(body)
-		}),
-
-	self: () =>
-		request<ChatSummary>('/api/v1/chats/self', { method: 'POST' })
-};
-
-// ── Me ────────────────────────────────────────────────────────────────────────
-export const me = {
-	starred: (params?: { cursor?: string; limit?: number }) => {
-		const qs = new URLSearchParams();
-		if (params?.cursor) qs.set('cursor', params.cursor);
-		if (params?.limit) qs.set('limit', String(params.limit));
-		const query = qs.toString() ? `?${qs}` : '';
-		return request<StarredMessagesResponse>(`/api/v1/me/starred${query}`);
-	}
-};
-
-// ── Users ─────────────────────────────────────────────────────────────────────
-export const users = {
-	search: (q: string, limit?: number) => {
-		const qs = new URLSearchParams({ q });
-		if (limit) qs.set('limit', String(limit));
-		return request<UserSearchResponse>(`/api/v1/users/search?${qs}`);
-	},
-
-	list: (params?: { offset?: number; limit?: number }) => {
-		const qs = new URLSearchParams();
-		if (params?.offset !== undefined) qs.set('offset', String(params.offset));
-		if (params?.limit !== undefined) qs.set('limit', String(params.limit));
-		const query = qs.toString() ? `?${qs}` : '';
-		return request<ListUsersResponse>(`/api/v1/users${query}`);
-	},
-
-	getProfile: (userId: string) =>
-		request<MemberDetail>(`/api/v1/users/${userId}`),
-
-	updateProfile: (body: UpdateProfileRequest) =>
-		request<AuthResponse>('/api/v1/auth/me', {
-			method: 'PATCH',
-			body: JSON.stringify(body)
-		})
-};
-
-// ── Media uploads ─────────────────────────────────────────────────────────────
-export const media = {
-	upload: async (file: File): Promise<UploadResponse> => {
-		// Multipart upload — must not set Content-Type (browser sets it with boundary)
-		const makeUpload = async (token: string | null) => {
-			const formData = new FormData();
-			formData.append('file', file);
-			return fetch(`${PUBLIC_API_URL}/api/v1/media/upload`, {
-				method: 'POST',
-				headers: token ? { Authorization: `Bearer ${token}` } : {},
-				body: formData
-			});
-		};
-
-		let res = await makeUpload(sessionStore.accessToken);
-
-		if (res.status === 401) {
-			try {
-				const newSession = await tryRefresh();
-				res = await makeUpload(newSession.accessToken);
-			} catch {
-				sessionStore.clear();
-				throw new ApiError(401, 'Session expired. Please sign in again.');
-			}
-		}
-
-		if (!res.ok) {
-			const body = await res.json().catch(() => ({ error: res.statusText }));
-			throw new ApiError(res.status, body.error ?? res.statusText);
-		}
-
-		return res.json() as Promise<UploadResponse>;
-	}
-};
-
-// ── GIFs ──────────────────────────────────────────────────────────────────────
-export const gifs = {
-	trending: (provider: GifProvider = 'giphy', limit = 30) =>
-		request<GifSearchResponse>(`/api/v1/gifs/${provider}/trending?limit=${limit}`),
-
-	search: (q: string, provider: GifProvider = 'giphy', limit = 30) =>
-		request<GifSearchResponse>(
-			`/api/v1/gifs/${provider}/search?q=${encodeURIComponent(q)}&limit=${limit}`
-		)
-};
-
-// ── Polls ─────────────────────────────────────────────────────────────────────
-export const polls = {
-	create: (
-		chatId: string,
-		body: { question: string; options: string[]; multiSelect?: boolean; expiresAt?: string }
-	) =>
-		request<SendMessageResponse>(`/api/v1/chats/${chatId}/polls`, {
-			method: 'POST',
-			body: JSON.stringify(body)
-		}),
-
-	vote: (pollId: string, optionIndex: number) =>
-		request<PollData>(`/api/v1/polls/${pollId}/vote`, {
-			method: 'POST',
-			body: JSON.stringify({ optionIndex })
-		})
-};
-
-// ── Reactions ─────────────────────────────────────────────────────────────────
-export const reactions = {
-	add: (chatId: string, messageId: string, emoji: string) =>
-		request<void>(`/api/v1/chats/${chatId}/messages/${messageId}/reactions`, {
-			method: 'POST',
-			body: JSON.stringify({ emoji })
-		}),
-
-	remove: (chatId: string, messageId: string, emoji: string) =>
-		request<void>(`/api/v1/chats/${chatId}/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`, {
-			method: 'DELETE'
-		})
-};
-
-// ── Pins ──────────────────────────────────────────────────────────────────────
-export const pins = {
-	list: (chatId: string) =>
-		request<PinnedMessage[]>(`/api/v1/chats/${chatId}/pins`),
-
-	add: (chatId: string, messageId: string) =>
-		request<PinnedMessage>(`/api/v1/chats/${chatId}/pins`, {
-			method: 'POST',
-			body: JSON.stringify({ messageId })
-		}),
-
-	remove: (chatId: string, messageId: string) =>
-		request<void>(`/api/v1/chats/${chatId}/pins/${messageId}`, { method: 'DELETE' })
-};
-
-export { ApiError };
