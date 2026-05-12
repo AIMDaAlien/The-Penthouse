@@ -1,26 +1,29 @@
 <script lang="ts">
-  import ChatPaneV3_01 from '$lib/prototypes/chat-pane/ChatPane-V3-01-AuroraGlass.svelte';
-  import PeoplePaneV3_01 from '$lib/prototypes/people-pane/PeoplePane-V3-01-AuroraGlass.svelte';
-  import ChatPaneV3_02 from '$lib/prototypes/chat-pane/ChatPane-V3-02-NebulaDrift.svelte';
-  import PeoplePaneV3_02 from '$lib/prototypes/people-pane/PeoplePane-V3-02-NebulaDrift.svelte';
-  import ChatPaneV3_03 from '$lib/prototypes/chat-pane/ChatPane-V3-03-PrismaticCore.svelte';
-  import PeoplePaneV3_03 from '$lib/prototypes/people-pane/PeoplePane-V3-03-PrismaticCore.svelte';
-  import ChatPaneV3_04 from '$lib/prototypes/chat-pane/ChatPane-V3-04-ZenithGlow.svelte';
-  import PeoplePaneV3_04 from '$lib/prototypes/people-pane/PeoplePane-V3-04-ZenithGlow.svelte';
-  import ChatPaneV3_05 from '$lib/prototypes/chat-pane/ChatPane-V3-05-EtherealWave.svelte';
-  import PeoplePaneV3_05 from '$lib/prototypes/people-pane/PeoplePane-V3-05-EtherealWave.svelte';
-  import ChatPaneV3_06 from '$lib/prototypes/chat-pane/ChatPane-V3-06-LunarMist.svelte';
-  import PeoplePaneV3_06 from '$lib/prototypes/people-pane/PeoplePane-V3-06-LunarMist.svelte';
-  import ChatPaneV3_07 from '$lib/prototypes/chat-pane/ChatPane-V3-07-CelestiaForm.svelte';
-  import PeoplePaneV3_07 from '$lib/prototypes/people-pane/PeoplePane-V3-07-CelestiaForm.svelte';
-  import ChatPaneV3_08 from '$lib/prototypes/chat-pane/ChatPane-V3-08-AstralMorph.svelte';
-  import PeoplePaneV3_08 from '$lib/prototypes/people-pane/PeoplePane-V3-08-AstralMorph.svelte';
-  import ChatPaneV3_09 from '$lib/prototypes/chat-pane/ChatPane-V3-09-NovaPulse.svelte';
-  import PeoplePaneV3_09 from '$lib/prototypes/people-pane/PeoplePane-V3-09-NovaPulse.svelte';
-  import ChatPaneV3_10 from '$lib/prototypes/chat-pane/ChatPane-V3-10-CosmicFroth.svelte';
-  import PeoplePaneV3_10 from '$lib/prototypes/people-pane/PeoplePane-V3-10-CosmicFroth.svelte';
+  // Chat V4 Panes
+  import ChatPaneV4_01 from '$lib/prototypes/chat-pane/ChatPane-V4-01-GrainyMidnight.svelte';
+  import ChatPaneV4_02 from '$lib/prototypes/chat-pane/ChatPane-V4-02-MeshPastel.svelte';
+  import ChatPaneV4_03 from '$lib/prototypes/chat-pane/ChatPane-V4-03-BrushedSilk.svelte';
+  import ChatPaneV4_04 from '$lib/prototypes/chat-pane/ChatPane-V4-04-FrostedLinen.svelte';
+  import ChatPaneV4_05 from '$lib/prototypes/chat-pane/ChatPane-V4-05-NoiseGradient.svelte';
+  import ChatPaneV4_06 from '$lib/prototypes/chat-pane/ChatPane-V4-06-GeometricShadow.svelte';
+  import ChatPaneV4_07 from '$lib/prototypes/chat-pane/ChatPane-V4-07-VelvetMist.svelte';
+  import ChatPaneV4_08 from '$lib/prototypes/chat-pane/ChatPane-V4-08-Crystalline.svelte';
+  import ChatPaneV4_09 from '$lib/prototypes/chat-pane/ChatPane-V4-09-EthericFlow.svelte';
+  import ChatPaneV4_10 from '$lib/prototypes/chat-pane/ChatPane-V4-10-Monolith.svelte';
 
-  // V4 Settings Panes
+  // People V4 Panes
+  import PeoplePaneV4_01 from '$lib/prototypes/people-pane/PeoplePane-V4-01-VogueMist.svelte';
+  import PeoplePaneV4_02 from '$lib/prototypes/people-pane/PeoplePane-V4-02-BazaarGlass.svelte';
+  import PeoplePaneV4_03 from '$lib/prototypes/people-pane/PeoplePane-V4-03-AtelierSoft.svelte';
+  import PeoplePaneV4_04 from '$lib/prototypes/people-pane/PeoplePane-V4-04-EaselGrain.svelte';
+  import PeoplePaneV4_05 from '$lib/prototypes/people-pane/PeoplePane-V4-05-CuratorVelvet.svelte';
+  import PeoplePaneV4_06 from '$lib/prototypes/people-pane/PeoplePane-V4-06-GalleryLinen.svelte';
+  import PeoplePaneV4_07 from '$lib/prototypes/people-pane/PeoplePane-V4-07-StudioSilk.svelte';
+  import PeoplePaneV4_08 from '$lib/prototypes/people-pane/PeoplePane-V4-08-JournalNoise.svelte';
+  import PeoplePaneV4_09 from '$lib/prototypes/people-pane/PeoplePane-V4-09-PortfolioFroth.svelte';
+  import PeoplePaneV4_10 from '$lib/prototypes/people-pane/PeoplePane-V4-10-EditionEtch.svelte';
+
+  // Settings V4 Panes
   import SettingsPaneV4_01 from '$lib/prototypes/settings-pane/SettingsPane-V4-01-LunarMist-Editorial.svelte';
   import SettingsPaneV4_02 from '$lib/prototypes/settings-pane/SettingsPane-V4-02-LunarMist-Split.svelte';
   import SettingsPaneV4_03 from '$lib/prototypes/settings-pane/SettingsPane-V4-03-LunarMist-Bento.svelte';
@@ -33,16 +36,16 @@
   import SettingsPaneV4_10 from '$lib/prototypes/settings-pane/SettingsPane-V4-10-LunarMist-Mosaic.svelte';
 
   const chatPanes = [
-    { component: ChatPaneV3_01, name: 'V3: Aurora Glass' },
-    { component: ChatPaneV3_02, name: 'V3: Nebula Drift' },
-    { component: ChatPaneV3_03, name: 'V3: Prismatic Core' },
-    { component: ChatPaneV3_04, name: 'V3: Zenith Glow' },
-    { component: ChatPaneV3_05, name: 'V3: Ethereal Wave' },
-    { component: ChatPaneV3_06, name: 'V3: Lunar Mist' },
-    { component: ChatPaneV3_07, name: 'V3: Celestia Form' },
-    { component: ChatPaneV3_08, name: 'V3: Astral Morph' },
-    { component: ChatPaneV3_09, name: 'V3: Nova Pulse' },
-    { component: ChatPaneV3_10, name: 'V3: Cosmic Froth' },
+    { component: ChatPaneV4_01, name: 'V4: Grainy Midnight' },
+    { component: ChatPaneV4_02, name: 'V4: Mesh Pastel' },
+    { component: ChatPaneV4_03, name: 'V4: Brushed Silk' },
+    { component: ChatPaneV4_04, name: 'V4: Frosted Linen' },
+    { component: ChatPaneV4_05, name: 'V4: Noise Gradient' },
+    { component: ChatPaneV4_06, name: 'V4: Geometric Shadow' },
+    { component: ChatPaneV4_07, name: 'V4: Velvet Mist' },
+    { component: ChatPaneV4_08, name: 'V4: Crystalline' },
+    { component: ChatPaneV4_09, name: 'V4: Etheric Flow' },
+    { component: ChatPaneV4_10, name: 'V4: Monolith' },
   ];
 
   const settingsPanes = [
@@ -59,16 +62,16 @@
   ];
 
   const peoplePanes = [
-    { component: PeoplePaneV3_01, name: 'V3: Aurora Glass' },
-    { component: PeoplePaneV3_02, name: 'V3: Nebula Drift' },
-    { component: PeoplePaneV3_03, name: 'V3: Prismatic Core' },
-    { component: PeoplePaneV3_04, name: 'V3: Zenith Glow' },
-    { component: PeoplePaneV3_05, name: 'V3: Ethereal Wave' },
-    { component: PeoplePaneV3_06, name: 'V3: Lunar Mist' },
-    { component: PeoplePaneV3_07, name: 'V3: Celestia Form' },
-    { component: PeoplePaneV3_08, name: 'V3: Astral Morph' },
-    { component: PeoplePaneV3_09, name: 'V3: Nova Pulse' },
-    { component: PeoplePaneV3_10, name: 'V3: Cosmic Froth' },
+    { component: PeoplePaneV4_01, name: 'V4: Vogue Mist' },
+    { component: PeoplePaneV4_02, name: 'V4: Bazaar Glass' },
+    { component: PeoplePaneV4_03, name: 'V4: Atelier Soft' },
+    { component: PeoplePaneV4_04, name: 'V4: Easel Grain' },
+    { component: PeoplePaneV4_05, name: 'V4: Curator Velvet' },
+    { component: PeoplePaneV4_06, name: 'V4: Gallery Linen' },
+    { component: PeoplePaneV4_07, name: 'V4: Studio Silk' },
+    { component: PeoplePaneV4_08, name: 'V4: Journal Noise' },
+    { component: PeoplePaneV4_09, name: 'V4: Portfolio Froth' },
+    { component: PeoplePaneV4_10, name: 'V4: Edition Etch' },
   ];
 
   let currentCategory = $state<'chat' | 'settings' | 'people'>('chat');
