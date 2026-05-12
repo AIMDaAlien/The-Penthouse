@@ -20,7 +20,7 @@
 			<div class="message-wrapper">
 				<div class="meta">
 					<span class="time">[{msg.time}]</span>
-					<span class="sender {msg.isMine ? 'mine' : 'theirs'}"><{msg.sender}></span>
+					<span class="sender {msg.isMine ? 'mine' : 'theirs'}">&lt;{msg.sender}&gt;</span>
 				</div>
 				<div class="text">{msg.text}</div>
 			</div>

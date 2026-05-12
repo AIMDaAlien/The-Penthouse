@@ -21,7 +21,7 @@
         <div class="bg-pulse"></div>
         <div class="kin-content">
           <div class="avatar-wrap">
-            <Avatar seed={user.handle} size="md" />
+            <Avatar name={user.handle} size={48} />
             <div class="orb" data-status={user.status}></div>
           </div>
           <div class="text-group">

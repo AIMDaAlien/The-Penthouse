@@ -26,7 +26,7 @@
         <div class="matting">
           <div class="canvas">
             <div class="art-avatar">
-              <Avatar seed={user.name} size="lg" />
+              <Avatar name={user.name} size={64} />
               <div class="presence-dot" data-status={user.status}></div>
             </div>
           </div>

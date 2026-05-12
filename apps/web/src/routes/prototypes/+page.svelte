@@ -9,6 +9,16 @@
   import ChatPane08 from '$lib/prototypes/chat-pane/ChatPane-08-VaporwaveCathedral.svelte';
   import ChatPane09 from '$lib/prototypes/chat-pane/ChatPane-09-KineticTypography.svelte';
   import ChatPane10 from '$lib/prototypes/chat-pane/ChatPane-10-MuseumExhibit.svelte';
+  import ChatPaneV2_01 from '$lib/prototypes/chat-pane/ChatPane-V2-01-FrostedBlossom.svelte';
+  import ChatPaneV2_02 from '$lib/prototypes/chat-pane/ChatPane-V2-02-SilkenLavender.svelte';
+  import ChatPaneV2_03 from '$lib/prototypes/chat-pane/ChatPane-V2-03-CrystalPetals.svelte';
+  import ChatPaneV2_04 from '$lib/prototypes/chat-pane/ChatPane-V2-04-VelvetNebula.svelte';
+  import ChatPaneV2_05 from '$lib/prototypes/chat-pane/ChatPane-V2-05-MorningDew.svelte';
+  import ChatPaneV2_06 from '$lib/prototypes/chat-pane/ChatPane-V2-06-AmethystWhisper.svelte';
+  import ChatPaneV2_07 from '$lib/prototypes/chat-pane/ChatPane-V2-07-LunarFroth.svelte';
+  import ChatPaneV2_08 from '$lib/prototypes/chat-pane/ChatPane-V2-08-OrchidGlass.svelte';
+  import ChatPaneV2_09 from '$lib/prototypes/chat-pane/ChatPane-V2-09-PearlMorph.svelte';
+  import ChatPaneV2_10 from '$lib/prototypes/chat-pane/ChatPane-V2-10-TwilightBloom.svelte';
 
   import SettingsPane01 from '$lib/prototypes/settings-pane/SettingsPane-01-LiquidGlass.svelte';
   import SettingsPane02 from '$lib/prototypes/settings-pane/SettingsPane-02-BrutalistSoft.svelte';
@@ -20,6 +30,16 @@
   import SettingsPane08 from '$lib/prototypes/settings-pane/SettingsPane-08-VaporwaveCathedral.svelte';
   import SettingsPane09 from '$lib/prototypes/settings-pane/SettingsPane-09-KineticTypography.svelte';
   import SettingsPane10 from '$lib/prototypes/settings-pane/SettingsPane-10-MuseumExhibit.svelte';
+  import SettingsPaneV2_01 from '$lib/prototypes/settings-pane/SettingsPane-V2-01-LavenderCloud.svelte';
+  import SettingsPaneV2_02 from '$lib/prototypes/settings-pane/SettingsPane-V2-02-LilacBreeze.svelte';
+  import SettingsPaneV2_03 from '$lib/prototypes/settings-pane/SettingsPane-V2-03-AmethystJelly.svelte';
+  import SettingsPaneV2_04 from '$lib/prototypes/settings-pane/SettingsPane-V2-04-PlumPlush.svelte';
+  import SettingsPaneV2_05 from '$lib/prototypes/settings-pane/SettingsPane-V2-05-GrapeGum.svelte';
+  import SettingsPaneV2_06 from '$lib/prototypes/settings-pane/SettingsPane-V2-06-ThistlePuff.svelte';
+  import SettingsPaneV2_07 from '$lib/prototypes/settings-pane/SettingsPane-V2-07-OrchidBounce.svelte';
+  import SettingsPaneV2_08 from '$lib/prototypes/settings-pane/SettingsPane-V2-08-WisteriaSpring.svelte';
+  import SettingsPaneV2_09 from '$lib/prototypes/settings-pane/SettingsPane-V2-09-VioletMochi.svelte';
+  import SettingsPaneV2_10 from '$lib/prototypes/settings-pane/SettingsPane-V2-10-MauveMarshmallow.svelte';
 
   import PeoplePane01 from '$lib/prototypes/people-pane/PeoplePane-01-LiquidGlass.svelte';
   import PeoplePane02 from '$lib/prototypes/people-pane/PeoplePane-02-BrutalistSoft.svelte';
@@ -32,6 +52,17 @@
   import PeoplePane09 from '$lib/prototypes/people-pane/PeoplePane-09-KineticTypography.svelte';
   import PeoplePane10 from '$lib/prototypes/people-pane/PeoplePane-10-MuseumExhibit.svelte';
 
+  import PeoplePaneV2_01 from '$lib/prototypes/people-pane/PeoplePane-V2-01-FrostedBlossom.svelte';
+  import PeoplePaneV2_02 from '$lib/prototypes/people-pane/PeoplePane-V2-02-SilkenLavender.svelte';
+  import PeoplePaneV2_03 from '$lib/prototypes/people-pane/PeoplePane-V2-03-CrystalPetals.svelte';
+  import PeoplePaneV2_04 from '$lib/prototypes/people-pane/PeoplePane-V2-04-VelvetNebula.svelte';
+  import PeoplePaneV2_05 from '$lib/prototypes/people-pane/PeoplePane-V2-05-MorningDew.svelte';
+  import PeoplePaneV2_06 from '$lib/prototypes/people-pane/PeoplePane-V2-06-AmethystWhisper.svelte';
+  import PeoplePaneV2_07 from '$lib/prototypes/people-pane/PeoplePane-V2-07-LunarFroth.svelte';
+  import PeoplePaneV2_08 from '$lib/prototypes/people-pane/PeoplePane-V2-08-OrchidGlass.svelte';
+  import PeoplePaneV2_09 from '$lib/prototypes/people-pane/PeoplePane-V2-09-PearlMorph.svelte';
+  import PeoplePaneV2_10 from '$lib/prototypes/people-pane/PeoplePane-V2-10-TwilightBloom.svelte';
+
   const chatPanes = [
     { component: ChatPane01, name: 'Liquid Glass' },
     { component: ChatPane02, name: 'Brutalist Soft' },
@@ -42,7 +73,17 @@
     { component: ChatPane07, name: 'Organic Blobs' },
     { component: ChatPane08, name: 'Vaporwave Cathedral' },
     { component: ChatPane09, name: 'Kinetic Typography' },
-    { component: ChatPane10, name: 'Museum Exhibit' }
+    { component: ChatPane10, name: 'Museum Exhibit' },
+    { component: ChatPaneV2_01, name: 'V2: Frosted Blossom' },
+    { component: ChatPaneV2_02, name: 'V2: Silken Lavender' },
+    { component: ChatPaneV2_03, name: 'V2: Crystal Petals' },
+    { component: ChatPaneV2_04, name: 'V2: Velvet Nebula' },
+    { component: ChatPaneV2_05, name: 'V2: Morning Dew' },
+    { component: ChatPaneV2_06, name: 'V2: Amethyst Whisper' },
+    { component: ChatPaneV2_07, name: 'V2: Lunar Froth' },
+    { component: ChatPaneV2_08, name: 'V2: Orchid Glass' },
+    { component: ChatPaneV2_09, name: 'V2: Pearl Morph' },
+    { component: ChatPaneV2_10, name: 'V2: Twilight Bloom' }
   ];
 
   const settingsPanes = [
@@ -55,7 +96,17 @@
     { component: SettingsPane07, name: 'Organic Blobs' },
     { component: SettingsPane08, name: 'Vaporwave Cathedral' },
     { component: SettingsPane09, name: 'Kinetic Typography' },
-    { component: SettingsPane10, name: 'Museum Exhibit' }
+    { component: SettingsPane10, name: 'Museum Exhibit' },
+    { component: SettingsPaneV2_01, name: 'V2: Lavender Cloud' },
+    { component: SettingsPaneV2_02, name: 'V2: Lilac Breeze' },
+    { component: SettingsPaneV2_03, name: 'V2: Amethyst Jelly' },
+    { component: SettingsPaneV2_04, name: 'V2: Plum Plush' },
+    { component: SettingsPaneV2_05, name: 'V2: Grape Gum' },
+    { component: SettingsPaneV2_06, name: 'V2: Thistle Puff' },
+    { component: SettingsPaneV2_07, name: 'V2: Orchid Bounce' },
+    { component: SettingsPaneV2_08, name: 'V2: Wisteria Spring' },
+    { component: SettingsPaneV2_09, name: 'V2: Violet Mochi' },
+    { component: SettingsPaneV2_10, name: 'V2: Mauve Marshmallow' }
   ];
 
   const peoplePanes = [
@@ -68,7 +119,17 @@
     { component: PeoplePane07, name: 'Organic Blobs' },
     { component: PeoplePane08, name: 'Vaporwave Cathedral' },
     { component: PeoplePane09, name: 'Kinetic Typography' },
-    { component: PeoplePane10, name: 'Museum Exhibit' }
+    { component: PeoplePane10, name: 'Museum Exhibit' },
+    { component: PeoplePaneV2_01, name: 'V2: Frosted Blossom' },
+    { component: PeoplePaneV2_02, name: 'V2: Silken Lavender' },
+    { component: PeoplePaneV2_03, name: 'V2: Crystal Petals' },
+    { component: PeoplePaneV2_04, name: 'V2: Velvet Nebula' },
+    { component: PeoplePaneV2_05, name: 'V2: Morning Dew' },
+    { component: PeoplePaneV2_06, name: 'V2: Amethyst Whisper' },
+    { component: PeoplePaneV2_07, name: 'V2: Lunar Froth' },
+    { component: PeoplePaneV2_08, name: 'V2: Orchid Glass' },
+    { component: PeoplePaneV2_09, name: 'V2: Pearl Morph' },
+    { component: PeoplePaneV2_10, name: 'V2: Twilight Bloom' }
   ];
 
   let currentCategory = $state<'chat' | 'settings' | 'people'>('chat');
