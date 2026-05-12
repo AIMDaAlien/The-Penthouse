@@ -126,6 +126,16 @@
     { component: ChatPaneV2_08, name: 'V2: Orchid Glass' },
     { component: ChatPaneV2_09, name: 'V2: Pearl Morph' },
     { component: ChatPaneV2_10, name: 'V2: Twilight Bloom' }
+    { component: ChatPaneV3_01, name: 'V3: Aurora Glass' },
+    { component: ChatPaneV3_02, name: 'V3: Nebula Drift' },
+    { component: ChatPaneV3_03, name: 'V3: Prismatic Core' },
+    { component: ChatPaneV3_04, name: 'V3: Zenith Glow' },
+    { component: ChatPaneV3_05, name: 'V3: Ethereal Wave' },
+    { component: ChatPaneV3_06, name: 'V3: Lunar Mist' },
+    { component: ChatPaneV3_07, name: 'V3: Celestia Form' },
+    { component: ChatPaneV3_08, name: 'V3: Astral Morph' },
+    { component: ChatPaneV3_09, name: 'V3: Nova Pulse' },
+    { component: ChatPaneV3_10, name: 'V3: Cosmic Froth' },
   ];
 
   const settingsPanes = [
@@ -160,6 +170,16 @@
     { component: SettingsPaneV2_08, name: 'V2: Wisteria Spring' },
     { component: SettingsPaneV2_09, name: 'V2: Violet Mochi' },
     { component: SettingsPaneV2_10, name: 'V2: Mauve Marshmallow' }
+    { component: SettingsPaneV3_01, name: 'V3: Aurora Glass' },
+    { component: SettingsPaneV3_02, name: 'V3: Nebula Drift' },
+    { component: SettingsPaneV3_03, name: 'V3: Prismatic Core' },
+    { component: SettingsPaneV3_04, name: 'V3: Zenith Glow' },
+    { component: SettingsPaneV3_05, name: 'V3: Ethereal Wave' },
+    { component: SettingsPaneV3_06, name: 'V3: Lunar Mist' },
+    { component: SettingsPaneV3_07, name: 'V3: Celestia Form' },
+    { component: SettingsPaneV3_08, name: 'V3: Astral Morph' },
+    { component: SettingsPaneV3_09, name: 'V3: Nova Pulse' },
+    { component: SettingsPaneV3_10, name: 'V3: Cosmic Froth' },
   ];
 
   const peoplePanes = [
@@ -194,9 +214,51 @@
     { component: PeoplePaneV2_08, name: 'V2: Orchid Glass' },
     { component: PeoplePaneV2_09, name: 'V2: Pearl Morph' },
     { component: PeoplePaneV2_10, name: 'V2: Twilight Bloom' }
+    { component: PeoplePaneV3_01, name: 'V3: Aurora Glass' },
+    { component: PeoplePaneV3_02, name: 'V3: Nebula Drift' },
+    { component: PeoplePaneV3_03, name: 'V3: Prismatic Core' },
+    { component: PeoplePaneV3_04, name: 'V3: Zenith Glow' },
+    { component: PeoplePaneV3_05, name: 'V3: Ethereal Wave' },
+    { component: PeoplePaneV3_06, name: 'V3: Lunar Mist' },
+    { component: PeoplePaneV3_07, name: 'V3: Celestia Form' },
+    { component: PeoplePaneV3_08, name: 'V3: Astral Morph' },
+    { component: PeoplePaneV3_09, name: 'V3: Nova Pulse' },
+    { component: PeoplePaneV3_10, name: 'V3: Cosmic Froth' },
   ];
 
   let currentCategory = $state<'chat' | 'settings' | 'people'>('chat');
+
+  // V3 Imports
+import ChatPaneV3_01 from '/prototypes/chat-pane/ChatPane-V3-01-AuroraGlass.svelte';
+import ChatPaneV3_02 from '/prototypes/chat-pane/ChatPane-V3-02-NebulaDrift.svelte';
+import ChatPaneV3_03 from '/prototypes/chat-pane/ChatPane-V3-03-PrismaticCore.svelte';
+import ChatPaneV3_04 from '/prototypes/chat-pane/ChatPane-V3-04-ZenithGlow.svelte';
+import ChatPaneV3_05 from '/prototypes/chat-pane/ChatPane-V3-05-EtherealWave.svelte';
+import ChatPaneV3_06 from '/prototypes/chat-pane/ChatPane-V3-06-LunarMist.svelte';
+import ChatPaneV3_07 from '/prototypes/chat-pane/ChatPane-V3-07-CelestiaForm.svelte';
+import ChatPaneV3_08 from '/prototypes/chat-pane/ChatPane-V3-08-AstralMorph.svelte';
+import ChatPaneV3_09 from '/prototypes/chat-pane/ChatPane-V3-09-NovaPulse.svelte';
+import ChatPaneV3_10 from '/prototypes/chat-pane/ChatPane-V3-10-CosmicFroth.svelte';
+import SettingsPaneV3_01 from '/prototypes/settings-pane/SettingsPane-V3-01-AuroraGlass.svelte';
+import SettingsPaneV3_02 from '/prototypes/settings-pane/SettingsPane-V3-02-NebulaDrift.svelte';
+import SettingsPaneV3_03 from '/prototypes/settings-pane/SettingsPane-V3-03-PrismaticCore.svelte';
+import SettingsPaneV3_04 from '/prototypes/settings-pane/SettingsPane-V3-04-ZenithGlow.svelte';
+import SettingsPaneV3_05 from '/prototypes/settings-pane/SettingsPane-V3-05-EtherealWave.svelte';
+import SettingsPaneV3_06 from '/prototypes/settings-pane/SettingsPane-V3-06-LunarMist.svelte';
+import SettingsPaneV3_07 from '/prototypes/settings-pane/SettingsPane-V3-07-CelestiaForm.svelte';
+import SettingsPaneV3_08 from '/prototypes/settings-pane/SettingsPane-V3-08-AstralMorph.svelte';
+import SettingsPaneV3_09 from '/prototypes/settings-pane/SettingsPane-V3-09-NovaPulse.svelte';
+import SettingsPaneV3_10 from '/prototypes/settings-pane/SettingsPane-V3-10-CosmicFroth.svelte';
+import PeoplePaneV3_01 from '/prototypes/people-pane/PeoplePane-V3-01-AuroraGlass.svelte';
+import PeoplePaneV3_02 from '/prototypes/people-pane/PeoplePane-V3-02-NebulaDrift.svelte';
+import PeoplePaneV3_03 from '/prototypes/people-pane/PeoplePane-V3-03-PrismaticCore.svelte';
+import PeoplePaneV3_04 from '/prototypes/people-pane/PeoplePane-V3-04-ZenithGlow.svelte';
+import PeoplePaneV3_05 from '/prototypes/people-pane/PeoplePane-V3-05-EtherealWave.svelte';
+import PeoplePaneV3_06 from '/prototypes/people-pane/PeoplePane-V3-06-LunarMist.svelte';
+import PeoplePaneV3_07 from '/prototypes/people-pane/PeoplePane-V3-07-CelestiaForm.svelte';
+import PeoplePaneV3_08 from '/prototypes/people-pane/PeoplePane-V3-08-AstralMorph.svelte';
+import PeoplePaneV3_09 from '/prototypes/people-pane/PeoplePane-V3-09-NovaPulse.svelte';
+import PeoplePaneV3_10 from '/prototypes/people-pane/PeoplePane-V3-10-CosmicFroth.svelte';
 </script>
 
 <svelte:head>
