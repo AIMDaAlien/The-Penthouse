@@ -110,8 +110,8 @@
 
 <style>
 	.gif-picker {
-		background: var(--color-surface-elevated);
-		border: 1px solid var(--color-border);
+		background: var(--p-surface-2);
+		border: 1px solid var(--p-line);
 		border-radius: var(--radius-lg);
 		padding: var(--space-md);
 		max-height: 400px;
@@ -141,18 +141,18 @@
 	.header input,
 	.search-wrap input {
 		flex: 1;
-		background: var(--color-bg);
-		border: 1px solid var(--color-border);
+		background: var(--p-bg);
+		border: 1px solid var(--p-line);
 		border-radius: var(--radius-pill);
 		padding: var(--space-sm) var(--space-md);
-		color: var(--color-text);
+		color: var(--p-text);
 		font-size: var(--text-sm);
 		outline: none;
 	}
 
 	.header input:focus,
 	.search-wrap input:focus {
-		border-color: var(--color-accent);
+		border-color: var(--p-accent);
 	}
 
 	.search-wrap {
@@ -168,7 +168,7 @@
 	.close-btn {
 		background: none;
 		border: none;
-		color: var(--color-text-secondary);
+		color: var(--p-text-2);
 		cursor: pointer;
 		padding: var(--space-xs);
 		border-radius: var(--radius-sm);
@@ -180,7 +180,7 @@
 	}
 
 	.close-btn:hover {
-		background: var(--color-surface);
+		background: var(--p-surface);
 	}
 
 	.content {
@@ -229,21 +229,21 @@
 	.spinner {
 		width: 24px;
 		height: 24px;
-		border: 2px solid var(--color-border);
-		border-top-color: var(--color-accent);
+		border: 2px solid var(--p-line);
+		border-top-color: var(--p-accent);
 		border-radius: 50%;
 		animation: spin 0.8s linear infinite;
 	}
 
 	.spinner-text {
-		color: var(--color-text-secondary);
+		color: var(--p-text-2);
 		font-size: var(--text-sm);
 	}
 
 	.empty {
 		padding: var(--space-lg);
 		text-align: center;
-		color: var(--color-text-secondary);
+		color: var(--p-text-2);
 		font-size: var(--text-sm);
 	}
 

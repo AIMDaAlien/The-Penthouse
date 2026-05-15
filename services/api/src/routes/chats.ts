@@ -14,6 +14,7 @@ import { badRequest, forbidden, notFound } from '../utils/error-responses.js';
 import { assertChatMember, createMessage, hydrateMessage, listMessages, unreadCount } from '../utils/messages.js';
 import { avatarUrlFromMediaId } from '../utils/users.js';
 import { appEvents } from '../core/events.js';
+import { appendSyncEvent, buildChatSummaryForUser } from '../features/sync/service.js';
 
 export async function registerChatRoutes(fastify: FastifyInstance) {
   fastify.post('/api/v1/chats/dm', { preHandler: fastify.authenticate }, async (request) => {
@@ -52,6 +53,17 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
       firstUserId,
       secondUserId
     });
+
+    const memberRows = await db.select().from(chatMembers).where(eq(chatMembers.chatId, chat.id));
+    for (const member of memberRows) {
+      await appendSyncEvent({
+        scope: 'user',
+        userId: member.userId,
+        actorUserId: myId,
+        entityId: chat.id,
+        op: { type: 'chat.upsert', payload: await buildChatSummaryForUser(chat, member, member.userId) }
+      });
+    }
 
     return { chatId: chat.id };
   });
@@ -151,7 +163,9 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
         avatarUrl: avatarUrlFromMediaId(user.avatarMediaId),
         bio: user.bio,
         timezone: user.timezone,
-        lastSeenAt: user.lastSeenAt?.toISOString() ?? null
+        lastSeenAt: user.lastSeenAt?.toISOString() ?? null,
+        profileStyle: user.profileStyle,
+        bannerUrl: user.bannerUrl
       }))
     };
   });
@@ -174,6 +188,14 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
     fastify.io.to(`chat:${chatId}`).emit('message.new', {
       type: 'message.new',
       payload: result.message
+    });
+
+    await appendSyncEvent({
+      scope: 'chat',
+      chatId,
+      actorUserId: request.authUser!.userId,
+      entityId: result.message.id,
+      op: { type: 'message.upsert', payload: result.message }
     });
 
     appEvents.emit('message.sent', { message: result.message, senderId: request.authUser!.userId });
@@ -211,6 +233,14 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
       }
     });
 
+    await appendSyncEvent({
+      scope: 'chat',
+      chatId: message.chatId,
+      actorUserId: request.authUser!.userId,
+      entityId: message.id,
+      op: { type: 'message.upsert', payload: hydrated }
+    });
+
     return { message: hydrated };
   });
 
@@ -241,6 +271,22 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
         messageId: message.id,
         deletedAt: deletion.deletedAt.toISOString(),
         deletedByUserId: deletion.deletedByUserId
+      }
+    });
+
+    await appendSyncEvent({
+      scope: 'chat',
+      chatId: message.chatId,
+      actorUserId: request.authUser!.userId,
+      entityId: message.id,
+      op: {
+        type: 'message.delete',
+        payload: {
+          chatId: message.chatId,
+          messageId: message.id,
+          deletedAt: deletion.deletedAt.toISOString(),
+          deletedByUserId: deletion.deletedByUserId
+        }
       }
     });
 
@@ -277,6 +323,24 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
       }
     });
 
+    await appendSyncEvent({
+      scope: 'chat',
+      chatId,
+      actorUserId: request.authUser!.userId,
+      entityId: `${chatId}:${request.authUser!.userId}`,
+      op: {
+        type: 'read.upsert',
+        payload: {
+          chatId,
+          userId: request.authUser!.userId,
+          lastReadAt: member.lastReadAt.toISOString(),
+          lastReadMessageId: member.lastReadMessageId ?? null,
+          notificationsMuted: member.notificationsMuted,
+          archivedAt: member.archivedAt?.toISOString() ?? null
+        }
+      }
+    });
+
     return {
       chatId,
       unreadCount: await unreadCount(chatId, request.authUser!.userId),
@@ -293,6 +357,24 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
       .set({ notificationsMuted: body.notificationsMuted, notificationsMutedUpdatedAt: new Date() })
       .where(and(eq(chatMembers.chatId, chatId), eq(chatMembers.userId, request.authUser!.userId)))
       .returning();
+
+    await appendSyncEvent({
+      scope: 'user',
+      userId: request.authUser!.userId,
+      actorUserId: request.authUser!.userId,
+      entityId: `${chatId}:${request.authUser!.userId}`,
+      op: {
+        type: 'read.upsert',
+        payload: {
+          chatId,
+          userId: request.authUser!.userId,
+          lastReadAt: member.lastReadAt.toISOString(),
+          lastReadMessageId: member.lastReadMessageId ?? null,
+          notificationsMuted: member.notificationsMuted,
+          archivedAt: member.archivedAt?.toISOString() ?? null
+        }
+      }
+    });
 
     return {
       chatId,
@@ -334,16 +416,27 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
       }
     }).returning();
 
-    return {
-      pin: {
-        chatId: pin.chatId,
-        messageId: pin.messageId,
-        pinnedByUserId: pin.pinnedBy,
-        pinnedAt: pin.pinnedAt.toISOString(),
-        content: pin.contentSnapshot,
-        senderDisplayName: pin.senderDisplayNameSnapshot
-      }
+    const payload = {
+      chatId: pin.chatId,
+      messageId: pin.messageId,
+      pinnedByUserId: pin.pinnedBy,
+      pinnedAt: pin.pinnedAt.toISOString(),
+      content: pin.contentSnapshot,
+      senderDisplayName: pin.senderDisplayNameSnapshot
     };
+    fastify.io.to(`chat:${chatId}`).emit('message.pinned', {
+      type: 'message.pinned',
+      payload
+    });
+    await appendSyncEvent({
+      scope: 'chat',
+      chatId,
+      actorUserId: request.authUser!.userId,
+      entityId: pin.messageId,
+      op: { type: 'message.pin', payload }
+    });
+
+    return { pin: payload };
   });
 
   fastify.delete('/api/v1/chats/:id/pins/:messageId', { preHandler: fastify.authenticate }, async (request) => {
@@ -359,6 +452,17 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
     }
     await db.delete(pinnedMessages)
       .where(and(eq(pinnedMessages.chatId, chatId), eq(pinnedMessages.messageId, params.messageId)));
+    fastify.io.to(`chat:${chatId}`).emit('message.unpinned', {
+      type: 'message.unpinned',
+      payload: { chatId, messageId: params.messageId }
+    });
+    await appendSyncEvent({
+      scope: 'chat',
+      chatId,
+      actorUserId: request.authUser!.userId,
+      entityId: params.messageId,
+      op: { type: 'message.unpin', payload: { chatId, messageId: params.messageId } }
+    });
     return { success: true };
   });
 
@@ -405,6 +509,32 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
       userId: request.authUser!.userId,
       emoji: body.emoji
     }).onConflictDoNothing();
+    fastify.io.to(`chat:${message.chatId}`).emit('reaction.add', {
+      type: 'reaction.add',
+      payload: {
+        chatId: message.chatId,
+        messageId: params.id,
+        userId: request.authUser!.userId,
+        emoji: body.emoji,
+        createdAt: new Date().toISOString()
+      }
+    });
+    await appendSyncEvent({
+      scope: 'chat',
+      chatId: message.chatId,
+      actorUserId: request.authUser!.userId,
+      entityId: `${params.id}:${request.authUser!.userId}:${body.emoji}`,
+      op: {
+        type: 'reaction.add',
+        payload: {
+          chatId: message.chatId,
+          messageId: params.id,
+          userId: request.authUser!.userId,
+          emoji: body.emoji,
+          createdAt: new Date().toISOString()
+        }
+      }
+    });
     return reply.status(204).send();
   });
 }

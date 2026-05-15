@@ -6,6 +6,7 @@ import {
   ClientLeaveChatEventSchema,
   ClientMessageSendEventSchema,
   ClientPresenceUpdateEventSchema,
+  ClientSyncRequestSchema,
   ClientTypingStartEventSchema,
   ClientTypingStopEventSchema
 } from '@penthouse/contracts';
@@ -13,6 +14,8 @@ import { db } from '../db/pool.js';
 import { chatMembers, messageDeletions, messageReactions, messages, pinnedMessages, users } from '../db/schema.js';
 import { assertChatMember, createMessage, hydrateMessage } from '../utils/messages.js';
 import { appEvents } from '../core/events.js';
+import { appendSyncEvent, getSyncResponse } from '../features/sync/service.js';
+import { closeSocketMediaSessions, registerMediaSignaling } from './media-signaling.js';
 
 type SocketData = {
   userId: string;
@@ -76,6 +79,8 @@ export function registerSocket(io: Server, fastify: FastifyInstance) {
       void initializePresence(socket, userId, count);
 
       socket.on('disconnecting', () => {
+        closeSocketMediaSessions(socket);
+
         // Clean up voice rooms
         for (const roomKey of socket.rooms) {
           if (roomKey.startsWith('voice:')) {
@@ -112,6 +117,17 @@ export function registerSocket(io: Server, fastify: FastifyInstance) {
         }
       });
     }
+
+    socket.on('sync.request', (payload) => guarded(socket, async () => {
+      const parsed = ClientSyncRequestSchema.parse({ type: 'sync.request', ...payload });
+      const response = await getSyncResponse(socket.data.userId, parsed.cursor ?? '0', parsed.limit);
+      socket.emit('sync.batch', {
+        type: 'sync.batch',
+        payload: response
+      });
+    }));
+
+    registerMediaSignaling(socket, io, fastify);
 
     socket.on('chat.join', (payload) => guarded(socket, async () => {
       const parsed = ClientJoinChatEventSchema.parse({ type: 'chat.join', ...payload });
@@ -183,6 +199,14 @@ export function registerSocket(io: Server, fastify: FastifyInstance) {
         payload: result.message
       });
 
+      await appendSyncEvent({
+        scope: 'chat',
+        chatId,
+        actorUserId: socket.data.userId,
+        entityId: result.message.id,
+        op: { type: 'message.upsert', payload: result.message }
+      });
+
       appEvents.emit('message.sent', { message: result.message, senderId: socket.data.userId });
     }));
 
@@ -203,6 +227,13 @@ export function registerSocket(io: Server, fastify: FastifyInstance) {
           editedAt: hydrated.editedAt ?? new Date().toISOString(),
           editCount: hydrated.editCount ?? 0
         }
+      });
+      await appendSyncEvent({
+        scope: 'chat',
+        chatId: message.chatId,
+        actorUserId: socket.data.userId,
+        entityId: message.id,
+        op: { type: 'message.upsert', payload: hydrated }
       });
     }));
 
@@ -228,6 +259,21 @@ export function registerSocket(io: Server, fastify: FastifyInstance) {
           deletedByUserId: deletion.deletedByUserId
         }
       });
+      await appendSyncEvent({
+        scope: 'chat',
+        chatId: message.chatId,
+        actorUserId: socket.data.userId,
+        entityId: message.id,
+        op: {
+          type: 'message.delete',
+          payload: {
+            chatId: message.chatId,
+            messageId: message.id,
+            deletedAt: deletion.deletedAt.toISOString(),
+            deletedByUserId: deletion.deletedByUserId
+          }
+        }
+      });
     }));
 
     socket.on('message.react', (payload) => guarded(socket, async () => {
@@ -247,6 +293,22 @@ export function registerSocket(io: Server, fastify: FastifyInstance) {
           userId: socket.data.userId,
           emoji: body.emoji,
           createdAt: new Date().toISOString()
+        }
+      });
+      await appendSyncEvent({
+        scope: 'chat',
+        chatId: message.chatId,
+        actorUserId: socket.data.userId,
+        entityId: `${body.messageId}:${socket.data.userId}:${body.emoji}`,
+        op: {
+          type: 'reaction.add',
+          payload: {
+            chatId: message.chatId,
+            messageId: body.messageId,
+            userId: socket.data.userId,
+            emoji: body.emoji,
+            createdAt: new Date().toISOString()
+          }
         }
       });
     }));
@@ -270,22 +332,55 @@ export function registerSocket(io: Server, fastify: FastifyInstance) {
           emoji: body.emoji
         }
       });
+      await appendSyncEvent({
+        scope: 'chat',
+        chatId: message.chatId,
+        actorUserId: socket.data.userId,
+        entityId: `${body.messageId}:${socket.data.userId}:${body.emoji}`,
+        op: {
+          type: 'reaction.remove',
+          payload: {
+            chatId: message.chatId,
+            messageId: body.messageId,
+            userId: socket.data.userId,
+            emoji: body.emoji
+          }
+        }
+      });
     }));
 
     socket.on('message.read', (payload) => guarded(socket, async () => {
       const body = payload as { chatId: string; throughMessageId?: string };
       if (!body.throughMessageId) return;
       const { chatId } = await assertChatMember(body.chatId, socket.data.userId);
-      await db.update(chatMembers)
+      const [member] = await db.update(chatMembers)
         .set({ lastReadMessageId: body.throughMessageId, lastReadAt: new Date() })
-        .where(and(eq(chatMembers.chatId, chatId), eq(chatMembers.userId, socket.data.userId)));
+        .where(and(eq(chatMembers.chatId, chatId), eq(chatMembers.userId, socket.data.userId)))
+        .returning();
       io.to(`chat:${chatId}`).emit('message.read', {
         type: 'message.read',
         payload: {
           chatId,
           readerUserId: socket.data.userId,
-          seenAt: new Date().toISOString(),
+          seenAt: member.lastReadAt.toISOString(),
           seenThroughMessageId: body.throughMessageId
+        }
+      });
+      await appendSyncEvent({
+        scope: 'chat',
+        chatId,
+        actorUserId: socket.data.userId,
+        entityId: `${chatId}:${socket.data.userId}`,
+        op: {
+          type: 'read.upsert',
+          payload: {
+            chatId,
+            userId: socket.data.userId,
+            lastReadAt: member.lastReadAt.toISOString(),
+            lastReadMessageId: member.lastReadMessageId ?? null,
+            notificationsMuted: member.notificationsMuted,
+            archivedAt: member.archivedAt?.toISOString() ?? null
+          }
         }
       });
     }));
@@ -330,6 +425,23 @@ export function registerSocket(io: Server, fastify: FastifyInstance) {
           senderDisplayName: row.sender.displayName
         }
       });
+      await appendSyncEvent({
+        scope: 'chat',
+        chatId: row.message.chatId,
+        actorUserId: socket.data.userId,
+        entityId: row.message.id,
+        op: {
+          type: 'message.pin',
+          payload: {
+            chatId: row.message.chatId,
+            messageId: row.message.id,
+            pinnedByUserId: socket.data.userId,
+            pinnedAt: pinnedAt.toISOString(),
+            content: row.message.content,
+            senderDisplayName: row.sender.displayName
+          }
+        }
+      });
     }));
 
     socket.on('message.unpin', (payload) => guarded(socket, async () => {
@@ -353,6 +465,13 @@ export function registerSocket(io: Server, fastify: FastifyInstance) {
           chatId: message.chatId,
           messageId: message.id
         }
+      });
+      await appendSyncEvent({
+        scope: 'chat',
+        chatId: message.chatId,
+        actorUserId: socket.data.userId,
+        entityId: message.id,
+        op: { type: 'message.unpin', payload: { chatId: message.chatId, messageId: message.id } }
       });
     }));
 

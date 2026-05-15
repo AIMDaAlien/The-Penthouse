@@ -50,7 +50,7 @@
 		width: auto;
 	}
 	.markdown-text :global(a) {
-		color: var(--color-accent);
+		color: var(--p-accent);
 		text-decoration: underline;
 		text-underline-offset: 2px;
 	}

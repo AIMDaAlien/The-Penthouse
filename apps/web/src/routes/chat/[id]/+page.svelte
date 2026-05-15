@@ -35,7 +35,6 @@
 	import { media } from '$services/media';
 	import { env } from '$env/dynamic/public';
 	import { voiceStore } from '$stores/voice.svelte';
-	import { wallpapersStore } from '$stores/wallpapers.svelte';
 	import { emotesStore } from '$stores/emotes.svelte';
 	import { stickersStore } from '$stores/stickers.svelte';
 	import type { Message } from '@penthouse/contracts';
@@ -233,7 +232,6 @@
 			loadMessages(currentChatId);
 			loadPins(currentChatId);
 			channelsStore.load(currentChatId);
-			wallpapersStore.load();
 			emotesStore.load();
 			stickersStore.loadPacks();
 		});
@@ -316,7 +314,6 @@
 			}),
 			onMessageEdited((event) => {
 				const data = event.payload;
-				console.log('[socket] message.edited', data.messageId, data.content.slice(0, 30));
 				if (data.chatId !== currentChatId) return;
 				messages = messages.map((m) =>
 					m.id === data.messageId
@@ -326,7 +323,6 @@
 			}),
 			onMessageDeleted((event) => {
 				const data = event.payload;
-				console.log('[socket] message.deleted', data.messageId);
 				if (data.chatId !== currentChatId) return;
 				messages = messages.map((m) =>
 					m.id === data.messageId
@@ -605,15 +601,6 @@
 		'Chat'
 	);
 
-	const activeWallpaper = $derived(wallpapersStore.getForChat(chatId));
-	const wallpaperStyle = $derived(() => {
-		const w = activeWallpaper;
-		if (!w) return '';
-		let style = '';
-		if (w.wallpaperUrl) style += `background-image: url(${w.wallpaperUrl});`;
-		if (w.wallpaperColor) style += `background-color: ${w.wallpaperColor};`;
-		return style;
-	});
 </script>
 
 <div class="thread">
@@ -784,7 +771,7 @@
 		</div>
 	{/if}
 
-	<div class="messages" bind:this={scrollContainer} style={wallpaperStyle()}>
+	<div class="messages" bind:this={scrollContainer}>
 		{#if loading}
 			<p class="state">Loading messages...</p>
 		{:else if error}
@@ -792,16 +779,22 @@
 		{:else if messages.length === 0}
 			<p class="state">No messages yet. Say something.</p>
 		{:else}
-			{#each messages as message (message.id)}
-				<div data-message-id={message.id}>
-					<MessageBubble
-						{message}
-						onReply={handleReply}
-						onReact={handleReact}
-						onEdit={handleEdit}
-						onDelete={handleDelete}
-						onPin={handlePin}
-					/>
+			{#each messages as message, i (message.id)}
+				{@const showAvatar = i === messages.length - 1 || messages[i + 1].senderId !== message.senderId}
+				{@const firstInCluster = i === 0 || messages[i - 1].senderId !== message.senderId}
+				<MessageBubble
+					{message}
+					onReply={handleReply}
+					onReact={handleReact}
+					onEdit={handleEdit}
+					onDelete={handleDelete}
+					onPin={handlePin}
+					{showAvatar}
+					{firstInCluster}
+					showClusterGap={firstInCluster && i !== 0}
+					senderAvatar={message.senderAvatarUrl ?? null}
+				/>
+				{#if showAvatar}
 					<ReadReceipts
 						messageId={message.id}
 						{chatId}
@@ -811,7 +804,7 @@
 						usersMap={new Map()}
 						orderedMessageIds={messages.map((m) => m.id)}
 					/>
-				</div>
+				{/if}
 			{/each}
 		{/if}
 		<div class="typing-zone">
@@ -846,14 +839,14 @@
 		align-items: center;
 		gap: var(--space-md);
 		padding: var(--space-md) var(--space-lg);
-		border-bottom: 1px solid var(--color-border);
-		background: var(--color-surface);
+		border-bottom: 1px solid var(--p-line);
+		background: var(--p-surface);
 	}
 
 	.back-btn {
 		background: none;
 		border: none;
-		color: var(--color-accent);
+		color: var(--p-accent);
 		padding: var(--space-sm);
 		border-radius: var(--radius-md);
 		cursor: pointer;
@@ -862,7 +855,7 @@
 		transition: background 0.15s;
 	}
 
-	.back-btn:hover { background: var(--color-surface-elevated); }
+	.back-btn:hover { background: var(--p-surface-2); }
 
 	h1 {
 		font-family: var(--font-display);
@@ -882,31 +875,31 @@
 		align-items: center;
 		gap: var(--space-xs);
 		padding: var(--space-xs) var(--space-sm);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--p-line);
 		border-radius: var(--radius-pill);
-		background: var(--color-surface-elevated);
-		color: var(--color-text-secondary);
+		background: var(--p-surface-2);
+		color: var(--p-text-2);
 		font-size: var(--text-sm);
 		cursor: pointer;
 		transition: background 0.1s, color 0.1s, border-color 0.1s;
 	}
 
 	.voice-btn:hover {
-		background: var(--color-accent);
-		color: var(--color-bg);
-		border-color: var(--color-accent);
+		background: var(--p-accent);
+		color: var(--p-bg);
+		border-color: var(--p-accent);
 	}
 
 	.voice-btn.active {
-		background: var(--color-accent);
-		color: var(--color-bg);
-		border-color: var(--color-accent);
+		background: var(--p-accent);
+		color: var(--p-bg);
+		border-color: var(--p-accent);
 	}
 
 	.voice-btn.voice-leave {
-		background: var(--color-error);
-		color: var(--color-bg);
-		border-color: var(--color-error);
+		background: var(--p-error);
+		color: var(--p-bg);
+		border-color: var(--p-error);
 	}
 
 	.voice-btn.voice-leave:hover {
@@ -918,8 +911,8 @@
 		align-items: center;
 		gap: var(--space-xs);
 		padding: var(--space-xs) var(--space-lg);
-		border-bottom: 1px solid var(--color-border);
-		background: var(--color-surface);
+		border-bottom: 1px solid var(--p-line);
+		background: var(--p-surface);
 		overflow-x: auto;
 	}
 
@@ -928,40 +921,40 @@
 		align-items: center;
 		gap: var(--space-sm);
 		padding: var(--space-sm) var(--space-lg);
-		border-bottom: 1px solid var(--color-border);
-		background: var(--color-surface);
+		border-bottom: 1px solid var(--p-line);
+		background: var(--p-surface);
 	}
 
 	.channel-form input {
 		flex: 1;
 		min-width: 0;
-		background: var(--color-bg);
-		border: 1px solid var(--color-border);
+		background: var(--p-bg);
+		border: 1px solid var(--p-line);
 		border-radius: var(--radius-md);
-		color: var(--color-text);
+		color: var(--p-text);
 		font-size: var(--text-sm);
 		padding: var(--space-sm) var(--space-md);
 	}
 
 	.channel-form input:focus {
 		outline: none;
-		border-color: var(--color-accent);
+		border-color: var(--p-accent);
 	}
 
 	.channel-form button {
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--p-line);
 		border-radius: var(--radius-md);
-		background: var(--color-surface-elevated);
-		color: var(--color-text);
+		background: var(--p-surface-2);
+		color: var(--p-text);
 		font-size: var(--text-sm);
 		padding: var(--space-sm) var(--space-md);
 		cursor: pointer;
 	}
 
 	.channel-form button[type="submit"] {
-		background: var(--color-accent);
-		border-color: var(--color-accent);
-		color: var(--color-bg);
+		background: var(--p-accent);
+		border-color: var(--p-accent);
+		color: var(--p-bg);
 		font-weight: var(--weight-bold);
 	}
 
@@ -970,8 +963,8 @@
 		align-items: center;
 		padding: var(--space-xs) var(--space-sm);
 		border-radius: var(--radius-pill);
-		background: var(--color-accent);
-		color: var(--color-bg);
+		background: var(--p-accent);
+		color: var(--p-bg);
 		font-size: var(--text-xs);
 		font-weight: 600;
 		white-space: nowrap;
@@ -979,8 +972,8 @@
 	}
 
 	.voice-pill.muted {
-		background: var(--color-surface-elevated);
-		color: var(--color-text-muted);
+		background: var(--p-surface-2);
+		color: var(--p-muted);
 	}
 
 	.voice-pill.deafened {
@@ -990,21 +983,21 @@
 
 	.voice-pill.speaking {
 		animation: voice-pulse 1s ease-in-out infinite;
-		box-shadow: 0 0 8px var(--color-success);
+		box-shadow: 0 0 8px var(--p-success);
 	}
 
 	.voice-pill.ptt-active {
-		box-shadow: 0 0 6px var(--color-accent);
+		box-shadow: 0 0 6px var(--p-accent);
 	}
 
 	@keyframes voice-pulse {
-		0%, 100% { box-shadow: 0 0 4px var(--color-success); }
-		50% { box-shadow: 0 0 12px var(--color-success); }
+		0%, 100% { box-shadow: 0 0 4px var(--p-success); }
+		50% { box-shadow: 0 0 12px var(--p-success); }
 	}
 
 	.pinned-banner {
-		background: var(--color-surface-elevated);
-		border-bottom: 1px solid var(--color-border);
+		background: var(--p-surface-2);
+		border-bottom: 1px solid var(--p-line);
 		padding: var(--space-sm) var(--space-lg);
 		display: flex;
 		flex-direction: column;
@@ -1016,7 +1009,7 @@
 		align-items: center;
 		gap: var(--space-sm);
 		font-size: var(--text-sm);
-		color: var(--color-text-secondary);
+		color: var(--p-text-2);
 	}
 
 	.pinned-icon {
@@ -1034,7 +1027,7 @@
 	.pinned-unpin {
 		background: none;
 		border: none;
-		color: var(--color-text-muted);
+		color: var(--p-muted);
 		cursor: pointer;
 		padding: var(--space-xs);
 		display: flex;
@@ -1045,16 +1038,16 @@
 	}
 
 	.pinned-unpin:hover {
-		color: var(--color-error);
+		color: var(--p-error);
 	}
 
 	.messages {
 		flex: 1;
 		overflow-y: auto;
-		padding: var(--space-md) 0;
+		padding: var(--space-md) var(--space-lg);
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-xs);
+		gap: 4px;
 		min-height: 0;
 		background-size: cover;
 		background-position: center;
@@ -1064,12 +1057,12 @@
 	.state {
 		text-align: center;
 		padding: var(--space-xl);
-		color: var(--color-text-secondary);
+		color: var(--p-text-2);
 		font-size: var(--text-sm);
 	}
 
 	.state.error {
-		color: var(--color-error);
+		color: var(--p-error);
 	}
 
 	.typing-zone {
@@ -1080,7 +1073,7 @@
 	.search-toggle {
 		background: none;
 		border: none;
-		color: var(--color-text-secondary);
+		color: var(--p-text-2);
 		cursor: pointer;
 		padding: var(--space-sm);
 		border-radius: var(--radius-md);
@@ -1091,13 +1084,13 @@
 		margin-left: auto;
 	}
 	.search-toggle:hover {
-		background: var(--color-surface-elevated);
-		color: var(--color-text);
+		background: var(--p-surface-2);
+		color: var(--p-text);
 	}
 
 	.search-panel {
-		background: var(--color-surface);
-		border-bottom: 1px solid var(--color-border);
+		background: var(--p-surface);
+		border-bottom: 1px solid var(--p-line);
 		display: flex;
 		flex-direction: column;
 		max-height: 60vh;
@@ -1109,28 +1102,28 @@
 		align-items: center;
 		gap: var(--space-sm);
 		padding: var(--space-sm) var(--space-lg);
-		border-bottom: 1px solid var(--color-border);
+		border-bottom: 1px solid var(--p-line);
 	}
 
 	.search-header input {
 		flex: 1;
-		background: var(--color-bg);
-		border: 1px solid var(--color-border);
+		background: var(--p-bg);
+		border: 1px solid var(--p-line);
 		border-radius: var(--radius-pill);
 		padding: var(--space-sm) var(--space-md);
-		color: var(--color-text);
+		color: var(--p-text);
 		font-size: var(--text-base);
 		font-family: inherit;
 		outline: none;
 	}
 	.search-header input:focus {
-		border-color: var(--color-accent);
+		border-color: var(--p-accent);
 	}
 
 	.search-header button {
 		background: none;
 		border: none;
-		color: var(--color-text-secondary);
+		color: var(--p-text-2);
 		cursor: pointer;
 		padding: var(--space-sm);
 		border-radius: var(--radius-md);
@@ -1140,8 +1133,8 @@
 		transition: background 0.15s, color 0.15s;
 	}
 	.search-header button:hover {
-		background: var(--color-surface-elevated);
-		color: var(--color-text);
+		background: var(--p-surface-2);
+		color: var(--p-text);
 	}
 
 	.search-results {

@@ -8,33 +8,24 @@
 	import Icon from '$components/Icon.svelte';
 	import Avatar from '$components/Avatar.svelte';
 	import PushSettings from '$components/PushSettings.svelte';
-	import { wallpapers } from '$services/wallpapers';
-	import { wallpapersStore } from '$stores/wallpapers.svelte';
-	import { getTheme, setTheme, type Theme } from '$utils/theme';
+	import AppearanceSettings from '$components/AppearanceSettings.svelte';
+	import ProfileStyleSettings from '$components/ProfileStyleSettings.svelte';
+	import { appearanceStore } from '$stores/appearance.svelte';
 
 	let loggingOut = $state(false);
 	let showConfirm = $state(false);
 	let saving = $state(false);
 	let saveError = $state('');
 	let displayName = $state(sessionStore.user?.displayName ?? '');
-
-	// Wallpaper form state
-	let wallpaperUrl = $state('');
-	let wallpaperColor = $state('');
-	let wallpaperOpacity = $state('1');
-	let savingWallpaper = $state(false);
-	let wallpaperError = $state('');
+	let profileStyle = $state<'editorial' | 'vogue' | 'wallpaper'>(sessionStore.user?.profileStyle ?? 'editorial');
 
 	let presenceState = $state(socketStore.presenceState);
 	let presenceNote = $state(socketStore.presenceNote);
 	let autoAfk = $state(socketStore.autoAfkEnabled);
-	let theme = $state<Theme>(getTheme());
 
 	const currentUser = $derived(sessionStore.user);
 
-	$effect(() => {
-		if (sessionStore.isAuthenticated) wallpapersStore.load();
-	});
+
 	const presenceOptions = [
 		{ value: 'available', label: 'Available' },
 		{ value: 'busy', label: 'Busy' },
@@ -56,7 +47,8 @@
 		saveError = '';
 		try {
 			const res = await users.updateProfile({
-				...(displayName.trim() ? { displayName: displayName.trim() } : {})
+				...(displayName.trim() ? { displayName: displayName.trim() } : {}),
+				...(profileStyle !== sessionStore.user?.profileStyle ? { profileStyle } : {})
 			});
 			sessionStore.updateUser(res);
 		} catch (err) {
@@ -75,35 +67,7 @@
 		}
 	}
 
-	async function handleSaveWallpaper() {
-		savingWallpaper = true;
-		wallpaperError = '';
-		try {
-			const res = await wallpapers.create({
-				isGlobal: true,
-				...(wallpaperUrl.trim() ? { wallpaperUrl: wallpaperUrl.trim() } : {}),
-				...(wallpaperColor.trim() ? { wallpaperColor: wallpaperColor.trim() } : {}),
-				opacity: wallpaperOpacity
-			});
-			wallpapersStore.addWallpaper(res.wallpaper);
-			wallpaperUrl = '';
-			wallpaperColor = '';
-			wallpaperOpacity = '1';
-		} catch (err) {
-			wallpaperError = err instanceof Error ? err.message : 'Failed to save wallpaper';
-		} finally {
-			savingWallpaper = false;
-		}
-	}
 
-	async function handleRemoveWallpaper(id: string) {
-		try {
-			await wallpapers.remove(id);
-			wallpapersStore.removeWallpaper(id);
-		} catch {
-			// ignore
-		}
-	}
 </script>
 
 <div class="shell">
@@ -174,43 +138,21 @@
 			</section>
 
 			<section class="section">
-				<p class="section-label">Notifications</p>
-				<PushSettings />
+				<p class="section-label">Appearance</p>
+				<AppearanceSettings />
 			</section>
 
 			<section class="section">
-				<p class="section-label">Wallpaper</p>
-				<div class="setting-card">
-					<div class="field">
-						<label for="wallpaper-url">Image URL</label>
-						<input id="wallpaper-url" type="text" bind:value={wallpaperUrl} placeholder="https://example.com/bg.jpg" />
-					</div>
-					<div class="field">
-						<label for="wallpaper-color">Fallback color</label>
-						<input id="wallpaper-color" type="text" bind:value={wallpaperColor} placeholder="#1a1a2e" />
-					</div>
-					<div class="field">
-						<label for="wallpaper-opacity">Opacity ({wallpaperOpacity})</label>
-						<input id="wallpaper-opacity" type="range" min="0.1" max="1" step="0.1" bind:value={wallpaperOpacity} />
-					</div>
-					{#if wallpaperError}<p class="field-error">{wallpaperError}</p>{/if}
-					<button class="btn-secondary" onclick={handleSaveWallpaper} disabled={savingWallpaper || (!wallpaperUrl.trim() && !wallpaperColor.trim())}>
-						{savingWallpaper ? 'Saving...' : 'Set global wallpaper'}
-					</button>
-					{#if wallpapersStore.wallpapers.length > 0}
-						<div class="wallpaper-list">
-							{#each wallpapersStore.wallpapers as w (w.id)}
-								<div class="wallpaper-item">
-									<span class="wallpaper-preview" style:background={w.wallpaperColor ?? 'var(--color-surface)'} style:background-image={w.wallpaperUrl ? `url(${w.wallpaperUrl})` : 'none'}></span>
-									<span class="wallpaper-meta">{w.isGlobal ? 'Global' : 'Chat'} · opacity {w.opacity}</span>
-									<button class="wallpaper-delete" onclick={() => handleRemoveWallpaper(w.id)} aria-label="Remove wallpaper">
-										<Icon name="x" size={14} />
-									</button>
-								</div>
-							{/each}
-						</div>
-					{/if}
-				</div>
+				<p class="section-label">Profile Style</p>
+				<ProfileStyleSettings
+					value={profileStyle}
+					onChange={(v) => profileStyle = v}
+				/>
+			</section>
+
+			<section class="section">
+				<p class="section-label">Notifications</p>
+				<PushSettings />
 			</section>
 
 			<section class="section">
@@ -254,13 +196,13 @@
 		align-items: center;
 		gap: var(--space-md);
 		padding: var(--space-md) var(--space-lg);
-		border-bottom: 1px solid var(--color-border);
+		border-bottom: 1px solid var(--p-line);
 	}
 
 	.back-btn {
 		background: none;
 		border: none;
-		color: var(--color-accent);
+		color: var(--p-accent);
 		padding: var(--space-sm);
 		border-radius: var(--radius-md);
 		cursor: pointer;
@@ -269,7 +211,7 @@
 		transition: background 0.15s;
 	}
 
-	.back-btn:hover { background: var(--color-surface-elevated); }
+	.back-btn:hover { background: var(--p-surface-2); }
 
 	h1 {
 		font-family: var(--font-display);
@@ -287,7 +229,7 @@
 
 	.profile-section {
 		padding-bottom: var(--space-lg);
-		border-bottom: 1px solid var(--color-border);
+		border-bottom: 1px solid var(--p-line);
 	}
 
 	.profile-card {
@@ -299,12 +241,12 @@
 	.profile-name {
 		font-size: var(--text-base);
 		font-weight: var(--weight-medium);
-		color: var(--color-text);
+		color: var(--p-text);
 	}
 
 	.profile-handle {
 		font-size: var(--text-sm);
-		color: var(--color-text-secondary);
+		color: var(--p-text-2);
 	}
 
 	.section {
@@ -316,14 +258,14 @@
 	.section-label {
 		font-size: var(--text-xs);
 		font-weight: var(--weight-bold);
-		color: var(--color-text-secondary);
+		color: var(--p-text-2);
 		text-transform: uppercase;
 		letter-spacing: 0.07em;
 	}
 
 	.setting-card {
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
+		background: var(--p-surface);
+		border: 1px solid var(--p-line);
 		border-radius: var(--radius-lg);
 		padding: var(--space-lg);
 		display: flex;
@@ -339,7 +281,7 @@
 
 	.field label {
 		font-size: var(--text-sm);
-		color: var(--color-text-secondary);
+		color: var(--p-text-2);
 		font-weight: var(--weight-medium);
 	}
 
@@ -347,9 +289,9 @@
 	.field select {
 		background: transparent;
 		border: none;
-		border-bottom: 1px solid var(--color-border);
+		border-bottom: 1px solid var(--p-line);
 		border-radius: 0;
-		color: var(--color-text);
+		color: var(--p-text);
 		padding: var(--space-sm) 0;
 		outline: none;
 		font-family: inherit;
@@ -367,11 +309,11 @@
 	}
 
 	.field input:focus,
-	.field select:focus { border-color: var(--color-accent); }
+	.field select:focus { border-color: var(--p-accent); }
 
 	.field-error {
 		font-size: var(--text-sm);
-		color: var(--color-error);
+		color: var(--p-error);
 	}
 
 	.toggle-row {
@@ -379,7 +321,7 @@
 		align-items: center;
 		justify-content: space-between;
 		font-size: var(--text-sm);
-		color: var(--color-text);
+		color: var(--p-text);
 		cursor: pointer;
 		gap: var(--space-md);
 	}
@@ -387,17 +329,17 @@
 	.toggle-row input[type="checkbox"] {
 		width: 20px;
 		height: 20px;
-		accent-color: var(--color-accent);
+		accent-color: var(--p-accent);
 		cursor: pointer;
 		flex-shrink: 0;
 	}
 
 	.btn-secondary {
-		background: var(--color-surface-elevated);
-		border: 1px solid var(--color-border);
+		background: var(--p-surface-2);
+		border: 1px solid var(--p-line);
 		border-radius: var(--radius-pill);
 		padding: var(--space-sm) var(--space-md);
-		color: var(--color-text);
+		color: var(--p-text);
 		font-size: var(--text-sm);
 		font-weight: var(--weight-medium);
 		cursor: pointer;
@@ -405,7 +347,7 @@
 		transition: background 0.15s;
 	}
 
-	.btn-secondary:hover { background: var(--color-border); }
+	.btn-secondary:hover { background: var(--p-line); }
 	.btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
 
 	.danger-btn {
@@ -414,10 +356,10 @@
 		gap: var(--space-md);
 		width: 100%;
 		padding: var(--space-md) var(--space-lg);
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
+		background: var(--p-surface);
+		border: 1px solid var(--p-line);
 		border-radius: var(--radius-lg);
-		color: var(--color-error);
+		color: var(--p-error);
 		font-size: var(--text-base);
 		font-weight: var(--weight-medium);
 		text-align: left;
@@ -425,12 +367,12 @@
 		transition: background 0.15s;
 	}
 
-	.danger-btn:hover { background: color-mix(in srgb, var(--color-error) 8%, var(--color-surface)); }
+	.danger-btn:hover { background: var(--p-surface-2); }
 	.danger-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 	.version {
 		font-size: var(--text-xs);
-		color: var(--color-text-muted);
+		color: var(--p-muted);
 		text-align: center;
 		margin-top: auto;
 	}
@@ -448,8 +390,8 @@
 	}
 
 	.modal {
-		background: var(--color-surface-elevated);
-		border: 1px solid var(--color-border);
+		background: var(--p-surface-2);
+		border: 1px solid var(--p-line);
 		border-radius: var(--radius-lg);
 		padding: var(--space-lg);
 		width: 100%;
@@ -462,12 +404,12 @@
 	.modal-title {
 		font-size: var(--text-lg);
 		font-weight: var(--weight-medium);
-		color: var(--color-text);
+		color: var(--p-text);
 	}
 
 	.modal-desc {
 		font-size: var(--text-sm);
-		color: var(--color-text-secondary);
+		color: var(--p-text-2);
 		line-height: 1.5;
 	}
 
@@ -480,9 +422,9 @@
 	.btn-cancel {
 		padding: var(--space-sm) var(--space-lg);
 		background: none;
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--p-line);
 		border-radius: var(--radius-pill);
-		color: var(--color-text-secondary);
+		color: var(--p-text-2);
 		font-size: var(--text-sm);
 		font-weight: var(--weight-medium);
 		cursor: pointer;
@@ -490,10 +432,10 @@
 
 	.btn-confirm {
 		padding: var(--space-sm) var(--space-lg);
-		background: var(--color-error);
+		background: var(--p-error);
 		border: none;
 		border-radius: var(--radius-pill);
-		color: #fff;
+		color: var(--p-bg);
 		font-size: var(--text-sm);
 		font-weight: var(--weight-bold);
 		cursor: pointer;
@@ -502,53 +444,4 @@
 
 	.btn-confirm:hover { opacity: 0.85; }
 	.btn-confirm:disabled { opacity: 0.5; }
-
-	.wallpaper-list {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-sm);
-	}
-
-	.wallpaper-item {
-		display: flex;
-		align-items: center;
-		gap: var(--space-sm);
-		padding: var(--space-sm);
-		background: var(--color-bg);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-md);
-	}
-
-	.wallpaper-preview {
-		width: 40px;
-		height: 40px;
-		border-radius: var(--radius-sm);
-		background-size: cover;
-		background-position: center;
-		flex-shrink: 0;
-		border: 1px solid var(--color-border);
-	}
-
-	.wallpaper-meta {
-		flex: 1;
-		font-size: var(--text-sm);
-		color: var(--color-text-secondary);
-	}
-
-	.wallpaper-delete {
-		background: none;
-		border: none;
-		color: var(--color-text-muted);
-		cursor: pointer;
-		padding: var(--space-xs);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		border-radius: var(--radius-sm);
-		transition: color 0.15s;
-	}
-
-	.wallpaper-delete:hover {
-		color: var(--color-error);
-	}
 </style>

@@ -28,7 +28,8 @@ export function toAuthUser(user: UserRow): AuthUser {
     mustChangePassword: user.mustChangePassword,
     mustAcceptTestNotice: user.testNoticeAcceptedVersion !== requiredVersion,
     requiredTestNoticeVersion: requiredVersion,
-    acceptedTestNoticeVersion: user.testNoticeAcceptedVersion
+    acceptedTestNoticeVersion: user.testNoticeAcceptedVersion,
+    profileStyle: user.profileStyle as 'editorial' | 'vogue' | 'wallpaper'
   };
 }
 
@@ -36,7 +37,8 @@ export function toMeResponse(user: UserRow): MeResponse {
   return {
     ...toAuthUser(user),
     bio: user.bio,
-    avatarMediaId: user.avatarMediaId
+    avatarMediaId: user.avatarMediaId,
+    bannerUrl: user.bannerUrl
   };
 }
 
@@ -48,6 +50,8 @@ export function toMemberDetail(user: UserRow) {
     avatarUrl: avatarUrlFromMediaId(user.avatarMediaId),
     bio: user.bio,
     timezone: user.timezone,
-    lastSeenAt: user.lastSeenAt?.toISOString() ?? null
+    lastSeenAt: user.lastSeenAt?.toISOString() ?? null,
+    profileStyle: user.profileStyle as 'editorial' | 'vogue' | 'wallpaper',
+    bannerUrl: user.bannerUrl
   };
 }

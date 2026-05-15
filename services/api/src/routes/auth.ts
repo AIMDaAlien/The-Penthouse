@@ -14,9 +14,10 @@ import { rateLimit } from '../middleware/rateLimit.js';
 import { badRequest, forbidden, notFound, unauthorized } from '../utils/error-responses.js';
 import { recoveryCode, sha256 } from '../utils/crypto.js';
 import { createSession, revokeRefreshToken, revokeSessionDevice, rotateRefreshToken } from '../utils/sessions.js';
-import { hashPassword, toAuthUser, toMeResponse, verifyPassword } from '../utils/users.js';
+import { hashPassword, toAuthUser, toMeResponse, toMemberDetail, verifyPassword } from '../utils/users.js';
 import { isProduction } from '../config/env.js';
 import { verifyChallenge } from '../utils/altcha.js';
+import { appendSyncEvent } from '../features/sync/service.js';
 
 export async function registerAuthRoutes(fastify: FastifyInstance) {
   fastify.get('/api/v1/auth/config', async () => {
@@ -84,6 +85,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
     });
 
     const session = await createSession(fastify, user);
+    await appendUserProfileSyncEvents(user, user.id);
     return {
       user: toAuthUser(user),
       accessToken: session.accessToken,
@@ -138,10 +140,12 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
         ...(body.displayName !== undefined ? { displayName: body.displayName } : {}),
         ...(body.bio !== undefined ? { bio: body.bio } : {}),
         ...(body.timezone !== undefined ? { timezone: body.timezone } : {}),
-        ...(body.avatarUploadId !== undefined ? { avatarMediaId: body.avatarUploadId } : {})
+        ...(body.avatarUploadId !== undefined ? { avatarMediaId: body.avatarUploadId } : {}),
+        ...(body.profileStyle !== undefined ? { profileStyle: body.profileStyle } : {})
       })
       .where(eq(users.id, request.authUser!.userId))
       .returning();
+    await appendUserProfileSyncEvents(user, request.authUser!.userId);
     return toMeResponse(user);
   });
 
@@ -167,4 +171,32 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
     await db.update(users).set({ passwordHash: await hashPassword(body.newPassword) }).where(eq(users.id, user.id));
     return reply.status(204).send();
   });
+}
+
+async function appendUserProfileSyncEvents(user: typeof users.$inferSelect, actorUserId: string) {
+  const memberRows = await db.select({ chatId: chatMembers.chatId })
+    .from(chatMembers)
+    .where(eq(chatMembers.userId, user.id));
+  const payload = toMemberDetail(user);
+
+  if (memberRows.length === 0) {
+    await appendSyncEvent({
+      scope: 'user',
+      userId: user.id,
+      actorUserId,
+      entityId: user.id,
+      op: { type: 'user.upsert', payload }
+    });
+    return;
+  }
+
+  for (const member of memberRows) {
+    await appendSyncEvent({
+      scope: 'chat',
+      chatId: member.chatId,
+      actorUserId,
+      entityId: user.id,
+      op: { type: 'user.upsert', payload }
+    });
+  }
 }

@@ -118,8 +118,8 @@
 		padding: var(--space-sm) var(--space-lg);
 		background: none;
 		border: none;
-		border-bottom: 1px solid var(--color-border);
-		color: var(--color-text);
+		border-bottom: 1px solid var(--p-line);
+		color: var(--p-text);
 		width: 100%;
 		text-align: left;
 		cursor: pointer;
@@ -127,7 +127,7 @@
 	}
 
 	.item:hover, .item.active {
-		background: var(--color-surface-elevated);
+		background: var(--p-surface-2);
 	}
 
 	.content {
@@ -155,13 +155,13 @@
 
 	.time {
 		font-size: var(--text-xs);
-		color: var(--color-text-muted);
+		color: var(--p-muted);
 		flex-shrink: 0;
 	}
 
 	.preview {
 		font-size: var(--text-sm);
-		color: var(--color-text-secondary);
+		color: var(--p-text-2);
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -169,8 +169,9 @@
 	}
 
 	.badge {
-		background: var(--color-accent);
-		color: var(--color-bg);
+		background: var(--p-accent);
+		color: var(--p-bg);
+		mix-blend-mode: normal;
 		font-size: var(--text-xs);
 		font-weight: var(--weight-bold);
 		padding: 1px 6px;
@@ -182,10 +183,10 @@
 
 	.context-menu {
 		position: absolute;
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
+		background: var(--p-surface);
+		border: 1px solid var(--p-line);
 		border-radius: var(--radius-md);
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+		box-shadow: 0 4px 12px oklch(0 0 0 / 0.15);
 		z-index: 10;
 		min-width: 160px;
 		padding: var(--space-xs) 0;
@@ -194,7 +195,7 @@
 	.menu-section {
 		padding: var(--space-xs) var(--space-md);
 		font-size: var(--text-xs);
-		color: var(--color-text-muted);
+		color: var(--p-muted);
 		text-transform: uppercase;
 		font-weight: var(--weight-bold);
 	}
@@ -206,22 +207,22 @@
 		background: none;
 		border: none;
 		padding: var(--space-sm) var(--space-md);
-		color: var(--color-text);
+		color: var(--p-text);
 		font-size: var(--text-sm);
 		cursor: pointer;
 	}
 
 	.menu-item:hover {
-		background: var(--color-surface-elevated);
+		background: var(--p-surface-2);
 	}
 
 	.menu-divider {
 		height: 1px;
-		background: var(--color-border);
+		background: var(--p-line);
 		margin: var(--space-xs) var(--space-md);
 	}
 
 	.menu-item-danger {
-		color: var(--color-error);
+		color: var(--p-error);
 	}
 </style>

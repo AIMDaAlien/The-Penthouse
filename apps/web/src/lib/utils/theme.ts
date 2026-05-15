@@ -1,40 +1,56 @@
-export type Theme = 'dark' | 'light' | 'system';
+import { appearanceStore } from '$stores/appearance.svelte';
+import { themes } from '$lib/themes';
 
-const STORAGE_KEY = 'penthouse-theme';
+export type ThemeId = (typeof themes)[number]['id'];
+export type ThemeMode = 'dark' | 'light' | 'system';
 
-function getSystemTheme(): 'dark' | 'light' {
-	return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+export interface AppearancePref {
+	themeId: ThemeId;
+	mode: ThemeMode;
 }
 
-export function getResolvedTheme(): 'dark' | 'light' {
-	const stored = localStorage.getItem(STORAGE_KEY) as Theme | null;
-	if (stored === 'light' || stored === 'dark') return stored;
-	return getSystemTheme();
+// ── Backward-compatible API (deprecated, use appearanceStore directly) ──
+
+/** @deprecated Use appearanceStore.mode */
+export function getTheme(): ThemeMode | 'system' {
+	return appearanceStore.mode;
 }
 
-export function getTheme(): Theme {
-	return (localStorage.getItem(STORAGE_KEY) as Theme | null) ?? 'system';
+/** @deprecated Use appearanceStore.setMode() */
+export function setTheme(mode: ThemeMode | 'system') {
+	appearanceStore.setMode(mode);
 }
 
-export function setTheme(theme: Theme) {
-	localStorage.setItem(STORAGE_KEY, theme);
-	applyTheme(theme);
+/** @deprecated Use appearanceStore.setMode() */
+export function applyTheme(mode: ThemeMode | 'system') {
+	appearanceStore.setMode(mode);
 }
 
-export function applyTheme(theme: Theme) {
-	const resolved = theme === 'system' ? getSystemTheme() : theme;
-	document.documentElement.setAttribute('data-theme', resolved);
-}
-
+/** @deprecated Store initializes automatically; no-op for compat */
 export function initTheme() {
-	const theme = getTheme();
-	applyTheme(theme);
+	// appearanceStore constructor handles everything
+}
 
-	// Listen for system changes when in system mode
-	const media = window.matchMedia('(prefers-color-scheme: dark)');
-	media.addEventListener('change', () => {
-		if (getTheme() === 'system') {
-			applyTheme('system');
-		}
-	});
+/** @deprecated Use appearanceStore.resolvedMode */
+export function getResolvedTheme(): 'dark' | 'light' {
+	return appearanceStore.resolvedMode;
+}
+
+/** @deprecated Use appearanceStore.resolvedMode */
+export function getResolvedMode(): 'dark' | 'light' {
+	return appearanceStore.resolvedMode;
+}
+
+// ── New API ──
+
+export function setAppearance(pref: AppearancePref) {
+	appearanceStore.setTheme(pref.themeId);
+	appearanceStore.setMode(pref.mode);
+}
+
+export function getAppearance(): AppearancePref {
+	return {
+		themeId: appearanceStore.themeId as ThemeId,
+		mode: appearanceStore.mode,
+	};
 }

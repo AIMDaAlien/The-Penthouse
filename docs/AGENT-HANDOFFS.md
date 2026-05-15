@@ -179,3 +179,88 @@ apps/web/src/lib/prototypes/chat-pane/      (empty)
 apps/web/src/lib/prototypes/settings-pane/  (empty)
 apps/web/src/lib/prototypes/people-pane/    (empty)
 ```
+
+---
+
+## Codex Handoff — Local-First Sync + WebRTC SFU
+
+**New comprehensive handoff created:** `docs/CODEX-HANDOFF-LOCAL-FIRST-SYNC-WEBRTC.md`
+
+**Scope:**
+1. **Local-First Sync Engine** (PRIMARY — must be worked on now)
+   - Client-side SQLite (sql.js in Web Worker)
+   - CRDT operation-based sync over Socket.IO
+   - Offline outbox queue with retry
+   - Full-text search via FTS5
+   - Frontend cutover from HTTP to local DB
+
+2. **WebRTC SFU Streaming** (SECONDARY — included in same handoff)
+   - Self-hosted Mediasoup (no 3rd party)
+   - 1080p video with simulcast
+   - Screen sharing
+   - Self-hosted Coturn TURN server
+   - Replaces existing mesh voice scaffold
+
+**Estimated sessions:** 6–8
+**Priority:** CRITICAL PATH — blocks all future features
+**Branch:** `feature/local-first-sync`
+
+E2E encryption explicitly DEFERRED per operator request.
+
+---
+
+## Codex Fix Handoff — Sync Issues
+
+**New targeted fix list:** `docs/CODEX-HANDOFF-SYNC-FIXES.md`
+
+**7 issues to fix, prioritized:**
+1. 🔴 User privacy leak (syncing all users to all clients)
+2. 🔴 SQLite outbox not wired into message flow
+3. 🔴 Missing folder/item delete sync events
+4. 🟡 Transaction-wrap sync events with main DB ops
+5. 🟡 Paginate initial snapshot (lower 50→25 messages/chat)
+6. 🟢 Document edit-history limitation
+7. 🟢 Mediasoup port validation at startup
+
+**Estimated time:** ~5 hours
+**Branch:** `feature/local-first-sync`
+
+---
+
+## Codex Fix Handoff — COMPLETED 2026-05-11
+
+**Status:** Critical fixes done. Remaining: message/reaction transaction wrapping + E2E selector fix.
+
+**Verifications:**
+- 34/34 integration tests passing
+- 0 type errors
+- Privacy leak eliminated (users scoped to shared chats)
+- SQLite outbox wired for offline text messaging
+- Folder mutations transaction-wrapped with sync events
+- Mediasoup fails fast on bad port config
+
+**See:** `docs/CODEX-HANDOFF-SYNC-FIXES.md` for full completion notes.
+
+---
+
+## Claude Prototype Handoff — 2026-05-13
+
+**Status:** First 3 prototypes built by Kimi. Remaining 27 + refinement handed to Claude.
+
+**Handoff doc:** `docs/CLAUDE-PROTOTYPE-HANDOFF.md`
+
+**What's done:**
+- Phase 1 foundation (tokens, theme system, utilities)
+- ChatPane-V5-01-Periwinkle
+- SettingsPane-V5-01-GlassQuiet  
+- PeoplePane-V5-01-Editorial
+
+**What's for Claude:**
+- Review/refine first 3
+- Build 9 remaining chat panes (T-D2–T-D7, T-L2–T-L7)
+- Build 9 remaining settings panes (S1.5–S1.6, moonlit, asymmetric, stacked, mosaic)
+- Build 9 remaining people panes (Vogue, Wallpaper, NewYorker, Apartamento, Kinfolk, Roster, Mosaic, Index, Hero)
+- Update prototypes index page
+- Quality gates
+
+**Batch plan:** 3 at a time → spot-check → continue.

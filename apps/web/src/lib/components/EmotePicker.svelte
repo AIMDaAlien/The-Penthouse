@@ -191,8 +191,8 @@
 
 <style>
 	.emote-picker {
-		background: var(--color-surface-elevated);
-		border: 1px solid var(--color-border);
+		background: var(--p-surface-2);
+		border: 1px solid var(--p-line);
 		border-radius: var(--radius-lg);
 		padding: var(--space-md);
 		max-height: 320px;
@@ -221,13 +221,13 @@
 	.title {
 		font-size: var(--text-sm);
 		font-weight: var(--weight-medium);
-		color: var(--color-text);
+		color: var(--p-text);
 	}
 
 	.close-btn {
 		background: none;
 		border: none;
-		color: var(--color-text-secondary);
+		color: var(--p-text-2);
 		cursor: pointer;
 		padding: var(--space-xs);
 		border-radius: var(--radius-sm);
@@ -237,7 +237,7 @@
 		justify-content: center;
 	}
 	.close-btn:hover {
-		background: var(--color-surface);
+		background: var(--p-surface);
 	}
 
 	.search-wrap {
@@ -247,17 +247,17 @@
 
 	.search-wrap input {
 		width: 100%;
-		background: var(--color-bg);
-		border: 1px solid var(--color-border);
+		background: var(--p-bg);
+		border: 1px solid var(--p-line);
 		border-radius: var(--radius-pill);
 		padding: var(--space-sm) var(--space-md);
-		color: var(--color-text);
+		color: var(--p-text);
 		font-size: var(--text-sm);
 		outline: none;
 		box-sizing: border-box;
 	}
 	.search-wrap input:focus {
-		border-color: var(--color-accent);
+		border-color: var(--p-accent);
 	}
 
 	.scroll-area {
@@ -269,7 +269,7 @@
 	.section-label {
 		font-size: var(--text-xs);
 		font-weight: var(--weight-bold);
-		color: var(--color-text-secondary);
+		color: var(--p-text-2);
 		text-transform: uppercase;
 		letter-spacing: 0.07em;
 		padding: var(--space-xs) 0;
@@ -295,7 +295,7 @@
 		aspect-ratio: 1;
 	}
 	.emoji-btn:hover {
-		background: var(--color-surface);
+		background: var(--p-surface);
 	}
 
 	.emoji-char {
@@ -322,7 +322,7 @@
 		aspect-ratio: 1;
 	}
 	.emote-btn:hover {
-		background: var(--color-surface);
+		background: var(--p-surface);
 	}
 
 	.emote-btn img {
@@ -336,12 +336,12 @@
 	.status {
 		padding: var(--space-lg);
 		text-align: center;
-		color: var(--color-text-secondary);
+		color: var(--p-text-2);
 		font-size: var(--text-sm);
 	}
 
 	.error {
-		color: var(--color-error, #ef4444);
+		color: var(--p-error);
 	}
 
 	.footer {
@@ -355,8 +355,8 @@
 
 	.upload-btn {
 		width: 100%;
-		background: var(--color-accent);
-		color: var(--color-bg);
+		background: var(--p-accent);
+		color: var(--p-bg);
 		border: none;
 		border-radius: var(--radius-pill);
 		padding: var(--space-sm) var(--space-md);

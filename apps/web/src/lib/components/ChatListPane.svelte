@@ -113,7 +113,7 @@
 		flex-direction: column;
 		flex: 1;
 		min-height: 0;
-		background: var(--color-bg);
+		background: var(--p-bg);
 	}
 
 	.header {
@@ -121,14 +121,14 @@
 		align-items: center;
 		justify-content: space-between;
 		padding: var(--space-md) var(--space-lg);
-		border-bottom: 1px solid var(--color-border);
+		border-bottom: 1px solid var(--p-line);
 	}
 
 	h2 {
 		font-family: var(--font-display);
 		font-size: var(--text-lg);
 		font-weight: 600;
-		color: var(--color-text);
+		color: var(--p-text);
 	}
 
 	.header-actions {
@@ -140,7 +140,7 @@
 	.icon-btn {
 		background: none;
 		border: none;
-		color: var(--color-accent);
+		color: var(--p-accent);
 		padding: var(--space-sm);
 		border-radius: var(--radius-md);
 		cursor: pointer;
@@ -151,7 +151,7 @@
 	}
 
 	.icon-btn:hover {
-		background: var(--color-surface-elevated);
+		background: var(--p-surface-2);
 	}
 
 	.folder-form {
@@ -161,18 +161,18 @@
 	}
 
 	.folder-form input {
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
+		background: var(--p-surface);
+		border: 1px solid var(--p-line);
 		border-radius: var(--radius-md);
 		padding: var(--space-xs) var(--space-sm);
-		color: var(--color-text);
+		color: var(--p-text);
 		font-size: var(--text-sm);
 		width: 120px;
 	}
 
 	.folder-form input:focus {
 		outline: none;
-		border-color: var(--color-accent);
+		border-color: var(--p-accent);
 	}
 
 	.list {
@@ -188,7 +188,7 @@
 		justify-content: center;
 		gap: var(--space-md);
 		padding: var(--space-xl);
-		color: var(--color-text-muted);
+		color: var(--p-muted);
 		min-height: 200px;
 	}
 
@@ -197,7 +197,7 @@
 	}
 
 	.folder {
-		border-bottom: 1px solid var(--color-border);
+		border-bottom: 1px solid var(--p-line);
 	}
 
 	.folder-header {
@@ -205,7 +205,7 @@
 		align-items: center;
 		gap: var(--space-sm);
 		padding: var(--space-sm) var(--space-lg);
-		background: var(--color-surface-elevated);
+		background: var(--p-surface-2);
 		cursor: pointer;
 		font-weight: var(--weight-bold);
 		font-size: var(--text-sm);
@@ -228,6 +228,6 @@
 	}
 
 	.folder-items {
-		background: var(--color-bg);
+		background: var(--p-bg);
 	}
 </style>

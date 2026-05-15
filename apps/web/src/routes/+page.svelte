@@ -20,9 +20,9 @@
 	});
 
 	const statusColor = $derived(
-		socketStore.state === 'connected' ? 'var(--color-success)' :
-		socketStore.state === 'connecting' ? 'var(--color-accent)' :
-		'var(--color-error)'
+		socketStore.state === 'connected' ? 'var(--p-success)' :
+		socketStore.state === 'connecting' ? 'var(--p-accent)' :
+		'var(--p-error)'
 	);
 
 	function handleSelectChat(chatId: string) {
@@ -88,14 +88,14 @@
 		align-items: center;
 		justify-content: space-between;
 		padding: var(--space-md) var(--space-lg);
-		border-bottom: 1px solid var(--color-border);
+		border-bottom: 1px solid var(--p-line);
 	}
 
 	h1 {
 		font-family: var(--font-display);
 		font-size: 1.25rem;
 		font-weight: 600;
-		color: var(--color-accent);
+		color: var(--p-accent);
 	}
 
 	.status {
@@ -107,12 +107,12 @@
 	.state {
 		text-align: center;
 		padding: var(--space-xl);
-		color: var(--color-text-secondary);
+		color: var(--p-text-2);
 		font-size: var(--text-sm);
 	}
 
 	.state.error {
-		color: var(--color-error);
+		color: var(--p-error);
 	}
 
 	.desktop-only {
@@ -154,7 +154,7 @@
 		font-size: 0.65rem;
 		font-weight: var(--weight-medium);
 		letter-spacing: 0.12em;
-		color: var(--color-text-secondary);
+		color: var(--p-text-2);
 		opacity: 0.6;
 	}
 
@@ -163,7 +163,7 @@
 		font-style: italic;
 		font-size: var(--text-xl);
 		line-height: 1.4;
-		background: linear-gradient(180deg, var(--color-text-primary) 40%, transparent 100%);
+		background: linear-gradient(180deg, var(--p-text) 40%, transparent 100%);
 		-webkit-background-clip: text;
 		-webkit-text-fill-color: transparent;
 		background-clip: text;
@@ -174,7 +174,7 @@
 		font-family: var(--font-mono);
 		font-size: var(--text-xs);
 		font-style: normal;
-		color: var(--color-text-secondary);
+		color: var(--p-text-2);
 		opacity: 0.5;
 	}
 

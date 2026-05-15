@@ -16,8 +16,10 @@
 		"@penthouse/contracts": "*",
 		"altcha": "^2.3.0",
 		"dompurify": "^3.4.2",
+		"mediasoup-client": "^3.20.0",
 		"snarkdown": "^2.0.0",
-		"socket.io-client": "^4.8.1"
+		"socket.io-client": "^4.8.1",
+		"sql.js": "^1.14.1"
 	},
 	"devDependencies": {
 		"@axe-core/playwright": "^4.11.1",
@@ -27,6 +29,7 @@
 		"@sveltejs/vite-plugin-svelte": "^6.2.4",
 		"@testing-library/svelte": "^5.2.7",
 		"@types/dompurify": "^3.0.5",
+		"@types/sql.js": "^1.4.11",
 		"@vite-pwa/sveltekit": "^1.1.0",
 		"playwright-lighthouse": "^4.0.0",
 		"svelte": "^5.54.0",

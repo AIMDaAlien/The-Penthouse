@@ -181,6 +181,8 @@ export const ReplyToSchema = z.object({
   senderDisplayName: z.string().nullable().optional()
 });
 
+export const ProfileStyleSchema = z.enum(['editorial', 'vogue', 'wallpaper']).default('editorial');
+
 export const AuthUserSchema = z.object({
   id: z.string(),
   username: z.string(),
@@ -191,7 +193,8 @@ export const AuthUserSchema = z.object({
   mustChangePassword: z.boolean(),
   mustAcceptTestNotice: z.boolean(),
   requiredTestNoticeVersion: z.string(),
-  acceptedTestNoticeVersion: z.string().nullable()
+  acceptedTestNoticeVersion: z.string().nullable(),
+  profileStyle: ProfileStyleSchema
 });
 
 export const AuthResponseSchema = z.object({
@@ -203,7 +206,8 @@ export const AuthResponseSchema = z.object({
 
 export const MeResponseSchema = AuthUserSchema.extend({
   bio: z.string().nullable(),
-  avatarMediaId: z.string().uuid().nullable()
+  avatarMediaId: z.string().uuid().nullable(),
+  bannerUrl: z.string().nullable().optional()
 });
 
 export const UpdateProfileRequestSchema = z
@@ -211,7 +215,8 @@ export const UpdateProfileRequestSchema = z
     displayName: DisplayNameSchema.optional(),
     bio: BioSchema.nullable().optional(),
     timezone: z.string().max(AUTH_CONSTRAINTS.timezoneMax).nullable().optional(),
-    avatarUploadId: z.string().uuid().nullable().optional()
+    avatarUploadId: z.string().uuid().nullable().optional(),
+    profileStyle: ProfileStyleSchema.optional()
   })
   .refine((value) => Object.keys(value).length > 0, {
     message: 'At least one profile field must be provided'
@@ -377,7 +382,9 @@ export const MemberSummarySchema = z.object({
 export const MemberDetailSchema = MemberSummarySchema.extend({
   bio: z.string().nullable(),
   timezone: z.string().max(AUTH_CONSTRAINTS.timezoneMax).nullable().optional(),
-  lastSeenAt: z.string().nullable().optional()
+  lastSeenAt: z.string().nullable().optional(),
+  profileStyle: ProfileStyleSchema,
+  bannerUrl: z.string().nullable().optional()
 });
 
 export const UserSearchRequestSchema = z.object({
@@ -804,30 +811,6 @@ export const RemoveFolderItemRequestSchema = z.object({
   chatId: z.string().uuid()
 });
 
-export const UserWallpaperSchema = z.object({
-  id: z.string().uuid(),
-  userId: z.string().uuid(),
-  chatId: z.string().uuid().nullable().optional(),
-  isGlobal: z.boolean(),
-  wallpaperUrl: z.string().nullable().optional(),
-  wallpaperColor: z.string().nullable().optional(),
-  opacity: z.string(),
-  createdAt: z.string(),
-  updatedAt: z.string()
-});
-
-export const CreateWallpaperRequestSchema = z.object({
-  chatId: z.string().uuid().optional(),
-  isGlobal: z.boolean().default(false),
-  wallpaperUrl: z.string().url().optional(),
-  wallpaperColor: z.string().optional(),
-  opacity: z.string().default('1')
-});
-
-export const ListWallpapersResponseSchema = z.object({
-  wallpapers: z.array(UserWallpaperSchema)
-});
-
 export const EmoteSchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
@@ -958,9 +941,6 @@ export type CreateChannelRequest = z.infer<typeof CreateChannelRequestSchema>;
 export type ListChannelsResponse = z.infer<typeof ListChannelsResponseSchema>;
 export type AddFolderItemRequest = z.infer<typeof AddFolderItemRequestSchema>;
 export type RemoveFolderItemRequest = z.infer<typeof RemoveFolderItemRequestSchema>;
-export type UserWallpaper = z.infer<typeof UserWallpaperSchema>;
-export type CreateWallpaperRequest = z.infer<typeof CreateWallpaperRequestSchema>;
-export type ListWallpapersResponse = z.infer<typeof ListWallpapersResponseSchema>;
 export type Emote = z.infer<typeof EmoteSchema>;
 export type ListEmotesResponse = z.infer<typeof ListEmotesResponseSchema>;
 export type StickerPack = z.infer<typeof StickerPackSchema>;

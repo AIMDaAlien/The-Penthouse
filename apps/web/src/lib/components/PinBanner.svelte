@@ -34,8 +34,8 @@
 		align-items: center;
 		gap: var(--space-sm);
 		padding: var(--space-sm) var(--space-md);
-		background: var(--color-surface-elevated);
-		border-bottom: 1px solid var(--color-border);
+		background: var(--p-surface-2);
+		border-bottom: 1px solid var(--p-line);
 	}
 	.content {
 		display: flex;
@@ -47,19 +47,19 @@
 	.sender {
 		font-size: var(--text-xs);
 		font-weight: var(--weight-medium);
-		color: var(--color-accent);
+		color: var(--p-accent);
 	}
 	.text {
 		font-size: var(--text-sm);
-		color: var(--color-text);
+		color: var(--p-text);
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
 	}
 	.unpin-btn {
 		background: none;
-		border: 1px solid var(--color-border);
-		color: var(--color-text-secondary);
+		border: 1px solid var(--p-line);
+		color: var(--p-text-2);
 		padding: var(--space-xs) var(--space-sm);
 		border-radius: var(--radius-sm);
 		font-size: var(--text-xs);
@@ -68,7 +68,7 @@
 		flex-shrink: 0;
 	}
 	.unpin-btn:hover {
-		background: var(--color-surface);
-		color: var(--color-text);
+		background: var(--p-surface);
+		color: var(--p-text);
 	}
 </style>

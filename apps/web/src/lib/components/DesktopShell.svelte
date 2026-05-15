@@ -106,7 +106,7 @@
 			overflow: hidden;
 			box-shadow:
 				0 16px 64px rgba(0, 0, 0, 0.6),
-				0 0 0 1px var(--color-border);
+				0 0 0 1px var(--p-line);
 			position: absolute;
 			top: 50%;
 			left: 50%;
@@ -117,8 +117,8 @@
 		.pane-left {
 			width: 340px;
 			flex-shrink: 0;
-			background: var(--color-bg);
-			border-right: 1px solid var(--color-border);
+			background: var(--p-bg);
+			border-right: 1px solid var(--p-line);
 			overflow-y: auto;
 			overflow-x: hidden;
 			display: flex !important;
@@ -134,7 +134,7 @@
 			position: relative;
 			display: block !important;
 			view-transition-name: pane-right;
-			background: var(--color-surface);
+			background: var(--p-surface);
 			min-height: unset;
 		}
 
@@ -184,13 +184,13 @@
 	.pane-loading,
 	.pane-error {
 		padding: var(--space-lg);
-		color: var(--color-text-secondary);
+		color: var(--p-text-2);
 		font-size: var(--text-sm);
 		text-align: center;
 	}
 
 	.pane-error {
-		color: var(--color-error);
+		color: var(--p-error);
 	}
 
 	@keyframes pane-out {

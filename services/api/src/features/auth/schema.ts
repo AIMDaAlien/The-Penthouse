@@ -19,6 +19,8 @@ export const users = pgTable('users', {
   presenceNoteUpdatedAt: timestamp('presence_note_updated_at', { withTimezone: true }),
   testNoticeAcceptedVersion: text('test_notice_accepted_version'),
   testNoticeAcceptedAt: timestamp('test_notice_accepted_at', { withTimezone: true }),
+  profileStyle: text('profile_style').notNull().default('editorial'),
+  bannerUrl: text('banner_url'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
 }, (table) => [
   index('idx_users_status').on(table.status),

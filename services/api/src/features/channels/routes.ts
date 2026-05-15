@@ -5,6 +5,7 @@ import { db } from '../../db/pool.js';
 import { chats, chatMembers } from '../../db/schema.js';
 import { assertChatMember } from '../../utils/messages.js';
 import { notFound } from '../../utils/error-responses.js';
+import { appendSyncEvent } from '../sync/service.js';
 
 function serializeChannel(row: typeof chats.$inferSelect) {
   return {
@@ -48,6 +49,13 @@ export async function registerChannelRoutes(fastify: FastifyInstance) {
     }
 
     const serialized = serializeChannel(channel);
+    await appendSyncEvent({
+      scope: 'chat',
+      chatId: channel.id,
+      actorUserId: request.authUser!.userId,
+      entityId: channel.id,
+      op: { type: 'channel.upsert', payload: serialized }
+    });
     const syncEvent = {
       type: 'chat.sync_required',
       payload: { chatId: parentChatId, reason: 'channel.created' }

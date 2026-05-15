@@ -73,16 +73,16 @@
 		width: 52px;
 		height: 52px;
 		border-radius: 50%;
-		background: var(--color-accent);
-		color: #12121C;
+		background: var(--p-accent);
+		color: var(--p-bg);
 		border: none;
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		cursor: pointer;
 		box-shadow:
-			0 4px 14px rgba(201, 169, 110, 0.35),
-			0 0 0 1px rgba(201, 169, 110, 0.2) inset;
+			0 4px 14px color-mix(in srgb, var(--p-accent) 35%, transparent),
+			0 0 0 1px color-mix(in srgb, var(--p-accent) 20%, transparent) inset;
 		transition:
 			transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
 			box-shadow 0.25s ease,
@@ -93,8 +93,8 @@
 	.fab:hover {
 		transform: scale(1.1);
 		box-shadow:
-			0 6px 22px rgba(201, 169, 110, 0.5),
-			0 0 0 1px rgba(201, 169, 110, 0.3) inset;
+			0 6px 22px oklch(0.7 0.08 80 / 0.5),
+			0 0 0 1px oklch(0.7 0.08 80 / 0.3) inset;
 	}
 
 	.fab:active {
@@ -109,15 +109,15 @@
 		height: 64px;
 		display: flex;
 		align-items: stretch;
-		background: rgba(26, 26, 40, 0.85);
+		background: oklch(0.16 0.020 280 / 0.85);
 		backdrop-filter: blur(24px) saturate(1.5);
 		-webkit-backdrop-filter: blur(24px) saturate(1.5);
-		border: 1px solid rgba(140, 140, 197, 0.15);
+		border: 1px solid oklch(0.6 0.03 280 / 0.15);
 		border-radius: 24px;
 		box-shadow:
-			0 20px 40px rgba(0, 0, 0, 0.55),
-			0 2px 8px rgba(0, 0, 0, 0.35),
-			0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+			0 20px 40px oklch(0 0 0 / 0.55),
+			0 2px 8px oklch(0 0 0 / 0.35),
+			0 0 0 1px oklch(1 0 0 / 0.03) inset;
 		overflow: hidden;
 		position: relative;
 	}
@@ -130,7 +130,7 @@
 		justify-content: center;
 		gap: 3px;
 		text-decoration: none;
-		color: var(--color-text-muted);
+		color: var(--p-muted);
 		position: relative;
 		padding: 0 4px;
 		transition: color 0.3s ease;
@@ -145,7 +145,7 @@
 		transform: translateX(-50%) scaleX(0);
 		width: 24px;
 		height: 2.5px;
-		background: var(--color-accent);
+		background: var(--p-accent);
 		border-radius: 0 0 3px 3px;
 		opacity: 0;
 		transition:
@@ -156,8 +156,8 @@
 	.tab-glow {
 		position: absolute;
 		inset: 6px 4px;
-		background: rgba(201, 169, 110, 0.08);
-		border: 1px solid rgba(201, 169, 110, 0.12);
+		background: oklch(0.7 0.08 80 / 0.08);
+		border: 1px solid oklch(0.7 0.08 80 / 0.12);
 		border-radius: 16px;
 		opacity: 0;
 		transform: scale(0.9);
@@ -167,7 +167,7 @@
 	}
 
 	.nav-tab.active {
-		color: var(--color-accent);
+		color: var(--p-accent);
 	}
 
 	.nav-tab.active .tab-indicator {
@@ -190,7 +190,7 @@
 
 	.nav-tab.active .tab-icon {
 		transform: translateY(-1px) scale(1.1);
-		filter: drop-shadow(0 0 6px rgba(201, 169, 110, 0.25));
+		filter: drop-shadow(0 0 6px oklch(0.7 0.08 80 / 0.25));
 	}
 
 	.tab-label {

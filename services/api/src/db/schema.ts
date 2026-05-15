@@ -7,8 +7,8 @@ export * from '../features/push/schema.js';
 export * from '../features/media/schema.js';
 export * from '../features/pins/schema.js';
 export * from '../features/chatFolders/schema.js';
-export * from '../features/wallpapers/schema.js';
 export * from '../features/customEmotes/schema.js';
+export * from '../features/sync/schema.js';
 
 // Relations that cross feature boundaries live here
 import { relations } from 'drizzle-orm';

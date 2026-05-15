@@ -4,8 +4,8 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "start": "node dist/index.js",
-    "build": "tsc -p tsconfig.json",
+    "start": "node --conditions=production dist/src/index.js",
+    "build": "npm --workspace @penthouse/contracts run build && tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "tsx src/db/migrate.ts && tsx --test --test-concurrency=1 ./test/*.test.ts",
     "test:integration": "tsx src/db/migrate.ts && tsx --test --test-concurrency=1 ./test/integration-*.test.ts",
@@ -21,6 +21,7 @@
     "dotenv": "^16.6.1",
     "drizzle-orm": "^0.45.2",
     "fastify": "^5.8.5",
+    "mediasoup": "^3.19.22",
     "pg": "^8.20.0",
     "socket.io": "^4.8.1",
     "web-push": "^3.6.7",

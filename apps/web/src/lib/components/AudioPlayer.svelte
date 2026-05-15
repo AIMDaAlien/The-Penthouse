@@ -116,7 +116,7 @@
 		align-items: center;
 		gap: var(--space-sm);
 		padding: var(--space-sm) var(--space-md);
-		background: var(--color-surface-elevated);
+		background: var(--p-surface-2);
 		border-radius: var(--radius-lg);
 		min-width: 260px;
 		max-width: 400px;
@@ -126,8 +126,8 @@
 		width: 36px;
 		height: 36px;
 		border-radius: 50%;
-		background: var(--color-accent);
-		color: var(--color-bg);
+		background: var(--p-accent);
+		color: var(--p-bg);
 		border: none;
 		display: flex;
 		align-items: center;
@@ -150,25 +150,25 @@
 	.bar {
 		flex: 1;
 		min-width: 2px;
-		background: var(--color-border);
+		background: var(--p-line);
 		border-radius: 1px;
 		transition: background 0.1s;
 	}
 	.bar.played {
-		background: var(--color-accent);
+		background: var(--p-accent);
 	}
 
 	.time {
 		font-size: var(--text-xs);
-		color: var(--color-text-secondary);
+		color: var(--p-text-2);
 		font-variant-numeric: tabular-nums;
 		white-space: nowrap;
 	}
 
 	.speed-btn {
 		background: none;
-		border: 1px solid var(--color-border);
-		color: var(--color-text-secondary);
+		border: 1px solid var(--p-line);
+		color: var(--p-text-2);
 		font-size: var(--text-xs);
 		padding: 2px 6px;
 		border-radius: var(--radius-sm);
@@ -177,6 +177,6 @@
 		transition: background 0.1s;
 	}
 	.speed-btn:hover {
-		background: var(--color-surface);
+		background: var(--p-surface);
 	}
 </style>

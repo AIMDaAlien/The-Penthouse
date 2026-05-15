@@ -25,22 +25,22 @@
 		align-items: center;
 		gap: var(--space-xs);
 		padding: 2px 6px;
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
+		background: var(--p-surface);
+		border: 1px solid var(--p-line);
 		border-radius: var(--radius-pill);
-		color: var(--color-text);
+		color: var(--p-text);
 		font-size: var(--text-sm);
 		cursor: pointer;
 		transition: background 0.1s, border-color 0.1s;
 	}
 
 	.pill:hover {
-		border-color: var(--color-accent);
+		border-color: var(--p-accent);
 	}
 
 	.pill.mine {
-		background: color-mix(in srgb, var(--color-accent) 15%, var(--color-surface));
-		border-color: var(--color-accent);
+		background: var(--p-accent-soft);
+		border-color: var(--p-accent);
 	}
 
 	.emoji {
@@ -49,11 +49,11 @@
 
 	.count {
 		font-size: var(--text-xs);
-		color: var(--color-text-secondary);
+		color: var(--p-text-2);
 		font-weight: var(--weight-medium);
 	}
 
 	.pill.mine .count {
-		color: var(--color-accent);
+		color: var(--p-accent);
 	}
 </style>

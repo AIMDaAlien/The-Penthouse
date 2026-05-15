@@ -10,6 +10,7 @@ import { db } from '../../db/pool.js';
 import { chatFolders, chatFolderItems } from '../../db/schema.js';
 import { chatMembers } from '../../db/schema.js';
 import { notFound, forbidden } from '../../utils/error-responses.js';
+import { appendSyncEvent } from '../sync/service.js';
 
 async function assertFolderOwner(folderId: string, userId: string) {
   const [folder] = await db.select().from(chatFolders)
@@ -78,14 +79,26 @@ export async function registerChatFolderRoutes(fastify: FastifyInstance) {
 
   fastify.post('/api/v1/folders', { preHandler: fastify.authenticate }, async (request) => {
     const body = CreateFolderRequestSchema.parse(request.body);
-    const [folder] = await db.insert(chatFolders).values({
-      userId: request.authUser!.userId,
-      name: body.name,
-      icon: body.icon ?? null,
-      color: body.color ?? null
-    }).returning();
+    const serialized = await db.transaction(async (tx) => {
+      const [folder] = await tx.insert(chatFolders).values({
+        userId: request.authUser!.userId,
+        name: body.name,
+        icon: body.icon ?? null,
+        color: body.color ?? null
+      }).returning();
 
-    return { folder: serializeFolder(folder) };
+      const payload = serializeFolder(folder);
+      await appendSyncEvent({
+        scope: 'user',
+        userId: request.authUser!.userId,
+        actorUserId: request.authUser!.userId,
+        entityId: folder.id,
+        op: { type: 'folder.upsert', payload }
+      }, tx);
+      return payload;
+    });
+
+    return { folder: serialized };
   });
 
   // ─── Update folder ───
@@ -95,17 +108,29 @@ export async function registerChatFolderRoutes(fastify: FastifyInstance) {
     const body = UpdateFolderRequestSchema.parse(request.body);
     await assertFolderOwner(params.id, request.authUser!.userId);
 
-    const [updated] = await db.update(chatFolders)
-      .set({
-        ...(body.name !== undefined && { name: body.name }),
-        ...(body.icon !== undefined && { icon: body.icon }),
-        ...(body.color !== undefined && { color: body.color }),
-        ...(body.sortOrder !== undefined && { sortOrder: body.sortOrder })
-      })
-      .where(eq(chatFolders.id, params.id))
-      .returning();
+    const serialized = await db.transaction(async (tx) => {
+      const [updated] = await tx.update(chatFolders)
+        .set({
+          ...(body.name !== undefined && { name: body.name }),
+          ...(body.icon !== undefined && { icon: body.icon }),
+          ...(body.color !== undefined && { color: body.color }),
+          ...(body.sortOrder !== undefined && { sortOrder: body.sortOrder })
+        })
+        .where(eq(chatFolders.id, params.id))
+        .returning();
 
-    return { folder: serializeFolder(updated) };
+      const payload = serializeFolder(updated);
+      await appendSyncEvent({
+        scope: 'user',
+        userId: request.authUser!.userId,
+        actorUserId: request.authUser!.userId,
+        entityId: updated.id,
+        op: { type: 'folder.upsert', payload }
+      }, tx);
+      return payload;
+    });
+
+    return { folder: serialized };
   });
 
   // ─── Delete folder ───
@@ -113,7 +138,16 @@ export async function registerChatFolderRoutes(fastify: FastifyInstance) {
   fastify.delete('/api/v1/folders/:id', { preHandler: fastify.authenticate }, async (request) => {
     const params = request.params as { id: string };
     await assertFolderOwner(params.id, request.authUser!.userId);
-    await db.delete(chatFolders).where(eq(chatFolders.id, params.id));
+    await db.transaction(async (tx) => {
+      await tx.delete(chatFolders).where(eq(chatFolders.id, params.id));
+      await appendSyncEvent({
+        scope: 'user',
+        userId: request.authUser!.userId,
+        actorUserId: request.authUser!.userId,
+        entityId: params.id,
+        op: { type: 'folder.delete', payload: { folderId: params.id } }
+      }, tx);
+    });
     return { success: true };
   });
 
@@ -129,17 +163,28 @@ export async function registerChatFolderRoutes(fastify: FastifyInstance) {
       .limit(1);
     if (!membership) throw forbidden('You are not a member of this chat');
 
-    const [inserted] = await db.insert(chatFolderItems).values({
-      folderId: params.id,
-      chatId: body.chatId
-    }).onConflictDoNothing({
-      target: [chatFolderItems.folderId, chatFolderItems.chatId]
-    }).returning();
+    const serialized = await db.transaction(async (tx) => {
+      const [inserted] = await tx.insert(chatFolderItems).values({
+        folderId: params.id,
+        chatId: body.chatId
+      }).onConflictDoNothing({
+        target: [chatFolderItems.folderId, chatFolderItems.chatId]
+      }).returning();
 
-    const item = inserted ?? (await db.select().from(chatFolderItems)
-      .where(and(eq(chatFolderItems.folderId, params.id), eq(chatFolderItems.chatId, body.chatId)))
-      .limit(1))[0];
-    return { item: serializeItem(item) };
+      const item = inserted ?? (await tx.select().from(chatFolderItems)
+        .where(and(eq(chatFolderItems.folderId, params.id), eq(chatFolderItems.chatId, body.chatId)))
+        .limit(1))[0];
+      const payload = serializeItem(item);
+      await appendSyncEvent({
+        scope: 'user',
+        userId: request.authUser!.userId,
+        actorUserId: request.authUser!.userId,
+        entityId: `${params.id}:${body.chatId}`,
+        op: { type: 'folder_item.upsert', payload }
+      }, tx);
+      return payload;
+    });
+    return { item: serialized };
   });
 
   // ─── Remove chat from folder ───
@@ -147,8 +192,17 @@ export async function registerChatFolderRoutes(fastify: FastifyInstance) {
   fastify.delete('/api/v1/folders/:id/items/:chatId', { preHandler: fastify.authenticate }, async (request) => {
     const params = request.params as { id: string; chatId: string };
     await assertFolderOwner(params.id, request.authUser!.userId);
-    await db.delete(chatFolderItems)
-      .where(and(eq(chatFolderItems.folderId, params.id), eq(chatFolderItems.chatId, params.chatId)));
+    await db.transaction(async (tx) => {
+      await tx.delete(chatFolderItems)
+        .where(and(eq(chatFolderItems.folderId, params.id), eq(chatFolderItems.chatId, params.chatId)));
+      await appendSyncEvent({
+        scope: 'user',
+        userId: request.authUser!.userId,
+        actorUserId: request.authUser!.userId,
+        entityId: `${params.id}:${params.chatId}`,
+        op: { type: 'folder_item.delete', payload: { folderId: params.id, chatId: params.chatId } }
+      }, tx);
+    });
     return { success: true };
   });
 
@@ -168,12 +222,21 @@ export async function registerChatFolderRoutes(fastify: FastifyInstance) {
 
     await db.transaction(async (tx) => {
       for (const entry of body.folders) {
+        const folder = existing.find((item) => item.id === entry.id);
+        if (!folder) continue;
         await tx.update(chatFolders)
           .set({ sortOrder: entry.sortOrder })
           .where(eq(chatFolders.id, entry.id));
+
+        await appendSyncEvent({
+          scope: 'user',
+          userId,
+          actorUserId: userId,
+          entityId: folder.id,
+          op: { type: 'folder.upsert', payload: serializeFolder({ ...folder, sortOrder: entry.sortOrder }) }
+        }, tx);
       }
     });
-
     return { success: true };
   });
 }

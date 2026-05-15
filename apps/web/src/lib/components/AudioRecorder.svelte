@@ -140,14 +140,14 @@
 	.duration {
 		font-size: var(--text-sm);
 		font-family: var(--font-mono);
-		color: var(--color-error);
+		color: var(--p-error);
 		min-width: 40px;
 	}
 
 	.recording-dot {
 		width: 8px;
 		height: 8px;
-		background: var(--color-error);
+		background: var(--p-error);
 		border-radius: 50%;
 		animation: pulse 1s ease-in-out infinite;
 	}
@@ -161,8 +161,8 @@
 		width: 40px;
 		height: 40px;
 		border-radius: 50%;
-		background: var(--color-accent);
-		color: #12121C;
+		background: var(--p-accent);
+		color: var(--p-bg);
 		border: none;
 		display: flex;
 		align-items: center;
@@ -173,8 +173,8 @@
 	}
 
 	.record-btn.recording {
-		background: var(--color-error);
-		color: #fff;
+		background: var(--p-error);
+		color: var(--p-bg);
 		animation: pulse 1s ease-in-out infinite;
 	}
 
@@ -182,8 +182,8 @@
 		width: 32px;
 		height: 32px;
 		border-radius: 50%;
-		background: var(--color-surface-elevated);
-		color: var(--color-text-secondary);
+		background: var(--p-surface-2);
+		color: var(--p-text-2);
 		border: none;
 		display: flex;
 		align-items: center;
@@ -194,6 +194,6 @@
 
 	.error {
 		font-size: var(--text-xs);
-		color: var(--color-error);
+		color: var(--p-error);
 	}
 </style>

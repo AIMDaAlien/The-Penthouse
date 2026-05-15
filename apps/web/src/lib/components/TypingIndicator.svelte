@@ -88,14 +88,14 @@
 		width: 22px;
 		height: 22px;
 		border-radius: 50%;
-		background: color-mix(in srgb, var(--color-accent) 20%, transparent);
-		border: 1px solid color-mix(in srgb, var(--color-accent) 30%, transparent);
+		background: color-mix(in srgb, var(--p-accent) 20%, transparent);
+		border: 1px solid color-mix(in srgb, var(--p-accent) 30%, transparent);
 		font-size: 9px;
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
 		font-weight: 600;
-		color: var(--color-accent);
+		color: var(--p-accent);
 	}
 
 	.dots {
@@ -107,7 +107,7 @@
 		width: 4px;
 		height: 4px;
 		border-radius: 50%;
-		background: var(--color-accent);
+		background: var(--p-accent);
 		animation: bounce 1.4s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
 	}
 
@@ -139,7 +139,7 @@
 	.label {
 		font-size: 12px;
 		font-style: italic;
-		color: var(--color-accent);
+		color: var(--p-accent);
 		opacity: 0.8;
 		white-space: nowrap;
 		overflow: hidden;

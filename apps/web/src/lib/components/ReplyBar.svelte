@@ -26,8 +26,8 @@
 		align-items: center;
 		gap: var(--space-sm);
 		padding: var(--space-sm) var(--space-lg);
-		background: var(--color-surface-elevated);
-		border-top: 1px solid var(--color-border);
+		background: var(--p-surface-2);
+		border-top: 1px solid var(--p-line);
 	}
 
 	.reply-info {
@@ -37,13 +37,13 @@
 
 	.reply-label {
 		font-size: var(--text-xs);
-		color: var(--color-accent);
+		color: var(--p-accent);
 		font-weight: var(--weight-medium);
 	}
 
 	.reply-preview {
 		font-size: var(--text-sm);
-		color: var(--color-text-secondary);
+		color: var(--p-text-2);
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -53,7 +53,7 @@
 	.cancel-btn {
 		background: none;
 		border: none;
-		color: var(--color-text-muted);
+		color: var(--p-muted);
 		padding: var(--space-xs);
 		border-radius: var(--radius-md);
 		cursor: pointer;
@@ -64,6 +64,6 @@
 	}
 
 	.cancel-btn:hover {
-		color: var(--color-text);
+		color: var(--p-text);
 	}
 </style>

@@ -107,8 +107,8 @@
 
 <style>
 	.unified-picker {
-		background: var(--color-surface-elevated);
-		border: 1px solid var(--color-border);
+		background: var(--p-surface-2);
+		border: 1px solid var(--p-line);
 		border-radius: var(--radius-lg);
 		padding: var(--space-md);
 		display: flex;
@@ -125,13 +125,13 @@
 		gap: var(--space-xs);
 		margin-bottom: var(--space-sm);
 		flex-shrink: 0;
-		border-bottom: 1px solid var(--color-border);
+		border-bottom: 1px solid var(--p-line);
 		padding-bottom: var(--space-sm);
 	}
 
 	.tab {
 		background: transparent;
-		color: var(--color-text-secondary);
+		color: var(--p-text-2);
 		border: none;
 		border-radius: var(--radius-pill);
 		padding: var(--space-xs) var(--space-md);
@@ -143,17 +143,17 @@
 		flex-shrink: 0;
 	}
 	.tab.active {
-		background: var(--color-accent);
-		color: var(--color-bg);
+		background: var(--p-accent);
+		color: var(--p-bg);
 	}
 	.tab:hover:not(.active) {
-		background: var(--color-surface);
+		background: var(--p-surface);
 	}
 
 	.close-btn {
 		background: none;
 		border: none;
-		color: var(--color-text-secondary);
+		color: var(--p-text-2);
 		cursor: pointer;
 		padding: var(--space-xs);
 		border-radius: var(--radius-sm);
@@ -164,7 +164,7 @@
 		margin-left: auto;
 	}
 	.close-btn:hover {
-		background: var(--color-surface);
+		background: var(--p-surface);
 	}
 
 	.panel-wrap {

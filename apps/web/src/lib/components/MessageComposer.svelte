@@ -221,8 +221,8 @@
 
 <style>
 	.composer-shell {
-		border-top: 1px solid var(--color-border);
-		background: var(--color-surface);
+		border-top: 1px solid var(--p-line);
+		background: var(--p-surface);
 		position: relative;
 	}
 
@@ -236,25 +236,25 @@
 
 	input[type="text"] {
 		flex: 1;
-		background: var(--color-bg);
-		border: 1px solid var(--color-border);
+		background: var(--p-bg);
+		border: 1px solid var(--p-line);
 		border-radius: var(--radius-pill);
-		color: var(--color-text);
+		color: var(--p-text);
 		padding: var(--space-sm) var(--space-md);
 		font-size: var(--text-base);
 		font-family: inherit;
 		outline: none;
 	}
 
-	input[type="text"]:focus { border-color: var(--color-accent); }
+	input[type="text"]:focus { border-color: var(--p-accent); }
 	input[type="text"]:disabled { opacity: 0.5; }
 
 	button[type="submit"] {
 		width: 40px;
 		height: 40px;
 		border-radius: 50%;
-		background: var(--color-accent);
-		color: var(--color-bg);
+		background: var(--p-accent);
+		color: var(--p-bg);
 		border: none;
 		display: flex;
 		align-items: center;
@@ -279,7 +279,7 @@
 
 	.attach-btn, .tool-btn {
 		background: none;
-		color: var(--color-text-secondary);
+		color: var(--p-text-2);
 		width: 40px;
 		height: 40px;
 		border-radius: 50%;
@@ -293,7 +293,7 @@
 	}
 
 	.attach-btn:hover:not(:disabled), .tool-btn:hover:not(:disabled) {
-		background: var(--color-surface-elevated);
+		background: var(--p-surface-2);
 		opacity: 1;
 	}
 
@@ -302,7 +302,7 @@
 		align-items: center;
 		gap: var(--space-sm);
 		padding: var(--space-sm) var(--space-lg);
-		border-bottom: 1px solid var(--color-border);
+		border-bottom: 1px solid var(--p-line);
 	}
 
 	.preview-img {
@@ -314,7 +314,7 @@
 
 	.file-name {
 		font-size: var(--text-sm);
-		color: var(--color-text-secondary);
+		color: var(--p-text-2);
 		flex: 1;
 		min-width: 0;
 		white-space: nowrap;
@@ -325,7 +325,7 @@
 	.clear-file {
 		background: none;
 		border: none;
-		color: var(--color-text-secondary);
+		color: var(--p-text-2);
 		cursor: pointer;
 		padding: var(--space-xs);
 		display: flex;
@@ -336,7 +336,7 @@
 	}
 
 	.clear-file:hover {
-		background: var(--color-surface-elevated);
+		background: var(--p-surface-2);
 	}
 
 	.picker-popup {

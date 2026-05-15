@@ -36,8 +36,8 @@
 		align-items: center;
 		gap: var(--space-xs);
 		padding: var(--space-sm) var(--space-lg);
-		border-bottom: 1px solid var(--color-border);
-		background: var(--color-surface);
+		border-bottom: 1px solid var(--p-line);
+		background: var(--p-surface);
 		overflow-x: auto;
 		min-height: 0;
 	}
@@ -47,10 +47,10 @@
 		align-items: center;
 		gap: var(--space-xs);
 		padding: var(--space-xs) var(--space-sm);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--p-line);
 		border-radius: var(--radius-pill);
-		background: var(--color-surface-elevated);
-		color: var(--color-text-secondary);
+		background: var(--p-surface-2);
+		color: var(--p-text-2);
 		font-size: var(--text-sm);
 		cursor: pointer;
 		white-space: nowrap;
@@ -59,9 +59,9 @@
 
 	.channel:hover,
 	.channel.active {
-		background: var(--color-accent);
-		color: var(--color-bg);
-		border-color: var(--color-accent);
+		background: var(--p-accent);
+		color: var(--p-bg);
+		border-color: var(--p-accent);
 	}
 
 	.channel.create {
@@ -70,8 +70,8 @@
 	}
 
 	.channel.create:hover {
-		background: var(--color-surface-elevated);
-		color: var(--color-text);
-		border-color: var(--color-border);
+		background: var(--p-surface-2);
+		color: var(--p-text);
+		border-color: var(--p-line);
 	}
 </style>

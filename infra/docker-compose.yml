@@ -16,5 +16,29 @@ services:
       timeout: 5s
       retries: 10
 
+  coturn:
+    image: coturn/coturn:4.6
+    container_name: penthouse-kimi-coturn
+    profiles:
+      - media
+    restart: unless-stopped
+    ports:
+      - "3478:3478/udp"
+      - "3478:3478/tcp"
+      - "5349:5349/udp"
+      - "5349:5349/tcp"
+      - "49152-65535:49152-65535/udp"
+    command: >
+      -n
+      --listen-port=3478
+      --tls-listening-port=5349
+      --fingerprint
+      --lt-cred-mech
+      --user=penthouse:${TURN_CREDENTIAL:-penthouse-turn-dev-secret}
+      --realm=${TURN_REALM:-penthouse.local}
+      --no-cli
+      --no-tlsv1
+      --no-tlsv1_1
+
 volumes:
   penthouse_kimi_pgdata:

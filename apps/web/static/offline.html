@@ -1,66 +1,73 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-	<meta charset="UTF-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>The Penthouse — Offline</title>
-	<style>
-		:root {
-			--bg: #12121C;
-			--surface: #1A1A28;
-			--text: #E8E8F0;
-			--muted: #9494A8;
-			--accent: #C9A96E;
-			--border: #2A2A3E;
-		}
-		* { box-sizing: border-box; margin: 0; padding: 0; }
-		body {
-			background: var(--bg);
-			color: var(--text);
-			font-family: 'Ubuntu', system-ui, sans-serif;
-			display: flex;
-			flex-direction: column;
-			align-items: center;
-			justify-content: center;
-			min-height: 100dvh;
-			padding: 2rem;
-			text-align: center;
-		}
-		.logo {
-			font-family: 'Gelasio', Georgia, serif;
-			font-size: 1.5rem;
-			color: var(--accent);
-			margin-bottom: 2rem;
-		}
-		h1 {
-			font-size: 1.25rem;
-			font-weight: 500;
-			margin-bottom: 0.75rem;
-		}
-		p {
-			color: var(--muted);
-			font-size: 0.9375rem;
-			line-height: 1.5;
-			max-width: 320px;
-			margin-bottom: 2rem;
-		}
-		button {
-			background: var(--accent);
-			color: #12121C;
-			border: none;
-			border-radius: 9999px;
-			padding: 0.75rem 1.5rem;
-			font-size: 1rem;
-			font-weight: 600;
-			cursor: pointer;
-		}
-		button:hover { opacity: 0.88; }
-	</style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Offline · The Penthouse</title>
+<link href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: oklch(0.16 0.020 280);
+    --text: oklch(0.93 0.012 280);
+    --muted: oklch(0.65 0.050 280);
+    --accent: oklch(0.69 0.140 285);
+    --line: oklch(0.78 0.090 280 / 0.18);
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: oklch(0.96 0.012 285);
+      --text: oklch(0.22 0.020 285);
+      --muted: oklch(0.55 0.030 285);
+      --accent: oklch(0.55 0.130 285);
+      --line: oklch(0.40 0.030 285 / 0.18);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100dvh;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--bg); color: var(--text);
+    font-family: 'Ubuntu', -apple-system, sans-serif;
+    position: relative; overflow: hidden;
+  }
+  body::before {
+    content: '';
+    position: absolute; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.18' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.85'/%3E%3C/svg%3E");
+    mix-blend-mode: overlay; opacity: 0.30; pointer-events: none;
+  }
+  .wrap { position: relative; z-index: 1; max-width: 480px; padding: 40px; text-align: center; }
+  .eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem; letter-spacing: 2px; text-transform: uppercase;
+    color: var(--accent); margin-bottom: 18px;
+  }
+  h1 {
+    font-weight: 700; font-size: 2.4rem; letter-spacing: -1.2px;
+    line-height: 0.98; margin: 0 0 14px;
+  }
+  p {
+    color: var(--muted); font-size: 0.95rem; line-height: 1.55;
+    margin: 0 0 32px; max-width: 360px; margin-left: auto; margin-right: auto;
+  }
+  button {
+    font-family: 'Ubuntu', sans-serif;
+    background: var(--accent); color: var(--bg);
+    border: none; border-radius: 999px; padding: 11px 24px;
+    font-size: 0.85rem; font-weight: 500; cursor: pointer;
+    transition: transform 200ms cubic-bezier(0.16,1,0.3,1);
+  }
+  button:hover { transform: translateY(-1px); }
+  .divider { color: var(--line); font-family: 'JetBrains Mono', monospace; margin: 40px 0 8px; font-size: 0.66rem; letter-spacing: 4px; }
+</style>
 </head>
 <body>
-	<div class="logo">The Penthouse</div>
-	<h1>You are offline</h1>
-	<p>Your messages are queued and will be sent when the connection is restored.</p>
-	<button onclick="location.reload()">Try again</button>
+  <div class="wrap">
+    <div class="eyebrow">N° 04 / OFFLINE</div>
+    <h1>The signal went quiet.</h1>
+    <p>Your last view is cached. When you're back online, the Penthouse picks up where you left it.</p>
+    <button onclick="location.reload()">TRY AGAIN</button>
+    <div class="divider">&#9671;</div>
+  </div>
 </body>
 </html>

@@ -92,13 +92,13 @@
 	.dm-glyphs {
 		font-family: var(--font-mono);
 		font-size: var(--text-xs);
-		color: var(--color-text-secondary);
+		color: var(--p-text-2);
 		letter-spacing: -0.1em;
 		margin-left: auto;
 	}
 
 	.dm-glyphs.read {
-		color: var(--color-accent);
+		color: var(--p-accent);
 	}
 
 	.avatar-rail {
@@ -114,7 +114,7 @@
 		height: 20px;
 		margin-left: -8px;
 		border-radius: 50%;
-		border: 2px solid var(--color-bg);
+		border: 2px solid var(--p-bg);
 		overflow: hidden;
 		animation: slideIn 200ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
 		animation-delay: calc(var(--index, 0) * 40ms);

@@ -172,8 +172,8 @@
 
 <style>
 	.setting-card {
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
+		background: var(--p-surface);
+		border: 1px solid var(--p-line);
 		border-radius: var(--radius-lg);
 		padding: var(--space-lg);
 		display: flex;
@@ -200,8 +200,8 @@
 		width: 32px;
 		height: 32px;
 		border-radius: var(--radius-md);
-		background: var(--color-surface-elevated);
-		color: var(--color-accent);
+		background: var(--p-surface-2);
+		color: var(--p-accent);
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -212,19 +212,19 @@
 	.label {
 		font-size: var(--text-base);
 		font-weight: var(--weight-medium);
-		color: var(--color-text);
+		color: var(--p-text);
 	}
 
 	.hint {
 		font-size: var(--text-sm);
-		color: var(--color-text-secondary);
+		color: var(--p-text-2);
 	}
 
 	.badge {
 		font-size: var(--text-xs);
 		font-weight: var(--weight-bold);
-		color: var(--color-text-muted);
-		background: var(--color-surface-elevated);
+		color: var(--p-muted);
+		background: var(--p-surface-2);
 		padding: var(--space-xs) var(--space-sm);
 		border-radius: var(--radius-pill);
 		text-transform: uppercase;
@@ -236,7 +236,7 @@
 		width: 48px;
 		height: 28px;
 		border-radius: 14px;
-		background: var(--color-border);
+		background: var(--p-line);
 		border: none;
 		padding: 2px;
 		cursor: pointer;
@@ -244,7 +244,7 @@
 		transition: background 0.2s ease;
 	}
 	.toggle.on {
-		background: var(--color-accent);
+		background: var(--p-accent);
 	}
 	.toggle:disabled {
 		opacity: 0.4;
@@ -267,7 +267,7 @@
 
 	.error {
 		font-size: var(--text-sm);
-		color: var(--color-error);
+		color: var(--p-error);
 		margin-top: var(--space-xs);
 	}
 
@@ -276,7 +276,7 @@
 		flex-direction: column;
 		gap: var(--space-md);
 		padding-top: var(--space-md);
-		border-top: 1px solid var(--color-border);
+		border-top: 1px solid var(--p-line);
 		margin-top: var(--space-sm);
 	}
 
@@ -289,14 +289,14 @@
 
 	.pref-row label {
 		font-size: var(--text-sm);
-		color: var(--color-text-secondary);
+		color: var(--p-text-2);
 	}
 
 	.pref-row select {
-		background: var(--color-bg);
-		border: 1px solid var(--color-border);
+		background: var(--p-bg);
+		border: 1px solid var(--p-line);
 		border-radius: var(--radius-md);
-		color: var(--color-text);
+		color: var(--p-text);
 		padding: var(--space-xs) var(--space-sm);
 		font-size: var(--text-sm);
 		font-family: inherit;
@@ -305,7 +305,7 @@
 
 	.pref-row select:focus {
 		outline: none;
-		border-color: var(--color-accent);
+		border-color: var(--p-accent);
 	}
 
 	@media (prefers-reduced-motion: reduce) {

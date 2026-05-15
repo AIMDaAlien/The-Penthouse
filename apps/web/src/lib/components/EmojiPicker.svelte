@@ -62,8 +62,8 @@
 
 <style>
 	.picker {
-		background: var(--color-surface-elevated);
-		border: 1px solid var(--color-border);
+		background: var(--p-surface-2);
+		border: 1px solid var(--p-line);
 		border-radius: var(--radius-md);
 		padding: var(--space-sm);
 		box-shadow: var(--shadow-card);
@@ -88,28 +88,28 @@
 		line-height: 1;
 	}
 	.emoji-btn:hover {
-		background: var(--color-surface);
+		background: var(--p-surface);
 	}
 	.custom-row {
 		margin-top: var(--space-sm);
 		padding-top: var(--space-sm);
-		border-top: 1px solid var(--color-border);
+		border-top: 1px solid var(--p-line);
 	}
 	.custom-row input {
 		width: 100%;
-		background: var(--color-bg);
-		border: 1px solid var(--color-border);
+		background: var(--p-bg);
+		border: 1px solid var(--p-line);
 		border-radius: var(--radius-md);
 		padding: var(--space-xs) var(--space-sm);
-		color: var(--color-text);
+		color: var(--p-text);
 		font-size: var(--text-base);
 		outline: none;
 	}
 	.custom-row input:focus {
-		border-color: var(--color-accent);
+		border-color: var(--p-accent);
 	}
 	.custom-row input::placeholder {
-		color: var(--color-text-muted);
+		color: var(--p-muted);
 		font-size: var(--text-sm);
 	}
 </style>

@@ -9,19 +9,23 @@ import { registerAuth } from './middleware/auth.js';
 import { registerAdminRoutes } from './routes/admin.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerChatRoutes } from './routes/chats.js';
+import { registerDistributionRoutes } from './routes/distribution.js';
 import { registerHealthRoutes } from './routes/health.js';
 import { registerMediaRoutes } from './routes/media.js';
 import { registerPushRoutes } from './routes/push.js';
+import { registerSyncRoutes } from './routes/sync.js';
 import { registerUserRoutes } from './routes/users.js';
 import { registerSocket } from './realtime/socket.js';
+import { mediasoupRooms, validateMediasoupConfig } from './realtime/mediasoup.js';
 import { registerPushHandlers } from './features/push/handlers.js';
 import { registerCustomEmoteRoutes } from './features/customEmotes/routes.js';
 import { registerGifRoutes } from './features/gifs/routes.js';
 import { registerChatFolderRoutes } from './features/chatFolders/routes.js';
 import { registerChannelRoutes } from './features/channels/routes.js';
-import { registerWallpaperRoutes } from './routes/wallpapers.js';
 
 export async function buildApp() {
+  validateMediasoupConfig();
+
   const fastify = Fastify({
     logger: env.NODE_ENV === 'test' ? false : true
   });
@@ -43,16 +47,17 @@ export async function buildApp() {
 
   await registerHealthRoutes(fastify);
   await registerAuthRoutes(fastify);
+  await registerDistributionRoutes(fastify);
   await registerAdminRoutes(fastify);
   await registerUserRoutes(fastify);
   await registerChatRoutes(fastify);
   await registerPushRoutes(fastify);
+  await registerSyncRoutes(fastify);
   await registerMediaRoutes(fastify);
   await registerCustomEmoteRoutes(fastify);
   await registerGifRoutes(fastify);
   await registerChatFolderRoutes(fastify);
   await registerChannelRoutes(fastify);
-  await registerWallpaperRoutes(fastify);
 
   const io = new Server(fastify.server, {
     cors: {
@@ -66,6 +71,7 @@ export async function buildApp() {
 
   fastify.addHook('onClose', async () => {
     unregisterPushHandlers();
+    await mediasoupRooms.close();
     io.close();
   });
 

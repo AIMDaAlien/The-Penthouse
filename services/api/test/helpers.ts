@@ -6,8 +6,9 @@ let registerRemoteAddressCounter = 1;
 
 export async function resetDb() {
   await pool.query(`
-    TRUNCATE
-      push_notifications,
+	    TRUNCATE
+	      sync_events,
+	      push_notifications,
       chat_notification_overrides,
       notification_prefs,
       push_subscriptions,
@@ -16,7 +17,6 @@ export async function resetDb() {
       stickers,
       sticker_packs,
       custom_emotes,
-      user_wallpapers,
       chat_folder_items,
       chat_folders,
       media_uploads,

@@ -125,8 +125,8 @@
 		bottom: calc(100% + var(--space-xs));
 		left: 0;
 		z-index: 30;
-		background: var(--color-surface-elevated);
-		border: 1px solid var(--color-border);
+		background: var(--p-surface-2);
+		border: 1px solid var(--p-line);
 		border-radius: var(--radius-lg);
 		padding: var(--space-sm);
 		min-width: 240px;
@@ -139,7 +139,7 @@
 
 	.empty {
 		padding: var(--space-md);
-		color: var(--color-text-secondary);
+		color: var(--p-text-2);
 		font-size: var(--text-sm);
 		text-align: center;
 	}
@@ -154,13 +154,13 @@
 	.section-label {
 		font-size: var(--text-xs);
 		font-weight: var(--weight-bold);
-		color: var(--color-text-secondary);
+		color: var(--p-text-2);
 		text-transform: uppercase;
 		letter-spacing: 0.07em;
 		padding: var(--space-xs) var(--space-sm);
 		position: sticky;
 		top: 0;
-		background: var(--color-surface-elevated);
+		background: var(--p-surface-2);
 		z-index: 1;
 	}
 
@@ -171,7 +171,7 @@
 		padding: var(--space-xs) var(--space-sm);
 		border: none;
 		background: none;
-		color: var(--color-text);
+		color: var(--p-text);
 		font-size: var(--text-sm);
 		cursor: pointer;
 		border-radius: var(--radius-md);
@@ -182,8 +182,8 @@
 
 	.result-row:hover,
 	.result-row.selected {
-		background: var(--color-accent);
-		color: var(--color-bg);
+		background: var(--p-accent);
+		color: var(--p-bg);
 	}
 
 	.result-char {

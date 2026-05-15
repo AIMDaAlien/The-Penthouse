@@ -93,7 +93,7 @@
 		z-index: 300;
 		background: rgba(26, 26, 40, 0.92);
 		backdrop-filter: blur(16px) saturate(1.5);
-		border-bottom: 1px solid var(--color-border);
+		border-bottom: 1px solid var(--p-line);
 		padding: var(--space-md) var(--space-lg);
 		display: flex;
 		flex-direction: column;
@@ -117,8 +117,8 @@
 		width: 36px;
 		height: 36px;
 		border-radius: var(--radius-md);
-		background: var(--color-accent);
-		color: #12121C;
+		background: var(--p-accent);
+		color: var(--p-bg);
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -129,13 +129,13 @@
 	.title {
 		font-size: var(--text-base);
 		font-weight: var(--weight-medium);
-		color: var(--color-text);
+		color: var(--p-text);
 		margin-bottom: 2px;
 	}
 
 	.desc {
 		font-size: var(--text-sm);
-		color: var(--color-text-secondary);
+		color: var(--p-text-2);
 		line-height: 1.4;
 	}
 
@@ -148,14 +148,14 @@
 
 	.error {
 		font-size: var(--text-sm);
-		color: var(--color-error);
+		color: var(--p-error);
 		margin-right: auto;
 	}
 
 	.btn-dismiss {
 		background: none;
 		border: none;
-		color: var(--color-text-secondary);
+		color: var(--p-text-2);
 		font-size: var(--text-sm);
 		font-weight: var(--weight-medium);
 		padding: var(--space-sm) var(--space-md);
@@ -163,13 +163,13 @@
 		cursor: pointer;
 		transition: background 0.15s;
 	}
-	.btn-dismiss:hover { background: var(--color-surface-elevated); }
+	.btn-dismiss:hover { background: var(--p-surface-2); }
 	.btn-dismiss:disabled { opacity: 0.5; cursor: not-allowed; }
 
 	.btn-allow {
-		background: var(--color-accent);
+		background: var(--p-accent);
 		border: none;
-		color: #12121C;
+		color: var(--p-bg);
 		font-size: var(--text-sm);
 		font-weight: var(--weight-bold);
 		padding: var(--space-sm) var(--space-lg);

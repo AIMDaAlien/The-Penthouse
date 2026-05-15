@@ -230,7 +230,7 @@
 	.logo-the {
 		font-size: 1.25rem;
 		font-weight: 400;
-		color: var(--color-accent);
+		color: var(--p-accent);
 		letter-spacing: 0.08em;
 		margin-bottom: 0.2em;
 	}
@@ -238,22 +238,22 @@
 	.logo-pent, .logo-house {
 		font-size: clamp(3.5rem, 14vw, 5.5rem);
 		font-weight: 600;
-		color: var(--color-text-primary);
+		color: var(--p-text);
 		letter-spacing: -0.015em;
 		line-height: 0.95;
 	}
 
 	.tagline {
 		margin-top: var(--space-md);
-		color: var(--color-text-secondary);
+		color: var(--p-text-2);
 		font-size: var(--text-sm);
 		font-family: var(--font-sans);
 	}
 
 	.auth-card {
 		width: 100%;
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
+		background: var(--p-surface);
+		border: 1px solid var(--p-line);
 		border-radius: var(--radius-lg);
 		box-shadow: var(--shadow-card);
 		overflow: hidden;
@@ -261,7 +261,7 @@
 
 	.mode-tabs {
 		display: flex;
-		border-bottom: 1px solid var(--color-border);
+		border-bottom: 1px solid var(--p-line);
 		padding: var(--space-sm) var(--space-md);
 		gap: var(--space-sm);
 	}
@@ -272,7 +272,7 @@
 		background: none;
 		border: none;
 		border-radius: var(--radius-pill);
-		color: var(--color-text-secondary);
+		color: var(--p-text-2);
 		font-size: var(--text-sm);
 		font-weight: var(--weight-medium);
 		transition: color 0.15s, background 0.15s;
@@ -280,8 +280,8 @@
 	}
 
 	.tab.active {
-		color: #12121C;
-		background: var(--color-accent);
+		color: var(--p-bg);
+		background: var(--p-accent);
 	}
 
 	form {
@@ -299,13 +299,13 @@
 
 	label, .section-label {
 		font-size: var(--text-sm);
-		color: var(--color-text-secondary);
+		color: var(--p-text-2);
 		font-weight: var(--weight-medium);
 	}
 
 	.hint {
 		font-size: var(--text-xs);
-		color: var(--color-text-muted);
+		color: var(--p-muted);
 	}
 
 	.requirements {
@@ -323,11 +323,11 @@
 		align-items: center;
 		gap: var(--space-sm);
 		font-size: var(--text-xs);
-		color: var(--color-text-secondary);
+		color: var(--p-text-2);
 		transition: color 0.15s;
 	}
 
-	.req.met { color: var(--color-success); }
+	.req.met { color: var(--p-success); }
 
 	.altcha-box {
 		display: flex;
@@ -337,29 +337,29 @@
 		padding: var(--space-md);
 		background: rgba(0, 0, 0, 0.2);
 		border-radius: var(--radius-md);
-		border: 1px solid var(--color-border);
+		border: 1px solid var(--p-line);
 		min-height: 100px;
 	}
 
 	.altcha-box.failed {
-		border-color: color-mix(in srgb, var(--color-error) 35%, var(--color-border));
-		background: color-mix(in srgb, var(--color-error) 6%, rgba(0, 0, 0, 0.2));
+		border-color: color-mix(in srgb, var(--p-error) 35%, var(--p-line));
+		background: color-mix(in srgb, var(--p-error) 6%, var(--p-bg));
 	}
 
 	.altcha-err, .altcha-loading {
 		font-size: var(--text-xs);
-		color: var(--color-text-secondary);
+		color: var(--p-text-2);
 		text-align: center;
 	}
 
-	.altcha-err { color: var(--color-error); }
+	.altcha-err { color: var(--p-error); }
 
 	input {
 		background: transparent;
 		border: none;
-		border-bottom: 1px solid var(--color-border);
+		border-bottom: 1px solid var(--p-line);
 		border-radius: 0;
-		color: var(--color-text-primary);
+		color: var(--p-text);
 		padding: var(--space-sm) 0;
 		outline: none;
 		transition: border-color 0.2s;
@@ -368,20 +368,20 @@
 		font-size: var(--text-base);
 	}
 
-	input:focus { border-color: var(--color-accent); }
+	input:focus { border-color: var(--p-accent); }
 	input:disabled { opacity: 0.5; }
 
 	.error-msg {
 		font-size: var(--text-sm);
-		color: var(--color-error);
+		color: var(--p-error);
 		padding: var(--space-sm) var(--space-md);
-		background: color-mix(in srgb, var(--color-error) 10%, transparent);
+		background: color-mix(in srgb, var(--p-error) 10%, var(--p-bg));
 		border-radius: var(--radius-sm);
 	}
 
 	.submit-btn {
-		background: var(--color-accent);
-		color: #12121C;
+		background: var(--p-accent);
+		color: var(--p-bg);
 		border: none;
 		border-radius: var(--radius-pill);
 		padding: var(--space-md);
@@ -401,7 +401,7 @@
 		gap: var(--space-md);
 		cursor: pointer;
 		font-size: var(--text-sm);
-		color: var(--color-text-secondary);
+		color: var(--p-text-2);
 		line-height: 1.4;
 	}
 
@@ -410,14 +410,14 @@
 		flex-shrink: 0;
 		width: 16px;
 		height: 16px;
-		accent-color: var(--color-accent);
+		accent-color: var(--p-accent);
 	}
 
-	.notice-check strong { color: var(--color-accent); }
+	.notice-check strong { color: var(--p-accent); }
 
 	:global(altcha-widget) {
 		--altcha-border-radius: var(--radius-md);
-		--altcha-border-color: var(--color-border);
+		--altcha-border-color: var(--p-line);
 		width: 100%;
 	}
 </style>
