@@ -4,25 +4,23 @@ import { CreateChannelRequestSchema } from '@penthouse/contracts';
 import { db } from '../../db/pool.js';
 import { chats, chatMembers } from '../../db/schema.js';
 import { assertChatMember } from '../../utils/messages.js';
-import { notFound } from '../../utils/error-responses.js';
+import { badRequest, notFound } from '../../utils/error-responses.js';
 import { appendSyncEvent } from '../sync/service.js';
-
-function serializeChannel(row: typeof chats.$inferSelect) {
-  return {
-    id: row.id,
-    parentChatId: row.parentChatId!,
-    name: row.name,
-    createdAt: row.createdAt.toISOString()
-  };
-}
+import { serializeChannel } from '../../utils/chat-management.js';
 
 async function resolveChannelParent(chatId: string) {
   const [chat] = await db.select({
     id: chats.id,
+    type: chats.type,
     parentChatId: chats.parentChatId
   }).from(chats).where(eq(chats.id, chatId)).limit(1);
   if (!chat) throw notFound('Chat not found');
-  return chat.parentChatId ?? chat.id;
+  if (chat.type === 'dm') throw badRequest('DMs cannot have channels');
+
+  const parentChatId = chat.parentChatId ?? chat.id;
+  const [parent] = await db.select({ type: chats.type }).from(chats).where(eq(chats.id, parentChatId)).limit(1);
+  if (parent?.type !== 'group') throw badRequest('Channels must belong to a group');
+  return parentChatId;
 }
 
 export async function registerChannelRoutes(fastify: FastifyInstance) {
@@ -32,30 +30,36 @@ export async function registerChannelRoutes(fastify: FastifyInstance) {
     const parentChatId = await resolveChannelParent(chatId);
     const body = CreateChannelRequestSchema.parse(request.body);
 
-    const [channel] = await db.insert(chats).values({
-      type: 'channel',
-      name: body.name,
-      parentChatId
-    }).returning();
-
     const parentMembers = await db.select({ userId: chatMembers.userId })
       .from(chatMembers)
       .where(eq(chatMembers.chatId, parentChatId));
 
-    if (parentMembers.length > 0) {
-      await db.insert(chatMembers).values(
-        parentMembers.map((m) => ({ chatId: channel.id, userId: m.userId }))
-      );
-    }
+    const [channel] = await db.transaction(async (tx) => {
+      const [created] = await tx.insert(chats).values({
+        type: 'channel',
+        name: body.name,
+        parentChatId
+      }).returning();
+
+      if (parentMembers.length > 0) {
+        await tx.insert(chatMembers).values(
+          parentMembers.map((m) => ({ chatId: created.id, userId: m.userId }))
+        );
+      }
+
+      const serialized = serializeChannel(created);
+      await appendSyncEvent({
+        scope: 'chat',
+        chatId: created.id,
+        actorUserId: request.authUser!.userId,
+        entityId: created.id,
+        op: { type: 'channel.upsert', payload: serialized }
+      }, tx);
+
+      return [created];
+    });
 
     const serialized = serializeChannel(channel);
-    await appendSyncEvent({
-      scope: 'chat',
-      chatId: channel.id,
-      actorUserId: request.authUser!.userId,
-      entityId: channel.id,
-      op: { type: 'channel.upsert', payload: serialized }
-    });
     const syncEvent = {
       type: 'chat.sync_required',
       payload: { chatId: parentChatId, reason: 'channel.created' }

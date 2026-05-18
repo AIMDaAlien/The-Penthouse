@@ -43,6 +43,20 @@ export function applySyncOperation(db: SyncSqlDatabase, op: SyncOperation) {
 			);
 			return;
 
+		case 'chat.delete':
+			for (const channel of execRows<{ id: string }>(db, 'SELECT id FROM channels WHERE parent_chat_id = ?', [op.payload.chatId])) {
+				db.run('DELETE FROM read_states WHERE chat_id = ?', [channel.id]);
+				db.run('DELETE FROM pinned_messages WHERE chat_id = ?', [channel.id]);
+				db.run('DELETE FROM messages WHERE chat_id = ?', [channel.id]);
+			}
+			db.run('DELETE FROM folder_items WHERE chat_id = ?', [op.payload.chatId]);
+			db.run('DELETE FROM read_states WHERE chat_id = ?', [op.payload.chatId]);
+			db.run('DELETE FROM pinned_messages WHERE chat_id = ?', [op.payload.chatId]);
+			db.run('DELETE FROM messages WHERE chat_id = ?', [op.payload.chatId]);
+			db.run('DELETE FROM channels WHERE parent_chat_id = ?', [op.payload.chatId]);
+			db.run('DELETE FROM chats WHERE id = ?', [op.payload.chatId]);
+			return;
+
 		case 'channel.upsert':
 			db.run(
 				`INSERT INTO channels (id, parent_chat_id, name, created_at)
@@ -53,6 +67,13 @@ export function applySyncOperation(db: SyncSqlDatabase, op: SyncOperation) {
 					created_at = excluded.created_at`,
 				[op.payload.id, op.payload.parentChatId, op.payload.name, op.payload.createdAt]
 			);
+			return;
+
+		case 'channel.delete':
+			db.run('DELETE FROM read_states WHERE chat_id = ?', [op.payload.channelId]);
+			db.run('DELETE FROM pinned_messages WHERE chat_id = ?', [op.payload.channelId]);
+			db.run('DELETE FROM messages WHERE chat_id = ?', [op.payload.channelId]);
+			db.run('DELETE FROM channels WHERE id = ?', [op.payload.channelId]);
 			return;
 
 		case 'folder.upsert':

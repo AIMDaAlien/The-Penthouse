@@ -8,10 +8,17 @@ import type {
 	DeleteMessageResponse,
 	MarkChatReadRequest,
 	MarkChatReadResponse,
+	Channel,
 	ChatSummary,
 	ChatPreferencesRequest,
 	ChatPreferencesResponse,
 	CreateDirectChatRequest,
+	CreateGroupChatRequest,
+	UpdateChatRequest,
+	AddChatMemberRequest,
+	ArchiveChatResponse,
+	DeleteChatResponse,
+	ListChatMembersResponse,
 	PinMessageRequest,
 	PinResponse,
 	ListPinsResponse
@@ -54,6 +61,38 @@ export const chats = {
 		return api.post<{ chatId: string }>('/api/v1/chats/dm', data);
 	},
 
+	createGroup(data: CreateGroupChatRequest): Promise<{ chat: ChatSummary }> {
+		return api.post<{ chat: ChatSummary }>('/api/v1/chats/group', data);
+	},
+
+	updateChat(chatId: string, data: UpdateChatRequest): Promise<{ chat?: ChatSummary; channel?: Channel }> {
+		return api.patch<{ chat?: ChatSummary; channel?: Channel }>(`/api/v1/chats/${chatId}`, data);
+	},
+
+	deleteChat(chatId: string): Promise<DeleteChatResponse> {
+		return api.delete<DeleteChatResponse>(`/api/v1/chats/${chatId}`);
+	},
+
+	archive(chatId: string): Promise<ArchiveChatResponse> {
+		return api.post<ArchiveChatResponse>(`/api/v1/chats/${chatId}/archive`);
+	},
+
+	unarchive(chatId: string): Promise<ArchiveChatResponse> {
+		return api.post<ArchiveChatResponse>(`/api/v1/chats/${chatId}/unarchive`);
+	},
+
+	addMember(chatId: string, data: AddChatMemberRequest): Promise<{ member: unknown }> {
+		return api.post<{ member: unknown }>(`/api/v1/chats/${chatId}/members`, data);
+	},
+
+	removeMember(chatId: string, memberId: string): Promise<{ success: true }> {
+		return api.delete<{ success: true }>(`/api/v1/chats/${chatId}/members/${memberId}`);
+	},
+
+	leave(chatId: string): Promise<{ success: true }> {
+		return api.post<{ success: true }>(`/api/v1/chats/${chatId}/leave`);
+	},
+
 	pinMessage(chatId: string, data: PinMessageRequest): Promise<PinResponse> {
 		return api.post<PinResponse>(`/api/v1/chats/${chatId}/pins`, data);
 	},
@@ -64,5 +103,9 @@ export const chats = {
 
 	listPins(chatId: string): Promise<ListPinsResponse> {
 		return api.get<ListPinsResponse>(`/api/v1/chats/${chatId}/pins`);
+	},
+
+	listMembers(chatId: string): Promise<ListChatMembersResponse> {
+		return api.get(`/api/v1/chats/${chatId}/members`);
 	}
 };

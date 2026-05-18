@@ -5,6 +5,12 @@ import {
   LoginRequestSchema,
   SendMessageRequestSchema,
   CreatePollRequestSchema,
+  ChatSummarySchema,
+  CreateGroupChatRequestSchema,
+  UpdateChatRequestSchema,
+  AddChatMemberRequestSchema,
+  ArchiveChatResponseSchema,
+  DeleteChatResponseSchema,
   MessageSchema,
   AUTH_CONSTRAINTS
 } from '../src/api.js';
@@ -142,6 +148,48 @@ describe('CreatePollRequestSchema', () => {
       options: ['Red']
     });
     assert.strictEqual(result.success, false);
+  });
+});
+
+describe('ChatSummarySchema', () => {
+  it('accepts dm, group, and channel chat types', () => {
+    for (const type of ['dm', 'group', 'channel'] as const) {
+      const result = ChatSummarySchema.safeParse({
+        id: `chat-${type}`,
+        type,
+        name: type,
+        role: type === 'dm' ? 'member' : 'owner',
+        updatedAt: new Date().toISOString(),
+        archivedAt: null
+      });
+      assert.strictEqual(result.success, true);
+    }
+  });
+});
+
+describe('group management schemas', () => {
+  it('validates group creation and rejects duplicate members', () => {
+    const memberId = '550e8400-e29b-41d4-a716-446655440000';
+    assert.strictEqual(CreateGroupChatRequestSchema.safeParse({
+      name: 'Strategy',
+      memberIds: [memberId]
+    }).success, true);
+
+    assert.strictEqual(CreateGroupChatRequestSchema.safeParse({
+      name: 'Strategy',
+      memberIds: [memberId, memberId]
+    }).success, false);
+  });
+
+  it('validates rename, member mutation, archive, and delete payloads', () => {
+    const chatId = '550e8400-e29b-41d4-a716-446655440001';
+    const memberId = '550e8400-e29b-41d4-a716-446655440002';
+
+    assert.strictEqual(UpdateChatRequestSchema.safeParse({ name: 'Ops' }).success, true);
+    assert.strictEqual(AddChatMemberRequestSchema.safeParse({ memberId, role: 'admin' }).success, true);
+    assert.strictEqual(AddChatMemberRequestSchema.parse({ memberId }).role, 'member');
+    assert.strictEqual(ArchiveChatResponseSchema.safeParse({ chatId, archivedAt: null }).success, true);
+    assert.strictEqual(DeleteChatResponseSchema.safeParse({ chatId, deletedAt: new Date().toISOString() }).success, true);
   });
 });
 

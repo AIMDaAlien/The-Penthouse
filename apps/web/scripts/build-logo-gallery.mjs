@@ -51,7 +51,7 @@ const BG = {
 };
 
 const bgKeys = ['dark', 'light', 'neutral'];
-const filterKeys = ['all', 'monogram', 'wordmark', 'architectural', 'experimental'];
+const filterKeys = ['all', 'grid', 'wordmark', 'interlock', 'experimental'];
 
 // Pre-render every variant at every size for every background.
 // This trades file size for a fully offline-capable HTML — no JS rendering
@@ -236,8 +236,10 @@ ${cards}
 
 	<footer class="foot">
 		<p>
-			${variants.length} icon directions across four families. Each tile shows the hero at 168 px,
-			plus a scale row at PWA-install (192), Apple touch (60), and favicon (16). Tap a tile to enlarge.
+			${variants.length} icon directions. The PENT 2x2 grid family leads,
+			non-grid PENT follows, PH interlock and experimental round out.
+			Each tile shows the hero at 168 px, plus a scale row at PWA-install (192), Apple touch (60), and favicon (16).
+			Tap a tile to enlarge.
 		</p>
 		<p class="fine">
 			Wordmark stays separate. None of these replace it. They are compressed marks meant to survive at

@@ -36,7 +36,7 @@ export async function resetDb() {
   `);
   await pool.query("INSERT INTO server_settings (key, value) VALUES ('registration_mode', 'invite_only')");
   await pool.query("INSERT INTO signup_invites (code, label, max_uses) VALUES ('PENTHOUSE-ALPHA', 'Default alpha invite', 999999)");
-  await pool.query("INSERT INTO chats (type, name, system_key) VALUES ('channel', 'General', 'general')");
+  await pool.query("INSERT INTO chats (type, name, system_key) VALUES ('group', 'General', 'general')");
 }
 
 export async function testApp() {

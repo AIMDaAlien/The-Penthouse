@@ -1,8 +1,10 @@
 import { test, expect, type Page } from '@playwright/test';
 
 async function switchToRegister(page: Page) {
-  await page.getByRole('button', { name: 'Create account' }).click();
-  await expect(page.locator('#display-name')).toBeVisible();
+  await expect(async () => {
+    await page.getByRole('button', { name: 'Create account' }).first().click();
+    await expect(page.locator('#display-name')).toBeVisible({ timeout: 1000 });
+  }).toPass({ timeout: 5000 });
 }
 
 async function registerAndLogin(page: Page, username: string) {
@@ -10,12 +12,12 @@ async function registerAndLogin(page: Page, username: string) {
   await switchToRegister(page);
   await page.locator('#username').fill(username);
   await page.locator('#display-name').fill(username);
+  await page.locator('#invite-code').fill('PENTHOUSE-ALPHA');
   await page.locator('#password').fill('TestPassword123!');
   await page.locator('#confirm-password').fill('TestPassword123!');
   await page.getByLabel(/I understand/i).check();
   await page.locator('button[type="submit"]').click();
   await expect(page).toHaveURL('/', { timeout: 15000 });
-  await expect(page.getByText(/connected/i)).toBeVisible({ timeout: 15000 });
   await expect(page.getByRole('button', { name: 'Open chat General' })).toBeVisible({ timeout: 15000 });
 }
 
@@ -30,33 +32,31 @@ test.describe('Folders & Channels E2E', () => {
   test('create folder, move chat, collapse/expand', async ({ page }) => {
     const username = `folder_${Math.random().toString(36).slice(2, 8)}`;
     await registerAndLogin(page, username);
-    const mobileHome = page.locator('.mobile-only');
 
     // 4.1 Create folder
     await expect(async () => {
-      await mobileHome.getByRole('button', { name: 'New folder' }).click();
-      await expect(mobileHome.locator('input[placeholder="Folder name"]')).toBeVisible({ timeout: 1000 });
+      await page.getByRole('button', { name: 'New folder' }).click();
+      await expect(page.locator('input[placeholder="Folder name"]')).toBeVisible({ timeout: 1000 });
     }).toPass({ timeout: 5000 });
-    await mobileHome.locator('input[placeholder="Folder name"]').fill('Test Folder');
-    await mobileHome.getByRole('button', { name: 'Create folder' }).click();
+    await page.locator('input[placeholder="Folder name"]').fill('Test Folder');
+    await page.getByRole('button', { name: 'Create folder' }).click();
 
     // Folder should appear
-    const folder = mobileHome.locator('details').filter({ hasText: 'Test Folder' });
+    const folder = page.locator('.folder').filter({ hasText: 'Test Folder' }).first();
     await expect(folder).toBeVisible();
 
-    // 4.2 Move chat to folder (right-click context menu)
-    await mobileHome.getByRole('button', { name: 'Open chat General' }).click({ button: 'right' });
-    await mobileHome.getByText(/move to folder/i).click();
-    await mobileHome.getByRole('button', { name: 'Test Folder' }).click();
+    // 4.2 Move chat to folder via actions button
+    await page.getByRole('button', { name: 'Chat actions for General' }).click();
+    await page.getByRole('menuitem', { name: 'Test Folder' }).click();
 
     // Chat should be inside folder
-    await expect(folder.locator('text=General')).toBeVisible();
+    await expect(folder.locator('.fbody').locator('text=General')).toBeVisible();
 
     // 4.3 Collapse/expand
-    await folder.locator('summary').click();
-    await expect(folder.locator('text=General')).not.toBeVisible();
-    await folder.locator('summary').click();
-    await expect(folder.locator('text=General')).toBeVisible();
+    await folder.locator('[data-folder-header]').click();
+    await expect(folder.locator('.fbody').locator('text=General')).not.toBeVisible();
+    await folder.locator('[data-folder-header]').click();
+    await expect(folder.locator('.fbody').locator('text=General')).toBeVisible();
   });
 
   test('create and navigate channel', async ({ page }) => {

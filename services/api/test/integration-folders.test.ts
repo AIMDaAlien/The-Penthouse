@@ -1,7 +1,52 @@
 import assert from 'node:assert/strict';
+import type { AddressInfo } from 'node:net';
 import { after, beforeEach, describe, it } from 'node:test';
+import { io as connect, type Socket } from 'socket.io-client';
 import { closeDb } from '../src/db/pool.js';
 import { registerUser, resetDb, testApp } from './helpers.js';
+
+type SocketEvent = { type: string; payload: Record<string, unknown> };
+
+async function connectSocket(url: string, token: string) {
+  const socket = connect(url, {
+    auth: { token },
+    transports: ['websocket']
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    socket.on('connect', resolve);
+    socket.on('connect_error', reject);
+    setTimeout(() => reject(new Error('socket connect timeout')), 2000);
+  });
+
+  return socket;
+}
+
+function waitForEvent<T extends SocketEvent>(
+  socket: Socket,
+  event: string,
+  predicate: (payload: T) => boolean = () => true
+) {
+  return new Promise<T>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      socket.off(event, handler);
+      reject(new Error(`${event} timeout`));
+    }, 2000);
+
+    const handler = (payload: T) => {
+      if (!predicate(payload)) return;
+      clearTimeout(timeout);
+      socket.off(event, handler);
+      resolve(payload);
+    };
+
+    socket.on(event, handler);
+  });
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 describe('folder integration', () => {
   beforeEach(resetDb);
@@ -289,6 +334,129 @@ describe('folder integration', () => {
       });
       assert.equal(stealReorder.statusCode, 404, stealReorder.body);
     } finally {
+      await app.close();
+    }
+  });
+
+  it('emits folder socket events to the owning user room only', async () => {
+    const app = await testApp();
+    const sockets: Socket[] = [];
+    await app.listen({ port: 0, host: '127.0.0.1' });
+    try {
+      const bruce = await registerUser(app, 'socket-folder-bruce');
+      const alfred = await registerUser(app, 'socket-folder-alfred');
+      const selina = await registerUser(app, 'socket-folder-selina');
+      const bruceHeaders = { authorization: `Bearer ${bruce.accessToken}` };
+      const address = app.server.address() as AddressInfo;
+      const url = `http://127.0.0.1:${address.port}`;
+
+      const dm = await app.inject({
+        method: 'POST',
+        url: '/api/v1/chats/dm',
+        headers: bruceHeaders,
+        payload: { memberId: alfred.user.id }
+      });
+      assert.equal(dm.statusCode, 200, dm.body);
+      const dmChatId = (dm.json() as { chatId: string }).chatId;
+
+      const bruceDeviceA = await connectSocket(url, bruce.accessToken);
+      const bruceDeviceB = await connectSocket(url, bruce.accessToken);
+      const selinaSocket = await connectSocket(url, selina.accessToken);
+      sockets.push(bruceDeviceA, bruceDeviceB, selinaSocket);
+
+      const outsiderEvents: SocketEvent[] = [];
+      for (const eventName of ['folder.upsert', 'folder.delete', 'folder_item.upsert', 'folder_item.delete']) {
+        selinaSocket.on(eventName, (event: SocketEvent) => outsiderEvents.push(event));
+      }
+
+      const createA = waitForEvent(bruceDeviceA, 'folder.upsert');
+      const createB = waitForEvent(bruceDeviceB, 'folder.upsert');
+      const created = await app.inject({
+        method: 'POST',
+        url: '/api/v1/folders',
+        headers: bruceHeaders,
+        payload: { name: 'Live Ops' }
+      });
+      assert.equal(created.statusCode, 200, created.body);
+      const folderId = (created.json() as { folder: { id: string } }).folder.id;
+      assert.equal((await createA).payload.id, folderId);
+      assert.equal((await createB).payload.id, folderId);
+
+      const updateEvent = waitForEvent(bruceDeviceB, 'folder.upsert', (event) => event.payload.id === folderId);
+      const updated = await app.inject({
+        method: 'PATCH',
+        url: `/api/v1/folders/${folderId}`,
+        headers: bruceHeaders,
+        payload: { name: 'Live Briefings' }
+      });
+      assert.equal(updated.statusCode, 200, updated.body);
+      assert.equal((await updateEvent).payload.name, 'Live Briefings');
+
+      const itemUpsert = waitForEvent(bruceDeviceB, 'folder_item.upsert');
+      const add = await app.inject({
+        method: 'POST',
+        url: `/api/v1/folders/${folderId}/items`,
+        headers: bruceHeaders,
+        payload: { chatId: dmChatId }
+      });
+      assert.equal(add.statusCode, 200, add.body);
+      assert.deepEqual((await itemUpsert).payload, {
+        folderId,
+        chatId: dmChatId,
+        sortOrder: 0,
+        createdAt: (add.json() as { item: { createdAt: string } }).item.createdAt
+      });
+
+      const itemDelete = waitForEvent(bruceDeviceB, 'folder_item.delete');
+      const remove = await app.inject({
+        method: 'DELETE',
+        url: `/api/v1/folders/${folderId}/items/${dmChatId}`,
+        headers: bruceHeaders
+      });
+      assert.equal(remove.statusCode, 200, remove.body);
+      assert.deepEqual((await itemDelete).payload, { folderId, chatId: dmChatId });
+
+      const otherCreated = await app.inject({
+        method: 'POST',
+        url: '/api/v1/folders',
+        headers: bruceHeaders,
+        payload: { name: 'Other' }
+      });
+      assert.equal(otherCreated.statusCode, 200, otherCreated.body);
+      const otherFolderId = (otherCreated.json() as { folder: { id: string } }).folder.id;
+
+      const reorderEvent = waitForEvent(
+        bruceDeviceB,
+        'folder.upsert',
+        (event) => event.payload.id === folderId && event.payload.sortOrder === 2
+      );
+      const reorder = await app.inject({
+        method: 'PATCH',
+        url: '/api/v1/folders/reorder',
+        headers: bruceHeaders,
+        payload: {
+          folders: [
+            { id: folderId, sortOrder: 2 },
+            { id: otherFolderId, sortOrder: 1 }
+          ]
+        }
+      });
+      assert.equal(reorder.statusCode, 200, reorder.body);
+      assert.equal((await reorderEvent).payload.sortOrder, 2);
+
+      const deleteEvent = waitForEvent(bruceDeviceB, 'folder.delete');
+      const deleted = await app.inject({
+        method: 'DELETE',
+        url: `/api/v1/folders/${folderId}`,
+        headers: bruceHeaders
+      });
+      assert.equal(deleted.statusCode, 200, deleted.body);
+      assert.deepEqual((await deleteEvent).payload, { folderId });
+
+      await delay(100);
+      assert.deepEqual(outsiderEvents, []);
+    } finally {
+      for (const socket of sockets) socket.close();
       await app.close();
     }
   });

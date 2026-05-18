@@ -4,9 +4,12 @@ build/
 .svelte-kit/
 .env
 .env.local
+infra/production.env
 .DS_Store
 *.log
 .vite/
 .vite-temp/
 coverage/
 *.tsbuildinfo
+apps/web/test-results/
+services/api/uploads/

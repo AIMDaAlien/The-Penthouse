@@ -43,6 +43,27 @@ function createChatsStore() {
 		chats = chats.filter((c) => c.id !== chatId);
 	}
 
+	async function createGroup(name: string, memberIds: string[]) {
+		const res = await chatsApi.createGroup({ name, memberIds });
+		addChat(res.chat);
+		return res.chat;
+	}
+
+	async function deleteChat(chatId: string) {
+		await chatsApi.deleteChat(chatId);
+		removeChat(chatId);
+	}
+
+	async function archive(chatId: string) {
+		await chatsApi.archive(chatId);
+		updateChat(chatId, { archivedAt: new Date().toISOString() });
+	}
+
+	async function unarchive(chatId: string) {
+		await chatsApi.unarchive(chatId);
+		updateChat(chatId, { archivedAt: null });
+	}
+
 	function reset() {
 		chats = [];
 		loading = false;
@@ -60,6 +81,10 @@ function createChatsStore() {
 		addChat,
 		updateChat,
 		removeChat,
+		createGroup,
+		deleteChat,
+		archive,
+		unarchive,
 		reset,
 	};
 }

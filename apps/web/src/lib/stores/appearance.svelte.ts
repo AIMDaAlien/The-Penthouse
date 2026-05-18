@@ -4,6 +4,7 @@ const STORAGE_KEY = 'penthouse-appearance';
 const LEGACY_KEY = 'penthouse-theme-pref';
 
 function getSystemMode(): 'dark' | 'light' {
+	if (typeof window === 'undefined') return 'dark';
 	return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 

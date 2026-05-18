@@ -8,6 +8,7 @@ export const users = pgTable('users', {
   displayName: text('display_name').notNull(),
   bio: text('bio'),
   avatarMediaId: uuid('avatar_media_id'),
+  bannerMediaId: uuid('banner_media_id'),
   role: userRoleEnum('role').notNull().default('member'),
   status: userStatusEnum('status').notNull().default('active'),
   mustChangePassword: boolean('must_change_password').notNull().default(false),

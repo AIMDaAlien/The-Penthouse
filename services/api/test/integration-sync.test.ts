@@ -239,6 +239,69 @@ describe('sync integration', () => {
     }
   });
 
+  it('replays group membership add and remove tombstones to affected users', async () => {
+    const app = await testApp();
+    try {
+      const bruce = await registerUser(app, 'sync-group-bruce');
+      const selina = await registerUser(app, 'sync-group-selina');
+      const bruceHeaders = { authorization: `Bearer ${bruce.accessToken}` };
+      const selinaHeaders = { authorization: `Bearer ${selina.accessToken}` };
+
+      const created = await app.inject({
+        method: 'POST',
+        url: '/api/v1/chats/group',
+        headers: bruceHeaders,
+        payload: { name: 'Private Sync Group', memberIds: [] }
+      });
+      assert.equal(created.statusCode, 200, created.body);
+      const groupId = (created.json() as { chat: { id: string } }).chat.id;
+
+      const channel = await app.inject({
+        method: 'POST',
+        url: `/api/v1/chats/${groupId}/channels`,
+        headers: bruceHeaders,
+        payload: { name: 'briefing' }
+      });
+      assert.equal(channel.statusCode, 200, channel.body);
+      const channelId = (channel.json() as { channel: { id: string } }).channel.id;
+
+      const initial = await app.inject({ method: 'GET', url: '/api/v1/sync?cursor=0', headers: selinaHeaders });
+      assert.equal(initial.statusCode, 200, initial.body);
+      const initialBody = initial.json() as SyncResponse;
+      assert.equal(initialBody.ops.some((event) => event.op.payload.chatId === groupId || event.op.payload.id === groupId), false);
+      const cursor = initialBody.nextCursor;
+
+      const added = await app.inject({
+        method: 'POST',
+        url: `/api/v1/chats/${groupId}/members`,
+        headers: bruceHeaders,
+        payload: { memberId: selina.user.id }
+      });
+      assert.equal(added.statusCode, 200, added.body);
+
+      const afterAdd = await app.inject({ method: 'GET', url: `/api/v1/sync?cursor=${cursor}`, headers: selinaHeaders });
+      assert.equal(afterAdd.statusCode, 200, afterAdd.body);
+      const addBody = afterAdd.json() as SyncResponse;
+      assert.ok(addBody.ops.some((event) => event.op.type === 'chat.upsert' && event.op.payload.id === groupId));
+      assert.ok(addBody.ops.some((event) => event.op.type === 'channel.upsert' && event.op.payload.id === channelId));
+
+      const removed = await app.inject({
+        method: 'DELETE',
+        url: `/api/v1/chats/${groupId}/members/${selina.user.id}`,
+        headers: bruceHeaders
+      });
+      assert.equal(removed.statusCode, 200, removed.body);
+
+      const afterRemove = await app.inject({ method: 'GET', url: `/api/v1/sync?cursor=${addBody.nextCursor}`, headers: selinaHeaders });
+      assert.equal(afterRemove.statusCode, 200, afterRemove.body);
+      const removeOps = (afterRemove.json() as SyncResponse).ops;
+      assert.ok(removeOps.some((event) => event.op.type === 'channel.delete' && event.op.payload.channelId === channelId));
+      assert.ok(removeOps.some((event) => event.op.type === 'chat.delete' && event.op.payload.chatId === groupId));
+    } finally {
+      await app.close();
+    }
+  });
+
   it('rejects invalid cursors', async () => {
     const app = await testApp();
     try {

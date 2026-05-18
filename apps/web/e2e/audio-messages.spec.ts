@@ -66,10 +66,13 @@ test.beforeEach(async ({ page }) => {
 
 async function registerAndLogin(page: Page, username: string) {
   await page.goto('/auth');
-  await page.getByRole('button', { name: 'Create account' }).click();
-  await expect(page.locator('#display-name')).toBeVisible();
+  await expect(async () => {
+    await page.getByRole('button', { name: 'Create account' }).click();
+    await expect(page.locator('#display-name')).toBeVisible({ timeout: 1000 });
+  }).toPass({ timeout: 5000 });
   await page.locator('#username').fill(username);
   await page.locator('#display-name').fill(username);
+  await page.locator('#invite-code').fill('PENTHOUSE-ALPHA');
   await page.locator('#password').fill('TestPassword123!');
   await page.locator('#confirm-password').fill('TestPassword123!');
   await page.getByLabel(/I understand/i).check();

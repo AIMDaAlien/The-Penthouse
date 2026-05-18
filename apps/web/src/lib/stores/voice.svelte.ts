@@ -47,6 +47,9 @@ function createVoiceStore() {
 
 		// Set up volume analyzer
 		audioContext = new AudioContext();
+		if (audioContext.state === 'suspended') {
+			await audioContext.resume().catch(() => undefined);
+		}
 		analyser = audioContext.createAnalyser();
 		analyser.fftSize = 256;
 		const source = audioContext.createMediaStreamSource(localStream);
@@ -137,6 +140,9 @@ function createVoiceStore() {
 			socketStore.on<{ payload: VoiceParticipant }>('voice.user_joined', (data) => {
 				// Existing peer waits for newcomer to send offer
 				addParticipant(data.payload);
+				if (speaking) {
+					socketStore.emit('voice.speaking', { speaking: true });
+				}
 			}),
 			socketStore.on<{ payload: { userId: string } }>('voice.user_left', (data) => {
 				removeParticipant(data.payload.userId);
@@ -288,7 +294,8 @@ function createVoiceStore() {
 			localVolume = average / 255;
 
 			// Threshold: ~5% of max volume (~-46dB)
-			const isSpeaking = localVolume > 0.05 && !muted;
+			const micOpen = pttMode ? pttActive : !muted;
+			const isSpeaking = localVolume > 0.05 && micOpen;
 			speaking = isSpeaking;
 
 			if (isSpeaking !== lastSpeakingState) {

@@ -70,6 +70,7 @@ export const WebPushMessagePayloadSchema = z.object({
   type: z.literal('message'),
   chatId: z.string().uuid(),
   messageId: z.string().uuid(),
+  chatType: z.enum(['dm', 'group']).optional(),
   senderName: z.string().min(1),
   chatName: z.string().min(1),
   body: z.string().optional(),

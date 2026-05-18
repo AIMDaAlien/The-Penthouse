@@ -1,7 +1,7 @@
 <script lang="ts">
 	interface Props {
 		users: Map<string, string>;
-		chatType?: 'dm' | 'channel';
+		chatType?: 'dm' | 'group' | 'channel';
 	}
 
 	let { users, chatType }: Props = $props();

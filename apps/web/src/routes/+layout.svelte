@@ -6,12 +6,19 @@
 	import { gifsStore } from '$stores/gifs.svelte';
 	import { chatsStore } from '$stores/chats.svelte';
 	import { foldersStore } from '$stores/folders.svelte';
-	import { socketStore } from '$stores/socket.svelte';
+	import {
+		socketStore,
+		onFolderUpsert,
+		onFolderDelete,
+		onFolderItemUpsert,
+		onFolderItemDelete
+	} from '$stores/socket.svelte';
 	import { syncEngine } from '$lib/sync/sync-engine.svelte';
 	import { goto, onNavigate } from '$app/navigation';
 	import { page } from '$app/stores';
 	import BottomNav from '$components/BottomNav.svelte';
 	import PushPermissionBanner from '$components/PushPermissionBanner.svelte';
+	import PwaReleaseBanner from '$components/PwaReleaseBanner.svelte';
 	import DesktopShell from '$components/DesktopShell.svelte';
 	import { appearanceStore } from '$stores/appearance.svelte';
 
@@ -63,6 +70,18 @@
 		if (socketStore.isConnected && syncEngine.activeUserId) {
 			void syncEngine.requestSocketSync();
 		}
+	});
+
+	// Folder socket events — update store in real time
+	$effect(() => {
+		if (!socketStore.isConnected) return;
+		const unsubs = [
+			onFolderUpsert((event) => foldersStore.upsertFolder(event.payload)),
+			onFolderDelete((event) => foldersStore.deleteFolder(event.payload.folderId)),
+			onFolderItemUpsert((event) => foldersStore.upsertItem(event.payload)),
+			onFolderItemDelete((event) => foldersStore.deleteItem(event.payload.folderId, event.payload.chatId))
+		];
+		return () => unsubs.forEach((fn) => fn());
 	});
 
 	// Clear user-scoped state on login/logout/user switches.
@@ -142,6 +161,7 @@
 	style:--p-error-edge={k.errorEdge}
 >
 	<PushPermissionBanner />
+	<PwaReleaseBanner />
 	{#if isMonolithRoute}
 		<DesktopShell>
 			{@render children()}

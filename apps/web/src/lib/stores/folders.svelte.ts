@@ -34,9 +34,9 @@ function createFoldersStore() {
 		return pending;
 	}
 
-	async function create(name: string, icon?: string, color?: string) {
-		const res = await foldersApi.create({ name, icon, color });
-		folders = [...folders, { ...res.folder, items: [] }];
+	async function create(name: string, icon?: string, color?: string, chatIds?: string[]) {
+		const res = await foldersApi.create({ name, icon, color, chatIds });
+		folders = [...folders, { ...res.folder, items: res.folder.items ?? [] }];
 		loaded = true;
 		return res.folder;
 	}
@@ -56,28 +56,18 @@ function createFoldersStore() {
 		// If chat is in another folder, remove it first
 		if (fromFolderId && fromFolderId !== folderId) {
 			await foldersApi.removeItem(fromFolderId, chatId);
-			folders = folders.map((f) =>
-				f.id === fromFolderId
-					? { ...f, items: f.items.filter((i) => i.chatId !== chatId) }
-					: f
-			);
+			deleteItem(fromFolderId, chatId);
 		}
 		// Add to new folder
 		const res = await foldersApi.addItem(folderId, { chatId });
-		folders = folders.map((f) =>
-			f.id === folderId
-				? { ...f, items: [...f.items, res.item] }
-				: f
-		);
+		upsertItem(res.item);
+		await load({ force: true });
 	}
 
 	async function removeChat(folderId: string, chatId: string) {
 		await foldersApi.removeItem(folderId, chatId);
-		folders = folders.map((f) =>
-			f.id === folderId
-				? { ...f, items: f.items.filter((i) => i.chatId !== chatId) }
-				: f
-		);
+		deleteItem(folderId, chatId);
+		await load({ force: true });
 	}
 
 	async function reorder(order: { id: string; sortOrder: number }[]) {
@@ -87,6 +77,44 @@ function createFoldersStore() {
 		folders = folders.map((f) =>
 			orderMap.has(f.id) ? { ...f, sortOrder: orderMap.get(f.id)! } : f
 		).sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt.localeCompare(b.createdAt));
+	}
+
+	async function reorderItems(folderId: string, itemOrder: { chatId: string; sortOrder: number }[]) {
+		const res = await foldersApi.reorderItems(folderId, { items: itemOrder });
+		// Optimistic: replace folder with reordered items
+		folders = folders.map((f) => (f.id === folderId ? { ...f, items: res.folder.items } : f));
+	}
+
+	function upsertFolder(folder: ChatFolder) {
+		const existing = folders.find((f) => f.id === folder.id);
+		if (existing) {
+			folders = folders.map((f) => (f.id === folder.id ? { ...f, ...folder } : f));
+		} else {
+			folders = [...folders, { ...folder, items: [] }];
+		}
+	}
+
+	function deleteFolder(folderId: string) {
+		folders = folders.filter((f) => f.id !== folderId);
+	}
+
+	function upsertItem(item: ChatFolderItem) {
+		folders = folders.map((f) => {
+			if (f.id !== item.folderId) return f;
+			const existing = f.items.find((i) => i.chatId === item.chatId);
+			if (existing) {
+				return { ...f, items: f.items.map((i) => (i.chatId === item.chatId ? item : i)) };
+			}
+			return { ...f, items: [...f.items, item] };
+		});
+	}
+
+	function deleteItem(folderId: string, chatId: string) {
+		folders = folders.map((f) =>
+			f.id === folderId
+				? { ...f, items: f.items.filter((i) => i.chatId !== chatId) }
+				: f
+		);
 	}
 
 	function reset() {
@@ -109,6 +137,11 @@ function createFoldersStore() {
 		moveChat,
 		removeChat,
 		reorder,
+		reorderItems,
+		upsertFolder,
+		deleteFolder,
+		upsertItem,
+		deleteItem,
 		reset,
 	};
 }

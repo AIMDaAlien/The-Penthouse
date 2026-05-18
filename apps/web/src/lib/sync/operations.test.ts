@@ -29,7 +29,7 @@ describe('local sync operation appliers', () => {
 				type: 'chat.upsert',
 				payload: {
 					id: CHAT_ID,
-					type: 'channel',
+					type: 'group',
 					name: 'General',
 					updatedAt: '2026-05-12T00:00:00.000Z',
 					archivedAt: null,
@@ -133,6 +133,46 @@ describe('local sync operation appliers', () => {
 
 		removeOutboxItem(db, items[0].id);
 		expect(listDueOutboxItems(db)).toHaveLength(0);
+	});
+
+	it('applies chat and channel delete tombstones', () => {
+		const channelId = '550e8400-e29b-41d4-a716-446655440004';
+		applySyncEvents(db, [
+			event({
+				type: 'chat.upsert',
+				payload: {
+					id: CHAT_ID,
+					type: 'group',
+					name: 'General',
+					updatedAt: '2026-05-12T00:00:00.000Z',
+					archivedAt: null,
+					unreadCount: 0,
+					notificationsMuted: false
+				}
+			}),
+			event({
+				type: 'channel.upsert',
+				payload: {
+					id: channelId,
+					parentChatId: CHAT_ID,
+					name: 'briefing',
+					createdAt: '2026-05-12T00:00:01.000Z'
+				}
+			})
+		]);
+
+		expect(rows<{ id: string }>('SELECT id FROM channels WHERE id = ?', [channelId])).toHaveLength(1);
+		applySyncEvents(db, [event({
+			type: 'channel.delete',
+			payload: { channelId, parentChatId: CHAT_ID }
+		})]);
+		expect(rows<{ id: string }>('SELECT id FROM channels WHERE id = ?', [channelId])).toHaveLength(0);
+
+		applySyncEvents(db, [event({
+			type: 'chat.delete',
+			payload: { chatId: CHAT_ID }
+		})]);
+		expect(rows<{ id: string }>('SELECT id FROM chats WHERE id = ?', [CHAT_ID])).toHaveLength(0);
 	});
 
 	it('replaces optimistic local messages when the server upsert arrives', () => {

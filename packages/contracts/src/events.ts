@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { MessageMetadataSchema, MessageSchema, MessageTypeSchema, ModerationActionSchema, PollDataSchema } from './api.js';
+import { ChatFolderItemSchema, ChatFolderSchema, MessageMetadataSchema, MessageSchema, MessageTypeSchema, ModerationActionSchema, PollDataSchema } from './api.js';
 
 export const ClientJoinChatEventSchema = z.object({
   type: z.literal('chat.join'),
@@ -201,6 +201,26 @@ export const ServerChatSyncRequiredEventSchema = z.object({
   })
 });
 
+export const ServerFolderUpsertEventSchema = z.object({
+  type: z.literal('folder.upsert'),
+  payload: ChatFolderSchema
+});
+
+export const ServerFolderDeleteEventSchema = z.object({
+  type: z.literal('folder.delete'),
+  payload: z.object({ folderId: z.string().uuid() })
+});
+
+export const ServerFolderItemUpsertEventSchema = z.object({
+  type: z.literal('folder_item.upsert'),
+  payload: ChatFolderItemSchema
+});
+
+export const ServerFolderItemDeleteEventSchema = z.object({
+  type: z.literal('folder_item.delete'),
+  payload: z.object({ folderId: z.string().uuid(), chatId: z.string().uuid() })
+});
+
 export const ClientVoiceJoinEventSchema = z.object({
   type: z.literal('voice.join'),
   chatId: z.string()
@@ -300,6 +320,10 @@ export type ServerMessagePinnedEvent = z.infer<typeof ServerMessagePinnedEventSc
 export type ServerMessageUnpinnedEvent = z.infer<typeof ServerMessageUnpinnedEventSchema>;
 export type ServerTypingUpdateEvent = z.infer<typeof ServerTypingUpdateEventSchema>;
 export type ServerChatSyncRequiredEvent = z.infer<typeof ServerChatSyncRequiredEventSchema>;
+export type ServerFolderUpsertEvent = z.infer<typeof ServerFolderUpsertEventSchema>;
+export type ServerFolderDeleteEvent = z.infer<typeof ServerFolderDeleteEventSchema>;
+export type ServerFolderItemUpsertEvent = z.infer<typeof ServerFolderItemUpsertEventSchema>;
+export type ServerFolderItemDeleteEvent = z.infer<typeof ServerFolderItemDeleteEventSchema>;
 export type ServerMessageModeratedEvent = z.infer<typeof ServerMessageModeratedEventSchema>;
 export type ClientVoiceJoinEvent = z.infer<typeof ClientVoiceJoinEventSchema>;
 export type ClientVoiceLeaveEvent = z.infer<typeof ClientVoiceLeaveEventSchema>;

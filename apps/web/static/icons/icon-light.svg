@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="ph-icon-light-title">
+	<title id="ph-icon-light-title">The Penthouse</title>
+	<!--
+		Light-mode variant. Used by browsers / OSes that adapt favicons
+		to the current color scheme. Same `pent-thick` geometry as
+		icon.svg, theme tokens swapped to the light Periwinkle palette.
+	-->
+	<rect width="512" height="512" rx="72" fill="oklch(0.96 0.020 285)"/>
+	<g font-family="'Playfair Display','Bodoni 72','Didot','Times New Roman',serif" font-weight="900" fill="oklch(0.20 0.020 285)" letter-spacing="-5">
+		<text x="133" y="143" text-anchor="middle" dominant-baseline="central" font-size="174">P</text>
+		<text x="379" y="143" text-anchor="middle" dominant-baseline="central" font-size="174">E</text>
+		<text x="133" y="369" text-anchor="middle" dominant-baseline="central" font-size="174">N</text>
+		<text x="379" y="369" text-anchor="middle" dominant-baseline="central" font-size="174">T</text>
+	</g>
+	<rect x="246" y="51" width="20" height="410" fill="oklch(0.52 0.135 285)"/>
+	<rect x="51" y="246" width="410" height="20" fill="oklch(0.52 0.135 285)"/>
+</svg>

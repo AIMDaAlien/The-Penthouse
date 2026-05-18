@@ -264,3 +264,8 @@ E2E encryption explicitly DEFERRED per operator request.
 - Quality gates
 
 **Batch plan:** 3 at a time → spot-check → continue.
+
+## 2026-05-15 — DND Folder Collapse/Expand Fix (Kimi → Codex)
+- Fixed E2E regression in `folders-channels.spec.ts` after DND integration
+- Handoff doc: `docs/AGENT-HANDOFF-KIMI-DND-FIX.md`
+- E2E status: 51/51 passing (local-sync flakiness pre-existing)

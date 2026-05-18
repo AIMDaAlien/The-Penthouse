@@ -104,19 +104,36 @@ async function fetchServerSearchStatus(page: Page, query: string) {
 }
 
 async function blockServerSearch(page: Page) {
-	let blockedRequests = 0;
-	await page.context().route(/\/api\/v1\/chats\/[^/]+\/messages\/search(?:\?|$)/, (route) => {
-		blockedRequests += 1;
-		route.fulfill({
-			status: 503,
-			contentType: 'application/json',
-			body: JSON.stringify({
-				code: 'SERVER_SEARCH_BLOCKED_FOR_LOCAL_SYNC_PROOF',
-				message: 'Server search blocked for local sync proof'
-			})
-		});
+	await page.evaluate(() => {
+		const win = window as typeof window & {
+			__penthouseBlockedServerSearches?: number;
+			__penthouseOriginalFetch?: typeof window.fetch;
+		};
+		win.__penthouseBlockedServerSearches = 0;
+		win.__penthouseOriginalFetch ??= window.fetch.bind(window);
+		window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+			const url = typeof input === 'string'
+				? input
+				: input instanceof Request
+					? input.url
+					: input.toString();
+			if (/\/api\/v1\/chats\/[^/]+\/messages\/search(?:\?|$)/.test(url)) {
+				win.__penthouseBlockedServerSearches = (win.__penthouseBlockedServerSearches ?? 0) + 1;
+				return new Response(JSON.stringify({
+					code: 'SERVER_SEARCH_BLOCKED_FOR_LOCAL_SYNC_PROOF',
+					message: 'Server search blocked for local sync proof'
+				}), {
+					status: 503,
+					headers: { 'content-type': 'application/json' }
+				});
+			}
+			return win.__penthouseOriginalFetch!(input, init);
+		};
 	});
-	return () => blockedRequests;
+	return () => page.evaluate(() => {
+		const win = window as typeof window & { __penthouseBlockedServerSearches?: number };
+		return win.__penthouseBlockedServerSearches ?? 0;
+	});
 }
 
 test.describe('local-first sync shadow mode', () => {
@@ -148,7 +165,7 @@ test.describe('local-first sync shadow mode', () => {
 
 		const blockedServerSearches = await blockServerSearch(pageB);
 		await expect(fetchServerSearchStatus(pageB, messageText)).resolves.toBe(503);
-		expect(blockedServerSearches()).toBeGreaterThan(0);
+		await expect(blockedServerSearches()).resolves.toBeGreaterThan(0);
 		await expect(searchLocalContents(pageB, messageText)).resolves.toContain(messageText);
 
 		await context.close();

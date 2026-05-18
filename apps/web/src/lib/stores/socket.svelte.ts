@@ -14,7 +14,11 @@ import type {
 	ServerPresenceSyncEvent,
 	ServerChatSyncRequiredEvent,
 	ServerMessagePinnedEvent,
-	ServerMessageUnpinnedEvent
+	ServerMessageUnpinnedEvent,
+	ServerFolderUpsertEvent,
+	ServerFolderDeleteEvent,
+	ServerFolderItemUpsertEvent,
+	ServerFolderItemDeleteEvent
 } from '@penthouse/contracts';
 
 type SocketState = 'idle' | 'connecting' | 'connected' | 'degraded' | 'failed';
@@ -231,6 +235,22 @@ export function onPresenceUpdate(handler: (data: ServerPresenceUpdateEvent) => v
 
 export function onPresenceSync(handler: (data: ServerPresenceSyncEvent) => void) {
 	return socketStore.on<ServerPresenceSyncEvent>('presence.sync', handler);
+}
+
+export function onFolderUpsert(handler: (data: ServerFolderUpsertEvent) => void) {
+	return socketStore.on<ServerFolderUpsertEvent>('folder.upsert', handler);
+}
+
+export function onFolderDelete(handler: (data: ServerFolderDeleteEvent) => void) {
+	return socketStore.on<ServerFolderDeleteEvent>('folder.delete', handler);
+}
+
+export function onFolderItemUpsert(handler: (data: ServerFolderItemUpsertEvent) => void) {
+	return socketStore.on<ServerFolderItemUpsertEvent>('folder_item.upsert', handler);
+}
+
+export function onFolderItemDelete(handler: (data: ServerFolderItemDeleteEvent) => void) {
+	return socketStore.on<ServerFolderItemDeleteEvent>('folder_item.delete', handler);
 }
 
 export function updatePresence(state: PresenceState, note?: string) {

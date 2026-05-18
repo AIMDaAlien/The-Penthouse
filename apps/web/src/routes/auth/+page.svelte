@@ -13,6 +13,7 @@
 	let mode = $state<AuthMode>('login');
 	let username = $state('');
 	let displayName = $state('');
+	let inviteCode = $state('');
 	let password = $state('');
 	let confirmPassword = $state('');
 	let captchaToken = $state('');
@@ -39,6 +40,7 @@
 	const canSubmit = $derived(
 		mode === 'login' || (
 			strength.minMet && strength.maxOk && strength.noSpace &&
+			inviteCode.trim().length > 0 &&
 			password === confirmPassword &&
 			acceptedAlphaNotice &&
 			(skipCaptcha || !!captchaToken)
@@ -48,6 +50,7 @@
 	function resetForm() {
 		error = '';
 		displayName = '';
+		inviteCode = '';
 		password = '';
 		confirmPassword = '';
 		captchaToken = '';
@@ -111,7 +114,7 @@
 					username,
 					...(displayName.trim() ? { displayName: displayName.trim() } : {}),
 					password,
-					inviteCode: 'PENTHOUSE-ALPHA',
+					inviteCode: inviteCode.trim().toUpperCase(),
 					captchaToken: skipCaptcha ? 'dev' : captchaToken,
 					acceptTestNotice: true,
 					testNoticeVersion: TEST_NOTICE_VERSION
@@ -159,6 +162,12 @@
 					<label for="display-name">Display name (optional)</label>
 					<input id="display-name" type="text" bind:value={displayName} placeholder="e.g. Alice Smith" autocomplete="name" disabled={loading} maxlength="40" />
 					<span class="hint">Used for your profile. Can be changed later.</span>
+				</div>
+
+				<div class="field">
+					<label for="invite-code">Invite code</label>
+					<input id="invite-code" class="invite-input" type="text" bind:value={inviteCode} autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" required disabled={loading} />
+					<span class="hint">Use the private alpha code you were issued.</span>
 				</div>
 
 				<div class="field">
@@ -370,6 +379,11 @@
 
 	input:focus { border-color: var(--p-accent); }
 	input:disabled { opacity: 0.5; }
+
+	.invite-input {
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+	}
 
 	.error-msg {
 		font-size: var(--text-sm);

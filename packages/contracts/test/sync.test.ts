@@ -52,6 +52,19 @@ describe('SyncOperationSchema', () => {
         chatId: CHAT_ID
       }
     }).success, true);
+
+    assert.equal(SyncOperationSchema.safeParse({
+      type: 'chat.delete',
+      payload: { chatId: CHAT_ID }
+    }).success, true);
+
+    assert.equal(SyncOperationSchema.safeParse({
+      type: 'channel.delete',
+      payload: {
+        channelId: '550e8400-e29b-41d4-a716-446655440004',
+        parentChatId: CHAT_ID
+      }
+    }).success, true);
   });
 });
 

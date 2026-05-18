@@ -5,6 +5,7 @@ import type {
 	CreateFolderRequest,
 	UpdateFolderRequest,
 	ReorderFoldersRequest,
+	ReorderFolderItemsRequest,
 	AddFolderItemRequest,
 	ListFoldersResponse
 } from '@penthouse/contracts';
@@ -14,8 +15,8 @@ export const folders = {
 		return api.get<ListFoldersResponse>('/api/v1/folders');
 	},
 
-	create(data: CreateFolderRequest): Promise<{ folder: ChatFolder }> {
-		return api.post<{ folder: ChatFolder }>('/api/v1/folders', data);
+	create(data: CreateFolderRequest): Promise<{ folder: ChatFolder & { items: ChatFolderItem[] } }> {
+		return api.post<{ folder: ChatFolder & { items: ChatFolderItem[] } }>('/api/v1/folders', data);
 	},
 
 	update(id: string, data: UpdateFolderRequest): Promise<{ folder: ChatFolder }> {
@@ -36,5 +37,9 @@ export const folders = {
 
 	reorder(data: ReorderFoldersRequest): Promise<{ success: boolean }> {
 		return api.patch<{ success: boolean }>('/api/v1/folders/reorder', data);
+	},
+
+	reorderItems(folderId: string, data: ReorderFolderItemsRequest): Promise<{ folder: ChatFolder & { items: ChatFolderItem[] } }> {
+		return api.patch<{ folder: ChatFolder & { items: ChatFolderItem[] } }>(`/api/v1/folders/${folderId}/items/reorder`, data);
 	}
 };

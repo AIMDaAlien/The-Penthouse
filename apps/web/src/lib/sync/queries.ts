@@ -74,7 +74,7 @@ export async function getLocalMessages(client: LocalSyncDbClient, chatId: string
 
 type ChatRow = {
 	id: string;
-	type: 'dm' | 'channel';
+	type: 'dm' | 'group' | 'channel';
 	name: string;
 	updated_at: string;
 	archived_at: string | null;

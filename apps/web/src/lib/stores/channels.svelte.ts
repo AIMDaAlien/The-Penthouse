@@ -38,6 +38,17 @@ function createChannelsStore() {
 		return res.channel;
 	}
 
+	async function deleteChannel(channelId: string) {
+		await channelsApi.delete(channelId);
+		channels = channels.filter((c) => c.id !== channelId);
+	}
+
+	async function update(channelId: string, patch: { name?: string }) {
+		const res = await channelsApi.update(channelId, patch);
+		channels = channels.map((c) => (c.id === channelId ? { ...c, ...res.channel } : c));
+		return res.channel;
+	}
+
 	function reset() {
 		channels = [];
 		loading = false;
@@ -53,6 +64,8 @@ function createChannelsStore() {
 		get error() { return error; },
 		load,
 		create,
+		delete: deleteChannel,
+		update,
 		reset,
 	};
 }

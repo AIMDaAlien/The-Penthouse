@@ -3,18 +3,105 @@ services:
     image: postgres:16-alpine
     container_name: penthouse-kimi-postgres
     environment:
-      POSTGRES_USER: penthouse
-      POSTGRES_PASSWORD: penthouse
-      POSTGRES_DB: penthouse
+      POSTGRES_USER: ${POSTGRES_USER:-penthouse}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-penthouse}
+      POSTGRES_DB: ${POSTGRES_DB:-penthouse}
     ports:
-      - "5434:5432"
+      - "${POSTGRES_PORT:-5434}:5432"
     volumes:
       - penthouse_kimi_pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U penthouse -d penthouse"]
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
       interval: 5s
       timeout: 5s
       retries: 10
+
+  api:
+    profiles:
+      - production
+    build:
+      context: ..
+      dockerfile: services/api/Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in infra/production.env}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in infra/production.env}
+      JWT_ACCESS_EXPIRY: ${JWT_ACCESS_EXPIRY:-15m}
+      JWT_REFRESH_EXPIRY: ${JWT_REFRESH_EXPIRY:-7d}
+      ALTCHA_HMAC_KEY: ${ALTCHA_HMAC_KEY:?Set ALTCHA_HMAC_KEY in infra/production.env}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:?Set PUBLIC_APP_URL in infra/production.env}
+      LEGACY_APK_DOWNLOAD_PATH: ${LEGACY_APK_DOWNLOAD_PATH:-/downloads/legacy/the-penthouse.apk}
+      LEGACY_APK_STATUS: ${LEGACY_APK_STATUS:-unavailable}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:?Set VAPID_PUBLIC_KEY in infra/production.env}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:?Set VAPID_PRIVATE_KEY in infra/production.env}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@penthouse.blog}
+      UPLOAD_DIR: ${UPLOAD_DIR:-/app/uploads}
+      MAX_FILE_SIZE_MB: ${MAX_FILE_SIZE_MB:-25}
+      UPLOAD_MAX_MB: ${UPLOAD_MAX_MB:-25}
+      PORT: 3000
+      HOST: 0.0.0.0
+      NODE_ENV: production
+      CORS_ORIGIN: ${CORS_ORIGIN:?Set CORS_ORIGIN in infra/production.env}
+      MEDIASOUP_ENABLED: ${MEDIASOUP_ENABLED:-false}
+      MEDIASOUP_LISTEN_IP: ${MEDIASOUP_LISTEN_IP:-0.0.0.0}
+      MEDIASOUP_ANNOUNCED_IP: ${MEDIASOUP_ANNOUNCED_IP:-127.0.0.1}
+      MEDIASOUP_MIN_PORT: ${MEDIASOUP_MIN_PORT:-10000}
+      MEDIASOUP_MAX_PORT: ${MEDIASOUP_MAX_PORT:-10100}
+      TURN_ENABLED: ${TURN_ENABLED:-false}
+      TURN_URL: ${TURN_URL:-}
+      TURN_USERNAME: ${TURN_USERNAME:-}
+      TURN_CREDENTIAL: ${TURN_CREDENTIAL:-}
+      ALPHA_BOOTSTRAP_INVITE_CODE: ${ALPHA_BOOTSTRAP_INVITE_CODE:-}
+      ALPHA_BOOTSTRAP_INVITE_LABEL: ${ALPHA_BOOTSTRAP_INVITE_LABEL:-Production alpha invite}
+      ALPHA_BOOTSTRAP_INVITE_MAX_USES: ${ALPHA_BOOTSTRAP_INVITE_MAX_USES:-25}
+      ALPHA_BOOTSTRAP_INVITE_EXPIRES_AT: ${ALPHA_BOOTSTRAP_INVITE_EXPIRES_AT:-}
+      ALPHA_REVOKE_DEFAULT_INVITE: ${ALPHA_REVOKE_DEFAULT_INVITE:-true}
+    ports:
+      - "${API_BIND:-127.0.0.1}:${API_PORT:-3000}:3000"
+    volumes:
+      - penthouse_uploads:${UPLOAD_DIR:-/app/uploads}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  caddy:
+    profiles:
+      - production
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+      args:
+        PUBLIC_API_URL: ${PUBLIC_API_URL:-}
+        PUBLIC_SOCKET_URL: ${PUBLIC_SOCKET_URL:-}
+        PUBLIC_VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+        PUBLIC_SKIP_CAPTCHA: ${PUBLIC_SKIP_CAPTCHA:-false}
+        PUBLIC_LOCAL_FIRST_SYNC: ${PUBLIC_LOCAL_FIRST_SYNC:-shadow}
+    restart: unless-stopped
+    environment:
+      CADDY_SITE_ADDRESS: ${CADDY_SITE_ADDRESS:-:80}
+      API_HOST: ${API_HOST:-api.penthouse.blog}
+      ACME_EMAIL: ${ACME_EMAIL:-admin@penthouse.blog}
+    ports:
+      - "${HTTP_PORT:-8080}:80"
+      - "${HTTPS_PORT:-8443}:443"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8081/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
 
   coturn:
     image: coturn/coturn:4.6
@@ -42,3 +129,6 @@ services:
 
 volumes:
   penthouse_kimi_pgdata:
+  penthouse_uploads:
+  caddy_data:
+  caddy_config:

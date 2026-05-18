@@ -22,7 +22,9 @@ export const SyncReadStateSchema = z.object({
 
 export const SyncOperationSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('chat.upsert'), payload: ChatSummarySchema }),
+  z.object({ type: z.literal('chat.delete'), payload: z.object({ chatId: z.string().uuid() }) }),
   z.object({ type: z.literal('channel.upsert'), payload: ChannelSchema }),
+  z.object({ type: z.literal('channel.delete'), payload: z.object({ channelId: z.string().uuid(), parentChatId: z.string().uuid() }) }),
   z.object({ type: z.literal('folder.upsert'), payload: ChatFolderSchema }),
   z.object({ type: z.literal('folder.delete'), payload: z.object({ folderId: z.string().uuid() }) }),
   z.object({ type: z.literal('folder_item.upsert'), payload: ChatFolderItemSchema }),

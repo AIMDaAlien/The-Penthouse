@@ -1,15 +1,18 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
-	<title>The Penthouse app icon</title>
-	<defs>
-		<linearGradient id="bg" x1="78" y1="56" x2="434" y2="456" gradientUnits="userSpaceOnUse">
-			<stop stop-color="#12121C"/>
-			<stop offset="0.52" stop-color="#24223B"/>
-			<stop offset="1" stop-color="#1C3E3D"/>
-		</linearGradient>
-	</defs>
-	<rect width="512" height="512" rx="112" fill="url(#bg)"/>
-	<circle cx="384" cy="126" r="84" fill="#8A7CFF" opacity="0.28"/>
-	<circle cx="114" cy="404" r="112" fill="#62D6B2" opacity="0.18"/>
-	<path fill="#F7F4FF" fill-rule="evenodd" d="M148 376V136h156c60 0 106 43 106 100s-46 100-106 100h-92v40h-64Zm64-96h84c29 0 50-18 50-44s-21-44-50-44h-84v88Z"/>
-	<path fill="#FFFFFF" opacity="0.72" d="M142 408h228c10 0 18 8 18 18s-8 18-18 18H142c-10 0-18-8-18-18s8-18 18-18Z"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="ph-icon-title">
+	<title id="ph-icon-title">The Penthouse</title>
+	<!--
+		Production app icon. Source variant: `pent-thick` from
+		apps/web/src/lib/prototypes/logo/variants.js.
+		Used only where an app icon is needed (favicon, PWA, OG).
+		Wordmark takes precedence in every in-app context.
+	-->
+	<rect width="512" height="512" rx="72" fill="oklch(0.16 0.020 280)"/>
+	<g font-family="'Playfair Display','Bodoni 72','Didot','Times New Roman',serif" font-weight="900" fill="oklch(0.95 0.012 280)" letter-spacing="-5">
+		<text x="133" y="143" text-anchor="middle" dominant-baseline="central" font-size="174">P</text>
+		<text x="379" y="143" text-anchor="middle" dominant-baseline="central" font-size="174">E</text>
+		<text x="133" y="369" text-anchor="middle" dominant-baseline="central" font-size="174">N</text>
+		<text x="379" y="369" text-anchor="middle" dominant-baseline="central" font-size="174">T</text>
+	</g>
+	<rect x="246" y="51" width="20" height="410" fill="oklch(0.72 0.150 285)"/>
+	<rect x="51" y="246" width="410" height="20" fill="oklch(0.72 0.150 285)"/>
 </svg>

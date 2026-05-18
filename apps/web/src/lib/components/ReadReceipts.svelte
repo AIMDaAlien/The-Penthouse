@@ -8,7 +8,7 @@
 		chatId: string;
 		isSentByMe: boolean;
 		isPending: boolean;
-		chatType: 'dm' | 'channel';
+		chatType: 'dm' | 'group' | 'channel';
 		deliveredAt?: string | null;
 		clientSendTime?: string | null;
 		usersMap: Map<string, { displayName: string; avatarUrl?: string | null }>;
@@ -42,7 +42,7 @@
 	});
 
 	const groupReaders = $derived.by(() => {
-		if (!isSentByMe || chatType !== 'channel') return [];
+		if (!isSentByMe || (chatType !== 'channel' && chatType !== 'group')) return [];
 
 		const readers = readReceiptsStore.getReadersForMessage(chatId, messageId, orderedMessageIds);
 		return readers.filter((r) => r.userId !== myId).slice(0, 5);
@@ -69,7 +69,7 @@
 				{/if}
 			</span>
 		</span>
-	{:else if chatType === 'channel' && groupReaders.length > 0}
+	{:else if chatType !== 'dm' && groupReaders.length > 0}
 		<div class="avatar-rail" aria-live="polite">
 			<span class="sr-only">
 				Read by {groupReaders.map((r) => usersMap.get(r.userId)?.displayName ?? 'Unknown').join(', ')}

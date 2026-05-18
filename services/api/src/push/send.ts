@@ -70,7 +70,7 @@ async function sendPushToUser(userId: string, message: Message) {
     .where(eq(chats.id, message.chatId))
     .limit(1);
 
-  const chatType = chat?.type ?? 'channel';
+  const chatType = chat?.type ?? 'group';
 
   if (!shouldNotifyByScope(scope, chatType, message, userId)) return;
 
@@ -143,7 +143,7 @@ async function sendPushToUser(userId: string, message: Message) {
 
 export function shouldNotifyByScope(
   scope: string,
-  chatType: 'dm' | 'channel',
+  chatType: 'dm' | 'group' | 'channel',
   message: Message,
   userId: string
 ) {
@@ -201,20 +201,21 @@ function buildPayload(
   message: Message,
   privacy: string,
   unread: number,
-  chatType: 'dm' | 'channel',
+  chatType: 'dm' | 'group' | 'channel',
   chatName: string
 ): Record<string, unknown> {
   const level = privacy as 'private' | 'metadata' | 'full';
+  const pushChatType = chatType === 'dm' ? 'dm' : 'group';
 
   const base: Record<string, unknown> = {
     v: 1,
     type: 'message',
     chatId: message.chatId,
     messageId: message.id,
-    chatType,
+    chatType: pushChatType,
     chatName,
     badge: unread,
-    scope: chatType === 'dm' ? 'dm_only' : 'all',
+    scope: pushChatType === 'dm' ? 'dm_only' : 'all',
     privacyLevel: level
   };
 

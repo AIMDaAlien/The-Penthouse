@@ -149,6 +149,8 @@ export const PasswordResetRequestSchema = z.object({
 
 export const UserRoleSchema = z.enum(['admin', 'member']);
 export const UserStatusSchema = z.enum(['active', 'removed', 'banned']);
+export const ChatTypeSchema = z.enum(['dm', 'group', 'channel']);
+export const ChatMemberRoleSchema = z.enum(['owner', 'admin', 'member']);
 export const MessageTypeSchema = z.enum(['text', 'image', 'video', 'gif', 'file', 'poll', 'audio', 'sticker']);
 export const ModerationActionSchema = z.enum(['hide', 'unhide']);
 export const RegistrationModeSchema = z.enum(['invite_only', 'closed']);
@@ -188,6 +190,7 @@ export const AuthUserSchema = z.object({
   username: z.string(),
   displayName: z.string(),
   avatarUrl: z.string().nullable(),
+  bannerUrl: z.string().nullable().optional(),
   timezone: z.string().max(AUTH_CONSTRAINTS.timezoneMax).nullable().optional(),
   role: UserRoleSchema,
   mustChangePassword: z.boolean(),
@@ -207,6 +210,7 @@ export const AuthResponseSchema = z.object({
 export const MeResponseSchema = AuthUserSchema.extend({
   bio: z.string().nullable(),
   avatarMediaId: z.string().uuid().nullable(),
+  bannerMediaId: z.string().uuid().nullable().optional(),
   bannerUrl: z.string().nullable().optional()
 });
 
@@ -216,6 +220,7 @@ export const UpdateProfileRequestSchema = z
     bio: BioSchema.nullable().optional(),
     timezone: z.string().max(AUTH_CONSTRAINTS.timezoneMax).nullable().optional(),
     avatarUploadId: z.string().uuid().nullable().optional(),
+    bannerUploadId: z.string().uuid().nullable().optional(),
     profileStyle: ProfileStyleSchema.optional()
   })
   .refine((value) => Object.keys(value).length > 0, {
@@ -312,8 +317,9 @@ export const RevokeOtherSessionsResponseSchema = z.object({
 
 export const ChatSummarySchema = z.object({
   id: z.string(),
-  type: z.enum(['dm', 'channel']),
+  type: ChatTypeSchema,
   name: z.string(),
+  role: ChatMemberRoleSchema.optional(),
   updatedAt: z.string(),
   archivedAt: z.string().nullable().optional(),
   unreadCount: z.number().int().nonnegative().default(0),
@@ -324,6 +330,33 @@ export const ChatSummarySchema = z.object({
 
 export const CreateDirectChatRequestSchema = z.object({
   memberId: z.string().uuid()
+});
+
+export const CreateGroupChatRequestSchema = z.object({
+  name: z.string().trim().min(1).max(64),
+  memberIds: z.array(z.string().uuid()).default([])
+}).superRefine((value, ctx) => {
+  const seen = new Set<string>();
+  for (const [index, memberId] of value.memberIds.entries()) {
+    if (seen.has(memberId)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['memberIds', index],
+        message: 'Group member ids must be unique'
+      });
+      return;
+    }
+    seen.add(memberId);
+  }
+});
+
+export const UpdateChatRequestSchema = z.object({
+  name: z.string().trim().min(1).max(64)
+});
+
+export const AddChatMemberRequestSchema = z.object({
+  memberId: z.string().uuid(),
+  role: ChatMemberRoleSchema.default('member')
 });
 
 export const CreatePollRequestSchema = z.object({
@@ -384,7 +417,16 @@ export const MemberDetailSchema = MemberSummarySchema.extend({
   timezone: z.string().max(AUTH_CONSTRAINTS.timezoneMax).nullable().optional(),
   lastSeenAt: z.string().nullable().optional(),
   profileStyle: ProfileStyleSchema,
+  bannerMediaId: z.string().uuid().nullable().optional(),
   bannerUrl: z.string().nullable().optional()
+});
+
+export const ChatMemberDetailSchema = MemberDetailSchema.extend({
+  role: ChatMemberRoleSchema
+});
+
+export const ListChatMembersResponseSchema = z.object({
+  members: z.array(ChatMemberDetailSchema)
 });
 
 export const UserSearchRequestSchema = z.object({
@@ -582,7 +624,7 @@ export const StarredMessageEntrySchema = z.object({
   starredAt: z.string(),
   message: MessageSchema.extend({
     chatName: z.string(),
-    chatType: z.enum(['dm', 'channel'])
+    chatType: ChatTypeSchema
   })
 });
 
@@ -594,6 +636,12 @@ export const StarredMessagesResponseSchema = z.object({
 export const ArchiveChatResponseSchema = z.object({
   chatId: z.string(),
   archivedAt: z.string().nullable()
+});
+
+export const DeleteChatResponseSchema = z.object({
+  chatId: z.string(),
+  deletedAt: z.string().nullable().optional(),
+  archivedAt: z.string().nullable().optional()
 });
 
 export const UploadResponseSchema = z.object({
@@ -761,7 +809,8 @@ export const ChatFolderItemSchema = z.object({
 export const CreateFolderRequestSchema = z.object({
   name: z.string().trim().min(1).max(64),
   icon: z.string().max(32).optional(),
-  color: z.string().max(32).optional()
+  color: z.string().max(32).optional(),
+  chatIds: z.array(z.string().uuid()).optional()
 });
 
 export const UpdateFolderRequestSchema = z.object({
@@ -780,6 +829,15 @@ export const FolderReorderItemSchema = z.object({
 
 export const ReorderFoldersRequestSchema = z.object({
   folders: z.array(FolderReorderItemSchema).min(1)
+});
+
+export const FolderItemReorderEntrySchema = z.object({
+  chatId: z.string().uuid(),
+  sortOrder: z.number().int()
+});
+
+export const ReorderFolderItemsRequestSchema = z.object({
+  items: z.array(FolderItemReorderEntrySchema).min(1)
 });
 
 export const ListFoldersResponseSchema = z.object({
@@ -857,6 +915,8 @@ export type RefreshRequest = z.infer<typeof RefreshRequestSchema>;
 export type PasswordResetRequest = z.infer<typeof PasswordResetRequestSchema>;
 export type UserRole = z.infer<typeof UserRoleSchema>;
 export type UserStatus = z.infer<typeof UserStatusSchema>;
+export type ChatType = z.infer<typeof ChatTypeSchema>;
+export type ChatMemberRole = z.infer<typeof ChatMemberRoleSchema>;
 export type MessageType = z.infer<typeof MessageTypeSchema>;
 export type ModerationAction = z.infer<typeof ModerationActionSchema>;
 export type MediaKind = z.infer<typeof MediaKindSchema>;
@@ -885,6 +945,9 @@ export type SessionSummary = z.infer<typeof SessionSummarySchema>;
 export type RevokeOtherSessionsResponse = z.infer<typeof RevokeOtherSessionsResponseSchema>;
 export type ChatSummary = z.infer<typeof ChatSummarySchema>;
 export type CreateDirectChatRequest = z.infer<typeof CreateDirectChatRequestSchema>;
+export type CreateGroupChatRequest = z.infer<typeof CreateGroupChatRequestSchema>;
+export type UpdateChatRequest = z.infer<typeof UpdateChatRequestSchema>;
+export type AddChatMemberRequest = z.infer<typeof AddChatMemberRequestSchema>;
 export type CreatePollRequest = z.infer<typeof CreatePollRequestSchema>;
 export type VotePollRequest = z.infer<typeof VotePollRequestSchema>;
 export type ChatPreferencesRequest = z.infer<typeof ChatPreferencesRequestSchema>;
@@ -893,6 +956,8 @@ export type MessageReadReceipt = z.infer<typeof MessageReadReceiptSchema>;
 export type ChatMemberReadState = z.infer<typeof ChatMemberReadStateSchema>;
 export type MemberSummary = z.infer<typeof MemberSummarySchema>;
 export type MemberDetail = z.infer<typeof MemberDetailSchema>;
+export type ChatMemberDetail = z.infer<typeof ChatMemberDetailSchema>;
+export type ListChatMembersResponse = z.infer<typeof ListChatMembersResponseSchema>;
 export type AdminMemberSummary = z.infer<typeof AdminMemberSummarySchema>;
 export type Message = z.infer<typeof MessageSchema>;
 export type AdminMessageModeration = z.infer<typeof AdminMessageModerationSchema>;
@@ -913,6 +978,7 @@ export type ListPinsResponse = z.infer<typeof ListPinsResponseSchema>;
 export type StarredMessageEntry = z.infer<typeof StarredMessageEntrySchema>;
 export type StarredMessagesResponse = z.infer<typeof StarredMessagesResponseSchema>;
 export type ArchiveChatResponse = z.infer<typeof ArchiveChatResponseSchema>;
+export type DeleteChatResponse = z.infer<typeof DeleteChatResponseSchema>;
 export type UploadResponse = z.infer<typeof UploadResponseSchema>;
 export type GifResult = z.infer<typeof GifResultSchema>;
 export type GifSearchResponse = z.infer<typeof GifSearchResponseSchema>;
@@ -935,6 +1001,8 @@ export type CreateFolderRequest = z.infer<typeof CreateFolderRequestSchema>;
 export type UpdateFolderRequest = z.infer<typeof UpdateFolderRequestSchema>;
 export type FolderReorderItem = z.infer<typeof FolderReorderItemSchema>;
 export type ReorderFoldersRequest = z.infer<typeof ReorderFoldersRequestSchema>;
+export type FolderItemReorderEntry = z.infer<typeof FolderItemReorderEntrySchema>;
+export type ReorderFolderItemsRequest = z.infer<typeof ReorderFolderItemsRequestSchema>;
 export type ListFoldersResponse = z.infer<typeof ListFoldersResponseSchema>;
 export type Channel = z.infer<typeof ChannelSchema>;
 export type CreateChannelRequest = z.infer<typeof CreateChannelRequestSchema>;

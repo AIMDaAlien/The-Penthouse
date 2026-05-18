@@ -2,7 +2,8 @@ import { pgEnum } from 'drizzle-orm/pg-core';
 
 export const userRoleEnum = pgEnum('user_role', ['admin', 'member']);
 export const userStatusEnum = pgEnum('user_status', ['active', 'removed', 'banned']);
-export const chatTypeEnum = pgEnum('chat_type', ['dm', 'channel']);
+export const chatTypeEnum = pgEnum('chat_type', ['dm', 'group', 'channel']);
+export const chatMemberRoleEnum = pgEnum('chat_member_role', ['owner', 'admin', 'member']);
 export const messageTypeEnum = pgEnum('message_type', ['text', 'image', 'video', 'gif', 'file', 'poll', 'audio', 'sticker']);
 export const mediaKindEnum = pgEnum('media_kind', ['image', 'video', 'file']);
 export const moderationActionEnum = pgEnum('moderation_action', ['hide', 'unhide']);

@@ -2,6 +2,10 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import {
   ClientMessageSendEventSchema,
+  ServerFolderDeleteEventSchema,
+  ServerFolderItemDeleteEventSchema,
+  ServerFolderItemUpsertEventSchema,
+  ServerFolderUpsertEventSchema,
   ServerMessageNewEventSchema,
   ServerTypingUpdateEventSchema
 } from '../src/events.js';
@@ -60,5 +64,48 @@ describe('ServerTypingUpdateEventSchema', () => {
       }
     });
     assert.strictEqual(result.success, true);
+  });
+});
+
+describe('folder socket event schemas', () => {
+  it('accepts folder mutation envelopes', () => {
+    const folderId = '550e8400-e29b-41d4-a716-446655440010';
+    const userId = '550e8400-e29b-41d4-a716-446655440011';
+    const chatId = '550e8400-e29b-41d4-a716-446655440012';
+    const now = new Date().toISOString();
+
+    assert.strictEqual(ServerFolderUpsertEventSchema.safeParse({
+      type: 'folder.upsert',
+      payload: {
+        id: folderId,
+        userId,
+        name: 'Ops',
+        icon: null,
+        color: null,
+        sortOrder: 1,
+        createdAt: now,
+        updatedAt: now
+      }
+    }).success, true);
+
+    assert.strictEqual(ServerFolderDeleteEventSchema.safeParse({
+      type: 'folder.delete',
+      payload: { folderId }
+    }).success, true);
+
+    assert.strictEqual(ServerFolderItemUpsertEventSchema.safeParse({
+      type: 'folder_item.upsert',
+      payload: {
+        folderId,
+        chatId,
+        sortOrder: 0,
+        createdAt: now
+      }
+    }).success, true);
+
+    assert.strictEqual(ServerFolderItemDeleteEventSchema.safeParse({
+      type: 'folder_item.delete',
+      payload: { folderId, chatId }
+    }).success, true);
   });
 });

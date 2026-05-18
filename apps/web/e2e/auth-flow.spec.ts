@@ -1,8 +1,12 @@
 import { test, expect } from '@playwright/test';
 
+const API_BASE = process.env.PLAYWRIGHT_API_URL ?? 'http://localhost:3000';
+
 async function switchToRegister(page: import('@playwright/test').Page) {
-  await page.getByRole('button', { name: 'Create account' }).click();
-  await expect(page.locator('#display-name')).toBeVisible();
+  await expect(async () => {
+    await page.getByRole('button', { name: 'Create account' }).click();
+    await expect(page.locator('#display-name')).toBeVisible({ timeout: 1000 });
+  }).toPass({ timeout: 5000 });
 }
 
 test.describe('Auth Flow E2E', () => {
@@ -14,6 +18,7 @@ test.describe('Auth Flow E2E', () => {
     await switchToRegister(page);
     await page.locator('#username').fill(username);
     await page.locator('#display-name').fill('Auth Bot');
+    await page.locator('#invite-code').fill('PENTHOUSE-ALPHA');
     await page.locator('#password').fill('TestPassword123!');
     await page.locator('#confirm-password').fill('TestPassword123!');
     await page.getByLabel(/I understand/i).check();
@@ -44,22 +49,25 @@ test.describe('Auth Flow E2E', () => {
   test('duplicate username rejected', async ({ page }) => {
     const username = `dup_test_${Math.random().toString(36).slice(2, 8)}`;
 
-    // Register first user
-    await page.goto('/auth');
-    await switchToRegister(page);
-    await page.locator('#username').fill(username);
-    await page.locator('#display-name').fill('Dup Bot');
-    await page.locator('#password').fill('TestPassword123!');
-    await page.locator('#confirm-password').fill('TestPassword123!');
-    await page.getByLabel(/I understand/i).check();
-    await page.locator('button[type="submit"]').click();
-    await expect(page).toHaveURL('/', { timeout: 15000 });
+    const seedResponse = await page.request.post(`${API_BASE}/api/v1/auth/register`, {
+      data: {
+        username,
+        displayName: 'Dup Bot',
+        password: 'TestPassword123!',
+        inviteCode: 'PENTHOUSE-ALPHA',
+        captchaToken: 'dev',
+        acceptTestNotice: true,
+        testNoticeVersion: 'alpha-v1'
+      }
+    });
+    expect(seedResponse.ok()).toBe(true);
 
     // Try duplicate
     await page.goto('/auth');
     await switchToRegister(page);
     await page.locator('#username').fill(username);
     await page.locator('#display-name').fill('Dup Bot 2');
+    await page.locator('#invite-code').fill('PENTHOUSE-ALPHA');
     await page.locator('#password').fill('TestPassword123!');
     await page.locator('#confirm-password').fill('TestPassword123!');
     await page.getByLabel(/I understand/i).check();
@@ -74,6 +82,7 @@ test.describe('Auth Flow E2E', () => {
     await switchToRegister(page);
     await page.locator('#username').fill(`weak_${Date.now()}`);
     await page.locator('#display-name').fill('Weak Bot');
+    await page.locator('#invite-code').fill('PENTHOUSE-ALPHA');
     await page.locator('#password').fill('short');
     await page.locator('#confirm-password').fill('short');
     await page.getByLabel(/I understand/i).check();

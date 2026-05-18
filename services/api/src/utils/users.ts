@@ -16,6 +16,10 @@ export function avatarUrlFromMediaId(mediaId: string | null) {
   return mediaId ? `/api/v1/media/${mediaId}` : null;
 }
 
+export function bannerUrlFromMediaId(mediaId: string | null, legacyBannerUrl?: string | null) {
+  return mediaId ? `/api/v1/media/${mediaId}` : legacyBannerUrl ?? null;
+}
+
 export function toAuthUser(user: UserRow): AuthUser {
   const requiredVersion = process.env.TEST_NOTICE_VERSION ?? 'alpha-v1';
   return {
@@ -23,6 +27,7 @@ export function toAuthUser(user: UserRow): AuthUser {
     username: user.username,
     displayName: user.displayName,
     avatarUrl: avatarUrlFromMediaId(user.avatarMediaId),
+    bannerUrl: bannerUrlFromMediaId(user.bannerMediaId, user.bannerUrl),
     timezone: user.timezone,
     role: user.role,
     mustChangePassword: user.mustChangePassword,
@@ -38,7 +43,8 @@ export function toMeResponse(user: UserRow): MeResponse {
     ...toAuthUser(user),
     bio: user.bio,
     avatarMediaId: user.avatarMediaId,
-    bannerUrl: user.bannerUrl
+    bannerMediaId: user.bannerMediaId,
+    bannerUrl: bannerUrlFromMediaId(user.bannerMediaId, user.bannerUrl)
   };
 }
 
@@ -52,6 +58,7 @@ export function toMemberDetail(user: UserRow) {
     timezone: user.timezone,
     lastSeenAt: user.lastSeenAt?.toISOString() ?? null,
     profileStyle: user.profileStyle as 'editorial' | 'vogue' | 'wallpaper',
-    bannerUrl: user.bannerUrl
+    bannerMediaId: user.bannerMediaId,
+    bannerUrl: bannerUrlFromMediaId(user.bannerMediaId, user.bannerUrl)
   };
 }

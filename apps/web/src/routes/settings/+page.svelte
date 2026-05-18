@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { auth } from '$services/auth';
 	import { users } from '$services/users';
+	import { media } from '$services/media';
 	import { sessionStore } from '$stores/session.svelte';
 	import { socketStore } from '$stores/socket.svelte';
 	import Icon from '$components/Icon.svelte';
@@ -18,12 +19,20 @@
 	let saveError = $state('');
 	let displayName = $state(sessionStore.user?.displayName ?? '');
 	let profileStyle = $state<'editorial' | 'vogue' | 'wallpaper'>(sessionStore.user?.profileStyle ?? 'editorial');
+	let avatarUploadId = $state<string | null>(null);
+	let bannerUploadId = $state<string | null>(null);
+	let avatarPreview = $state<string | null>(null);
+	let bannerPreview = $state<string | null>(null);
+	let uploadingAvatar = $state(false);
+	let uploadingBanner = $state(false);
 
 	let presenceState = $state(socketStore.presenceState);
 	let presenceNote = $state(socketStore.presenceNote);
 	let autoAfk = $state(socketStore.autoAfkEnabled);
 
 	const currentUser = $derived(sessionStore.user);
+	const effectiveAvatarUrl = $derived(avatarPreview ?? currentUser?.avatarUrl ?? null);
+	const effectiveBannerUrl = $derived(bannerPreview ?? currentUser?.bannerUrl ?? null);
 
 
 	const presenceOptions = [
@@ -42,15 +51,63 @@
 		socketStore.autoAfkEnabled = autoAfk;
 	}
 
+	async function handleAvatarSelect(e: Event) {
+		const input = e.target as HTMLInputElement;
+		const file = input.files?.[0];
+		if (!file) return;
+		if (!file.type.startsWith('image/')) {
+			saveError = 'Please select an image file';
+			return;
+		}
+		uploadingAvatar = true;
+		try {
+			const res = await media.upload(file, 'avatar');
+			avatarUploadId = res.id;
+			avatarPreview = res.url;
+		} catch (err) {
+			saveError = err instanceof Error ? err.message : 'Failed to upload avatar';
+		} finally {
+			uploadingAvatar = false;
+			input.value = '';
+		}
+	}
+
+	async function handleBannerSelect(e: Event) {
+		const input = e.target as HTMLInputElement;
+		const file = input.files?.[0];
+		if (!file) return;
+		if (!file.type.startsWith('image/')) {
+			saveError = 'Please select an image file';
+			return;
+		}
+		uploadingBanner = true;
+		try {
+			const res = await media.upload(file, 'banner');
+			bannerUploadId = res.id;
+			bannerPreview = res.url;
+		} catch (err) {
+			saveError = err instanceof Error ? err.message : 'Failed to upload banner';
+		} finally {
+			uploadingBanner = false;
+			input.value = '';
+		}
+	}
+
 	async function handleSaveProfile() {
 		saving = true;
 		saveError = '';
 		try {
-			const res = await users.updateProfile({
-				...(displayName.trim() ? { displayName: displayName.trim() } : {}),
-				...(profileStyle !== sessionStore.user?.profileStyle ? { profileStyle } : {})
-			});
+			const payload: Parameters<typeof users.updateProfile>[0] = {};
+			if (displayName.trim()) payload.displayName = displayName.trim();
+			if (profileStyle !== sessionStore.user?.profileStyle) payload.profileStyle = profileStyle;
+			if (avatarUploadId) payload.avatarUploadId = avatarUploadId;
+			if (bannerUploadId) payload.bannerUploadId = bannerUploadId;
+			const res = await users.updateProfile(payload);
 			sessionStore.updateUser(res);
+			avatarUploadId = null;
+			bannerUploadId = null;
+			avatarPreview = null;
+			bannerPreview = null;
 		} catch (err) {
 			saveError = err instanceof Error ? err.message : 'Failed to save';
 		} finally {
@@ -81,8 +138,25 @@
 	<main class="body">
 		{#if currentUser}
 			<div class="profile-section">
+				<div class="banner-preview" class:has-banner={!!effectiveBannerUrl}>
+					{#if effectiveBannerUrl}
+						<img src={effectiveBannerUrl} alt="Banner" class="banner-img" />
+					{:else}
+						<div class="banner-placeholder"></div>
+					{/if}
+					<label class="banner-upload-btn" title="Change banner">
+						<Icon name="image" size={16} />
+						<input type="file" accept="image/*" onchange={handleBannerSelect} disabled={uploadingBanner} hidden />
+					</label>
+				</div>
 				<div class="profile-card">
-					<Avatar url={currentUser.avatarUrl} name={currentUser.displayName ?? currentUser.username} size={64} />
+					<div class="avatar-wrap">
+						<Avatar url={effectiveAvatarUrl} name={currentUser.displayName ?? currentUser.username} size={64} />
+						<label class="avatar-upload-btn" title="Change avatar">
+							<Icon name="camera" size={14} />
+							<input type="file" accept="image/*" onchange={handleAvatarSelect} disabled={uploadingAvatar} hidden />
+						</label>
+					</div>
 					<div class="profile-info">
 						<p class="profile-name">{currentUser.displayName ?? currentUser.username}</p>
 						<p class="profile-handle">@{currentUser.username}</p>
@@ -230,6 +304,75 @@
 	.profile-section {
 		padding-bottom: var(--space-lg);
 		border-bottom: 1px solid var(--p-line);
+	}
+
+	.banner-preview {
+		position: relative;
+		width: 100%;
+		aspect-ratio: 20 / 9;
+		border-radius: var(--radius-lg);
+		overflow: hidden;
+		background: var(--p-surface-2);
+		margin-bottom: var(--space-md);
+	}
+
+	.banner-img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+
+	.banner-placeholder {
+		width: 100%;
+		height: 100%;
+		background: linear-gradient(135deg, var(--p-surface-2) 0%, var(--p-line) 100%);
+	}
+
+	.banner-upload-btn {
+		position: absolute;
+		bottom: var(--space-sm);
+		right: var(--space-sm);
+		width: 32px;
+		height: 32px;
+		border-radius: 50%;
+		background: rgba(0, 0, 0, 0.5);
+		color: #fff;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		cursor: pointer;
+		transition: background 0.15s;
+		border: none;
+	}
+
+	.banner-upload-btn:hover {
+		background: rgba(0, 0, 0, 0.7);
+	}
+
+	.avatar-wrap {
+		position: relative;
+		flex-shrink: 0;
+	}
+
+	.avatar-upload-btn {
+		position: absolute;
+		bottom: -2px;
+		right: -2px;
+		width: 24px;
+		height: 24px;
+		border-radius: 50%;
+		background: var(--p-accent);
+		color: var(--p-bg);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		cursor: pointer;
+		border: 2px solid var(--p-bg);
+		transition: opacity 0.15s;
+	}
+
+	.avatar-upload-btn:hover {
+		opacity: 0.85;
 	}
 
 	.profile-card {

@@ -232,10 +232,12 @@
 		gap: var(--space-sm);
 		padding: var(--space-sm) var(--space-lg);
 		padding-bottom: calc(var(--space-sm) + env(safe-area-inset-bottom));
+		min-width: 0;
 	}
 
 	input[type="text"] {
 		flex: 1;
+		min-width: 0;
 		background: var(--p-bg);
 		border: 1px solid var(--p-line);
 		border-radius: var(--radius-pill);
@@ -353,7 +355,35 @@
 		z-index: 30;
 	}
 
+	@media (max-width: 480px) {
+		.composer {
+			gap: var(--space-xs);
+			padding-left: var(--space-md);
+			padding-right: var(--space-md);
+		}
+
+		button[type="submit"],
+		.attach-btn,
+		.tool-btn {
+			width: 36px;
+			height: 36px;
+		}
+
+		.composer :global(.recorder) {
+			gap: var(--space-xs);
+		}
+
+		.composer :global(.record-btn) {
+			width: 36px;
+			height: 36px;
+		}
+	}
+
 	@media (max-width: 767px) {
+		.composer-shell {
+			margin-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+		}
+
 		.picker-popup {
 			left: var(--space-sm);
 			right: var(--space-sm);

@@ -39,6 +39,10 @@ function createSyncEngine() {
 	let realtimeUnsubscribers: Array<() => void> = [];
 	let scheduledSocketSync: ReturnType<typeof setTimeout> | null = null;
 
+	function canUseLocalDb() {
+		return isEnabled() && !!activeUserId && (state === 'ready' || state === 'syncing');
+	}
+
 	async function start(userId: string) {
 		if (!isEnabled()) {
 			state = 'disabled';
@@ -57,6 +61,10 @@ function createSyncEngine() {
 			await localSyncDb.init(userId);
 			state = 'ready';
 			await pull();
+			if (socketStore.isConnected) {
+				await drainOutbox();
+				scheduleSocketSync();
+			}
 		} catch (err) {
 			state = 'failed';
 			error = err instanceof Error ? err.message : 'Local sync failed to initialize';
@@ -106,7 +114,7 @@ function createSyncEngine() {
 	function attachSocket() {
 		detachSocketHandlers();
 		socketUnsubscribe = socketStore.on<ServerSyncBatchEvent>('sync.batch', async (event) => {
-			if (!isEnabled() || !activeUserId) return;
+			if (!canUseLocalDb()) return;
 			try {
 				await localSyncDb.applyEvents(event.payload.ops);
 				await localSyncDb.setMeta(SYNC_CURSOR_KEY, event.payload.nextCursor);
@@ -144,13 +152,13 @@ function createSyncEngine() {
 	}
 
 	async function requestSocketSync() {
-		if (!isEnabled() || !activeUserId || !socketStore.isConnected) return;
+		if (!canUseLocalDb() || !socketStore.isConnected) return;
 		const cursor = (await localSyncDb.getMeta(SYNC_CURSOR_KEY)) ?? '0';
 		socketStore.emit('sync.request', { cursor });
 	}
 
 	function scheduleSocketSync() {
-		if (!isEnabled() || !activeUserId || !socketStore.isConnected || scheduledSocketSync) return;
+		if (!canUseLocalDb() || !socketStore.isConnected || scheduledSocketSync) return;
 		scheduledSocketSync = setTimeout(() => {
 			scheduledSocketSync = null;
 			void requestSocketSync();
@@ -158,7 +166,7 @@ function createSyncEngine() {
 	}
 
 	async function sendMessage(input: LocalSendTextMessageInput) {
-		if (!isEnabled() || !activeUserId) throw new Error('Local sync is not active');
+		if (!canUseLocalDb()) throw new Error('Local sync is not active');
 		const createdAt = input.createdAt ?? new Date().toISOString();
 		const payload: LocalTextMessageOutboxPayload = {
 			chatId: input.chatId,
@@ -204,7 +212,7 @@ function createSyncEngine() {
 	}
 
 	async function drainOutbox() {
-		if (!isEnabled() || !activeUserId || !socketStore.isConnected) return;
+		if (!canUseLocalDb() || !socketStore.isConnected) return;
 		const rows = await localSyncDb.query<RawOutboxRow>(
 			`SELECT id, operation_type, payload, retry_count
 			FROM outbox
@@ -232,7 +240,7 @@ function createSyncEngine() {
 	}
 
 	async function handleMessageAck(event: ServerMessageAckEvent) {
-		if (!isEnabled() || !activeUserId) return;
+		if (!canUseLocalDb()) return;
 		await removeOutboxItemsByClientMessageId(event.payload.clientMessageId);
 		await localSyncDb.run(
 			`UPDATE OR IGNORE messages

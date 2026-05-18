@@ -1,0 +1,37 @@
+{
+	email {$ACME_EMAIL:admin@penthouse.blog}
+}
+
+:8081 {
+	respond /health "ok" 200
+}
+
+{$CADDY_SITE_ADDRESS::80} {
+	encode zstd gzip
+
+	@apiHost host {$API_HOST:api.penthouse.blog}
+	handle @apiHost {
+		reverse_proxy api:3000
+	}
+
+	@apiPath path /api/*
+	handle @apiPath {
+		reverse_proxy api:3000
+	}
+
+	@socketPath path /socket.io/*
+	handle @socketPath {
+		reverse_proxy api:3000
+	}
+
+	@immutable path /_app/immutable/* /icons/icon-*.png
+	@runtime path / /index.html /manifest.webmanifest /service-worker.js /registerSW.js /offline.html
+
+	handle {
+		header @immutable cache-control "public, max-age=31536000, immutable"
+		header @runtime cache-control "no-cache"
+		root * /srv
+		try_files {path} {path}/ /index.html
+		file_server
+	}
+}

@@ -28,6 +28,7 @@
 	import ReadReceipts from '$components/ReadReceipts.svelte';
 	import TypingIndicator from '$components/TypingIndicator.svelte';
 	import Icon from '$components/Icon.svelte';
+	import ChatMembersModal from '$components/ChatMembersModal.svelte';
 	import { channelsStore } from '$stores/channels.svelte';
 	import { chatsStore } from '$stores/chats.svelte';
 	import { readReceiptsStore } from '$stores/readReceipts.svelte';
@@ -55,6 +56,8 @@
 	let searchQuery = $state('');
 	let searchResults = $state<Message[]>([]);
 	let searching = $state(false);
+	let showChatMenu = $state(false);
+	let showMembersModal = $state(false);
 
 	// PTT keyboard handler
 	if (typeof window !== 'undefined') {
@@ -223,6 +226,18 @@
 			joinChat(chatId);
 			return () => { if (chatId) leaveChat(chatId); };
 		}
+	});
+
+	$effect(() => {
+		if (!showChatMenu) return;
+		function onWindowClick(e: MouseEvent) {
+			const target = e.target as HTMLElement;
+			if (!target.closest('.chat-menu') && !target.closest('.menu-toggle')) {
+				showChatMenu = false;
+			}
+		}
+		window.addEventListener('mousedown', onWindowClick);
+		return () => window.removeEventListener('mousedown', onWindowClick);
 	});
 
 	$effect(() => {
@@ -595,11 +610,56 @@
 		creatingChannel = false;
 	}
 
+	async function handleLeaveChat() {
+		if (!confirm('Leave this chat?')) return;
+		try {
+			await chats.leave(chatId);
+			goto('/');
+		} catch (err) {
+			alert(err instanceof Error ? err.message : 'Failed to leave chat');
+		}
+	}
+
+	async function handleArchiveChat() {
+		try {
+			await chats.archive(chatId);
+			const chat = chatsStore.chats.find(c => c.id === chatId);
+			if (chat) chatsStore.updateChat(chatId, { archivedAt: new Date().toISOString() });
+		} catch (err) {
+			alert(err instanceof Error ? err.message : 'Failed to archive');
+		}
+	}
+
+	async function handleDeleteChat() {
+		const prompt = rootChat?.type === 'dm'
+			? 'Hide this DM from your chat list?'
+			: activeChannel
+				? 'Delete this channel? This cannot be undone.'
+				: 'Delete this group? This cannot be undone.';
+		if (!confirm(prompt)) return;
+		try {
+			await chats.deleteChat(chatId);
+			chatsStore.removeChat(chatId);
+			goto('/');
+		} catch (err) {
+			alert(err instanceof Error ? err.message : 'Failed to update chat');
+		}
+	}
+
 	const chatName = $derived(
 		chatsStore.chats.find((c) => c.id === chatId)?.name ??
 		channelsStore.channels.find((c) => c.id === chatId)?.name ??
 		'Chat'
 	);
+	const activeChannel = $derived(channelsStore.channels.find((channel) => channel.id === chatId));
+	const rootChatId = $derived(activeChannel?.parentChatId ?? chatId);
+	const rootChat = $derived(chatsStore.chats.find((chat) => chat.id === rootChatId));
+	const canManageChat = $derived(
+		sessionStore.user?.role === 'admin' ||
+		rootChat?.role === 'owner' ||
+		rootChat?.role === 'admin'
+	);
+	const canLeaveChat = $derived(rootChat?.type === 'group');
 
 </script>
 
@@ -617,6 +677,35 @@
 		>
 			<Icon name="search" size={18} />
 		</button>
+		<button
+			class="menu-toggle"
+			onclick={(e) => { e.stopPropagation(); showChatMenu = !showChatMenu; }}
+			aria-label="Chat actions"
+			aria-expanded={showChatMenu}
+		>
+			<Icon name="more" size={18} />
+		</button>
+		{#if showChatMenu}
+			<div class="chat-menu" role="menu" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()}>
+				<button role="menuitem" onclick={() => { showChatMenu = false; showMembersModal = true; }}>
+					<Icon name="users" size={16} /> Members
+				</button>
+				<button role="menuitem" onclick={() => { showChatMenu = false; handleArchiveChat(); }}>
+					<Icon name="archive" size={16} /> Archive
+				</button>
+				{#if canLeaveChat}
+					<button role="menuitem" onclick={() => { showChatMenu = false; handleLeaveChat(); }}>
+						<Icon name="logOut" size={16} /> Leave
+					</button>
+				{/if}
+				<div class="menu-divider"></div>
+				{#if rootChat?.type === 'dm' || canManageChat}
+					<button role="menuitem" class="danger" onclick={() => { showChatMenu = false; handleDeleteChat(); }}>
+						<Icon name="trash" size={16} /> {rootChat?.type === 'dm' ? 'Hide' : 'Delete'}
+					</button>
+				{/if}
+			</div>
+		{/if}
 		{#if voiceStore.joined}
 			<div class="voice-controls">
 				<button
@@ -665,11 +754,21 @@
 		{/if}
 	</header>
 
+	<ChatMembersModal
+		chatId={chatId}
+		canManage={canManageChat}
+		open={showMembersModal}
+		onClose={() => showMembersModal = false}
+	/>
+
 	<ChannelList
 		channels={channelsStore.channels}
 		activeChannelId={chatId}
 		onSelect={(channelId) => goto(`/chat/${channelId}`)}
 		onCreate={() => creatingChannel = true}
+		onDelete={(channelId) => channelsStore.delete(channelId)}
+		onRename={(channelId, newName) => channelsStore.update(channelId, { name: newName })}
+		canManage={canManageChat}
 	/>
 
 	{#if creatingChannel}
@@ -835,6 +934,7 @@
 	}
 
 	.header {
+		position: relative;
 		display: flex;
 		align-items: center;
 		gap: var(--space-md);
@@ -1150,4 +1250,63 @@
 	.search-result {
 		border-radius: var(--radius-md);
 	}
+
+	.menu-toggle {
+		background: none;
+		border: none;
+		color: var(--p-text-2);
+		cursor: pointer;
+		padding: var(--space-sm);
+		border-radius: var(--radius-md);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		transition: background 0.15s, color 0.15s;
+	}
+	.menu-toggle:hover {
+		background: var(--p-surface-2);
+		color: var(--p-text);
+	}
+
+	.chat-menu {
+		position: absolute;
+		right: var(--space-sm);
+		top: 100%;
+		z-index: 100;
+		background: var(--p-surface);
+		border: 1px solid var(--p-line-2);
+		border-radius: var(--radius-md);
+		padding: var(--space-xs);
+		min-width: 160px;
+	}
+
+	.chat-menu button {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+		width: 100%;
+		padding: var(--space-sm) var(--space-md);
+		background: none;
+		border: none;
+		color: var(--p-text);
+		font-size: var(--text-sm);
+		cursor: pointer;
+		border-radius: var(--radius-sm);
+	}
+
+	.chat-menu button:hover {
+		background: var(--p-accent-soft);
+	}
+
+	.chat-menu button.danger {
+		color: var(--p-error);
+	}
+
+	.menu-divider {
+		height: 1px;
+		background: var(--p-line);
+		margin: var(--space-xs) 0;
+	}
+
+
 </style>

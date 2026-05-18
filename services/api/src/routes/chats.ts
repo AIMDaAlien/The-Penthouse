@@ -1,12 +1,15 @@
-import { and, desc, eq, ilike, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, ilike, inArray, isNull, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import {
+  AddChatMemberRequestSchema,
   ChatPreferencesRequestSchema,
   CreateDirectChatRequestSchema,
+  CreateGroupChatRequestSchema,
   EditMessageRequestSchema,
   MarkChatReadRequestSchema,
   PinMessageRequestSchema,
-  SendMessageRequestSchema
+  SendMessageRequestSchema,
+  UpdateChatRequestSchema
 } from '@penthouse/contracts';
 import { db } from '../db/pool.js';
 import { chatMembers, chats, directChats, messageDeletions, messageEdits, messageReactions, messages, pinnedMessages, users } from '../db/schema.js';
@@ -15,6 +18,96 @@ import { assertChatMember, createMessage, hydrateMessage, listMessages, unreadCo
 import { avatarUrlFromMediaId } from '../utils/users.js';
 import { appEvents } from '../core/events.js';
 import { appendSyncEvent, buildChatSummaryForUser } from '../features/sync/service.js';
+import {
+  assertNotLastOwner,
+  childChannels,
+  requireChatManager,
+  resolveChatHierarchy,
+  rootMember,
+  serializeChannel
+} from '../utils/chat-management.js';
+
+type ChatMember = typeof chatMembers.$inferSelect;
+type Chat = typeof chats.$inferSelect;
+
+function readStatePayload(member: ChatMember) {
+  return {
+    chatId: member.chatId,
+    userId: member.userId,
+    lastReadAt: member.lastReadAt?.toISOString() ?? null,
+    lastReadMessageId: member.lastReadMessageId ?? null,
+    notificationsMuted: member.notificationsMuted,
+    archivedAt: member.archivedAt?.toISOString() ?? null
+  };
+}
+
+async function appendChatSummaryForMembers(
+  chat: Chat,
+  members: ChatMember[],
+  actorUserId: string,
+  writer: Pick<typeof db, 'insert'> = db
+) {
+  for (const member of members) {
+    await appendSyncEvent({
+      scope: 'user',
+      userId: member.userId,
+      actorUserId,
+      entityId: chat.id,
+      op: { type: 'chat.upsert', payload: await buildChatSummaryForUser(chat, member, member.userId) }
+    }, writer);
+  }
+}
+
+async function setArchivedAt(chatId: string, userId: string, actorUserId: string, archivedAt: Date | null) {
+  const { chatId: resolvedChatId } = await assertChatMember(chatId, userId);
+  const [member] = await db.update(chatMembers)
+    .set({ archivedAt })
+    .where(and(eq(chatMembers.chatId, resolvedChatId), eq(chatMembers.userId, userId)))
+    .returning();
+
+  await appendSyncEvent({
+    scope: 'user',
+    userId,
+    actorUserId,
+    entityId: `${resolvedChatId}:${userId}`,
+    op: { type: 'read.upsert', payload: readStatePayload(member) }
+  });
+
+  return {
+    chatId: resolvedChatId,
+    archivedAt: member.archivedAt?.toISOString() ?? null
+  };
+}
+
+async function removeMemberFromGroup(rootChatId: string, member: ChatMember, actorUserId: string) {
+  await assertNotLastOwner(rootChatId, member);
+  const channels = await childChannels(rootChatId);
+  const channelIds = channels.map((channel) => channel.id);
+  const chatIds = [rootChatId, ...channelIds];
+
+  await db.transaction(async (tx) => {
+    await tx.delete(chatMembers)
+      .where(and(eq(chatMembers.userId, member.userId), inArray(chatMembers.chatId, chatIds)));
+
+    for (const channel of channels) {
+      await appendSyncEvent({
+        scope: 'user',
+        userId: member.userId,
+        actorUserId,
+        entityId: channel.id,
+        op: { type: 'channel.delete', payload: { channelId: channel.id, parentChatId: rootChatId } }
+      }, tx);
+    }
+
+    await appendSyncEvent({
+      scope: 'user',
+      userId: member.userId,
+      actorUserId,
+      entityId: rootChatId,
+      op: { type: 'chat.delete', payload: { chatId: rootChatId } }
+    }, tx);
+  });
+}
 
 export async function registerChatRoutes(fastify: FastifyInstance) {
   fastify.post('/api/v1/chats/dm', { preHandler: fastify.authenticate }, async (request) => {
@@ -68,6 +161,242 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
     return { chatId: chat.id };
   });
 
+  fastify.post('/api/v1/chats/group', { preHandler: fastify.authenticate }, async (request) => {
+    const body = CreateGroupChatRequestSchema.parse(request.body);
+    const myId = request.authUser!.userId;
+    const memberIds = [...new Set(body.memberIds.filter((id) => id !== myId))];
+
+    if (memberIds.length > 0) {
+      const found = await db.select({ id: users.id }).from(users).where(inArray(users.id, memberIds));
+      if (found.length !== memberIds.length) throw notFound('One or more users were not found');
+    }
+
+    const { chat, members } = await db.transaction(async (tx) => {
+      const [created] = await tx.insert(chats).values({
+        type: 'group',
+        name: body.name
+      }).returning();
+
+      const values = [
+        { chatId: created.id, userId: myId, role: 'owner' as const },
+        ...memberIds.map((memberId) => ({ chatId: created.id, userId: memberId, role: 'member' as const }))
+      ];
+      const insertedMembers = await tx.insert(chatMembers).values(values).returning();
+
+      await appendChatSummaryForMembers(created, insertedMembers, myId, tx);
+      return { chat: created, members: insertedMembers };
+    });
+
+    for (const member of members) {
+      fastify.io.to(`user:${member.userId}`).emit('chat.sync_required', {
+        type: 'chat.sync_required',
+        payload: { chatId: chat.id, reason: 'group.created' }
+      });
+    }
+
+    const ownMember = members.find((member) => member.userId === myId)!;
+    return { chat: await buildChatSummaryForUser(chat, ownMember, myId) };
+  });
+
+  fastify.patch('/api/v1/chats/:id', { preHandler: fastify.authenticate }, async (request) => {
+    const params = request.params as { id: string };
+    const body = UpdateChatRequestSchema.parse(request.body);
+    const { chat, root } = await requireChatManager(params.id, request.authUser!.userId, request.authUser!.role);
+    if (chat.type === 'dm') throw badRequest('DMs cannot be renamed');
+
+    const [updated] = await db.update(chats)
+      .set({ name: body.name, updatedAt: new Date() })
+      .where(eq(chats.id, chat.id))
+      .returning();
+
+    if (updated.type === 'channel') {
+      const serialized = serializeChannel(updated);
+      await appendSyncEvent({
+        scope: 'chat',
+        chatId: updated.id,
+        actorUserId: request.authUser!.userId,
+        entityId: updated.id,
+        op: { type: 'channel.upsert', payload: serialized }
+      });
+      fastify.io.to(`chat:${updated.id}`).emit('chat.sync_required', {
+        type: 'chat.sync_required',
+        payload: { chatId: root.id, reason: 'channel.renamed' }
+      });
+      return { channel: serialized };
+    }
+
+    const memberRows = await db.select().from(chatMembers).where(eq(chatMembers.chatId, updated.id));
+    await appendChatSummaryForMembers(updated, memberRows, request.authUser!.userId);
+    for (const member of memberRows) {
+      fastify.io.to(`user:${member.userId}`).emit('chat.sync_required', {
+        type: 'chat.sync_required',
+        payload: { chatId: updated.id, reason: 'group.renamed' }
+      });
+    }
+
+    const viewerMember = memberRows.find((member) => member.userId === request.authUser!.userId) ?? memberRows[0];
+    return { chat: await buildChatSummaryForUser(updated, viewerMember, request.authUser!.userId) };
+  });
+
+  fastify.delete('/api/v1/chats/:id', { preHandler: fastify.authenticate }, async (request) => {
+    const params = request.params as { id: string };
+    const { chat, root } = await resolveChatHierarchy(params.id);
+
+    if (chat.type === 'dm') {
+      return setArchivedAt(chat.id, request.authUser!.userId, request.authUser!.userId, new Date());
+    }
+
+    await requireChatManager(chat.id, request.authUser!.userId, request.authUser!.role);
+
+    if (chat.type === 'channel') {
+      const memberRows = await db.select({ userId: chatMembers.userId })
+        .from(chatMembers)
+        .where(eq(chatMembers.chatId, chat.id));
+
+      await db.transaction(async (tx) => {
+        await tx.delete(chats).where(eq(chats.id, chat.id));
+        for (const member of memberRows) {
+          await appendSyncEvent({
+            scope: 'user',
+            userId: member.userId,
+            actorUserId: request.authUser!.userId,
+            entityId: chat.id,
+            op: { type: 'channel.delete', payload: { channelId: chat.id, parentChatId: root.id } }
+          }, tx);
+        }
+      });
+
+      return { chatId: chat.id, deletedAt: new Date().toISOString() };
+    }
+
+    const channels = await childChannels(chat.id);
+    const memberRows = await db.select({ userId: chatMembers.userId })
+      .from(chatMembers)
+      .where(eq(chatMembers.chatId, chat.id));
+
+    await db.transaction(async (tx) => {
+      await tx.delete(chats).where(eq(chats.id, chat.id));
+      for (const member of memberRows) {
+        for (const channel of channels) {
+          await appendSyncEvent({
+            scope: 'user',
+            userId: member.userId,
+            actorUserId: request.authUser!.userId,
+            entityId: channel.id,
+            op: { type: 'channel.delete', payload: { channelId: channel.id, parentChatId: chat.id } }
+          }, tx);
+        }
+        await appendSyncEvent({
+          scope: 'user',
+          userId: member.userId,
+          actorUserId: request.authUser!.userId,
+          entityId: chat.id,
+          op: { type: 'chat.delete', payload: { chatId: chat.id } }
+        }, tx);
+      }
+    });
+
+    return { chatId: chat.id, deletedAt: new Date().toISOString() };
+  });
+
+  fastify.post('/api/v1/chats/:id/archive', { preHandler: fastify.authenticate }, async (request) => {
+    const params = request.params as { id: string };
+    return setArchivedAt(params.id, request.authUser!.userId, request.authUser!.userId, new Date());
+  });
+
+  fastify.post('/api/v1/chats/:id/unarchive', { preHandler: fastify.authenticate }, async (request) => {
+    const params = request.params as { id: string };
+    return setArchivedAt(params.id, request.authUser!.userId, request.authUser!.userId, null);
+  });
+
+  fastify.post('/api/v1/chats/:id/members', { preHandler: fastify.authenticate }, async (request) => {
+    const params = request.params as { id: string };
+    const body = AddChatMemberRequestSchema.parse(request.body);
+    const { root } = await requireChatManager(params.id, request.authUser!.userId, request.authUser!.role);
+
+    const [user] = await db.select().from(users).where(eq(users.id, body.memberId)).limit(1);
+    if (!user) throw notFound('User not found');
+
+    const existingMember = await rootMember(root.id, body.memberId);
+    if (existingMember?.role === 'owner' && body.role !== 'owner') {
+      await assertNotLastOwner(root.id, existingMember);
+    }
+
+    const channels = await childChannels(root.id);
+    const { member } = await db.transaction(async (tx) => {
+      const [rootRow] = await tx.insert(chatMembers).values({
+        chatId: root.id,
+        userId: body.memberId,
+        role: body.role
+      }).onConflictDoUpdate({
+        target: [chatMembers.chatId, chatMembers.userId],
+        set: { role: body.role }
+      }).returning();
+
+      if (channels.length > 0) {
+        await tx.insert(chatMembers).values(
+          channels.map((channel) => ({ chatId: channel.id, userId: body.memberId }))
+        ).onConflictDoNothing();
+      }
+
+      await appendSyncEvent({
+        scope: 'user',
+        userId: body.memberId,
+        actorUserId: request.authUser!.userId,
+        entityId: root.id,
+        op: { type: 'chat.upsert', payload: await buildChatSummaryForUser(root, rootRow, body.memberId) }
+      }, tx);
+
+      for (const channel of channels) {
+        await appendSyncEvent({
+          scope: 'user',
+          userId: body.memberId,
+          actorUserId: request.authUser!.userId,
+          entityId: channel.id,
+          op: { type: 'channel.upsert', payload: serializeChannel(channel) }
+        }, tx);
+      }
+
+      return { member: rootRow };
+    });
+
+    fastify.io.to(`user:${body.memberId}`).emit('chat.sync_required', {
+      type: 'chat.sync_required',
+      payload: { chatId: root.id, reason: 'member.added' }
+    });
+
+    return { member: { id: user.id, username: user.username, displayName: user.displayName, role: member.role } };
+  });
+
+  fastify.delete('/api/v1/chats/:id/members/:memberId', { preHandler: fastify.authenticate }, async (request) => {
+    const params = request.params as { id: string; memberId: string };
+    const { root } = await requireChatManager(params.id, request.authUser!.userId, request.authUser!.role);
+    if (params.memberId === request.authUser!.userId) throw badRequest('Use the leave endpoint to remove yourself');
+
+    const member = await rootMember(root.id, params.memberId);
+    if (!member) throw notFound('Chat member not found');
+    await removeMemberFromGroup(root.id, member, request.authUser!.userId);
+
+    fastify.io.to(`user:${params.memberId}`).emit('chat.sync_required', {
+      type: 'chat.sync_required',
+      payload: { chatId: root.id, reason: 'member.removed' }
+    });
+
+    return { success: true };
+  });
+
+  fastify.post('/api/v1/chats/:id/leave', { preHandler: fastify.authenticate }, async (request) => {
+    const params = request.params as { id: string };
+    const { root } = await resolveChatHierarchy(params.id);
+    if (root.type !== 'group') throw badRequest('Only group chats can be left');
+
+    const member = await rootMember(root.id, request.authUser!.userId);
+    if (!member) throw forbidden('You are not a member of this chat', 'CHAT_FORBIDDEN');
+    await removeMemberFromGroup(root.id, member, request.authUser!.userId);
+
+    return { success: true };
+  });
+
   fastify.get('/api/v1/chats', { preHandler: fastify.authenticate }, async (request) => {
     const rows = await db.select({
       chat: chats,
@@ -104,6 +433,7 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
         id: row.chat.id,
         type: row.chat.type,
         name,
+        role: row.member.role,
         updatedAt: row.chat.updatedAt.toISOString(),
         archivedAt: row.member.archivedAt?.toISOString() ?? null,
         unreadCount: await unreadCount(row.chat.id, request.authUser!.userId),
@@ -149,14 +479,22 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
   fastify.get('/api/v1/chats/:id/members', { preHandler: fastify.authenticate }, async (request) => {
     const params = request.params as { id: string };
     const { chatId } = await assertChatMember(params.id, request.authUser!.userId);
-    const rows = await db.select({ user: users })
+
+    // Resolve root chat for role authorization — child channels mirror parent membership
+    const [chat] = await db.select({ parentChatId: chats.parentChatId })
+      .from(chats)
+      .where(eq(chats.id, chatId))
+      .limit(1);
+    const rootChatId = chat?.parentChatId ?? chatId;
+
+    const rows = await db.select({ user: users, member: chatMembers })
       .from(chatMembers)
       .innerJoin(users, eq(chatMembers.userId, users.id))
-      .where(eq(chatMembers.chatId, chatId))
+      .where(eq(chatMembers.chatId, rootChatId))
       .orderBy(users.displayName);
 
     return {
-      members: rows.map(({ user }) => ({
+      members: rows.map(({ user, member }) => ({
         id: user.id,
         username: user.username,
         displayName: user.displayName,
@@ -165,7 +503,8 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
         timezone: user.timezone,
         lastSeenAt: user.lastSeenAt?.toISOString() ?? null,
         profileStyle: user.profileStyle,
-        bannerUrl: user.bannerUrl
+        bannerUrl: user.bannerUrl,
+        role: member.role
       }))
     };
   });

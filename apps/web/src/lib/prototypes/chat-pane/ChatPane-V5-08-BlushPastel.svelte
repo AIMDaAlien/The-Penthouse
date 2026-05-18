@@ -1,10 +1,10 @@
 <script lang="ts">
-	// ChatPane V5-05 — Lavender Pastel (T-L5 light)
+	// ChatPane V5-08 — Blush Pastel (T-L4 light)
 	// Self-contained prototype. No external imports.
 	// CRITICAL: pastel-tinted bubbles + dark text (per V5-HANDOFF risk #6).
 
-	const me = { id: 'me', name: 'You', avatar: 'https://i.pravatar.cc/150?u=lara', status: 'online' as const };
-	const them = { id: 'them', name: 'Mira', avatar: 'https://i.pravatar.cc/150?u=mira', status: 'online' as const };
+	const me = { id: 'me', name: 'You', avatar: 'https://i.pravatar.cc/150?u=rose', status: 'online' as const };
+	const them = { id: 'them', name: 'Lina', avatar: 'https://i.pravatar.cc/150?u=lina', status: 'online' as const };
 
 	interface Msg {
 		id: string;
@@ -15,16 +15,16 @@
 	}
 
 	const messages: Msg[] = [
-		{ id: '1', sender: them, content: 'morning. the light in the kitchen is soft today.', time: '08:02' },
-		{ id: '2', sender: them, content: 'are you coming over?', time: '08:03' },
-		{ id: '3', sender: me, content: 'twenty minutes', time: '08:04' },
-		{ id: '4', sender: me, content: 'i found the book you mentioned. the one about gardens.', time: '08:05', reactions: [{ emoji: '✿', count: 1 }] },
-		{ id: '5', sender: them, content: 'oh good. i was going to ask.', time: '08:06' },
-		{ id: '6', sender: them, content: 'bring it. and the small cake from yesterday if you havent finished it.', time: '08:07' },
-		{ id: '7', sender: me, content: 'i finished it', time: '08:08' },
-		{ id: '8', sender: me, content: 'sorry', time: '08:08' },
-		{ id: '9', sender: them, content: 'unforgivable', time: '08:09', reactions: [{ emoji: '◇', count: 1 }] },
-		{ id: '10', sender: them, content: 'come anyway', time: '08:09' },
+		{ id: '1', sender: them, content: 'the peonies opened this morning', time: '09:04' },
+		{ id: '2', sender: them, content: 'all at once, like a held breath released', time: '09:05' },
+		{ id: '3', sender: me, content: 'what color?', time: '09:06' },
+		{ id: '4', sender: them, content: 'the pale ones. almost white at the edges.', time: '09:07', reactions: [{ emoji: '✿', count: 1 }] },
+		{ id: '5', sender: me, content: 'i will bring my camera after work', time: '09:08' },
+		{ id: '6', sender: them, content: 'the light is best around five', time: '09:09' },
+		{ id: '7', sender: me, content: 'i will be there', time: '09:10' },
+		{ id: '8', sender: them, content: 'do not rush', time: '09:11' },
+		{ id: '9', sender: me, content: 'i never do', time: '09:12', reactions: [{ emoji: '◇', count: 1 }] },
+		{ id: '10', sender: them, content: 'see you then', time: '09:13' },
 	];
 
 	function isShort(text: string) { return text.length < 40 && !text.includes('\n'); }
@@ -107,17 +107,17 @@
 
 <style>
 	.pane {
-		/* Lavender Pastel — pastel lavender bg, dark ink text */
-		--p-bg:          oklch(0.96 0.018 285);
-		--p-text:        oklch(0.22 0.020 285);
-		--p-text-2:      oklch(0.40 0.025 285);
-		--p-muted:       oklch(0.55 0.030 285);
-		--p-accent:      oklch(0.55 0.110 285);
-		--p-accent-soft: oklch(0.78 0.090 285 / 0.28);   /* pastel bubble fill ~25% alpha */
-		--p-accent-edge: oklch(0.55 0.110 285 / 0.32);
-		--p-line:        oklch(0.40 0.040 285 / 0.10);
-		--p-line-2:      oklch(0.40 0.040 285 / 0.18);
-		--p-secondary:   oklch(0.40 0.030 285);
+		/* Blush Pastel — warm cream with rose-pink accent */
+		--p-bg:          oklch(0.96 0.018 350);
+		--p-text:        oklch(0.22 0.020 350);
+		--p-text-2:      oklch(0.40 0.025 350);
+		--p-muted:       oklch(0.55 0.030 350);
+		--p-accent:      oklch(0.55 0.130 350);
+		--p-accent-soft: oklch(0.78 0.090 350 / 0.28);
+		--p-accent-edge: oklch(0.55 0.130 350 / 0.32);
+		--p-line:        oklch(0.40 0.040 350 / 0.10);
+		--p-line-2:      oklch(0.40 0.040 350 / 0.18);
+		--p-secondary:   oklch(0.40 0.030 350);
 		--p-success:     oklch(0.50 0.130 145);
 
 		position: relative;
@@ -199,15 +199,15 @@
 	.reactions-row { display: flex; justify-content: flex-start; padding-left: 48px; margin-top: 6px; }
 	.reactions-row.own { justify-content: flex-end; padding-left: 0; padding-right: 48px; }
 
-	/* Received bubble — soft cool grey-lavender */
+	/* Received bubble — soft blush-tinted */
 	.bub {
 		position: relative; padding: 12px 18px;
-		background: oklch(0.88 0.018 285);
+		background: oklch(0.88 0.018 350);
 		border: 1px solid var(--p-line);
 		border-radius: var(--r-lg, 22px); max-width: 70%;
 	}
 	.bub.short { border-radius: var(--r-pill, 999px); padding: 10px 20px; }
-	/* Own bubble — pastel lavender (~25% over bg), dark ink */
+	/* Own bubble — pastel blush (~25% over bg), dark ink */
 	.row.own .bub {
 		background: var(--p-accent-soft);
 		border-color: var(--p-accent-edge);
@@ -223,7 +223,7 @@
 		display: inline-flex; align-items: center; gap: 4px;
 		padding: 3px 10px;
 		border-radius: var(--r-pill, 999px);
-		background: oklch(0.93 0.018 285);
+		background: oklch(0.93 0.018 350);
 		border: 1px solid var(--p-line);
 		font-size: 0.82rem; cursor: pointer; transition: background 0.15s;
 		color: var(--p-text);

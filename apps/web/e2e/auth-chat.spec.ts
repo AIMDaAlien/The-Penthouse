@@ -20,14 +20,20 @@ test.describe('auth and routing', () => {
     await expect(page.getByLabel('Password')).toBeVisible();
 
     // Switch to register
-    await page.getByRole('button', { name: 'Create account' }).click();
-    await expect(page.getByLabel('Display name')).toBeVisible();
+    await expect(async () => {
+      await page.getByRole('button', { name: 'Create account' }).click();
+      await expect(page.getByLabel('Display name')).toBeVisible({ timeout: 1000 });
+    }).toPass({ timeout: 5000 });
     await expect(page.getByLabel('Confirm password')).toBeVisible();
+    await expect(page.getByLabel('Invite code')).toBeVisible();
   });
 
   test('register mode has alpha notice checkbox', async ({ page }) => {
     await page.goto('/auth');
-    await page.getByRole('button', { name: 'Create account' }).first().click();
+    await expect(async () => {
+      await page.getByRole('button', { name: 'Create account' }).first().click();
+      await expect(page.getByLabel('Display name')).toBeVisible({ timeout: 1000 });
+    }).toPass({ timeout: 5000 });
     await expect(page.getByText(/alpha/i)).toBeVisible();
   });
 

@@ -4,7 +4,12 @@
   import ChatPaneV5_02 from '$lib/prototypes/chat-pane/ChatPane-V5-02-SageMoss.svelte';
   import ChatPaneV5_03 from '$lib/prototypes/chat-pane/ChatPane-V5-03-SlateBlue.svelte';
   import ChatPaneV5_04 from '$lib/prototypes/chat-pane/ChatPane-V5-04-PlumMauve.svelte';
-  import ChatPaneV5_05 from '$lib/prototypes/chat-pane/ChatPane-V5-05-LavenderPastel.svelte';
+  import ChatPaneV5_05 from '$lib/prototypes/chat-pane/ChatPane-V5-05-CharcoalRust.svelte';
+  import ChatPaneV5_06 from '$lib/prototypes/chat-pane/ChatPane-V5-06-SageCream.svelte';
+  import ChatPaneV5_07 from '$lib/prototypes/chat-pane/ChatPane-V5-07-SkyPastel.svelte';
+  import ChatPaneV5_08 from '$lib/prototypes/chat-pane/ChatPane-V5-08-BlushPastel.svelte';
+  import ChatPaneV5_09 from '$lib/prototypes/chat-pane/ChatPane-V5-09-LavenderPastel.svelte';
+  import ChatPaneV5_10 from '$lib/prototypes/chat-pane/ChatPane-V5-10-OatStone.svelte';
 
   // V5 Settings Panes
   import SettingsPaneV5_01 from '$lib/prototypes/settings-pane/SettingsPane-V5-01-GlassQuiet.svelte';
@@ -23,7 +28,12 @@
     { component: ChatPaneV5_02, name: 'V5-02: Sage Moss (T-D2 dark)' },
     { component: ChatPaneV5_03, name: 'V5-03: Slate Blue (T-D3 dark)' },
     { component: ChatPaneV5_04, name: 'V5-04: Plum Mauve (T-D4 dark)' },
-    { component: ChatPaneV5_05, name: 'V5-05: Lavender Pastel (T-L5 light)' },
+    { component: ChatPaneV5_05, name: 'V5-05: Charcoal Rust (T-D7 dark)' },
+    { component: ChatPaneV5_06, name: 'V5-06: Sage Cream (T-L2 light)' },
+    { component: ChatPaneV5_07, name: 'V5-07: Sky Pastel (T-L3 light)' },
+    { component: ChatPaneV5_08, name: 'V5-08: Blush Pastel (T-L4 light)' },
+    { component: ChatPaneV5_09, name: 'V5-09: Lavender Pastel (T-L5 light)' },
+    { component: ChatPaneV5_10, name: 'V5-10: Oat Stone (T-L7 light)' },
   ];
 
   const settingsPanes = [

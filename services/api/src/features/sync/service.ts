@@ -295,6 +295,7 @@ export async function buildChatSummaryForUser(
     id: chat.id,
     type: chat.type,
     name,
+    role: member.role,
     updatedAt: chat.updatedAt.toISOString(),
     archivedAt: member.archivedAt?.toISOString() ?? null,
     unreadCount: await unreadCount(chat.id, viewerUserId),

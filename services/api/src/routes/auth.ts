@@ -76,9 +76,22 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
 
       await tx.insert(notificationPrefs).values({ userId: created.id }).onConflictDoNothing();
 
-      const channelRows = await tx.select({ chatId: chats.id }).from(chats).where(eq(chats.type, 'channel'));
-      for (const channel of channelRows) {
-        await tx.insert(chatMembers).values({ chatId: channel.chatId, userId: created.id }).onConflictDoNothing();
+      const [general] = await tx.select({ chatId: chats.id })
+        .from(chats)
+        .where(eq(chats.systemKey, 'general'))
+        .limit(1);
+
+      if (general) {
+        await tx.insert(chatMembers).values({
+          chatId: general.chatId,
+          userId: created.id,
+          role: userCount === 0 ? 'owner' : 'member'
+        }).onConflictDoNothing();
+
+        const childRows = await tx.select({ chatId: chats.id }).from(chats).where(eq(chats.parentChatId, general.chatId));
+        for (const channel of childRows) {
+          await tx.insert(chatMembers).values({ chatId: channel.chatId, userId: created.id }).onConflictDoNothing();
+        }
       }
 
       return [created];
@@ -141,6 +154,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
         ...(body.bio !== undefined ? { bio: body.bio } : {}),
         ...(body.timezone !== undefined ? { timezone: body.timezone } : {}),
         ...(body.avatarUploadId !== undefined ? { avatarMediaId: body.avatarUploadId } : {}),
+        ...(body.bannerUploadId !== undefined ? { bannerMediaId: body.bannerUploadId } : {}),
         ...(body.profileStyle !== undefined ? { profileStyle: body.profileStyle } : {})
       })
       .where(eq(users.id, request.authUser!.userId))

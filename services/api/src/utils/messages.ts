@@ -23,38 +23,36 @@ export async function resolveChatId(chatId: string) {
 
 export async function assertChatMember(chatId: string, userId: string) {
   const resolvedChatId = await resolveChatId(chatId);
+  const [chat] = await db.select({ parentChatId: chats.parentChatId })
+    .from(chats)
+    .where(eq(chats.id, resolvedChatId))
+    .limit(1);
+
+  if (chat?.parentChatId) {
+    const [parentMember] = await db.select()
+      .from(chatMembers)
+      .where(and(eq(chatMembers.chatId, chat.parentChatId), eq(chatMembers.userId, userId)))
+      .limit(1);
+
+    if (!parentMember) throw forbidden('You are not a member of this chat', 'CHAT_FORBIDDEN');
+
+    const [inserted] = await db.insert(chatMembers)
+      .values({ chatId: resolvedChatId, userId })
+      .onConflictDoNothing()
+      .returning();
+
+    const member = inserted ?? (await db.select()
+      .from(chatMembers)
+      .where(and(eq(chatMembers.chatId, resolvedChatId), eq(chatMembers.userId, userId)))
+      .limit(1))[0];
+
+    return { chatId: resolvedChatId, member };
+  }
+
   let [member] = await db.select()
     .from(chatMembers)
     .where(and(eq(chatMembers.chatId, resolvedChatId), eq(chatMembers.userId, userId)))
     .limit(1);
-
-  if (!member) {
-    // Child channels inherit membership from their parent
-    const [chat] = await db.select({ parentChatId: chats.parentChatId })
-      .from(chats)
-      .where(eq(chats.id, resolvedChatId))
-      .limit(1);
-
-    if (chat?.parentChatId) {
-      const [parentMember] = await db.select()
-        .from(chatMembers)
-        .where(and(eq(chatMembers.chatId, chat.parentChatId), eq(chatMembers.userId, userId)))
-        .limit(1);
-
-      if (parentMember) {
-        // Inherit membership: create child member row (idempotent)
-        const [inserted] = await db.insert(chatMembers)
-          .values({ chatId: resolvedChatId, userId })
-          .onConflictDoNothing()
-          .returning();
-
-        member = inserted ?? (await db.select()
-          .from(chatMembers)
-          .where(and(eq(chatMembers.chatId, resolvedChatId), eq(chatMembers.userId, userId)))
-          .limit(1))[0];
-      }
-    }
-  }
 
   if (!member) throw forbidden('You are not a member of this chat', 'CHAT_FORBIDDEN');
   return { chatId: resolvedChatId, member };

@@ -1,6 +1,6 @@
 import { relations, sql } from 'drizzle-orm';
 import { boolean, check, foreignKey, index, integer, jsonb, pgTable, primaryKey, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
-import { chatTypeEnum, messageTypeEnum, moderationActionEnum } from '../../db/enums.js';
+import { chatMemberRoleEnum, chatTypeEnum, messageTypeEnum, moderationActionEnum } from '../../db/enums.js';
 import { users } from '../auth/schema.js';
 
 export const chats = pgTable('chats', {
@@ -23,6 +23,7 @@ export const chats = pgTable('chats', {
 export const chatMembers = pgTable('chat_members', {
   chatId: uuid('chat_id').notNull().references(() => chats.id, { onDelete: 'cascade' }),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  role: chatMemberRoleEnum('role').notNull().default('member'),
   lastReadAt: timestamp('last_read_at', { withTimezone: true }).defaultNow().notNull(),
   lastReadMessageId: uuid('last_read_message_id'),
   notificationsMuted: boolean('notifications_muted').notNull().default(false),

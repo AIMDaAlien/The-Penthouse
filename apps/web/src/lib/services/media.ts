@@ -2,9 +2,10 @@ import { api } from './api';
 import type { UploadResponse } from '@penthouse/contracts';
 
 export const media = {
-	async upload(file: File): Promise<UploadResponse> {
+	async upload(file: File, purpose?: 'avatar' | 'banner'): Promise<UploadResponse> {
 		const formData = new FormData();
 		formData.append('file', file);
-		return api.post<UploadResponse>('/api/v1/media/upload', formData);
+		const query = purpose ? `?purpose=${purpose}` : '';
+		return api.post<UploadResponse>(`/api/v1/media/upload${query}`, formData);
 	}
 };

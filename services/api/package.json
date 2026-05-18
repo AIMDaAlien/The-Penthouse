@@ -3,13 +3,16 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "bootstrap:alpha": "tsx src/db/bootstrap-alpha.ts",
+    "bootstrap:alpha:prod": "node --conditions=production dist/src/db/bootstrap-alpha.js",
     "dev": "tsx watch src/index.ts",
     "start": "node --conditions=production dist/src/index.js",
-    "build": "npm --workspace @penthouse/contracts run build && tsc -p tsconfig.json",
+    "build": "npm --workspace @penthouse/contracts run build && tsc -p tsconfig.json && rm -rf dist/src/db/migrations && cp -R src/db/migrations dist/src/db/migrations",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "tsx src/db/migrate.ts && tsx --test --test-concurrency=1 ./test/*.test.ts",
     "test:integration": "tsx src/db/migrate.ts && tsx --test --test-concurrency=1 ./test/integration-*.test.ts",
-    "migrate": "tsx src/db/migrate.ts"
+    "migrate": "tsx src/db/migrate.ts",
+    "migrate:prod": "node --conditions=production dist/src/db/migrate.js"
   },
   "dependencies": {
     "@fastify/cors": "^10.1.0",
@@ -23,6 +26,7 @@
     "fastify": "^5.8.5",
     "mediasoup": "^3.19.22",
     "pg": "^8.20.0",
+    "sharp": "^0.34.5",
     "socket.io": "^4.8.1",
     "web-push": "^3.6.7",
     "zod": "^3.25.76"

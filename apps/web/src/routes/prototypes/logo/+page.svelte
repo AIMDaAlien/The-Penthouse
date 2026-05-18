@@ -42,7 +42,7 @@
 	};
 
 	const bgKeys: BgKey[] = ['dark', 'light', 'neutral'];
-	const filterKeys: FilterKey[] = ['all', 'monogram', 'wordmark', 'architectural', 'experimental'];
+	const filterKeys: FilterKey[] = ['all', 'grid', 'wordmark', 'interlock', 'experimental'];
 
 	let bg = $state<BgKey>('dark');
 	let filter = $state<FilterKey>('all');
@@ -141,8 +141,9 @@
 
 	<footer class="foot">
 		<p>
-			{variants.length} icon directions across four families. Hero is {zoomed ? '256' : '168'} px.
-			Scale row tests at PWA-install (192), Apple touch (60), and favicon (16). Tap a tile to enlarge.
+			{variants.length} icon directions. The PENT 2x2 grid family leads,
+			non-grid PENT follows, PH interlock and experimental round out. Hero is {zoomed ? '256' : '168'} px;
+			scale row tests at PWA-install (192), Apple touch (60), and favicon (16). Tap a tile to enlarge.
 		</p>
 		<p class="fine">
 			The wordmark stays separate. None of these replace it. They are compressed marks meant to

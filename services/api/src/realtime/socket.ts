@@ -48,6 +48,7 @@ interface VoiceParticipantMeta {
   displayName: string;
   muted: boolean;
   deafened: boolean;
+  speaking: boolean;
 }
 
 const voiceRooms = new Map<string, Map<string, VoiceParticipantMeta>>(); // chatId -> userId -> metadata
@@ -515,12 +516,18 @@ export function registerSocket(io: Server, fastify: FastifyInstance) {
         room = new Map();
         voiceRooms.set(chatId, room);
       }
-      room.set(socket.data.userId, { displayName: socket.data.username, muted: false, deafened: false });
+      room.set(socket.data.userId, { displayName: socket.data.username, muted: false, deafened: false, speaking: false });
 
       // Send existing participants to newcomer
       const existing = Array.from(room.entries())
         .filter(([id]) => id !== socket.data.userId)
-        .map(([id, meta]) => ({ userId: id, displayName: meta.displayName, muted: meta.muted, deafened: meta.deafened }));
+        .map(([id, meta]) => ({
+          userId: id,
+          displayName: meta.displayName,
+          muted: meta.muted,
+          deafened: meta.deafened,
+          speaking: meta.speaking
+        }));
       socket.emit('voice.state', {
         type: 'voice.state',
         payload: { participants: existing }
@@ -529,7 +536,7 @@ export function registerSocket(io: Server, fastify: FastifyInstance) {
       // Notify existing participants
       socket.to(roomKey).emit('voice.user_joined', {
         type: 'voice.user_joined',
-        payload: { userId: socket.data.userId, displayName: socket.data.username, muted: false, deafened: false }
+        payload: { userId: socket.data.userId, displayName: socket.data.username, muted: false, deafened: false, speaking: false }
       });
     }));
 
@@ -628,6 +635,12 @@ export function registerSocket(io: Server, fastify: FastifyInstance) {
         const parsed = payload as { speaking: boolean };
         const rooms = Array.from(socket.rooms).filter((r) => r.startsWith('voice:'));
         for (const roomKey of rooms) {
+          const chatId = roomKey.slice(6);
+          const room = voiceRooms.get(chatId);
+          if (room) {
+            const meta = room.get(socket.data.userId);
+            if (meta) meta.speaking = parsed.speaking;
+          }
           socket.to(roomKey).emit('voice.speaking', {
             type: 'voice.speaking',
             payload: { userId: socket.data.userId, speaking: parsed.speaking }

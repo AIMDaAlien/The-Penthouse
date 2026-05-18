@@ -42,6 +42,10 @@
 			await foldersStore.removeChat(currentFolderId, chatId);
 		}
 	}
+
+	async function handleCreateGroup(name: string) {
+		await chatsStore.createGroup(name, []);
+	}
 </script>
 
 <div class="monolith" class:show-right={showRightPane}>
@@ -61,6 +65,7 @@
 				folders={foldersStore.folders}
 				onSelectChat={handleSelectChat}
 				onCreateFolder={(name) => foldersStore.create(name)}
+				onCreateGroup={handleCreateGroup}
 				onMoveToFolder={handleMoveToFolder}
 			/>
 		{/if}

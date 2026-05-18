@@ -17,9 +17,9 @@
 			.toUpperCase()
 	);
 
-	const hue = $derived(
-		name.split('').reduce((sum, c) => sum + c.charCodeAt(0), 0) % 360
-	);
+	// Solid muted themed fallback — replaced per-name HSL hue per DND design handoff
+	const fallbackBg = 'color-mix(in oklch, var(--p-accent) 30%, var(--p-surface-2))';
+
 </script>
 
 {#if url}
@@ -29,7 +29,7 @@
 		class="avatar fallback"
 		style:width="{size}px"
 		style:height="{size}px"
-		style:background={`hsl(${hue} 50% 35%)`}
+		style:background={fallbackBg}
 	>
 		{initials}
 	</div>
@@ -46,7 +46,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		color: oklch(1 0 0 / 0.98);
+		color: var(--p-text);
 		font-size: calc(var(--size, 40px) * 0.4);
 		font-weight: var(--weight-bold);
 		font-family: var(--font-body);
