@@ -13,11 +13,11 @@ export async function verifyPassword(password: string, passwordHash: string) {
 }
 
 export function avatarUrlFromMediaId(mediaId: string | null) {
-  return mediaId ? `/api/v1/media/${mediaId}` : null;
+  return mediaId ? `/api/v1/media/public/${mediaId}` : null;
 }
 
 export function bannerUrlFromMediaId(mediaId: string | null, legacyBannerUrl?: string | null) {
-  return mediaId ? `/api/v1/media/${mediaId}` : legacyBannerUrl ?? null;
+  return mediaId ? `/api/v1/media/public/${mediaId}` : legacyBannerUrl ?? null;
 }
 
 export function toAuthUser(user: UserRow): AuthUser {

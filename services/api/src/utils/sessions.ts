@@ -121,4 +121,16 @@ export async function assertActiveSession(context: AuthContext) {
 
   if (!row) throw unauthorized('Session device was not found; saved login is stale', 'SESSION_DEVICE_NOT_FOUND');
   if (row.status !== 'active') throw unauthorized('User account is not active', 'USER_INACTIVE');
+
+  const [activeRefresh] = await db.select({ id: refreshTokens.id })
+    .from(refreshTokens)
+    .where(and(
+      eq(refreshTokens.sessionDeviceId, context.sessionDeviceId),
+      isNull(refreshTokens.revokedAt),
+      isNull(refreshTokens.rotatedAt),
+      gt(refreshTokens.expiresAt, new Date())
+    ))
+    .limit(1);
+
+  if (!activeRefresh) throw unauthorized('Session was revoked; sign in again', 'SESSION_REVOKED');
 }

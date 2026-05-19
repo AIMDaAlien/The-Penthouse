@@ -21,6 +21,7 @@ const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   CORS_ORIGIN: z.string().default('http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174'),
   DISABLE_RATE_LIMIT: z.coerce.string().transform(v => v === 'true').default('false'),
+  TRUST_PROXY: z.coerce.string().transform(v => v === 'true').default('false'),
   MEDIASOUP_ENABLED: z.coerce.string().default('true').transform(v => v === 'true'),
   MEDIASOUP_LISTEN_IP: z.string().default('0.0.0.0'),
   MEDIASOUP_ANNOUNCED_IP: z.string().default('127.0.0.1'),

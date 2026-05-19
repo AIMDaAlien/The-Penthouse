@@ -4,7 +4,16 @@ import { pool } from '../src/db/pool.js';
 
 let registerRemoteAddressCounter = 1;
 
+async function assertTestDatabase() {
+  const { rows } = await pool.query<{ name: string }>('SELECT current_database() AS name');
+  const databaseName = rows[0]?.name ?? '';
+  if (!/(^|_)test($|_)/i.test(databaseName)) {
+    throw new Error(`Refusing to reset non-test database: ${databaseName}`);
+  }
+}
+
 export async function resetDb() {
+  await assertTestDatabase();
   await pool.query(`
 	    TRUNCATE
 	      sync_events,

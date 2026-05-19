@@ -20,36 +20,10 @@ import {
 } from '../../db/schema.js';
 import { hydrateMessage, unreadCount } from '../../utils/messages.js';
 import { avatarUrlFromMediaId, toMemberDetail } from '../../utils/users.js';
+export { appendSyncEvent } from './events.js';
 
 const INITIAL_MESSAGES_PER_CHAT = 50;
 const DEFAULT_SYNC_LIMIT = 100;
-
-type SyncScope = 'chat' | 'user' | 'global';
-type SyncEventWriter = Pick<typeof db, 'insert'>;
-
-type AppendSyncEventInput = {
-  op: SyncOperation;
-  scope: SyncScope;
-  entityId: string;
-  chatId?: string | null;
-  userId?: string | null;
-  actorUserId?: string | null;
-};
-
-export async function appendSyncEvent(input: AppendSyncEventInput, writer: SyncEventWriter = db) {
-  const op = SyncOperationSchema.parse(input.op);
-  const [event] = await writer.insert(syncEvents).values({
-    scope: input.scope,
-    opType: op.type,
-    entityId: input.entityId,
-    chatId: input.chatId ?? null,
-    userId: input.userId ?? null,
-    actorUserId: input.actorUserId ?? null,
-    payload: op
-  }).returning();
-
-  return serializeSyncEvent(event);
-}
 
 export async function getSyncResponse(userId: string, cursor = '0', limit = DEFAULT_SYNC_LIMIT): Promise<SyncResponse> {
   const cursorNumber = Number(cursor);

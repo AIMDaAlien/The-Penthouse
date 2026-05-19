@@ -10,6 +10,7 @@ import { env } from '../config/env.js';
 import { db } from '../db/pool.js';
 import { chatNotificationOverrides, chats, notificationPrefs, pushSubscriptions, sessionDevices } from '../db/schema.js';
 import { badRequest, notFound } from '../utils/error-responses.js';
+import { assertChatMember } from '../utils/messages.js';
 
 export async function registerPushRoutes(fastify: FastifyInstance) {
   fastify.get('/api/v1/push/vapid-key', async () => ({
@@ -143,14 +144,15 @@ export async function registerPushRoutes(fastify: FastifyInstance) {
 
     const [chat] = await db.select().from(chats).where(eq(chats.id, params.chatId)).limit(1);
     if (!chat) throw notFound('Chat not found');
+    const { chatId } = await assertChatMember(params.chatId, userId);
 
     const [row] = await db.select().from(chatNotificationOverrides)
-      .where(and(eq(chatNotificationOverrides.chatId, params.chatId), eq(chatNotificationOverrides.userId, userId)))
+      .where(and(eq(chatNotificationOverrides.chatId, chatId), eq(chatNotificationOverrides.userId, userId)))
       .limit(1);
 
     if (!row) {
       return {
-        chatId: params.chatId,
+        chatId,
         scope: null,
         dndOverride: false,
         updatedAt: null
@@ -172,17 +174,18 @@ export async function registerPushRoutes(fastify: FastifyInstance) {
 
     const [chat] = await db.select().from(chats).where(eq(chats.id, params.chatId)).limit(1);
     if (!chat) throw notFound('Chat not found');
+    const { chatId } = await assertChatMember(params.chatId, userId);
 
     if (Object.keys(body).length === 0) throw badRequest('At least one field must be provided');
 
     const [existing] = await db.select().from(chatNotificationOverrides)
-      .where(and(eq(chatNotificationOverrides.chatId, params.chatId), eq(chatNotificationOverrides.userId, userId)))
+      .where(and(eq(chatNotificationOverrides.chatId, chatId), eq(chatNotificationOverrides.userId, userId)))
       .limit(1);
 
     if (!existing) {
       const [created] = await db.insert(chatNotificationOverrides).values({
         userId,
-        chatId: params.chatId,
+        chatId,
         scope: body.scope ?? 'all',
         dndOverride: body.dndOverride ?? false
       }).returning();
@@ -200,7 +203,7 @@ export async function registerPushRoutes(fastify: FastifyInstance) {
         ...(body.dndOverride !== undefined ? { dndOverride: body.dndOverride } : {}),
         updatedAt: new Date()
       })
-      .where(and(eq(chatNotificationOverrides.chatId, params.chatId), eq(chatNotificationOverrides.userId, userId)))
+      .where(and(eq(chatNotificationOverrides.chatId, chatId), eq(chatNotificationOverrides.userId, userId)))
       .returning();
 
     return {

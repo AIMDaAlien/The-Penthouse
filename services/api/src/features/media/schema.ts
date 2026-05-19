@@ -11,6 +11,7 @@ export const mediaUploads = pgTable('media_uploads', {
   sizeBytes: integer('size_bytes').notNull(),
   contentType: text('content_type'),
   mediaKind: mediaKindEnum('media_kind').notNull(),
+  scope: text('scope').notNull().default('private'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
 }, (table) => [
   index('idx_media_uploads_uploader').on(table.uploaderId),

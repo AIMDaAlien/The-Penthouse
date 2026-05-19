@@ -6,7 +6,7 @@ import { chats, chatMembers } from '../../db/schema.js';
 import { assertChatMember } from '../../utils/messages.js';
 import { badRequest, notFound } from '../../utils/error-responses.js';
 import { appendSyncEvent } from '../sync/service.js';
-import { serializeChannel } from '../../utils/chat-management.js';
+import { requireChatManager, serializeChannel } from '../../utils/chat-management.js';
 
 async function resolveChannelParent(chatId: string) {
   const [chat] = await db.select({
@@ -28,6 +28,7 @@ export async function registerChannelRoutes(fastify: FastifyInstance) {
     const params = request.params as { id: string };
     const { chatId } = await assertChatMember(params.id, request.authUser!.userId);
     const parentChatId = await resolveChannelParent(chatId);
+    await requireChatManager(parentChatId, request.authUser!.userId, request.authUser!.role);
     const body = CreateChannelRequestSchema.parse(request.body);
 
     const parentMembers = await db.select({ userId: chatMembers.userId })

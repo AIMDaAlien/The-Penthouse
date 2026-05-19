@@ -10,10 +10,13 @@ import {
   messages,
   users
 } from '../db/schema.js';
-import { forbidden, notFound } from './error-responses.js';
+import { badRequest, forbidden, notFound } from './error-responses.js';
 import { avatarUrlFromMediaId } from './users.js';
+import { appendSyncEvent } from '../features/sync/events.js';
+import { assertMessageMediaRefsAllowed, rewriteMessageMediaUrls } from './media-access.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+type MessageReader = Pick<typeof db, 'select'>;
 
 export async function resolveChatId(chatId: string) {
   if (UUID_RE.test(chatId)) return chatId;
@@ -58,8 +61,8 @@ export async function assertChatMember(chatId: string, userId: string) {
   return { chatId: resolvedChatId, member };
 }
 
-export async function hydrateMessage(messageId: string, viewerUserId?: string): Promise<Message> {
-  const [row] = await db.select({
+export async function hydrateMessage(messageId: string, viewerUserId?: string, reader: MessageReader = db): Promise<Message> {
+  const [row] = await reader.select({
     message: messages,
     sender: users,
     deletion: messageDeletions
@@ -72,23 +75,23 @@ export async function hydrateMessage(messageId: string, viewerUserId?: string): 
 
   if (!row) throw notFound('Message not found');
 
-  const [{ value: editCount }] = await db.select({ value: count() })
+  const [{ value: editCount }] = await reader.select({ value: count() })
     .from(messageEdits)
     .where(eq(messageEdits.messageId, messageId));
 
-  const [latestEdit] = await db.select()
+  const [latestEdit] = await reader.select()
     .from(messageEdits)
     .where(eq(messageEdits.messageId, messageId))
     .orderBy(desc(messageEdits.createdAt))
     .limit(1);
 
-  const reactionRows = await db.select().from(messageReactions).where(eq(messageReactions.messageId, messageId));
+  const reactionRows = await reader.select().from(messageReactions).where(eq(messageReactions.messageId, messageId));
   const reactions = new Map<string, string[]>();
   for (const reaction of reactionRows) {
     reactions.set(reaction.emoji, [...(reactions.get(reaction.emoji) ?? []), reaction.userId]);
   }
 
-  const readRows = await db.select({
+  const readRows = await reader.select({
     userId: chatMembers.userId,
     readAt: chatMembers.lastReadAt
   })
@@ -109,7 +112,7 @@ export async function hydrateMessage(messageId: string, viewerUserId?: string): 
     senderAvatarUrl: avatarUrlFromMediaId(row.sender.avatarMediaId),
     content: row.message.content,
     type: row.message.messageType,
-    metadata: row.message.metadata as Message['metadata'],
+    metadata: await rewriteMessageMediaUrls(row.message.metadata, row.message.senderId, reader) as Message['metadata'],
     createdAt: row.message.createdAt.toISOString(),
     editedAt: latestEdit?.createdAt.toISOString() ?? null,
     editCount,
@@ -155,6 +158,7 @@ export async function createMessage(input: {
   replyToMessageId?: string;
   clientMessageId?: string;
 }) {
+  await assertMessageMediaRefsAllowed(input.metadata, input.senderId);
   const mentionedUserIds = await mentionedMembers(input.chatId, input.senderId, input.content);
   let replySnapshot: { id: string; content: string; senderDisplayName: string | null } | null = null;
   if (input.replyToMessageId) {
@@ -183,7 +187,7 @@ export async function createMessage(input: {
 
   if (existing) return { message: await hydrateMessage(existing.id, input.senderId), deduped: true };
 
-  const [created] = await db.transaction(async (tx) => {
+  const created = await db.transaction(async (tx) => {
     const [message] = await tx.insert(messages).values({
       chatId: input.chatId,
       senderId: input.senderId,
@@ -199,10 +203,208 @@ export async function createMessage(input: {
     }).returning();
 
     await tx.update(chats).set({ updatedAt: new Date() }).where(eq(chats.id, input.chatId));
-    return [message];
+    const hydrated = await hydrateMessage(message.id, input.senderId, tx);
+    await appendSyncEvent({
+      scope: 'chat',
+      chatId: input.chatId,
+      actorUserId: input.senderId,
+      entityId: message.id,
+      op: { type: 'message.upsert', payload: hydrated }
+    }, tx);
+    return hydrated;
   });
 
-  return { message: await hydrateMessage(created.id, input.senderId), deduped: false };
+  return { message: created, deduped: false };
+}
+
+export async function editMessage(input: {
+  messageId: string;
+  editorUserId: string;
+  content: string;
+}) {
+  const [message] = await db.select().from(messages).where(eq(messages.id, input.messageId)).limit(1);
+  if (!message) throw notFound('Message not found');
+  await assertChatMember(message.chatId, input.editorUserId);
+  if (message.senderId !== input.editorUserId) throw forbidden('Only the sender can edit this message');
+
+  const hydrated = await db.transaction(async (tx) => {
+    await tx.insert(messageEdits).values({
+      messageId: message.id,
+      previousContent: message.content,
+      editedBy: input.editorUserId
+    });
+    await tx.update(messages).set({ content: input.content }).where(eq(messages.id, message.id));
+
+    const row = await hydrateMessage(message.id, input.editorUserId, tx);
+    await appendSyncEvent({
+      scope: 'chat',
+      chatId: message.chatId,
+      actorUserId: input.editorUserId,
+      entityId: message.id,
+      op: { type: 'message.upsert', payload: row }
+    }, tx);
+    return row;
+  });
+
+  return {
+    chatId: message.chatId,
+    message: hydrated,
+    event: {
+      chatId: message.chatId,
+      messageId: message.id,
+      content: hydrated.content,
+      editedAt: hydrated.editedAt ?? new Date().toISOString(),
+      editCount: hydrated.editCount ?? 0
+    }
+  };
+}
+
+export async function deleteMessage(input: {
+  messageId: string;
+  actorUserId: string;
+  actorRole: 'admin' | 'member';
+}) {
+  const [message] = await db.select().from(messages).where(eq(messages.id, input.messageId)).limit(1);
+  if (!message) throw notFound('Message not found');
+  await assertChatMember(message.chatId, input.actorUserId);
+  if (message.senderId !== input.actorUserId && input.actorRole !== 'admin') {
+    throw forbidden('Only the sender can delete this message');
+  }
+
+  return db.transaction(async (tx) => {
+    const [deletion] = await tx.insert(messageDeletions).values({
+      messageId: message.id,
+      deletedByUserId: input.actorUserId
+    }).onConflictDoUpdate({
+      target: messageDeletions.messageId,
+      set: {
+        deletedByUserId: input.actorUserId,
+        deletedAt: new Date()
+      }
+    }).returning();
+
+    const payload = {
+      chatId: message.chatId,
+      messageId: message.id,
+      deletedAt: deletion.deletedAt.toISOString(),
+      deletedByUserId: deletion.deletedByUserId
+    };
+    await appendSyncEvent({
+      scope: 'chat',
+      chatId: message.chatId,
+      actorUserId: input.actorUserId,
+      entityId: message.id,
+      op: { type: 'message.delete', payload }
+    }, tx);
+    return payload;
+  });
+}
+
+export async function markChatRead(input: {
+  chatId: string;
+  userId: string;
+  throughMessageId?: string;
+}) {
+  if (!input.throughMessageId) throw badRequest('throughMessageId is required');
+  const { chatId } = await assertChatMember(input.chatId, input.userId);
+
+  const result = await db.transaction(async (tx) => {
+    const [message] = await tx.select({ id: messages.id }).from(messages)
+      .where(and(eq(messages.id, input.throughMessageId!), eq(messages.chatId, chatId)))
+      .limit(1);
+    if (!message) throw badRequest('throughMessageId must belong to this chat');
+
+    const [member] = await tx.update(chatMembers)
+      .set({ lastReadMessageId: message.id, lastReadAt: new Date() })
+      .where(and(eq(chatMembers.chatId, chatId), eq(chatMembers.userId, input.userId)))
+      .returning();
+
+    const payload = {
+      chatId,
+      userId: input.userId,
+      lastReadAt: member.lastReadAt.toISOString(),
+      lastReadMessageId: member.lastReadMessageId ?? null,
+      notificationsMuted: member.notificationsMuted,
+      archivedAt: member.archivedAt?.toISOString() ?? null
+    };
+    await appendSyncEvent({
+      scope: 'chat',
+      chatId,
+      actorUserId: input.userId,
+      entityId: `${chatId}:${input.userId}`,
+      op: { type: 'read.upsert', payload }
+    }, tx);
+
+    return { member, messageId: message.id, payload };
+  });
+
+  return { chatId, ...result };
+}
+
+export async function addMessageReaction(input: {
+  messageId: string;
+  userId: string;
+  emoji: string;
+}) {
+  const message = await hydrateMessage(input.messageId, input.userId);
+  await assertChatMember(message.chatId, input.userId);
+  const payload = {
+    chatId: message.chatId,
+    messageId: input.messageId,
+    userId: input.userId,
+    emoji: input.emoji,
+    createdAt: new Date().toISOString()
+  };
+
+  await db.transaction(async (tx) => {
+    await tx.insert(messageReactions).values({
+      messageId: input.messageId,
+      userId: input.userId,
+      emoji: input.emoji
+    }).onConflictDoNothing();
+    await appendSyncEvent({
+      scope: 'chat',
+      chatId: message.chatId,
+      actorUserId: input.userId,
+      entityId: `${input.messageId}:${input.userId}:${input.emoji}`,
+      op: { type: 'reaction.add', payload }
+    }, tx);
+  });
+
+  return payload;
+}
+
+export async function removeMessageReaction(input: {
+  messageId: string;
+  userId: string;
+  emoji: string;
+}) {
+  const message = await hydrateMessage(input.messageId, input.userId);
+  await assertChatMember(message.chatId, input.userId);
+  const payload = {
+    chatId: message.chatId,
+    messageId: input.messageId,
+    userId: input.userId,
+    emoji: input.emoji
+  };
+
+  await db.transaction(async (tx) => {
+    await tx.delete(messageReactions)
+      .where(and(
+        eq(messageReactions.messageId, input.messageId),
+        eq(messageReactions.userId, input.userId),
+        eq(messageReactions.emoji, input.emoji)
+      ));
+    await appendSyncEvent({
+      scope: 'chat',
+      chatId: message.chatId,
+      actorUserId: input.userId,
+      entityId: `${input.messageId}:${input.userId}:${input.emoji}`,
+      op: { type: 'reaction.remove', payload }
+    }, tx);
+  });
+
+  return payload;
 }
 
 async function mentionedMembers(chatId: string, senderId: string, content: string) {

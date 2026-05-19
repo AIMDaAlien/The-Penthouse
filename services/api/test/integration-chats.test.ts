@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 import { after, beforeEach, describe, it } from 'node:test';
 import { io as connect } from 'socket.io-client';
-import { closeDb } from '../src/db/pool.js';
+import { closeDb, pool } from '../src/db/pool.js';
 import { registerUser, resetDb, testApp } from './helpers.js';
 
 describe('chat integration', () => {
@@ -10,11 +11,17 @@ describe('chat integration', () => {
   after(closeDb);
 
   it('lists seeded general chat and sends messages over REST', async () => {
-    const app = await testApp();
-    try {
-      const session = await registerUser(app, 'bruce');
-      const alfred = await registerUser(app, 'alfred');
-      const headers = { authorization: `Bearer ${session.accessToken}` };
+      const app = await testApp();
+      try {
+        const session = await registerUser(app, 'bruce');
+        const alfred = await registerUser(app, 'alfred');
+        const bannerId = randomUUID();
+        await pool.query(`
+          INSERT INTO media_uploads (id, uploader_id, file_name, original_file_name, storage_key, size_bytes, content_type, media_kind, scope)
+          VALUES ($1, $2, 'alfred-banner.png', 'alfred-banner.png', $3, 512, 'image/png', 'image', 'public')
+        `, [bannerId, alfred.user.id, `test/${bannerId}.png`]);
+        await pool.query('UPDATE users SET banner_media_id = $1 WHERE id = $2', [bannerId, alfred.user.id]);
+        const headers = { authorization: `Bearer ${session.accessToken}` };
 
       const list = await app.inject({ method: 'GET', url: '/api/v1/chats', headers });
       assert.equal(list.statusCode, 200, list.body);
@@ -40,9 +47,12 @@ describe('chat integration', () => {
 
       const members = await app.inject({ method: 'GET', url: `/api/v1/chats/${chat.id}/members`, headers });
       assert.equal(members.statusCode, 200, members.body);
-      const memberRows = (members.json() as { members: Array<{ username: string }> }).members;
+      const memberRows = (members.json() as { members: Array<{ username: string; bannerMediaId?: string | null; bannerUrl?: string | null }> }).members;
       assert.equal(memberRows.length, 2);
       assert.deepEqual(memberRows.map((member) => member.username).sort(), ['alfred', 'bruce']);
+      const alfredMember = memberRows.find((member) => member.username === 'alfred');
+      assert.equal(alfredMember?.bannerMediaId, bannerId);
+      assert.equal(alfredMember?.bannerUrl, `/api/v1/media/public/${bannerId}`);
 
       const mention = await app.inject({
         method: 'POST',
@@ -175,6 +185,161 @@ describe('chat integration', () => {
       assert.equal(pinned.payload.messageId, ack.payload.messageId);
       assert.equal(pinned.payload.content, 'Socket hello');
       assert.equal(pinned.payload.senderDisplayName, 'selina');
+
+      socket.close();
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('records socket message edits in the same audit path as REST edits', async () => {
+    const app = await testApp();
+    await app.listen({ port: 0, host: '127.0.0.1' });
+    try {
+      const session = await registerUser(app, 'edit-socket');
+      const headers = { authorization: `Bearer ${session.accessToken}` };
+      const list = await app.inject({ method: 'GET', url: '/api/v1/chats', headers });
+      const chat = (list.json() as { chats: Array<{ id: string }> }).chats[0];
+      const sent = await app.inject({
+        method: 'POST',
+        url: `/api/v1/chats/${chat.id}/messages`,
+        headers,
+        payload: {
+          chatId: chat.id,
+          content: 'Before edit',
+          type: 'text',
+          clientMessageId: 'client-message-socket-edit'
+        }
+      });
+      assert.equal(sent.statusCode, 200, sent.body);
+      const message = (sent.json() as { message: { id: string } }).message;
+
+      const address = app.server.address() as AddressInfo;
+      const socket = connect(`http://127.0.0.1:${address.port}`, {
+        auth: { token: session.accessToken },
+        transports: ['websocket']
+      });
+
+      await new Promise<void>((resolve, reject) => {
+        socket.on('connect', () => {
+          socket.emit('chat.join', { chatId: chat.id });
+        });
+        socket.on('chat.joined', () => resolve());
+        socket.on('connect_error', reject);
+        setTimeout(() => reject(new Error('socket join timeout')), 2000);
+      });
+
+      const edited = await new Promise<{ payload: { messageId: string; content: string; editCount: number } }>((resolve, reject) => {
+        socket.on('message.edited', resolve);
+        socket.emit('message.edit', { messageId: message.id, content: 'After edit' });
+        setTimeout(() => reject(new Error('socket edit timeout')), 2000);
+      });
+      assert.equal(edited.payload.messageId, message.id);
+      assert.equal(edited.payload.content, 'After edit');
+      assert.equal(edited.payload.editCount, 1);
+
+      const messages = await app.inject({ method: 'GET', url: `/api/v1/chats/${chat.id}/messages`, headers });
+      assert.equal(messages.statusCode, 200, messages.body);
+      const [hydrated] = (messages.json() as { messages: Array<{ id: string; content: string; editCount: number; editedAt: string | null }> }).messages;
+      assert.equal(hydrated.id, message.id);
+      assert.equal(hydrated.content, 'After edit');
+      assert.equal(hydrated.editCount, 1);
+      assert.ok(hydrated.editedAt);
+
+      socket.close();
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('rejects socket read receipts for messages outside the target chat', async () => {
+    const app = await testApp();
+    await app.listen({ port: 0, host: '127.0.0.1' });
+    try {
+      const bruce = await registerUser(app, 'read-bruce');
+      const alfred = await registerUser(app, 'read-alfred');
+      const headers = { authorization: `Bearer ${bruce.accessToken}` };
+
+      const list = await app.inject({ method: 'GET', url: '/api/v1/chats', headers });
+      const general = (list.json() as { chats: Array<{ id: string }> }).chats[0];
+      const dm = await app.inject({
+        method: 'POST',
+        url: '/api/v1/chats/dm',
+        headers,
+        payload: { memberId: alfred.user.id }
+      });
+      assert.equal(dm.statusCode, 200, dm.body);
+      const dmChatId = (dm.json() as { chatId: string }).chatId;
+      const dmMessage = await app.inject({
+        method: 'POST',
+        url: `/api/v1/chats/${dmChatId}/messages`,
+        headers,
+        payload: {
+          chatId: dmChatId,
+          content: 'Wrong chat',
+          type: 'text',
+          clientMessageId: 'client-message-wrong-chat-read'
+        }
+      });
+      assert.equal(dmMessage.statusCode, 200, dmMessage.body);
+      const messageId = (dmMessage.json() as { message: { id: string } }).message.id;
+
+      const address = app.server.address() as AddressInfo;
+      const socket = connect(`http://127.0.0.1:${address.port}`, {
+        auth: { token: bruce.accessToken },
+        transports: ['websocket']
+      });
+
+      await new Promise<void>((resolve, reject) => {
+        socket.on('connect', resolve);
+        socket.on('connect_error', reject);
+        setTimeout(() => reject(new Error('socket connect timeout')), 2000);
+      });
+
+      const error = await new Promise<{ code: string; message: string }>((resolve, reject) => {
+        socket.on('error', resolve);
+        socket.emit('message.read', { chatId: general.id, throughMessageId: messageId });
+        setTimeout(() => reject(new Error('socket read rejection timeout')), 2000);
+      });
+      assert.equal(error.code, 'VALIDATION_ERROR');
+      assert.match(error.message, /throughMessageId must belong to this chat/);
+
+      socket.close();
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('rejects socket events after the backing session is revoked', async () => {
+    const app = await testApp();
+    await app.listen({ port: 0, host: '127.0.0.1' });
+    try {
+      const session = await registerUser(app, 'barbara');
+      const address = app.server.address() as AddressInfo;
+      const socket = connect(`http://127.0.0.1:${address.port}`, {
+        auth: { token: session.accessToken },
+        transports: ['websocket']
+      });
+
+      await new Promise<void>((resolve, reject) => {
+        socket.on('connect', resolve);
+        socket.on('connect_error', reject);
+        setTimeout(() => reject(new Error('socket connect timeout')), 2000);
+      });
+
+      const logout = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/logout',
+        headers: { authorization: `Bearer ${session.accessToken}` }
+      });
+      assert.equal(logout.statusCode, 204, logout.body);
+
+      const errorEvent = await new Promise<{ code: string }>((resolve, reject) => {
+        socket.on('error', resolve);
+        socket.emit('presence.update', { state: 'available' });
+        setTimeout(() => reject(new Error('socket revocation timeout')), 2000);
+      });
+      assert.equal(errorEvent.code, 'SESSION_REVOKED');
 
       socket.close();
     } finally {

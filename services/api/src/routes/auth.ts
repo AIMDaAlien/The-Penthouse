@@ -9,14 +9,14 @@ import {
   UpdateProfileRequestSchema
 } from '@penthouse/contracts';
 import { db } from '../db/pool.js';
-import { chatMembers, chats, notificationPrefs, refreshTokens, serverSettings, signupInvites, users } from '../db/schema.js';
+import { chatMembers, chats, mediaUploads, notificationPrefs, refreshTokens, serverSettings, signupInvites, users } from '../db/schema.js';
 import { rateLimit } from '../middleware/rateLimit.js';
 import { badRequest, forbidden, notFound, unauthorized } from '../utils/error-responses.js';
 import { recoveryCode, sha256 } from '../utils/crypto.js';
 import { createSession, revokeRefreshToken, revokeSessionDevice, rotateRefreshToken } from '../utils/sessions.js';
 import { hashPassword, toAuthUser, toMeResponse, toMemberDetail, verifyPassword } from '../utils/users.js';
 import { isProduction } from '../config/env.js';
-import { verifyChallenge } from '../utils/altcha.js';
+import { createChallenge, verifyChallenge } from '../utils/altcha.js';
 import { appendSyncEvent } from '../features/sync/service.js';
 
 export async function registerAuthRoutes(fastify: FastifyInstance) {
@@ -25,13 +25,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
     return { registrationMode: setting?.value ?? 'invite_only' };
   });
 
-  fastify.get('/api/v1/auth/challenge', async () => ({
-    algorithm: 'SHA-256',
-    challenge: 'development-challenge',
-    maxnumber: 50000,
-    salt: 'penthouse',
-    signature: 'development-signature'
-  }));
+  fastify.get('/api/v1/auth/challenge', async () => createChallenge());
 
   fastify.post('/api/v1/auth/register', { preHandler: rateLimit(3) }, async (request) => {
     const body = RegisterRequestSchema.parse(request.body);
@@ -148,17 +142,32 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
 
   fastify.patch('/api/v1/auth/me', { preHandler: fastify.authenticate }, async (request) => {
     const body = UpdateProfileRequestSchema.parse(request.body);
-    const [user] = await db.update(users)
-      .set({
+    if (body.avatarUploadId !== undefined) {
+      await assertOwnedProfileImageUpload(body.avatarUploadId, request.authUser!.userId);
+    }
+    if (body.bannerUploadId !== undefined) {
+      await assertOwnedProfileImageUpload(body.bannerUploadId, request.authUser!.userId);
+    }
+
+    const [user] = await db.transaction(async (tx) => {
+      if (body.avatarUploadId) {
+        await tx.update(mediaUploads).set({ scope: 'public' }).where(eq(mediaUploads.id, body.avatarUploadId));
+      }
+      if (body.bannerUploadId) {
+        await tx.update(mediaUploads).set({ scope: 'public' }).where(eq(mediaUploads.id, body.bannerUploadId));
+      }
+      return tx.update(users)
+        .set({
         ...(body.displayName !== undefined ? { displayName: body.displayName } : {}),
         ...(body.bio !== undefined ? { bio: body.bio } : {}),
         ...(body.timezone !== undefined ? { timezone: body.timezone } : {}),
         ...(body.avatarUploadId !== undefined ? { avatarMediaId: body.avatarUploadId } : {}),
         ...(body.bannerUploadId !== undefined ? { bannerMediaId: body.bannerUploadId } : {}),
         ...(body.profileStyle !== undefined ? { profileStyle: body.profileStyle } : {})
-      })
-      .where(eq(users.id, request.authUser!.userId))
-      .returning();
+        })
+        .where(eq(users.id, request.authUser!.userId))
+        .returning();
+    });
     await appendUserProfileSyncEvents(user, request.authUser!.userId);
     return toMeResponse(user);
   });
@@ -185,6 +194,18 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
     await db.update(users).set({ passwordHash: await hashPassword(body.newPassword) }).where(eq(users.id, user.id));
     return reply.status(204).send();
   });
+}
+
+async function assertOwnedProfileImageUpload(mediaUploadId: string | null, userId: string) {
+  if (!mediaUploadId) return;
+  const [upload] = await db.select()
+    .from(mediaUploads)
+    .where(eq(mediaUploads.id, mediaUploadId))
+    .limit(1);
+
+  if (!upload) throw notFound('Media upload not found');
+  if (upload.uploaderId !== userId) throw forbidden('Only your own uploads can be used for profile media');
+  if (upload.mediaKind !== 'image') throw badRequest('Profile media must be an image', 'PROFILE_MEDIA_NOT_IMAGE');
 }
 
 async function appendUserProfileSyncEvents(user: typeof users.$inferSelect, actorUserId: string) {

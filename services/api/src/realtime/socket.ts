@@ -2,24 +2,38 @@ import { and, eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import type { Server, Socket } from 'socket.io';
 import {
+  AddReactionRequestSchema,
   ClientJoinChatEventSchema,
   ClientLeaveChatEventSchema,
   ClientMessageSendEventSchema,
   ClientPresenceUpdateEventSchema,
   ClientSyncRequestSchema,
   ClientTypingStartEventSchema,
-  ClientTypingStopEventSchema
+  ClientTypingStopEventSchema,
+  EditMessageRequestSchema,
+  MarkChatReadRequestSchema
 } from '@penthouse/contracts';
 import { db } from '../db/pool.js';
-import { chatMembers, messageDeletions, messageReactions, messages, pinnedMessages, users } from '../db/schema.js';
-import { assertChatMember, createMessage, hydrateMessage } from '../utils/messages.js';
+import { messages, pinnedMessages, users } from '../db/schema.js';
+import {
+  addMessageReaction,
+  assertChatMember,
+  createMessage,
+  deleteMessage,
+  editMessage,
+  markChatRead,
+  removeMessageReaction
+} from '../utils/messages.js';
 import { appEvents } from '../core/events.js';
 import { appendSyncEvent, getSyncResponse } from '../features/sync/service.js';
 import { closeSocketMediaSessions, registerMediaSignaling } from './media-signaling.js';
+import { assertActiveSession } from '../utils/sessions.js';
+import { AppError } from '../utils/error-responses.js';
 
 type SocketData = {
   userId: string;
   username: string;
+  sessionDeviceId: string | null;
   role: 'admin' | 'member';
 };
 
@@ -31,13 +45,23 @@ type PresenceSnapshot = {
 
 async function guarded(socket: Socket, fn: () => Promise<void>) {
   try {
+    await assertSocketSession(socket);
     await fn();
   } catch (error) {
     socket.emit('error', {
-      code: error instanceof Error ? error.name : 'SOCKET_ERROR',
+      code: error instanceof AppError ? error.code : error instanceof Error ? error.name : 'SOCKET_ERROR',
       message: error instanceof Error ? error.message : 'Socket error'
     });
   }
+}
+
+async function assertSocketSession(socket: Socket) {
+  await assertActiveSession({
+    userId: socket.data.userId,
+    username: socket.data.username,
+    sessionDeviceId: socket.data.sessionDeviceId,
+    role: socket.data.role
+  });
 }
 
 const onlineUserSockets = new Map<string, number>();
@@ -58,15 +82,18 @@ export function registerSocket(io: Server, fastify: FastifyInstance) {
     const token = socket.handshake.auth?.token;
     if (!token || typeof token !== 'string') return next(new Error('AUTH_REQUIRED'));
     try {
-      const payload = await fastify.jwt.verify<SocketData & { sessionDeviceId: string | null }>(token);
+      const payload = await fastify.jwt.verify<SocketData>(token);
       socket.data.userId = payload.userId;
       socket.data.username = payload.username;
+      socket.data.sessionDeviceId = payload.sessionDeviceId;
       socket.data.role = payload.role;
+      await assertActiveSession(payload);
       socket.join(`user:${payload.userId}`);
       await db.update(users).set({ lastSeenAt: new Date() }).where(eq(users.id, payload.userId));
       next();
-    } catch {
-      next(new Error('AUTH_INVALID'));
+    } catch (error) {
+      const code = error instanceof AppError ? error.code : 'AUTH_INVALID';
+      next(new Error(code));
     }
   });
 
@@ -200,188 +227,82 @@ export function registerSocket(io: Server, fastify: FastifyInstance) {
         payload: result.message
       });
 
-      await appendSyncEvent({
-        scope: 'chat',
-        chatId,
-        actorUserId: socket.data.userId,
-        entityId: result.message.id,
-        op: { type: 'message.upsert', payload: result.message }
-      });
-
       appEvents.emit('message.sent', { message: result.message, senderId: socket.data.userId });
     }));
 
     socket.on('message.edit', (payload) => guarded(socket, async () => {
-      const body = payload as { messageId: string; content: string };
-      const [message] = await db.select().from(messages).where(eq(messages.id, body.messageId)).limit(1);
-      if (!message) return;
-      await assertChatMember(message.chatId, socket.data.userId);
-      if (message.senderId !== socket.data.userId) return;
-      await db.update(messages).set({ content: body.content }).where(eq(messages.id, message.id));
-      const hydrated = await hydrateMessage(message.id, socket.data.userId);
-      io.to(`chat:${message.chatId}`).emit('message.edited', {
-        type: 'message.edited',
-        payload: {
-          chatId: message.chatId,
-          messageId: message.id,
-          content: hydrated.content,
-          editedAt: hydrated.editedAt ?? new Date().toISOString(),
-          editCount: hydrated.editCount ?? 0
-        }
+      const body = payload as { messageId?: string; content?: string };
+      if (!body.messageId) throw new Error('messageId is required');
+      const parsed = EditMessageRequestSchema.parse({ content: body.content });
+      const result = await editMessage({
+        messageId: body.messageId,
+        editorUserId: socket.data.userId,
+        content: parsed.content
       });
-      await appendSyncEvent({
-        scope: 'chat',
-        chatId: message.chatId,
-        actorUserId: socket.data.userId,
-        entityId: message.id,
-        op: { type: 'message.upsert', payload: hydrated }
+      io.to(`chat:${result.chatId}`).emit('message.edited', {
+        type: 'message.edited',
+        payload: result.event
       });
     }));
 
     socket.on('message.delete', (payload) => guarded(socket, async () => {
       const body = payload as { messageId: string };
-      const [message] = await db.select().from(messages).where(eq(messages.id, body.messageId)).limit(1);
-      if (!message) return;
-      await assertChatMember(message.chatId, socket.data.userId);
-      if (message.senderId !== socket.data.userId && socket.data.role !== 'admin') return;
-      const [deletion] = await db.insert(messageDeletions).values({
-        messageId: message.id,
-        deletedByUserId: socket.data.userId
-      }).onConflictDoUpdate({
-        target: messageDeletions.messageId,
-        set: { deletedByUserId: socket.data.userId, deletedAt: new Date() }
-      }).returning();
-      io.to(`chat:${message.chatId}`).emit('message.deleted', {
-        type: 'message.deleted',
-        payload: {
-          chatId: message.chatId,
-          messageId: message.id,
-          deletedAt: deletion.deletedAt.toISOString(),
-          deletedByUserId: deletion.deletedByUserId
-        }
-      });
-      await appendSyncEvent({
-        scope: 'chat',
-        chatId: message.chatId,
+      const deletion = await deleteMessage({
+        messageId: body.messageId,
         actorUserId: socket.data.userId,
-        entityId: message.id,
-        op: {
-          type: 'message.delete',
-          payload: {
-            chatId: message.chatId,
-            messageId: message.id,
-            deletedAt: deletion.deletedAt.toISOString(),
-            deletedByUserId: deletion.deletedByUserId
-          }
-        }
+        actorRole: socket.data.role
+      });
+      io.to(`chat:${deletion.chatId}`).emit('message.deleted', {
+        type: 'message.deleted',
+        payload: deletion
       });
     }));
 
     socket.on('message.react', (payload) => guarded(socket, async () => {
-      const body = payload as { messageId: string; emoji: string };
-      const message = await hydrateMessage(body.messageId, socket.data.userId);
-      await assertChatMember(message.chatId, socket.data.userId);
-      await db.insert(messageReactions).values({
+      const body = payload as { messageId?: string; emoji?: string };
+      if (!body.messageId) throw new Error('messageId is required');
+      const parsed = AddReactionRequestSchema.parse({ emoji: body.emoji });
+      const event = await addMessageReaction({
         messageId: body.messageId,
         userId: socket.data.userId,
-        emoji: body.emoji
-      }).onConflictDoNothing();
-      io.to(`chat:${message.chatId}`).emit('reaction.add', {
-        type: 'reaction.add',
-        payload: {
-          chatId: message.chatId,
-          messageId: body.messageId,
-          userId: socket.data.userId,
-          emoji: body.emoji,
-          createdAt: new Date().toISOString()
-        }
+        emoji: parsed.emoji
       });
-      await appendSyncEvent({
-        scope: 'chat',
-        chatId: message.chatId,
-        actorUserId: socket.data.userId,
-        entityId: `${body.messageId}:${socket.data.userId}:${body.emoji}`,
-        op: {
-          type: 'reaction.add',
-          payload: {
-            chatId: message.chatId,
-            messageId: body.messageId,
-            userId: socket.data.userId,
-            emoji: body.emoji,
-            createdAt: new Date().toISOString()
-          }
-        }
+      io.to(`chat:${event.chatId}`).emit('reaction.add', {
+        type: 'reaction.add',
+        payload: event
       });
     }));
 
     socket.on('message.unreact', (payload) => guarded(socket, async () => {
-      const body = payload as { messageId: string; emoji: string };
-      const message = await hydrateMessage(body.messageId, socket.data.userId);
-      await assertChatMember(message.chatId, socket.data.userId);
-      await db.delete(messageReactions)
-        .where(and(
-          eq(messageReactions.messageId, body.messageId),
-          eq(messageReactions.userId, socket.data.userId),
-          eq(messageReactions.emoji, body.emoji)
-        ));
-      io.to(`chat:${message.chatId}`).emit('reaction.remove', {
-        type: 'reaction.remove',
-        payload: {
-          chatId: message.chatId,
-          messageId: body.messageId,
-          userId: socket.data.userId,
-          emoji: body.emoji
-        }
+      const body = payload as { messageId?: string; emoji?: string };
+      if (!body.messageId) throw new Error('messageId is required');
+      const parsed = AddReactionRequestSchema.parse({ emoji: body.emoji });
+      const event = await removeMessageReaction({
+        messageId: body.messageId,
+        userId: socket.data.userId,
+        emoji: parsed.emoji
       });
-      await appendSyncEvent({
-        scope: 'chat',
-        chatId: message.chatId,
-        actorUserId: socket.data.userId,
-        entityId: `${body.messageId}:${socket.data.userId}:${body.emoji}`,
-        op: {
-          type: 'reaction.remove',
-          payload: {
-            chatId: message.chatId,
-            messageId: body.messageId,
-            userId: socket.data.userId,
-            emoji: body.emoji
-          }
-        }
+      io.to(`chat:${event.chatId}`).emit('reaction.remove', {
+        type: 'reaction.remove',
+        payload: event
       });
     }));
 
     socket.on('message.read', (payload) => guarded(socket, async () => {
       const body = payload as { chatId: string; throughMessageId?: string };
-      if (!body.throughMessageId) return;
-      const { chatId } = await assertChatMember(body.chatId, socket.data.userId);
-      const [member] = await db.update(chatMembers)
-        .set({ lastReadMessageId: body.throughMessageId, lastReadAt: new Date() })
-        .where(and(eq(chatMembers.chatId, chatId), eq(chatMembers.userId, socket.data.userId)))
-        .returning();
-      io.to(`chat:${chatId}`).emit('message.read', {
+      const parsed = MarkChatReadRequestSchema.parse({ throughMessageId: body.throughMessageId });
+      const read = await markChatRead({
+        chatId: body.chatId,
+        userId: socket.data.userId,
+        throughMessageId: parsed.throughMessageId
+      });
+      io.to(`chat:${read.chatId}`).emit('message.read', {
         type: 'message.read',
         payload: {
-          chatId,
+          chatId: read.chatId,
           readerUserId: socket.data.userId,
-          seenAt: member.lastReadAt.toISOString(),
-          seenThroughMessageId: body.throughMessageId
-        }
-      });
-      await appendSyncEvent({
-        scope: 'chat',
-        chatId,
-        actorUserId: socket.data.userId,
-        entityId: `${chatId}:${socket.data.userId}`,
-        op: {
-          type: 'read.upsert',
-          payload: {
-            chatId,
-            userId: socket.data.userId,
-            lastReadAt: member.lastReadAt.toISOString(),
-            lastReadMessageId: member.lastReadMessageId ?? null,
-            notificationsMuted: member.notificationsMuted,
-            archivedAt: member.archivedAt?.toISOString() ?? null
-          }
+          seenAt: read.member.lastReadAt.toISOString(),
+          seenThroughMessageId: read.messageId
         }
       });
     }));
@@ -561,95 +482,75 @@ export function registerSocket(io: Server, fastify: FastifyInstance) {
       });
     }));
 
-    socket.on('voice.signal', (payload) => {
-      try {
-        const parsed = payload as { targetUserId: string; data: Record<string, unknown> };
-        io.to(`user:${parsed.targetUserId}`).emit('voice.signal', {
-          type: 'voice.signal',
-          payload: { fromUserId: socket.data.userId, data: parsed.data }
+    socket.on('voice.signal', (payload) => guarded(socket, async () => {
+      const parsed = payload as { targetUserId: string; data: Record<string, unknown> };
+      io.to(`user:${parsed.targetUserId}`).emit('voice.signal', {
+        type: 'voice.signal',
+        payload: { fromUserId: socket.data.userId, data: parsed.data }
+      });
+    }));
+
+    socket.on('voice.mute', (payload) => guarded(socket, async () => {
+      const parsed = payload as { muted: boolean };
+      const rooms = Array.from(socket.rooms).filter((r) => r.startsWith('voice:'));
+      for (const roomKey of rooms) {
+        const chatId = roomKey.slice(6);
+        const room = voiceRooms.get(chatId);
+        if (room) {
+          const meta = room.get(socket.data.userId);
+          if (meta) meta.muted = parsed.muted;
+        }
+        socket.to(roomKey).emit('voice.mute', {
+          type: 'voice.mute',
+          payload: { userId: socket.data.userId, muted: parsed.muted }
         });
-      } catch (error) {
-        fastify.log.warn({ error, userId: socket.data.userId }, 'voice.signal relay failed');
       }
-    });
+    }));
 
-    socket.on('voice.mute', (payload) => {
-      try {
-        const parsed = payload as { muted: boolean };
-        const rooms = Array.from(socket.rooms).filter((r) => r.startsWith('voice:'));
-        for (const roomKey of rooms) {
-          const chatId = roomKey.slice(6);
-          const room = voiceRooms.get(chatId);
-          if (room) {
-            const meta = room.get(socket.data.userId);
-            if (meta) meta.muted = parsed.muted;
-          }
-          socket.to(roomKey).emit('voice.mute', {
-            type: 'voice.mute',
-            payload: { userId: socket.data.userId, muted: parsed.muted }
-          });
+    socket.on('voice.deafen', (payload) => guarded(socket, async () => {
+      const parsed = payload as { deafened: boolean };
+      const rooms = Array.from(socket.rooms).filter((r) => r.startsWith('voice:'));
+      for (const roomKey of rooms) {
+        const chatId = roomKey.slice(6);
+        const room = voiceRooms.get(chatId);
+        if (room) {
+          const meta = room.get(socket.data.userId);
+          if (meta) meta.deafened = parsed.deafened;
         }
-      } catch (error) {
-        fastify.log.warn({ error, userId: socket.data.userId }, 'voice.mute relay failed');
+        socket.to(roomKey).emit('voice.deafen', {
+          type: 'voice.deafen',
+          payload: { userId: socket.data.userId, deafened: parsed.deafened }
+        });
       }
-    });
+    }));
 
-    socket.on('voice.deafen', (payload) => {
-      try {
-        const parsed = payload as { deafened: boolean };
-        const rooms = Array.from(socket.rooms).filter((r) => r.startsWith('voice:'));
-        for (const roomKey of rooms) {
-          const chatId = roomKey.slice(6);
-          const room = voiceRooms.get(chatId);
-          if (room) {
-            const meta = room.get(socket.data.userId);
-            if (meta) meta.deafened = parsed.deafened;
-          }
-          socket.to(roomKey).emit('voice.deafen', {
-            type: 'voice.deafen',
-            payload: { userId: socket.data.userId, deafened: parsed.deafened }
-          });
-        }
-      } catch (error) {
-        fastify.log.warn({ error, userId: socket.data.userId }, 'voice.deafen relay failed');
+    socket.on('voice.ptt', (payload) => guarded(socket, async () => {
+      const parsed = payload as { active: boolean };
+      const rooms = Array.from(socket.rooms).filter((r) => r.startsWith('voice:'));
+      for (const roomKey of rooms) {
+        socket.to(roomKey).emit('voice.ptt', {
+          type: 'voice.ptt',
+          payload: { userId: socket.data.userId, active: parsed.active }
+        });
       }
-    });
+    }));
 
-    socket.on('voice.ptt', (payload) => {
-      try {
-        const parsed = payload as { active: boolean };
-        const rooms = Array.from(socket.rooms).filter((r) => r.startsWith('voice:'));
-        for (const roomKey of rooms) {
-          socket.to(roomKey).emit('voice.ptt', {
-            type: 'voice.ptt',
-            payload: { userId: socket.data.userId, active: parsed.active }
-          });
+    socket.on('voice.speaking', (payload) => guarded(socket, async () => {
+      const parsed = payload as { speaking: boolean };
+      const rooms = Array.from(socket.rooms).filter((r) => r.startsWith('voice:'));
+      for (const roomKey of rooms) {
+        const chatId = roomKey.slice(6);
+        const room = voiceRooms.get(chatId);
+        if (room) {
+          const meta = room.get(socket.data.userId);
+          if (meta) meta.speaking = parsed.speaking;
         }
-      } catch (error) {
-        fastify.log.warn({ error, userId: socket.data.userId }, 'voice.ptt relay failed');
+        socket.to(roomKey).emit('voice.speaking', {
+          type: 'voice.speaking',
+          payload: { userId: socket.data.userId, speaking: parsed.speaking }
+        });
       }
-    });
-
-    socket.on('voice.speaking', (payload) => {
-      try {
-        const parsed = payload as { speaking: boolean };
-        const rooms = Array.from(socket.rooms).filter((r) => r.startsWith('voice:'));
-        for (const roomKey of rooms) {
-          const chatId = roomKey.slice(6);
-          const room = voiceRooms.get(chatId);
-          if (room) {
-            const meta = room.get(socket.data.userId);
-            if (meta) meta.speaking = parsed.speaking;
-          }
-          socket.to(roomKey).emit('voice.speaking', {
-            type: 'voice.speaking',
-            payload: { userId: socket.data.userId, speaking: parsed.speaking }
-          });
-        }
-      } catch (error) {
-        fastify.log.warn({ error, userId: socket.data.userId }, 'voice.speaking relay failed');
-      }
-    });
+    }));
   });
 
   async function initializePresence(socket: Socket, userId: string, connectionCount: number) {

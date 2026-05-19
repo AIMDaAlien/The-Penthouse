@@ -12,10 +12,20 @@ import {
   UpdateChatRequestSchema
 } from '@penthouse/contracts';
 import { db } from '../db/pool.js';
-import { chatMembers, chats, directChats, messageDeletions, messageEdits, messageReactions, messages, pinnedMessages, users } from '../db/schema.js';
+import { chatMembers, chats, directChats, messages, pinnedMessages, users } from '../db/schema.js';
 import { badRequest, forbidden, notFound } from '../utils/error-responses.js';
-import { assertChatMember, createMessage, hydrateMessage, listMessages, unreadCount } from '../utils/messages.js';
-import { avatarUrlFromMediaId } from '../utils/users.js';
+import {
+  addMessageReaction,
+  assertChatMember,
+  createMessage,
+  deleteMessage,
+  editMessage,
+  hydrateMessage,
+  listMessages,
+  markChatRead,
+  unreadCount
+} from '../utils/messages.js';
+import { avatarUrlFromMediaId, bannerUrlFromMediaId } from '../utils/users.js';
 import { appEvents } from '../core/events.js';
 import { appendSyncEvent, buildChatSummaryForUser } from '../features/sync/service.js';
 import {
@@ -503,7 +513,8 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
         timezone: user.timezone,
         lastSeenAt: user.lastSeenAt?.toISOString() ?? null,
         profileStyle: user.profileStyle,
-        bannerUrl: user.bannerUrl,
+        bannerMediaId: user.bannerMediaId,
+        bannerUrl: bannerUrlFromMediaId(user.bannerMediaId, user.bannerUrl),
         role: member.role
       }))
     };
@@ -529,14 +540,6 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
       payload: result.message
     });
 
-    await appendSyncEvent({
-      scope: 'chat',
-      chatId,
-      actorUserId: request.authUser!.userId,
-      entityId: result.message.id,
-      op: { type: 'message.upsert', payload: result.message }
-    });
-
     appEvents.emit('message.sent', { message: result.message, senderId: request.authUser!.userId });
 
     return result;
@@ -545,146 +548,64 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
   fastify.patch('/api/v1/messages/:id', { preHandler: fastify.authenticate }, async (request) => {
     const params = request.params as { id: string };
     const body = EditMessageRequestSchema.parse(request.body);
-    const [message] = await db.select().from(messages).where(eq(messages.id, params.id)).limit(1);
-    if (!message) throw notFound('Message not found');
-    await assertChatMember(message.chatId, request.authUser!.userId);
-    if (message.senderId !== request.authUser!.userId) throw forbidden('Only the sender can edit this message');
-
-    await db.transaction(async (tx) => {
-      await tx.insert(messageEdits).values({
-        messageId: message.id,
-        previousContent: message.content,
-        editedBy: request.authUser!.userId
-      });
-      await tx.update(messages).set({ content: body.content }).where(eq(messages.id, message.id));
+    const result = await editMessage({
+      messageId: params.id,
+      editorUserId: request.authUser!.userId,
+      content: body.content
     });
 
-    const hydrated = await hydrateMessage(message.id, request.authUser!.userId);
-
-    fastify.io.to(`chat:${message.chatId}`).emit('message.edited', {
+    fastify.io.to(`chat:${result.chatId}`).emit('message.edited', {
       type: 'message.edited',
-      payload: {
-        chatId: message.chatId,
-        messageId: message.id,
-        content: hydrated.content,
-        editedAt: hydrated.editedAt ?? new Date().toISOString(),
-        editCount: hydrated.editCount ?? 0
-      }
+      payload: result.event
     });
 
-    await appendSyncEvent({
-      scope: 'chat',
-      chatId: message.chatId,
-      actorUserId: request.authUser!.userId,
-      entityId: message.id,
-      op: { type: 'message.upsert', payload: hydrated }
-    });
-
-    return { message: hydrated };
+    return { message: result.message };
   });
 
   fastify.delete('/api/v1/messages/:id', { preHandler: fastify.authenticate }, async (request) => {
     const params = request.params as { id: string };
-    const [message] = await db.select().from(messages).where(eq(messages.id, params.id)).limit(1);
-    if (!message) throw notFound('Message not found');
-    await assertChatMember(message.chatId, request.authUser!.userId);
-    if (message.senderId !== request.authUser!.userId && request.authUser!.role !== 'admin') {
-      throw forbidden('Only the sender can delete this message');
-    }
-
-    const [deletion] = await db.insert(messageDeletions).values({
-      messageId: message.id,
-      deletedByUserId: request.authUser!.userId
-    }).onConflictDoUpdate({
-      target: messageDeletions.messageId,
-      set: {
-        deletedByUserId: request.authUser!.userId,
-        deletedAt: new Date()
-      }
-    }).returning();
-
-    fastify.io.to(`chat:${message.chatId}`).emit('message.deleted', {
-      type: 'message.deleted',
-      payload: {
-        chatId: message.chatId,
-        messageId: message.id,
-        deletedAt: deletion.deletedAt.toISOString(),
-        deletedByUserId: deletion.deletedByUserId
-      }
+    const deletion = await deleteMessage({
+      messageId: params.id,
+      actorUserId: request.authUser!.userId,
+      actorRole: request.authUser!.role
     });
 
-    await appendSyncEvent({
-      scope: 'chat',
-      chatId: message.chatId,
-      actorUserId: request.authUser!.userId,
-      entityId: message.id,
-      op: {
-        type: 'message.delete',
-        payload: {
-          chatId: message.chatId,
-          messageId: message.id,
-          deletedAt: deletion.deletedAt.toISOString(),
-          deletedByUserId: deletion.deletedByUserId
-        }
-      }
+    fastify.io.to(`chat:${deletion.chatId}`).emit('message.deleted', {
+      type: 'message.deleted',
+      payload: deletion
     });
 
     return {
-      messageId: message.id,
-      deletedAt: deletion.deletedAt.toISOString(),
+      messageId: deletion.messageId,
+      deletedAt: deletion.deletedAt,
       deletedByUserId: deletion.deletedByUserId
     };
   });
 
   fastify.post('/api/v1/chats/:id/read', { preHandler: fastify.authenticate }, async (request) => {
     const params = request.params as { id: string };
-    const { chatId } = await assertChatMember(params.id, request.authUser!.userId);
     const body = MarkChatReadRequestSchema.parse(request.body);
-    if (!body.throughMessageId) throw badRequest('throughMessageId is required');
-
-    const [message] = await db.select().from(messages)
-      .where(and(eq(messages.id, body.throughMessageId), eq(messages.chatId, chatId)))
-      .limit(1);
-    if (!message) throw badRequest('throughMessageId must belong to this chat');
-
-    const [member] = await db.update(chatMembers)
-      .set({ lastReadMessageId: message.id, lastReadAt: new Date() })
-      .where(and(eq(chatMembers.chatId, chatId), eq(chatMembers.userId, request.authUser!.userId)))
-      .returning();
-
-    fastify.io.to(`chat:${chatId}`).emit('message.read', {
-      type: 'message.read',
-      payload: {
-        chatId,
-        readerUserId: request.authUser!.userId,
-        seenAt: member.lastReadAt.toISOString(),
-        seenThroughMessageId: message.id
-      }
+    const read = await markChatRead({
+      chatId: params.id,
+      userId: request.authUser!.userId,
+      throughMessageId: body.throughMessageId
     });
 
-    await appendSyncEvent({
-      scope: 'chat',
-      chatId,
-      actorUserId: request.authUser!.userId,
-      entityId: `${chatId}:${request.authUser!.userId}`,
-      op: {
-        type: 'read.upsert',
-        payload: {
-          chatId,
-          userId: request.authUser!.userId,
-          lastReadAt: member.lastReadAt.toISOString(),
-          lastReadMessageId: member.lastReadMessageId ?? null,
-          notificationsMuted: member.notificationsMuted,
-          archivedAt: member.archivedAt?.toISOString() ?? null
-        }
+    fastify.io.to(`chat:${read.chatId}`).emit('message.read', {
+      type: 'message.read',
+      payload: {
+        chatId: read.chatId,
+        readerUserId: request.authUser!.userId,
+        seenAt: read.member.lastReadAt.toISOString(),
+        seenThroughMessageId: read.messageId
       }
     });
 
     return {
-      chatId,
-      unreadCount: await unreadCount(chatId, request.authUser!.userId),
-      lastReadAt: member.lastReadAt.toISOString(),
-      seenThroughMessageId: message.id
+      chatId: read.chatId,
+      unreadCount: await unreadCount(read.chatId, request.authUser!.userId),
+      lastReadAt: read.member.lastReadAt.toISOString(),
+      seenThroughMessageId: read.messageId
     };
   });
 
@@ -841,38 +762,14 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
     const params = request.params as { id: string };
     const body = request.body as { emoji?: string };
     if (!body.emoji) throw badRequest('emoji is required');
-    const message = await hydrateMessage(params.id, request.authUser!.userId);
-    await assertChatMember(message.chatId, request.authUser!.userId);
-    await db.insert(messageReactions).values({
+    const payload = await addMessageReaction({
       messageId: params.id,
       userId: request.authUser!.userId,
       emoji: body.emoji
-    }).onConflictDoNothing();
-    fastify.io.to(`chat:${message.chatId}`).emit('reaction.add', {
-      type: 'reaction.add',
-      payload: {
-        chatId: message.chatId,
-        messageId: params.id,
-        userId: request.authUser!.userId,
-        emoji: body.emoji,
-        createdAt: new Date().toISOString()
-      }
     });
-    await appendSyncEvent({
-      scope: 'chat',
-      chatId: message.chatId,
-      actorUserId: request.authUser!.userId,
-      entityId: `${params.id}:${request.authUser!.userId}:${body.emoji}`,
-      op: {
-        type: 'reaction.add',
-        payload: {
-          chatId: message.chatId,
-          messageId: params.id,
-          userId: request.authUser!.userId,
-          emoji: body.emoji,
-          createdAt: new Date().toISOString()
-        }
-      }
+    fastify.io.to(`chat:${payload.chatId}`).emit('reaction.add', {
+      type: 'reaction.add',
+      payload
     });
     return reply.status(204).send();
   });

@@ -3,7 +3,7 @@ import { after, beforeEach, describe, it } from 'node:test';
 import type { Message } from '@penthouse/contracts';
 import { closeDb } from '../src/db/pool.js';
 import { shouldNotifyByScope } from '../src/push/send.js';
-import { authHeader, resetDb, testApp } from './helpers.js';
+import { authHeader, registerUser, resetDb, testApp } from './helpers.js';
 
 describe('push integration', () => {
   beforeEach(resetDb);
@@ -48,5 +48,50 @@ describe('push integration', () => {
     assert.equal(shouldNotifyByScope('dm_and_mention', 'channel', message, 'user-1'), true);
     assert.equal(shouldNotifyByScope('dm_and_mention', 'channel', message, 'user-2'), false);
     assert.equal(shouldNotifyByScope('dm_and_mention', 'dm', message, 'user-2'), true);
+  });
+
+  it('requires chat membership before reading or writing notification overrides', async () => {
+    const app = await testApp();
+    try {
+      const bruce = await registerUser(app, 'notify-bruce');
+      const alfred = await registerUser(app, 'notify-alfred');
+      const selina = await registerUser(app, 'notify-selina');
+      const bruceHeaders = { authorization: `Bearer ${bruce.accessToken}` };
+      const selinaHeaders = { authorization: `Bearer ${selina.accessToken}` };
+
+      const dm = await app.inject({
+        method: 'POST',
+        url: '/api/v1/chats/dm',
+        headers: bruceHeaders,
+        payload: { memberId: alfred.user.id }
+      });
+      assert.equal(dm.statusCode, 200, dm.body);
+      const dmChatId = (dm.json() as { chatId: string }).chatId;
+
+      const read = await app.inject({
+        method: 'GET',
+        url: `/api/v1/notifications/overrides/${dmChatId}`,
+        headers: selinaHeaders
+      });
+      assert.equal(read.statusCode, 403, read.body);
+
+      const write = await app.inject({
+        method: 'PATCH',
+        url: `/api/v1/notifications/overrides/${dmChatId}`,
+        headers: selinaHeaders,
+        payload: { scope: 'all' }
+      });
+      assert.equal(write.statusCode, 403, write.body);
+
+      const memberWrite = await app.inject({
+        method: 'PATCH',
+        url: `/api/v1/notifications/overrides/${dmChatId}`,
+        headers: bruceHeaders,
+        payload: { scope: 'mentions_only' }
+      });
+      assert.equal(memberWrite.statusCode, 200, memberWrite.body);
+    } finally {
+      await app.close();
+    }
   });
 });

@@ -27,7 +27,8 @@ export async function buildApp() {
   validateMediasoupConfig();
 
   const fastify = Fastify({
-    logger: env.NODE_ENV === 'test' ? false : true
+    logger: env.NODE_ENV === 'test' ? false : true,
+    trustProxy: env.TRUST_PROXY
   });
 
   await fastify.register(cors, {

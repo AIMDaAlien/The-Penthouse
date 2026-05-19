@@ -149,6 +149,7 @@ CREATE TABLE IF NOT EXISTS media_uploads (
   size_bytes integer NOT NULL,
   content_type text,
   media_kind media_kind NOT NULL,
+  scope text NOT NULL DEFAULT 'private' CHECK (scope IN ('public', 'private')),
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
@@ -262,11 +263,26 @@ ALTER TABLE media_uploads
   ADD COLUMN IF NOT EXISTS original_file_name text,
   ADD COLUMN IF NOT EXISTS storage_key text,
   ADD COLUMN IF NOT EXISTS content_type text,
-  ADD COLUMN IF NOT EXISTS media_kind media_kind;
+  ADD COLUMN IF NOT EXISTS media_kind media_kind,
+  ADD COLUMN IF NOT EXISTS scope text NOT NULL DEFAULT 'private';
 
 UPDATE media_uploads
-SET original_file_name = COALESCE(original_file_name, file_name),
-    storage_key = COALESCE(storage_key, file_path, file_name);
+SET original_file_name = COALESCE(original_file_name, file_name);
+
+DO $$ BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'media_uploads'
+      AND column_name = 'file_path'
+  ) THEN
+    EXECUTE 'UPDATE media_uploads SET storage_key = COALESCE(storage_key, file_path, file_name)';
+  ELSE
+    UPDATE media_uploads
+    SET storage_key = COALESCE(storage_key, file_name);
+  END IF;
+END $$;
 
 DO $$ BEGIN
   IF EXISTS (
@@ -289,6 +305,11 @@ ALTER TABLE media_uploads
   ALTER COLUMN original_file_name SET NOT NULL,
   ALTER COLUMN storage_key SET NOT NULL,
   ALTER COLUMN media_kind SET NOT NULL;
+
+DO $$ BEGIN
+  ALTER TABLE media_uploads ADD CONSTRAINT media_uploads_scope_check CHECK (scope IN ('public', 'private'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 ALTER TABLE push_subscriptions
   ADD COLUMN IF NOT EXISTS session_device_id uuid REFERENCES session_devices(id) ON DELETE CASCADE,

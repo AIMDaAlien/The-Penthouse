@@ -50,6 +50,14 @@ describe('auth integration', () => {
         headers: { authorization: `Bearer ${refreshed.accessToken}` }
       });
       assert.equal(logout.statusCode, 204, logout.body);
+
+      const afterLogout = await app.inject({
+        method: 'GET',
+        url: '/api/v1/auth/me',
+        headers: { authorization: `Bearer ${refreshed.accessToken}` }
+      });
+      assert.equal(afterLogout.statusCode, 401, afterLogout.body);
+      assert.equal(afterLogout.json().code, 'SESSION_REVOKED');
     } finally {
       await app.close();
     }

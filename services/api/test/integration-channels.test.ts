@@ -201,6 +201,30 @@ describe('channel integration', () => {
     }
   });
 
+  it('forbids regular group members from creating channels', async () => {
+    const app = await testApp();
+    try {
+      const bruce = await registerUser(app, 'owner-bruce');
+      const alfred = await registerUser(app, 'member-alfred');
+      const bruceHeaders = { authorization: `Bearer ${bruce.accessToken}` };
+      const alfredHeaders = { authorization: `Bearer ${alfred.accessToken}` };
+
+      const list = await app.inject({ method: 'GET', url: '/api/v1/chats', headers: bruceHeaders });
+      assert.equal(list.statusCode, 200, list.body);
+      const general = (list.json() as { chats: Array<{ id: string }> }).chats[0];
+
+      const create = await app.inject({
+        method: 'POST',
+        url: `/api/v1/chats/${general.id}/channels`,
+        headers: alfredHeaders,
+        payload: { name: 'member-created' }
+      });
+      assert.equal(create.statusCode, 403, create.body);
+    } finally {
+      await app.close();
+    }
+  });
+
   it('forbids non-members from listing channels', async () => {
     const app = await testApp();
     try {

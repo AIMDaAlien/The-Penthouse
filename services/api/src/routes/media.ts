@@ -3,14 +3,16 @@ import { mkdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { eq } from 'drizzle-orm';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { env } from '../config/env.js';
 import { db } from '../db/pool.js';
 import { mediaUploads } from '../db/schema.js';
-import { notFound } from '../utils/error-responses.js';
+import { forbidden, notFound } from '../utils/error-responses.js';
 import { processImage, type ImagePurpose } from '../utils/image-processing.js';
+import { rateLimit } from '../middleware/rateLimit.js';
+import { privateMediaUrl, publicMediaUrl, verifySignedPrivateMediaToken } from '../utils/media-access.js';
 
 function mediaKind(contentType?: string): 'image' | 'video' | 'file' {
   if (contentType?.startsWith('image/')) return 'image';
@@ -22,8 +24,21 @@ const UploadQuerySchema = z.object({
   purpose: z.enum(['avatar', 'banner']).optional()
 });
 
+async function sendMediaFile(row: typeof mediaUploads.$inferSelect, reply: FastifyReply) {
+  const base = path.resolve(env.UPLOAD_DIR);
+  const resolved = path.resolve(base, row.storageKey);
+  const relative = path.relative(base, resolved);
+  if (relative.startsWith('..') || path.isAbsolute(relative)) throw notFound('Media not found');
+
+  const info = await stat(resolved).catch(() => null);
+  if (!info?.isFile()) throw notFound('Media not found');
+
+  if (row.contentType) reply.header('content-type', row.contentType);
+  return reply.send(createReadStream(resolved));
+}
+
 export async function registerMediaRoutes(fastify: FastifyInstance) {
-  fastify.post('/api/v1/media/upload', { preHandler: fastify.authenticate }, async (request) => {
+  fastify.post('/api/v1/media/upload', { preHandler: [fastify.authenticate, rateLimit(10)] }, async (request) => {
     await mkdir(env.UPLOAD_DIR, { recursive: true });
     const part = await request.file();
     if (!part) throw notFound('No file uploaded');
@@ -55,30 +70,44 @@ export async function registerMediaRoutes(fastify: FastifyInstance) {
       storageKey,
       sizeBytes,
       contentType,
-      mediaKind: mediaKind(contentType)
+      mediaKind: mediaKind(contentType),
+      scope: purpose ? 'public' : 'private'
     }).returning();
 
     return {
       id: row.id,
       fileName: row.fileName,
       originalFileName: row.originalFileName,
-      url: `/api/v1/media/${row.id}`,
+      url: row.scope === 'public' ? publicMediaUrl(row.id) : privateMediaUrl(row.id),
       size: row.sizeBytes,
       contentType: row.contentType ?? undefined,
       mediaKind: row.mediaKind
     };
   });
 
+  fastify.get('/api/v1/media/public/:id', async (request, reply) => {
+    const params = request.params as { id: string };
+    const [row] = await db.select().from(mediaUploads).where(eq(mediaUploads.id, params.id)).limit(1);
+    if (!row || row.scope !== 'public') throw notFound('Media not found');
+    return sendMediaFile(row, reply);
+  });
+
+  fastify.get('/api/v1/media/signed/:payload/:signature', async (request, reply) => {
+    const params = request.params as { payload: string; signature: string };
+    const mediaId = verifySignedPrivateMediaToken(`${params.payload}.${params.signature}`);
+    const [row] = await db.select().from(mediaUploads).where(eq(mediaUploads.id, mediaId)).limit(1);
+    if (!row) throw notFound('Media not found');
+    return sendMediaFile(row, reply);
+  });
+
   fastify.get('/api/v1/media/:id', { preHandler: fastify.authenticate }, async (request, reply) => {
     const params = request.params as { id: string };
     const [row] = await db.select().from(mediaUploads).where(eq(mediaUploads.id, params.id)).limit(1);
     if (!row) throw notFound('Media not found');
+    if (row.scope !== 'public' && row.uploaderId !== request.authUser!.userId) {
+      throw forbidden('Only the uploader can access this media');
+    }
 
-    const resolved = path.resolve(env.UPLOAD_DIR, row.storageKey);
-    const base = path.resolve(env.UPLOAD_DIR);
-    if (!resolved.startsWith(base)) throw notFound('Media not found');
-
-    if (row.contentType) reply.header('content-type', row.contentType);
-    return reply.send(createReadStream(resolved));
+    return sendMediaFile(row, reply);
   });
 }

@@ -1,1 +1,1 @@
-ALTER TABLE users ADD COLUMN banner_media_id UUID;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS banner_media_id uuid;

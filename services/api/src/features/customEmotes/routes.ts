@@ -20,7 +20,7 @@ const CreateStickerBodySchema = z.object({
 });
 
 function emoteUrl(mediaUploadId: string): string {
-  return `/api/v1/media/${mediaUploadId}`;
+  return `/api/v1/media/public/${mediaUploadId}`;
 }
 
 async function assertOwnedImageUpload(mediaUploadId: string, userId: string, role: 'admin' | 'member') {
@@ -34,6 +34,10 @@ async function assertOwnedImageUpload(mediaUploadId: string, userId: string, rol
     throw forbidden('Only the uploader or admins can use this media upload');
   }
   return upload;
+}
+
+async function markPublicMedia(mediaUploadId: string) {
+  await db.update(mediaUploads).set({ scope: 'public' }).where(eq(mediaUploads.id, mediaUploadId));
 }
 
 function assertPackVisible(pack: typeof stickerPacks.$inferSelect, userId: string, role: 'admin' | 'member') {
@@ -66,11 +70,14 @@ export async function registerCustomEmoteRoutes(fastify: FastifyInstance) {
   fastify.post('/api/v1/emotes', { preHandler: fastify.authenticate }, async (request) => {
     const body = CreateEmoteBodySchema.parse(request.body);
     await assertOwnedImageUpload(body.mediaUploadId, request.authUser!.userId, request.authUser!.role);
-    const [row] = await db.insert(customEmotes).values({
-      userId: request.authUser!.userId,
-      name: body.name,
-      mediaUploadId: body.mediaUploadId
-    }).returning();
+    const [row] = await db.transaction(async (tx) => {
+      await tx.update(mediaUploads).set({ scope: 'public' }).where(eq(mediaUploads.id, body.mediaUploadId));
+      return tx.insert(customEmotes).values({
+        userId: request.authUser!.userId,
+        name: body.name,
+        mediaUploadId: body.mediaUploadId
+      }).returning();
+    });
 
     return {
       emote: {
@@ -184,6 +191,7 @@ export async function registerCustomEmoteRoutes(fastify: FastifyInstance) {
       throw forbidden('Only the pack owner or admins can add stickers');
     }
     await assertOwnedImageUpload(body.mediaUploadId, request.authUser!.userId, request.authUser!.role);
+    await markPublicMedia(body.mediaUploadId);
 
     const [row] = await db.insert(stickers).values({
       packId: params.id,

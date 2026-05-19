@@ -253,31 +253,31 @@ export async function registerChatFolderRoutes(fastify: FastifyInstance) {
       throw notFound('One or more items not found in this folder');
     }
 
-    await db.transaction(async (tx) => {
+    const payload = await db.transaction(async (tx) => {
       for (const entry of body.items) {
         await tx.update(chatFolderItems)
           .set({ sortOrder: entry.sortOrder })
           .where(and(eq(chatFolderItems.folderId, folderId), eq(chatFolderItems.chatId, entry.chatId)));
       }
-    });
 
-    // Re-fetch folder with reordered items for response + sync
-    const [folder] = await db.select().from(chatFolders).where(eq(chatFolders.id, folderId)).limit(1);
-    const items = await db.select().from(chatFolderItems)
-      .where(eq(chatFolderItems.folderId, folderId))
-      .orderBy(chatFolderItems.sortOrder);
+      const [folder] = await tx.select().from(chatFolders).where(eq(chatFolders.id, folderId)).limit(1);
+      const items = await tx.select().from(chatFolderItems)
+        .where(eq(chatFolderItems.folderId, folderId))
+        .orderBy(chatFolderItems.sortOrder);
 
-    const payload = {
-      ...serializeFolder(folder!),
-      items: items.map(serializeItem)
-    };
+      const nextPayload = {
+        ...serializeFolder(folder!),
+        items: items.map(serializeItem)
+      };
 
-    await appendSyncEvent({
-      scope: 'user',
-      userId,
-      actorUserId: userId,
-      entityId: folderId,
-      op: { type: 'folder.upsert', payload }
+      await appendSyncEvent({
+        scope: 'user',
+        userId,
+        actorUserId: userId,
+        entityId: folderId,
+        op: { type: 'folder.upsert', payload: nextPayload }
+      }, tx);
+      return nextPayload;
     });
 
     fastify.io.to(`user:${userId}`).emit('folder.upsert', { type: 'folder.upsert', payload });

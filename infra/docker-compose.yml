@@ -42,6 +42,7 @@ services:
       HOST: 0.0.0.0
       NODE_ENV: production
       CORS_ORIGIN: ${CORS_ORIGIN:?Set CORS_ORIGIN in infra/production.env}
+      TRUST_PROXY: ${TRUST_PROXY:-true}
       MEDIASOUP_ENABLED: ${MEDIASOUP_ENABLED:-false}
       MEDIASOUP_LISTEN_IP: ${MEDIASOUP_LISTEN_IP:-0.0.0.0}
       MEDIASOUP_ANNOUNCED_IP: ${MEDIASOUP_ANNOUNCED_IP:-127.0.0.1}

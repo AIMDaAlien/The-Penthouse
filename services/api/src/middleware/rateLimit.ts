@@ -12,8 +12,7 @@ const buckets = new Map<string, Bucket>();
 export function rateLimit(maxAttempts: number, windowMs = 15 * 60_000) {
   return async (request: FastifyRequest, reply: FastifyReply) => {
     if (env.DISABLE_RATE_LIMIT) return;
-    const forwarded = request.headers['x-forwarded-for'];
-    const ip = Array.isArray(forwarded) ? forwarded[0] : forwarded?.split(',')[0] ?? request.ip;
+    const ip = request.ip;
     const key = `${request.method}:${request.url}:${ip}`;
     const now = Date.now();
     const bucket = buckets.get(key);
