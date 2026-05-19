@@ -6,6 +6,8 @@ END $$;
 ALTER TABLE chat_members
   ADD COLUMN IF NOT EXISTS role chat_member_role NOT NULL DEFAULT 'member';
 
+ALTER TABLE chats DROP CONSTRAINT IF EXISTS chats_type_check;
+
 UPDATE chats
 SET type = 'group'
 WHERE type = 'channel'

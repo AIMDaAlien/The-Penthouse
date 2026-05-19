@@ -216,6 +216,98 @@ CREATE TABLE IF NOT EXISTS push_notifications (
   error_code text
 );
 
+-- Older alpha databases may already have these tables from the pre-migration
+-- backend. CREATE TABLE IF NOT EXISTS preserves those tables, so add columns
+-- introduced by the production-alpha schema before indexes/FKs reference them.
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS bio text,
+  ADD COLUMN IF NOT EXISTS avatar_media_id uuid,
+  ADD COLUMN IF NOT EXISTS role user_role NOT NULL DEFAULT 'member',
+  ADD COLUMN IF NOT EXISTS status user_status NOT NULL DEFAULT 'active',
+  ADD COLUMN IF NOT EXISTS must_change_password boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS recovery_code_hash text,
+  ADD COLUMN IF NOT EXISTS timezone text,
+  ADD COLUMN IF NOT EXISTS last_seen_at timestamptz DEFAULT now(),
+  ADD COLUMN IF NOT EXISTS test_notice_accepted_version text,
+  ADD COLUMN IF NOT EXISTS test_notice_accepted_at timestamptz;
+
+ALTER TABLE signup_invites
+  ADD COLUMN IF NOT EXISTS label text NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS max_uses integer NOT NULL DEFAULT 1,
+  ADD COLUMN IF NOT EXISTS uses integer NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS expires_at timestamptz,
+  ADD COLUMN IF NOT EXISTS revoked_at timestamptz,
+  ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now();
+
+ALTER TABLE refresh_tokens
+  ADD COLUMN IF NOT EXISTS session_device_id uuid REFERENCES session_devices(id) ON DELETE CASCADE,
+  ADD COLUMN IF NOT EXISTS revoked_at timestamptz,
+  ADD COLUMN IF NOT EXISTS rotated_at timestamptz,
+  ADD COLUMN IF NOT EXISTS rotated_to_token_hash text;
+
+ALTER TABLE chat_members
+  ADD COLUMN IF NOT EXISTS last_read_message_id uuid,
+  ADD COLUMN IF NOT EXISTS notifications_muted boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS notifications_muted_updated_at timestamptz NOT NULL DEFAULT now(),
+  ADD COLUMN IF NOT EXISTS archived_at timestamptz;
+
+ALTER TABLE messages
+  ADD COLUMN IF NOT EXISTS client_message_id text,
+  ADD COLUMN IF NOT EXISTS message_type message_type NOT NULL DEFAULT 'text',
+  ADD COLUMN IF NOT EXISTS metadata jsonb,
+  ADD COLUMN IF NOT EXISTS reply_to_message_id uuid,
+  ADD COLUMN IF NOT EXISTS reply_to_snapshot jsonb;
+
+ALTER TABLE media_uploads
+  ADD COLUMN IF NOT EXISTS original_file_name text,
+  ADD COLUMN IF NOT EXISTS storage_key text,
+  ADD COLUMN IF NOT EXISTS content_type text,
+  ADD COLUMN IF NOT EXISTS media_kind media_kind;
+
+UPDATE media_uploads
+SET original_file_name = COALESCE(original_file_name, file_name),
+    storage_key = COALESCE(storage_key, file_path, file_name);
+
+DO $$ BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'media_uploads'
+      AND column_name = 'media_kind'
+      AND udt_name = 'media_kind'
+  ) THEN
+    UPDATE media_uploads
+    SET media_kind = COALESCE(media_kind, 'file'::media_kind);
+  ELSE
+    UPDATE media_uploads
+    SET media_kind = COALESCE(NULLIF(media_kind::text, ''), 'file');
+  END IF;
+END $$;
+
+ALTER TABLE media_uploads
+  ALTER COLUMN original_file_name SET NOT NULL,
+  ALTER COLUMN storage_key SET NOT NULL,
+  ALTER COLUMN media_kind SET NOT NULL;
+
+ALTER TABLE push_subscriptions
+  ADD COLUMN IF NOT EXISTS session_device_id uuid REFERENCES session_devices(id) ON DELETE CASCADE,
+  ADD COLUMN IF NOT EXISTS user_agent text,
+  ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now(),
+  ADD COLUMN IF NOT EXISTS last_seen_at timestamptz NOT NULL DEFAULT now();
+
+ALTER TABLE users ALTER COLUMN id SET DEFAULT gen_random_uuid();
+ALTER TABLE signup_invites ALTER COLUMN id SET DEFAULT gen_random_uuid();
+ALTER TABLE session_devices ALTER COLUMN id SET DEFAULT gen_random_uuid();
+ALTER TABLE refresh_tokens ALTER COLUMN id SET DEFAULT gen_random_uuid();
+ALTER TABLE chats ALTER COLUMN id SET DEFAULT gen_random_uuid();
+ALTER TABLE messages ALTER COLUMN id SET DEFAULT gen_random_uuid();
+ALTER TABLE message_edits ALTER COLUMN id SET DEFAULT gen_random_uuid();
+ALTER TABLE message_moderation_events ALTER COLUMN id SET DEFAULT gen_random_uuid();
+ALTER TABLE media_uploads ALTER COLUMN id SET DEFAULT gen_random_uuid();
+ALTER TABLE push_subscriptions ALTER COLUMN id SET DEFAULT gen_random_uuid();
+ALTER TABLE push_notifications ALTER COLUMN id SET DEFAULT gen_random_uuid();
+
 CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);
