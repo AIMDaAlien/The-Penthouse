@@ -6,9 +6,9 @@ Base branch/commit when reviewed: `main` at `7fcc4ac`
 
 ## Verdict
 
-Codex completed the deployment-inclusive backend review and a final reviewer pass. No open Critical, High, or Medium backend findings remain from this pass.
+Codex completed the deployment-inclusive backend review, final reviewer pass, and live redeploy. No open Critical, High, or Medium backend findings remain from this pass.
 
-There is one deployment caveat: the repo Caddy config now has immutable cache handling for `/icons/*`, but the live site still returns `cache-control: no-cache` for `https://penthouse.blog/icons/icon-192.png` until this config is deployed.
+The prior deployment caveat is closed: after redeploy, `https://penthouse.blog/icons/icon-192.png` returns `cache-control: public, max-age=31536000, immutable`.
 
 ## Resolved Findings
 
@@ -42,6 +42,8 @@ There is one deployment caveat: the repo Caddy config now has immutable cache ha
 - `services/api/src/features/customEmotes/routes.ts`
 - `services/api/src/db/migrations/0010_media_scope.sql`
 - `infra/caddy/Caddyfile`
+- Live host preserved deployment seam: `/mnt/cache/appdata/penthouse/app/infra/compose/caddy/Caddyfile.production`
+- Live host preserved deployment seam: `/mnt/cache/appdata/penthouse/app/infra/compose/docker-compose.production.yml`
 - `infra/docker-compose.yml`
 - `infra/production.env.example`
 - `docs/backend-review-follow-ups.md`
@@ -68,7 +70,7 @@ Notable results:
 - Compose render showed `TRUST_PROXY: "true"`.
 - Caddy config validated successfully.
 
-Fresh public checks on May 19, 2026:
+Fresh public checks before redeploy on May 19, 2026:
 
 - `https://api.penthouse.blog/api/v1/health`: HTTP 200.
 - `https://api.penthouse.blog/api/v1/auth/config`: HTTP 200.
@@ -77,14 +79,28 @@ Fresh public checks on May 19, 2026:
 - `https://penthouse.blog/manifest.webmanifest`: HTTP 200, `cache-control: no-cache`.
 - `https://penthouse.blog/service-worker.js`: HTTP 200, `cache-control: no-cache`.
 - `https://api.penthouse.blog/socket.io/?EIO=4&transport=polling`: HTTP 200, `cache-control: no-store`.
-- `https://penthouse.blog/icons/icon-192.png`: HTTP 200 but still `cache-control: no-cache`; repeat after deploy.
+- `https://penthouse.blog/icons/icon-192.png`: HTTP 200 but still `cache-control: no-cache`.
+
+Post-deploy proof on May 19, 2026:
+
+- Pushed commit: `e56a22e Harden backend release surface`.
+- Live API rebuilt and Caddy recreated from the `/mnt/cache/appdata/penthouse/app` checkout.
+- API migration log showed `applied 0010_media_scope.sql`.
+- API container `TRUST_PROXY=true`.
+- Runtime Caddy config contains `@immutable path /_app/immutable/* /icons/*`.
+- `https://api.penthouse.blog/api/v1/health`: HTTP 200, `{ "status": "ok", "db": "reachable" }`.
+- `https://api.penthouse.blog/api/v1/app-distribution`: HTTP 200, `cache-control: public, max-age=60`.
+- `https://api.penthouse.blog/socket.io/?EIO=4&transport=polling`: HTTP 200, `cache-control: no-store`.
+- `https://penthouse.blog/icons/icon-192.png`: HTTP 200, `cache-control: public, max-age=31536000, immutable`.
+- `https://penthouse.blog/manifest.webmanifest`: HTTP 200, `cache-control: no-cache`.
+- `https://penthouse.blog/service-worker.js`: HTTP 200, `cache-control: no-cache`.
 
 ## Remaining Caveats
 
-- Repeat live proof after deployment, especially icon cache headers and profile/media rendering through public media URLs.
+- The live host still carries preserved untracked deployment files under `infra/compose/` and `scripts/`. Do not delete those during rsync-style deploys; the runtime Caddy and Compose files currently live there.
 - The final review did not find a release blocker in the remaining chat routes, but a future hardening sweep could wrap lower-risk sync append paths for pins, unpins, chat preferences, archive/unarchive, and DM create in transactions for perfect consistency. Current tests pass and the main message/folder paths are already transaction-safe.
 - Do not revert the dirty backend hardening changes while reviewing. This handoff assumes they are the intended current work product.
 
 ## Kimi Next Step
 
-Use this as a validation handoff, not a request to re-architect the backend. Start by reading the files above, then run the exact verification commands. If they pass, the backend review can be considered closed except for post-deploy live proof of the Caddy icon cache header.
+Use this as a validation handoff, not a request to re-architect the backend. Start by reading the files above, then run the exact verification commands. If they pass, the backend review can be considered closed.

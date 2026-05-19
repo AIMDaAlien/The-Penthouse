@@ -12,6 +12,6 @@ Generated from the deployment-inclusive backend review on May 19, 2026.
 
 ## Resolved Low Findings
 
-- Static icon cache headers still differ on the live deployment as of May 19, 2026: `https://penthouse.blog/icons/icon-192.png` returns `cache-control: no-cache`. The repo Caddyfile now has an explicit immutable static handle for `/icons/*` and `/_app/immutable/*`; live proof must be repeated after the next deployment.
+- Static icon cache headers are now deployed on the live host as of May 19, 2026: `https://penthouse.blog/icons/icon-192.png` returns `cache-control: public, max-age=31536000, immutable`. The active live seam was the preserved `/mnt/cache/appdata/penthouse/app/infra/compose/caddy/Caddyfile.production` file, so future deploys must not delete the host's preserved `infra/compose/` files during rsync-style updates.
 - Private chat media now has a backend signed URL path for render-only clients. Message hydration rewrites allowed private attachment URLs to short-lived `/api/v1/media/signed/<payload>/<signature>` links, and message creation rejects media references the sender cannot access.
 - Chat member listing now derives banner URLs from `banner_media_id` via `/api/v1/media/public/:id`, matching `/auth/me`, user search, admin member lists, and sync user payloads.
