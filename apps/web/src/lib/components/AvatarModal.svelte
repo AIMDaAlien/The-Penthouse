@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { chats } from '$services/api';
+	import { chats } from '$services/chats';
 	import { sessionStore } from '$stores/session.svelte';
 	import Icon from './Icon.svelte';
 
@@ -62,9 +62,9 @@
 	async function handleMessageUser() {
 		messagingLoading = true;
 		try {
-			const result = await chats.createDm(user.id);
+			const result = await chats.createDM({ memberId: user.id });
 			onClose?.();
-			await goto(`/chat/${result.id}?name=${encodeURIComponent(user.displayName)}`);
+			await goto(`/chat/${result.chatId}?name=${encodeURIComponent(user.displayName)}`);
 		} finally {
 			messagingLoading = false;
 		}

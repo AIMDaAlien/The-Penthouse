@@ -193,16 +193,14 @@ test('[schema] ChatSummary: accepts valid channel type', () => {
   assert.equal(result.success, true, 'channel type is valid');
 });
 
-test('[schema] ChatSummary: rejects invalid type (unauthorized cross-type access probe)', () => {
-  // If a malicious client sends an unexpected chat type, the route's
-  // ChatSummarySchema.parse() will throw before it returns data.
+test('[schema] ChatSummary: accepts valid group type', () => {
   const result = ChatSummarySchema.safeParse({
     id: 'chat-uuid',
-    type: 'group', // not a valid enum value
-    name: 'Hackers',
+    type: 'group',
+    name: 'General',
     updatedAt: new Date().toISOString()
   });
-  assert.equal(result.success, false, 'only dm and channel types are permitted');
+  assert.equal(result.success, true, 'group type is valid');
 });
 
 test('[schema] create direct chat request accepts memberId', () => {

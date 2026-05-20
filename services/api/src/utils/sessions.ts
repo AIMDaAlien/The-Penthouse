@@ -113,7 +113,13 @@ export async function revokeSessionDevice(sessionDeviceId: string) {
 export async function assertActiveSession(context: AuthContext) {
   if (!context.sessionDeviceId) return;
 
-  const [row] = await db.select({ id: sessionDevices.id, userId: users.id, status: users.status })
+  const [row] = await db.select({
+    id: sessionDevices.id,
+    userId: users.id,
+    username: users.username,
+    status: users.status,
+    role: users.role
+  })
     .from(sessionDevices)
     .innerJoin(users, eq(sessionDevices.userId, users.id))
     .where(and(eq(sessionDevices.id, context.sessionDeviceId), eq(users.id, context.userId)))
@@ -121,6 +127,8 @@ export async function assertActiveSession(context: AuthContext) {
 
   if (!row) throw unauthorized('Session device was not found; saved login is stale', 'SESSION_DEVICE_NOT_FOUND');
   if (row.status !== 'active') throw unauthorized('User account is not active', 'USER_INACTIVE');
+  context.username = row.username;
+  context.role = row.role;
 
   const [activeRefresh] = await db.select({ id: refreshTokens.id })
     .from(refreshTokens)

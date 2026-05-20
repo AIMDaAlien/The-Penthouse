@@ -160,7 +160,7 @@ describe('[integration] user directory and profiles', { skip: SKIP, concurrency:
     assert.equal(body.username, 'profile_editor');
     assert.equal(body.displayName, 'Profile Editor');
     assert.equal(body.timezone, 'America/Chicago');
-    assert.ok(!('bio' in body), 'auth/me should return the auth user shape, not the full me payload');
+    assert.equal(body.bio, 'Tier 1 ready');
   });
 
   test('user directory reads update lastSeenAt asynchronously', async () => {

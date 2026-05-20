@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import type { Server, Socket } from 'socket.io';
 import {
@@ -14,7 +14,7 @@ import {
   MarkChatReadRequestSchema
 } from '@penthouse/contracts';
 import { db } from '../db/pool.js';
-import { messages, pinnedMessages, users } from '../db/schema.js';
+import { chatMembers, messages, pinnedMessages, users } from '../db/schema.js';
 import {
   addMessageReaction,
   assertChatMember,
@@ -29,6 +29,7 @@ import { appendSyncEvent, getSyncResponse } from '../features/sync/service.js';
 import { closeSocketMediaSessions, registerMediaSignaling } from './media-signaling.js';
 import { assertActiveSession } from '../utils/sessions.js';
 import { AppError } from '../utils/error-responses.js';
+import { setSocketPresence } from '../utils/presence.js';
 
 type SocketData = {
   userId: string;
@@ -55,6 +56,54 @@ async function guarded(socket: Socket, fn: () => Promise<void>) {
   }
 }
 
+async function markLatestMessageReadOnDisconnect(
+  chatId: string,
+  userId: string,
+  io: Server,
+  fastify: FastifyInstance
+) {
+  try {
+    const [latest] = await db.select({ id: messages.id })
+      .from(messages)
+      .where(eq(messages.chatId, chatId))
+      .orderBy(desc(messages.createdAt))
+      .limit(1);
+    if (!latest) return;
+
+    const read = await markChatRead({ chatId, userId, throughMessageId: latest.id });
+    const event = {
+      type: 'message.read',
+      payload: {
+        chatId: read.chatId,
+        readerUserId: userId,
+        seenAt: read.member.lastReadAt.toISOString(),
+        seenThroughMessageId: read.messageId
+      }
+    };
+    const members = await db.select({ userId: chatMembers.userId })
+      .from(chatMembers)
+      .where(eq(chatMembers.chatId, read.chatId));
+    for (const member of members) {
+      io.to(`user:${member.userId}`).emit('message.read', event);
+    }
+  } catch (error) {
+    fastify.log.warn({ error, chatId, userId }, 'Failed to mark chat read on socket disconnect');
+  }
+}
+
+async function joinMemberChatRooms(socket: Socket, userId: string, fastify: FastifyInstance) {
+  try {
+    const memberRows = await db.select({ chatId: chatMembers.chatId })
+      .from(chatMembers)
+      .where(eq(chatMembers.userId, userId));
+    for (const member of memberRows) {
+      socket.join(`chat:${member.chatId}`);
+    }
+  } catch (error) {
+    fastify.log.warn({ error, userId, socketId: socket.id }, 'Failed to join socket chat rooms');
+  }
+}
+
 async function assertSocketSession(socket: Socket) {
   await assertActiveSession({
     userId: socket.data.userId,
@@ -66,6 +115,8 @@ async function assertSocketSession(socket: Socket) {
 
 const onlineUserSockets = new Map<string, number>();
 const userPresenceCache = new Map<string, PresenceSnapshot>();
+const activeTypingByChat = new Map<string, Map<string, { displayName: string; avatarUrl: string | null }>>();
+const activeChatsBySocket = new Map<string, Set<string>>();
 const MAX_VOICE_PARTICIPANTS = 8;
 
 interface VoiceParticipantMeta {
@@ -79,8 +130,20 @@ const voiceRooms = new Map<string, Map<string, VoiceParticipantMeta>>(); // chat
 
 export function registerSocket(io: Server, fastify: FastifyInstance) {
   io.use(async (socket, next) => {
+    fastify.log.info({
+      socketId: socket.id,
+      transport: socket.conn.transport.name
+    }, 'socket handshake start');
+
     const token = socket.handshake.auth?.token;
-    if (!token || typeof token !== 'string') return next(new Error('AUTH_REQUIRED'));
+    if (!token || typeof token !== 'string') {
+      fastify.log.warn({
+        socketId: socket.id,
+        transport: socket.conn.transport.name
+      }, 'socket auth failed: missing token');
+      return next(new Error('Unauthorized'));
+    }
+
     try {
       const payload = await fastify.jwt.verify<SocketData>(token);
       socket.data.userId = payload.userId;
@@ -89,25 +152,72 @@ export function registerSocket(io: Server, fastify: FastifyInstance) {
       socket.data.role = payload.role;
       await assertActiveSession(payload);
       socket.join(`user:${payload.userId}`);
+      const memberRows = await db.select({ chatId: chatMembers.chatId })
+        .from(chatMembers)
+        .where(eq(chatMembers.userId, payload.userId));
+      for (const member of memberRows) {
+        socket.join(`chat:${member.chatId}`);
+      }
       await db.update(users).set({ lastSeenAt: new Date() }).where(eq(users.id, payload.userId));
       next();
     } catch (error) {
       const code = error instanceof AppError ? error.code : 'AUTH_INVALID';
-      next(new Error(code));
+      const message = code === 'USER_INACTIVE'
+        ? 'Account unavailable'
+        : error instanceof AppError
+          ? error.message
+          : 'Unauthorized';
+      fastify.log.warn({
+        err: error,
+        socketId: socket.id,
+        code,
+        transport: socket.conn.transport.name
+      }, code === 'USER_INACTIVE' ? 'socket auth failed: account unavailable' : 'socket auth failed: invalid token');
+      next(new Error(message));
     }
   });
 
   io.on('connection', (socket) => {
     const userId = socket.data.userId as string | undefined;
     if (userId) {
+      fastify.log.info({
+        userId,
+        socketId: socket.id,
+        transport: socket.conn.transport.name
+      }, 'socket connected');
+
+      socket.join(`user:${userId}`);
+      void joinMemberChatRooms(socket, userId, fastify);
+
       const count = (onlineUserSockets.get(userId) ?? 0) + 1;
       onlineUserSockets.set(userId, count);
+      setSocketPresence(userId, socket.id, true);
       socket.join('presence:global');
 
       void initializePresence(socket, userId, count);
 
       socket.on('disconnecting', () => {
         closeSocketMediaSessions(socket);
+        const activeChats = activeChatsBySocket.get(socket.id) ?? new Set<string>();
+        activeChatsBySocket.delete(socket.id);
+        for (const chatId of activeChats) {
+          void markLatestMessageReadOnDisconnect(chatId, userId, io, fastify);
+        }
+
+        for (const [chatId, typingUsers] of activeTypingByChat) {
+          if (!typingUsers.delete(userId)) continue;
+          if (typingUsers.size === 0) activeTypingByChat.delete(chatId);
+          socket.to(`chat:${chatId}`).emit('typing.update', {
+            type: 'typing.update',
+            payload: {
+              chatId,
+              userId,
+              status: 'stop',
+              displayName: socket.data.username,
+              avatarUrl: null
+            }
+          });
+        }
 
         // Clean up voice rooms
         for (const roomKey of socket.rooms) {
@@ -128,6 +238,7 @@ export function registerSocket(io: Server, fastify: FastifyInstance) {
         }
 
         const current = onlineUserSockets.get(userId) ?? 0;
+        const presence = setSocketPresence(userId, socket.id, false);
         if (current <= 1) {
           onlineUserSockets.delete(userId);
           userPresenceCache.delete(userId);
@@ -135,11 +246,13 @@ export function registerSocket(io: Server, fastify: FastifyInstance) {
             .catch((error) => {
               fastify.log.warn({ error, userId }, 'Failed to persist socket disconnect presence');
             });
-          io.to('presence:global').emit('presence.update', {
-            userId,
-            state: 'offline',
-            timestamp: new Date().toISOString()
-          });
+          if (presence.becameOffline) {
+            io.to('presence:global').emit('presence.update', {
+              userId,
+              state: 'offline',
+              timestamp: new Date().toISOString()
+            });
+          }
         } else {
           onlineUserSockets.set(userId, current - 1);
         }
@@ -157,21 +270,52 @@ export function registerSocket(io: Server, fastify: FastifyInstance) {
 
     registerMediaSignaling(socket, io, fastify);
 
-    socket.on('chat.join', (payload) => guarded(socket, async () => {
-      const parsed = ClientJoinChatEventSchema.parse({ type: 'chat.join', ...payload });
-      const { chatId } = await assertChatMember(parsed.chatId, socket.data.userId);
-      socket.join(`chat:${chatId}`);
-      socket.emit('chat.joined', { type: 'chat.joined', payload: { chatId } });
-    }));
+    socket.on('chat.join', (payload, ack?: (response: { ok: boolean; error?: string }) => void) => {
+      void guarded(socket, async () => {
+        try {
+          const parsed = ClientJoinChatEventSchema.parse({ type: 'chat.join', ...payload });
+          const { chatId } = await assertChatMember(parsed.chatId, socket.data.userId);
+          socket.join(`chat:${chatId}`);
+          const activeChats = activeChatsBySocket.get(socket.id) ?? new Set<string>();
+          activeChats.add(chatId);
+          activeChatsBySocket.set(socket.id, activeChats);
+          socket.emit('chat.joined', { type: 'chat.joined', payload: { chatId } });
+          const typingUsers = activeTypingByChat.get(chatId);
+          if (typingUsers) {
+            for (const [typingUserId, metadata] of typingUsers) {
+              if (typingUserId === socket.data.userId) continue;
+              socket.emit('typing.update', {
+                type: 'typing.update',
+                payload: {
+                  chatId,
+                  userId: typingUserId,
+                  status: 'start',
+                  displayName: metadata.displayName,
+                  avatarUrl: metadata.avatarUrl
+                }
+              });
+            }
+          }
+          ack?.({ ok: true });
+        } catch (error) {
+          ack?.({ ok: false, error: error instanceof Error ? error.message : 'chat.join failed' });
+          throw error;
+        }
+      });
+    });
 
     socket.on('chat.leave', (payload) => guarded(socket, async () => {
       const parsed = ClientLeaveChatEventSchema.parse({ type: 'chat.leave', ...payload });
       socket.leave(`chat:${parsed.chatId}`);
+      activeChatsBySocket.get(socket.id)?.delete(parsed.chatId);
     }));
 
     socket.on('typing.start', (payload) => guarded(socket, async () => {
       const parsed = ClientTypingStartEventSchema.parse({ type: 'typing.start', ...payload });
       const { chatId } = await assertChatMember(parsed.chatId, socket.data.userId);
+      const typingUsers = activeTypingByChat.get(chatId) ?? new Map<string, { displayName: string; avatarUrl: string | null }>();
+      typingUsers.set(socket.data.userId, { displayName: socket.data.username, avatarUrl: null });
+      activeTypingByChat.set(chatId, typingUsers);
       socket.to(`chat:${chatId}`).emit('typing.update', {
         type: 'typing.update',
         payload: {
@@ -187,6 +331,9 @@ export function registerSocket(io: Server, fastify: FastifyInstance) {
     socket.on('typing.stop', (payload) => guarded(socket, async () => {
       const parsed = ClientTypingStopEventSchema.parse({ type: 'typing.stop', ...payload });
       const { chatId } = await assertChatMember(parsed.chatId, socket.data.userId);
+      const typingUsers = activeTypingByChat.get(chatId);
+      typingUsers?.delete(socket.data.userId);
+      if (typingUsers?.size === 0) activeTypingByChat.delete(chatId);
       socket.to(`chat:${chatId}`).emit('typing.update', {
         type: 'typing.update',
         payload: {
@@ -316,9 +463,6 @@ export function registerSocket(io: Server, fastify: FastifyInstance) {
         .limit(1);
       if (!row) return;
       await assertChatMember(row.message.chatId, socket.data.userId);
-      if (row.message.senderId !== socket.data.userId && socket.data.role !== 'admin') {
-        throw new Error('Only the sender or admins can pin messages');
-      }
       const pinnedAt = new Date();
       await db.insert(pinnedMessages).values({
         chatId: row.message.chatId,
@@ -565,10 +709,14 @@ export function registerSocket(io: Server, fastify: FastifyInstance) {
         .limit(1);
 
       const currentPresence: PresenceSnapshot = {
-        state: userRow?.presenceState ?? 'available',
+        state: userRow?.presenceState && userRow.presenceState !== 'offline' ? userRow.presenceState : 'available',
         note: userRow?.presenceNote ?? '',
         lastSeenAt: userRow?.lastSeenAt?.toISOString()
       };
+      await db.update(users).set({
+        presenceState: currentPresence.state,
+        lastSeenAt: new Date()
+      }).where(eq(users.id, userId));
       userPresenceCache.set(userId, currentPresence);
 
       const sync: Record<string, PresenceSnapshot> = {};

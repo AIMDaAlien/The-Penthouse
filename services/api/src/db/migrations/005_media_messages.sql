@@ -7,23 +7,62 @@ UPDATE media_uploads
 SET original_file_name = COALESCE(original_file_name, file_name)
 WHERE original_file_name IS NULL;
 
-UPDATE media_uploads
-SET storage_key = COALESCE(
-  storage_key,
-  NULLIF(regexp_replace(file_path, '^.*[\\\\/]', ''), ''),
-  file_name
-)
-WHERE storage_key IS NULL;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'media_uploads'
+      AND column_name = 'file_path'
+  ) THEN
+    EXECUTE $sql$
+      UPDATE media_uploads
+      SET storage_key = COALESCE(
+        storage_key,
+        NULLIF(regexp_replace(file_path, '^.*[\\\\/]', ''), ''),
+        file_name
+      )
+      WHERE storage_key IS NULL
+    $sql$;
+  ELSE
+    UPDATE media_uploads
+    SET storage_key = COALESCE(storage_key, file_name)
+    WHERE storage_key IS NULL;
+  END IF;
+END $$;
 
-UPDATE media_uploads
-SET media_kind = COALESCE(
-  media_kind,
-  CASE
-    WHEN content_type LIKE 'image/%' THEN 'image'
-    WHEN content_type LIKE 'video/%' THEN 'video'
-    ELSE 'file'
-  END
-);
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'media_uploads'
+      AND column_name = 'media_kind'
+      AND udt_name = 'media_kind'
+  ) THEN
+    UPDATE media_uploads
+    SET media_kind = COALESCE(
+      media_kind,
+      CASE
+        WHEN content_type LIKE 'image/%' THEN 'image'::media_kind
+        WHEN content_type LIKE 'video/%' THEN 'video'::media_kind
+        ELSE 'file'::media_kind
+      END
+    );
+  ELSE
+    UPDATE media_uploads
+    SET media_kind = COALESCE(
+      media_kind,
+      CASE
+        WHEN content_type LIKE 'image/%' THEN 'image'
+        WHEN content_type LIKE 'video/%' THEN 'video'
+        ELSE 'file'
+      END
+    );
+  END IF;
+END $$;
 
 ALTER TABLE media_uploads
 ALTER COLUMN original_file_name SET NOT NULL;

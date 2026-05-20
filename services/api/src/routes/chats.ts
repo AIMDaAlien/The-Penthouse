@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { and, desc, eq, ilike, inArray, isNull, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import {
@@ -5,13 +6,15 @@ import {
   ChatPreferencesRequestSchema,
   CreateDirectChatRequestSchema,
   CreateGroupChatRequestSchema,
+  CreatePollRequestSchema,
   EditMessageRequestSchema,
   MarkChatReadRequestSchema,
   PinMessageRequestSchema,
   SendMessageRequestSchema,
-  UpdateChatRequestSchema
+  UpdateChatRequestSchema,
+  VotePollRequestSchema
 } from '@penthouse/contracts';
-import { db } from '../db/pool.js';
+import { db, pool } from '../db/pool.js';
 import { chatMembers, chats, directChats, messages, pinnedMessages, users } from '../db/schema.js';
 import { badRequest, forbidden, notFound } from '../utils/error-responses.js';
 import {
@@ -23,8 +26,10 @@ import {
   hydrateMessage,
   listMessages,
   markChatRead,
+  removeMessageReaction,
   unreadCount
 } from '../utils/messages.js';
+import { createPollRecords, loadPollVoteContext, recordPollVote } from '../utils/polls.js';
 import { avatarUrlFromMediaId, bannerUrlFromMediaId } from '../utils/users.js';
 import { appEvents } from '../core/events.js';
 import { appendSyncEvent, buildChatSummaryForUser } from '../features/sync/service.js';
@@ -49,6 +54,20 @@ function readStatePayload(member: ChatMember) {
     notificationsMuted: member.notificationsMuted,
     archivedAt: member.archivedAt?.toISOString() ?? null
   };
+}
+
+async function emitToChatMembers(
+  fastify: FastifyInstance,
+  chatId: string,
+  event: string,
+  payload: unknown
+) {
+  const members = await db.select({ userId: chatMembers.userId })
+    .from(chatMembers)
+    .where(eq(chatMembers.chatId, chatId));
+  for (const member of members) {
+    fastify.io.to(`user:${member.userId}`).emit(event, payload);
+  }
 }
 
 async function appendChatSummaryForMembers(
@@ -138,7 +157,7 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
       .limit(1);
 
     if (existing) {
-      return { chatId: existing.chatId };
+      return { chatId: existing.chatId, id: existing.chatId };
     }
 
     const [chat] = await db.insert(chats).values({
@@ -168,7 +187,7 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
       });
     }
 
-    return { chatId: chat.id };
+    return { chatId: chat.id, id: chat.id };
   });
 
   fastify.post('/api/v1/chats/group', { preHandler: fastify.authenticate }, async (request) => {
@@ -591,7 +610,7 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
       throughMessageId: body.throughMessageId
     });
 
-    fastify.io.to(`chat:${read.chatId}`).emit('message.read', {
+    await emitToChatMembers(fastify, read.chatId, 'message.read', {
       type: 'message.read',
       payload: {
         chatId: read.chatId,
@@ -607,6 +626,82 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
       lastReadAt: read.member.lastReadAt.toISOString(),
       seenThroughMessageId: read.messageId
     };
+  });
+
+  fastify.post('/api/v1/chats/:id/polls', { preHandler: fastify.authenticate }, async (request) => {
+    const params = request.params as { id: string };
+    const { chatId } = await assertChatMember(params.id, request.authUser!.userId);
+    const body = CreatePollRequestSchema.parse(request.body);
+    const result = await createMessage({
+      chatId,
+      senderId: request.authUser!.userId,
+      content: body.question,
+      messageType: 'poll',
+      metadata: null,
+      clientMessageId: `poll:${randomUUID()}`
+    });
+    const poll = await createPollRecords(pool, {
+      chatId,
+      messageId: result.message.id,
+      createdByUserId: request.authUser!.userId,
+      question: body.question,
+      options: body.options,
+      multiSelect: body.multiSelect,
+      expiresAt: body.expiresAt
+    });
+    await db.update(messages).set({ metadata: poll }).where(eq(messages.id, result.message.id));
+    const message = await hydrateMessage(result.message.id, request.authUser!.userId);
+
+    fastify.io.to(`chat:${chatId}`).emit('message.new', {
+      type: 'message.new',
+      payload: message
+    });
+    appEvents.emit('message.sent', { message, senderId: request.authUser!.userId });
+
+    return { message };
+  });
+
+  fastify.post('/api/v1/polls/:pollId/vote', { preHandler: fastify.authenticate }, async (request) => {
+    const params = request.params as { pollId: string };
+    const body = VotePollRequestSchema.parse(request.body);
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const context = await loadPollVoteContext(client, params.pollId, request.authUser!.userId);
+      if (!context) throw notFound('Poll not found');
+      if (!context.isMember) throw forbidden('You are not a member of this chat', 'CHAT_FORBIDDEN');
+      if (context.expiresAt && new Date(context.expiresAt) <= new Date()) throw badRequest('Poll has expired', 'POLL_EXPIRED');
+      const optionId = context.optionIdsByIndex.get(body.optionIndex);
+      if (!optionId) throw badRequest('Invalid poll option', 'POLL_OPTION_INVALID');
+      const { poll } = await recordPollVote(client, {
+        pollId: params.pollId,
+        userId: request.authUser!.userId,
+        optionId,
+        multiSelect: context.multiSelect,
+        existingOptionIds: context.existingOptionIds
+      });
+      await client.query('COMMIT');
+
+      await emitToChatMembers(fastify, context.chatId, 'poll.voted', {
+        type: 'poll.voted',
+        payload: {
+          chatId: context.chatId,
+          pollId: params.pollId,
+          userId: request.authUser!.userId,
+          poll
+        }
+      });
+
+      return { poll };
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      if (error instanceof Error && error.message === 'You have already voted on this poll') {
+        throw badRequest(error.message, 'POLL_ALREADY_VOTED');
+      }
+      throw error;
+    } finally {
+      client.release();
+    }
   });
 
   fastify.patch('/api/v1/chats/:id/preferences', { preHandler: fastify.authenticate }, async (request) => {
@@ -654,10 +749,6 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
       .where(and(eq(messages.id, body.messageId), eq(messages.chatId, chatId)))
       .limit(1);
     if (!message) throw notFound('Message not found');
-    if (message.message.senderId !== request.authUser!.userId && request.authUser!.role !== 'admin') {
-      throw forbidden('Only the sender or admins can pin messages');
-    }
-
     const pinnedAt = new Date();
     const [pin] = await db.insert(pinnedMessages).values({
       chatId,
@@ -767,9 +858,117 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
       userId: request.authUser!.userId,
       emoji: body.emoji
     });
+    await emitToChatMembers(fastify, payload.chatId, 'reaction.add', {
+      type: 'reaction.add',
+      payload
+    });
+    return reply.status(204).send();
+  });
+
+  fastify.post('/api/v1/chats/:chatId/messages/:messageId/reactions', { preHandler: fastify.authenticate }, async (request) => {
+    const params = request.params as { chatId: string; messageId: string };
+    const body = request.body as { emoji?: string };
+    if (!body.emoji) throw badRequest('emoji is required');
+    await assertChatMember(params.chatId, request.authUser!.userId);
+    const payload = await addMessageReaction({
+      messageId: params.messageId,
+      userId: request.authUser!.userId,
+      emoji: body.emoji
+    });
     fastify.io.to(`chat:${payload.chatId}`).emit('reaction.add', {
       type: 'reaction.add',
       payload
+    });
+    return { reaction: payload };
+  });
+
+  fastify.delete('/api/v1/chats/:chatId/messages/:messageId/reactions/:emoji', { preHandler: fastify.authenticate }, async (request, reply) => {
+    const params = request.params as { chatId: string; messageId: string; emoji: string };
+    await assertChatMember(params.chatId, request.authUser!.userId);
+    const payload = await removeMessageReaction({
+      messageId: params.messageId,
+      userId: request.authUser!.userId,
+      emoji: decodeURIComponent(params.emoji)
+    });
+    await emitToChatMembers(fastify, payload.chatId, 'reaction.remove', {
+      type: 'reaction.remove',
+      payload
+    });
+    return reply.status(204).send();
+  });
+
+  fastify.post('/api/v1/chats/:chatId/messages/:messageId/pin', { preHandler: fastify.authenticate }, async (request) => {
+    const params = request.params as { chatId: string; messageId: string };
+    const { chatId } = await assertChatMember(params.chatId, request.authUser!.userId);
+    const [message] = await db.select({ message: messages, sender: users })
+      .from(messages)
+      .innerJoin(users, eq(messages.senderId, users.id))
+      .where(and(eq(messages.id, params.messageId), eq(messages.chatId, chatId)))
+      .limit(1);
+    if (!message) throw notFound('Message not found');
+    const pinnedAt = new Date();
+    const [pin] = await db.insert(pinnedMessages).values({
+      chatId,
+      messageId: params.messageId,
+      pinnedBy: request.authUser!.userId,
+      pinnedAt,
+      contentSnapshot: message.message.content,
+      senderDisplayNameSnapshot: message.sender.displayName
+    }).onConflictDoUpdate({
+      target: [pinnedMessages.chatId, pinnedMessages.messageId],
+      set: {
+        pinnedBy: request.authUser!.userId,
+        pinnedAt,
+        contentSnapshot: message.message.content,
+        senderDisplayNameSnapshot: message.sender.displayName
+      }
+    }).returning();
+
+    const payload = {
+      chatId: pin.chatId,
+      messageId: pin.messageId,
+      pinnedByUserId: pin.pinnedBy,
+      pinnedAt: pin.pinnedAt.toISOString(),
+      content: pin.contentSnapshot,
+      senderDisplayName: pin.senderDisplayNameSnapshot
+    };
+    await emitToChatMembers(fastify, chatId, 'message.pinned', {
+      type: 'message.pinned',
+      payload
+    });
+    await appendSyncEvent({
+      scope: 'chat',
+      chatId,
+      actorUserId: request.authUser!.userId,
+      entityId: pin.messageId,
+      op: { type: 'message.pin', payload }
+    });
+    return { pin: payload };
+  });
+
+  fastify.delete('/api/v1/chats/:chatId/messages/:messageId/pin', { preHandler: fastify.authenticate }, async (request, reply) => {
+    const params = request.params as { chatId: string; messageId: string };
+    const { chatId } = await assertChatMember(params.chatId, request.authUser!.userId);
+    const [pin] = await db.select({ pinnedBy: pinnedMessages.pinnedBy })
+      .from(pinnedMessages)
+      .where(and(eq(pinnedMessages.chatId, chatId), eq(pinnedMessages.messageId, params.messageId)))
+      .limit(1);
+    if (!pin) throw notFound('Pin not found');
+    if (pin.pinnedBy !== request.authUser!.userId && request.authUser!.role !== 'admin') {
+      throw forbidden('Only the pinner or admins can unpin messages');
+    }
+    await db.delete(pinnedMessages)
+      .where(and(eq(pinnedMessages.chatId, chatId), eq(pinnedMessages.messageId, params.messageId)));
+    await emitToChatMembers(fastify, chatId, 'message.unpinned', {
+      type: 'message.unpinned',
+      payload: { chatId, messageId: params.messageId }
+    });
+    await appendSyncEvent({
+      scope: 'chat',
+      chatId,
+      actorUserId: request.authUser!.userId,
+      entityId: params.messageId,
+      op: { type: 'message.unpin', payload: { chatId, messageId: params.messageId } }
     });
     return reply.status(204).send();
   });

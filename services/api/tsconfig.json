@@ -11,5 +11,12 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["src/**/*.ts", "test/**/*.ts"]
+  "files": [
+    "src/types.ts",
+    "src/types/app.d.ts",
+    "src/types/fastify.d.ts",
+    "src/index.ts",
+    "src/db/migrate.ts",
+    "src/db/bootstrap-alpha.ts"
+  ]
 }

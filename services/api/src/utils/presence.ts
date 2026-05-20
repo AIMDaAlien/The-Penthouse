@@ -1,7 +1,17 @@
 import { ServerPresenceSyncEventSchema } from '@penthouse/contracts';
 
 type Queryable = {
-  query: (sql: string, params?: unknown[]) => Promise<{ rows: Array<{ id: string }> }>;
+  query: (
+    sql: string,
+    params?: unknown[]
+  ) => Promise<{
+    rows: Array<{
+      id: string;
+      presence_state: 'available' | 'busy' | 'dnd' | 'afk' | 'offline';
+      presence_note: string | null;
+      last_seen_at: Date | string | null;
+    }>;
+  }>;
 };
 
 const activePresenceSocketsByUser = new Map<string, Set<string>>();
@@ -41,10 +51,27 @@ export function listOnlineUserIds(): string[] {
   return Array.from(activePresenceSocketsByUser.keys());
 }
 
-export async function buildPresenceSnapshot(db: Queryable): Promise<Record<string, boolean>> {
-  const result = await db.query(`SELECT id FROM users WHERE status = 'active' ORDER BY created_at ASC`);
+export async function buildPresenceSnapshot(db: Queryable) {
+  const result = await db.query(`
+    SELECT id, presence_state, presence_note, last_seen_at
+    FROM users
+    WHERE status = 'active'
+    ORDER BY created_at ASC
+  `);
   const snapshot = Object.fromEntries(
-    result.rows.map((row) => [String(row.id), activePresenceSocketsByUser.has(String(row.id))])
+    result.rows.map((row) => {
+      const isOnline = activePresenceSocketsByUser.has(String(row.id));
+      const state = isOnline ? row.presence_state : 'offline';
+      const lastSeenAt = row.last_seen_at instanceof Date
+        ? row.last_seen_at.toISOString()
+        : row.last_seen_at ?? undefined;
+
+      return [String(row.id), {
+        state,
+        note: row.presence_note ?? '',
+        ...(lastSeenAt ? { lastSeenAt } : {})
+      }];
+    })
   );
 
   return ServerPresenceSyncEventSchema.parse(snapshot);

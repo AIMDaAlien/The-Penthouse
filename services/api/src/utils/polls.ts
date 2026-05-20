@@ -1,6 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { PollDataSchema, type PollData } from '@penthouse/contracts';
-import type { Queryable } from './users.js';
+
+type Queryable = {
+  query: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[]; rowCount: number | null }>;
+};
 
 type PollRow = {
   id: string;

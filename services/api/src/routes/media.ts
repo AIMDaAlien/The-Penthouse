@@ -14,9 +14,13 @@ import { processImage, type ImagePurpose } from '../utils/image-processing.js';
 import { rateLimit } from '../middleware/rateLimit.js';
 import { privateMediaUrl, publicMediaUrl, verifySignedPrivateMediaToken } from '../utils/media-access.js';
 
-function mediaKind(contentType?: string): 'image' | 'video' | 'file' {
+function classifyUpload(fileName: string, contentType?: string): 'image' | 'video' | 'file' {
+  const extension = path.extname(fileName).toLowerCase();
   if (contentType?.startsWith('image/')) return 'image';
   if (contentType?.startsWith('video/')) return 'video';
+  if (contentType?.startsWith('audio/')) return 'file';
+  if (['.apng', '.avif', '.gif', '.heic', '.jpeg', '.jpg', '.png', '.webp'].includes(extension)) return 'image';
+  if (['.m4v', '.mov', '.mp4', '.mpeg', '.mpg', '.webm'].includes(extension)) return 'video';
   return 'file';
 }
 
@@ -54,7 +58,8 @@ export async function registerMediaRoutes(fastify: FastifyInstance) {
     let contentType = part.mimetype;
     let sizeBytes: number;
 
-    if (purpose && mediaKind(part.mimetype) === 'image') {
+    const kind = classifyUpload(part.filename, part.mimetype);
+    if (purpose && kind === 'image') {
       const processed = await processImage(target, part.mimetype, purpose);
       contentType = processed.contentType;
       sizeBytes = processed.sizeBytes;
@@ -70,7 +75,7 @@ export async function registerMediaRoutes(fastify: FastifyInstance) {
       storageKey,
       sizeBytes,
       contentType,
-      mediaKind: mediaKind(contentType),
+      mediaKind: classifyUpload(part.filename, contentType),
       scope: purpose ? 'public' : 'private'
     }).returning();
 
@@ -111,3 +116,7 @@ export async function registerMediaRoutes(fastify: FastifyInstance) {
     return sendMediaFile(row, reply);
   });
 }
+
+export const __testables = {
+  classifyUpload
+};

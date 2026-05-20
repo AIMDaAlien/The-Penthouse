@@ -95,7 +95,6 @@ async function waitForSocketEvent<T>(
 
 describe('[integration] realtime observability', { skip: SKIP }, () => {
   let app: any;
-  let ioServer: any;
   let baseUrl = '';
   let infoLogs: CapturedLog[] = [];
   let warnLogs: CapturedLog[] = [];
@@ -107,8 +106,6 @@ describe('[integration] realtime observability', { skip: SKIP }, () => {
     await cleanup();
 
     const { createApp } = await import('../src/app.js');
-    const { initRealtime } = await import('../src/realtime/socket.js');
-
     app = await createApp();
 
     const originalInfo = app.log.info.bind(app.log);
@@ -124,20 +121,12 @@ describe('[integration] realtime observability', { skip: SKIP }, () => {
       return originalWarn(...args as Parameters<typeof originalWarn>);
     }) as typeof app.log.warn;
 
-    ioServer = initRealtime(app);
-    app.decorate('io', ioServer as any);
-
     await app.listen({ port: 0, host: '127.0.0.1' });
     const address = app.server.address() as AddressInfo;
     baseUrl = `http://127.0.0.1:${address.port}`;
   });
 
   after(async () => {
-    if (ioServer) {
-      await new Promise<void>((resolve) => {
-        ioServer.close(() => resolve());
-      });
-    }
     await app?.close();
     const { cleanup } = await import('./helpers.js');
     await cleanup();
@@ -262,38 +251,38 @@ describe('[integration] realtime observability', { skip: SKIP }, () => {
       autoConnect: false
     });
 
-    const presenceSync = waitForSocketEvent<Record<string, boolean>>(
+    const presenceSync = waitForSocketEvent<Record<string, { state: string }>>(
       syncedObserverSocket,
       'presence.sync',
-      (event) => event?.[actor.user.id] === true && event?.[observer.user.id] === true,
+      (event) => event?.[actor.user.id]?.state === 'available' && event?.[observer.user.id]?.state === 'available',
       1_500
     );
     syncedObserverSocket.connect();
     await waitForSocketConnect(syncedObserverSocket);
 
     const syncPayload = await presenceSync;
-    assert.equal(syncPayload[actor.user.id], true);
-    assert.equal(syncPayload[observer.user.id], true);
+    assert.equal(syncPayload[actor.user.id].state, 'available');
+    assert.equal(syncPayload[observer.user.id].state, 'available');
 
-    actorSocket.emit('presence.update', { online: false });
+    actorSocket.emit('presence.update', { state: 'offline' });
 
     await waitForSocketEvent(syncedObserverSocket, 'presence.update', (event: any) => (
       event?.userId === actor.user.id &&
-      event?.online === false &&
+      event?.state === 'offline' &&
       typeof event?.timestamp === 'string'
     ), 1_500);
 
-    actorSocket.emit('presence.update', { online: true });
+    actorSocket.emit('presence.update', { state: 'available' });
 
     await waitForSocketEvent(syncedObserverSocket, 'presence.update', (event: any) => (
       event?.userId === actor.user.id &&
-      event?.online === true &&
+      event?.state === 'available' &&
       typeof event?.timestamp === 'string'
     ), 1_500);
 
     const disconnected = waitForSocketEvent(syncedObserverSocket, 'presence.update', (event: any) => (
       event?.userId === actor.user.id &&
-      event?.online === false &&
+      event?.state === 'offline' &&
       typeof event?.timestamp === 'string'
     ), 1_500);
 
@@ -302,7 +291,7 @@ describe('[integration] realtime observability', { skip: SKIP }, () => {
     await closeSocket(syncedObserverSocket);
   });
 
-  test('GET /api/v1/presence returns the current boolean presence snapshot', async () => {
+  test('GET /api/v1/presence returns the current presence-state snapshot', async () => {
     const { authHeaders, cleanup, registerUser } = await import('./helpers.js');
     await cleanup();
 
@@ -325,9 +314,9 @@ describe('[integration] realtime observability', { skip: SKIP }, () => {
     });
     assert.equal(response.statusCode, 200);
 
-    const snapshot = JSON.parse(response.payload) as Record<string, boolean>;
-    assert.equal(snapshot[onlineUser.user.id], true);
-    assert.equal(snapshot[offlineUser.user.id], false);
+    const snapshot = JSON.parse(response.payload) as Record<string, { state: string }>;
+    assert.equal(snapshot[onlineUser.user.id].state, 'available');
+    assert.equal(snapshot[offlineUser.user.id].state, 'offline');
 
     await closeSocket(onlineSocket);
   });
@@ -368,6 +357,7 @@ describe('[integration] realtime observability', { skip: SKIP }, () => {
     });
 
     senderSocket.emit('typing.start', { chatId: GENERAL_CHAT_ID });
+    await new Promise((resolve) => setTimeout(resolve, 25));
 
     const typingReplay = waitForSocketEvent(receiverSocket, 'typing.update', (event: any) => (
       event?.payload?.chatId === GENERAL_CHAT_ID &&
@@ -425,18 +415,16 @@ describe('[integration] realtime observability', { skip: SKIP }, () => {
          file_name,
          original_file_name,
          storage_key,
-         file_path,
          size_bytes,
          content_type,
          media_kind
-       ) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+       ) VALUES($1, $2, $3, $4, $5, $6, $7, $8)`,
       [
         avatarId,
         sender.user.id,
         storageKey,
         'socket-profile.png',
         storageKey,
-        `/tmp/${storageKey}`,
         128,
         'image/png',
         'image'
@@ -445,7 +433,7 @@ describe('[integration] realtime observability', { skip: SKIP }, () => {
 
     const profileUpdate = await app.inject({
       method: 'PATCH',
-      url: '/api/v1/me/profile',
+      url: '/api/v1/auth/me',
       headers: authHeaders(sender.accessToken),
       payload: {
         displayName: 'Fresh Alias',
@@ -472,7 +460,7 @@ describe('[integration] realtime observability', { skip: SKIP }, () => {
     const delivered = await messageNew;
     assert.equal(delivered.payload.senderDisplayName, 'Fresh Alias');
     assert.equal(delivered.payload.senderUsername, 'socket_profile_sender');
-    assert.equal(delivered.payload.senderAvatarUrl, `/uploads/${encodeURIComponent(storageKey)}`);
+    assert.equal(delivered.payload.senderAvatarUrl, `/api/v1/media/public/${avatarId}`);
 
     await closeSocket(senderSocket);
     await closeSocket(receiverSocket);
@@ -639,7 +627,7 @@ describe('[integration] realtime observability', { skip: SKIP }, () => {
       url: '/api/v1/chats',
       headers: authHeaders(sender.accessToken)
     });
-    const chatId = JSON.parse(senderChats.payload).find((chat: any) => chat.name === 'General').id as string;
+    const chatId = JSON.parse(senderChats.payload).chats.find((chat: any) => chat.name === 'General').id as string;
     const clientMessageId = 'reconnect-room-regression-001';
 
     const messageNew = waitForSocketEvent(reconnectedReceiverSocket, 'message.new', (event: any) => (

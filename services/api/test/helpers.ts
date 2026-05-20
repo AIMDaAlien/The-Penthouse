@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { buildApp } from '../src/app.js';
 import { pool } from '../src/db/pool.js';
+import { resetRateLimitBucketsForTests } from '../src/middleware/rateLimit.js';
+import { resetPresenceState } from '../src/utils/presence.js';
+
+export { pool };
 
 let registerRemoteAddressCounter = 1;
 
@@ -14,6 +18,8 @@ async function assertTestDatabase() {
 
 export async function resetDb() {
   await assertTestDatabase();
+  resetRateLimitBucketsForTests();
+  resetPresenceState();
   await pool.query(`
 	    TRUNCATE
 	      sync_events,
@@ -45,12 +51,37 @@ export async function resetDb() {
   `);
   await pool.query("INSERT INTO server_settings (key, value) VALUES ('registration_mode', 'invite_only')");
   await pool.query("INSERT INTO signup_invites (code, label, max_uses) VALUES ('PENTHOUSE-ALPHA', 'Default alpha invite', 999999)");
-  await pool.query("INSERT INTO chats (type, name, system_key) VALUES ('group', 'General', 'general')");
+  await pool.query(`
+    INSERT INTO chats (id, type, name, system_key)
+    VALUES ('00000000-0000-0000-0000-000000000001', 'group', 'General', 'general')
+  `);
 }
+
+export async function migrate() {
+  // The test script applies migrations before loading test files.
+}
+
+export const cleanup = resetDb;
 
 export async function testApp() {
   const app = await buildApp();
   return app;
+}
+
+export async function buildTestApp() {
+  const app = await buildApp();
+  const emitted: Array<{ room: string | null; event: string; data: unknown }> = [];
+  const originalTo = app.io.to.bind(app.io);
+  app.io.to = ((room: string) => {
+    const target = originalTo(room);
+    const originalEmit = target.emit.bind(target);
+    target.emit = ((event: string, data: unknown) => {
+      emitted.push({ room, event, data });
+      return originalEmit(event, data);
+    }) as typeof target.emit;
+    return target;
+  }) as typeof app.io.to;
+  return { app, emitted };
 }
 
 export async function registerUser(app: Awaited<ReturnType<typeof buildApp>>, username: string) {
@@ -76,4 +107,15 @@ export async function registerUser(app: Awaited<ReturnType<typeof buildApp>>, us
 export async function authHeader(app: Awaited<ReturnType<typeof buildApp>>, username = 'aim') {
   const session = await registerUser(app, username);
   return { authorization: `Bearer ${session.accessToken}` };
+}
+
+export function authHeaders(token: string): { authorization: string };
+export function authHeaders(app: Awaited<ReturnType<typeof buildApp>>, username?: string): Promise<{ authorization: string }>;
+export function authHeaders(appOrToken: Awaited<ReturnType<typeof buildApp>> | string, username = 'aim') {
+  if (typeof appOrToken === 'string') return { authorization: `Bearer ${appOrToken}` };
+  return authHeader(appOrToken, username);
+}
+
+export async function createCaptchaToken() {
+  return 'dev-token';
 }

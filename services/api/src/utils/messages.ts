@@ -103,6 +103,8 @@ export async function hydrateMessage(messageId: string, viewerUserId?: string, r
     replyTo = row.message.replyToSnapshot as Message['replyTo'];
   }
 
+  const hiddenByModeration = row.message.hiddenByModeration;
+
   return {
     id: row.message.id,
     chatId: row.message.chatId,
@@ -110,9 +112,9 @@ export async function hydrateMessage(messageId: string, viewerUserId?: string, r
     senderUsername: row.sender.username,
     senderDisplayName: row.sender.displayName,
     senderAvatarUrl: avatarUrlFromMediaId(row.sender.avatarMediaId),
-    content: row.message.content,
-    type: row.message.messageType,
-    metadata: await rewriteMessageMediaUrls(row.message.metadata, row.message.senderId, reader) as Message['metadata'],
+    content: hiddenByModeration ? 'Message removed by moderation.' : row.message.content,
+    type: hiddenByModeration ? 'text' : row.message.messageType,
+    metadata: hiddenByModeration ? null : await rewriteMessageMediaUrls(row.message.metadata, row.message.senderId, reader) as Message['metadata'],
     createdAt: row.message.createdAt.toISOString(),
     editedAt: latestEdit?.createdAt.toISOString() ?? null,
     editCount,
@@ -126,7 +128,7 @@ export async function hydrateMessage(messageId: string, viewerUserId?: string, r
     reactions: [...reactions.entries()].map(([emoji, userIds]) => ({ emoji, userIds })),
     replyTo,
     starred: false,
-    hidden: false,
+    hidden: hiddenByModeration,
     seenAt: viewerUserId === row.message.senderId ? row.message.createdAt.toISOString() : null
   };
 }

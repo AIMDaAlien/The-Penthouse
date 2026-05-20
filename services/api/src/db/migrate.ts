@@ -14,7 +14,9 @@ async function main() {
     )
   `);
 
-  const files = (await readdir(migrationsDir)).filter((file) => file.endsWith('.sql')).sort();
+  const files = (await readdir(migrationsDir))
+    .filter((file) => file.endsWith('.sql') && !file.endsWith('.down.sql'))
+    .sort();
 
   for (const file of files) {
     const existing = await pool.query('SELECT 1 FROM api_migrations WHERE name = $1', [file]);

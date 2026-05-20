@@ -76,7 +76,7 @@ test('realtime message.send event shape is enforced', () => {
 test('presence update event uses boolean online shape', () => {
   const ok = ClientPresenceUpdateEventSchema.safeParse({
     type: 'presence.update',
-    online: false
+    state: 'offline'
   });
 
   assert.equal(ok.success, true);
@@ -85,12 +85,12 @@ test('presence update event uses boolean online shape', () => {
 test('server presence payloads use boolean sync/update shapes', () => {
   const update = ServerPresenceUpdateEventSchema.safeParse({
     userId: 'user-1',
-    online: true,
+    state: 'available',
     timestamp: new Date().toISOString()
   });
   const sync = ServerPresenceSyncEventSchema.safeParse({
-    'user-1': true,
-    'user-2': false
+    'user-1': { state: 'available' },
+    'user-2': { state: 'offline' }
   });
 
   assert.equal(update.success, true);
@@ -165,7 +165,8 @@ test('pin realtime payload schemas are enforced', () => {
       chatId: 'chat-1',
       messageId: 'message-1',
       pinnedByUserId: 'user-1',
-      pinnedAt: new Date().toISOString()
+      pinnedAt: new Date().toISOString(),
+      content: 'Pinned message'
     }
   });
   const unpinned = ServerMessageUnpinnedEventSchema.safeParse({

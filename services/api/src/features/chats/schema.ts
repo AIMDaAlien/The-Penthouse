@@ -58,6 +58,11 @@ export const messages = pgTable('messages', {
   metadata: jsonb('metadata'),
   replyToMessageId: uuid('reply_to_message_id'),
   replyToSnapshot: jsonb('reply_to_snapshot'),
+  hiddenByModeration: boolean('hidden_by_moderation').notNull().default(false),
+  moderationAction: moderationActionEnum('moderation_action'),
+  moderationReason: text('moderation_reason'),
+  moderationActorUserId: uuid('moderation_actor_user_id'),
+  moderationUpdatedAt: timestamp('moderation_updated_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
 }, (table) => [
   unique('unique_client_message').on(table.chatId, table.senderId, table.clientMessageId),

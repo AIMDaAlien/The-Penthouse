@@ -15,6 +15,7 @@ import { registerMediaRoutes } from './routes/media.js';
 import { registerPushRoutes } from './routes/push.js';
 import { registerSyncRoutes } from './routes/sync.js';
 import { registerUserRoutes } from './routes/users.js';
+import { registerPresenceRoutes } from './routes/presence.js';
 import { registerSocket } from './realtime/socket.js';
 import { mediasoupRooms, validateMediasoupConfig } from './realtime/mediasoup.js';
 import { registerPushHandlers } from './features/push/handlers.js';
@@ -51,6 +52,7 @@ export async function buildApp() {
   await registerDistributionRoutes(fastify);
   await registerAdminRoutes(fastify);
   await registerUserRoutes(fastify);
+  await registerPresenceRoutes(fastify);
   await registerChatRoutes(fastify);
   await registerPushRoutes(fastify);
   await registerSyncRoutes(fastify);
@@ -78,3 +80,5 @@ export async function buildApp() {
 
   return fastify;
 }
+
+export const createApp = buildApp;

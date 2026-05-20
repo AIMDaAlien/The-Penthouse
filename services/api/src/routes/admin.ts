@@ -5,10 +5,11 @@ import { and, count, desc, eq, gte, sql, sum } from 'drizzle-orm';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import {
   AdminModerateMessageRequestSchema,
-  CreateInviteRequestSchema
+  CreateInviteRequestSchema,
+  UpdateRegistrationModeRequestSchema
 } from '@penthouse/contracts';
 import { env } from '../config/env.js';
-import { db } from '../db/pool.js';
+import { db, pool } from '../db/pool.js';
 import {
   chats,
   mediaUploads,
@@ -16,10 +17,11 @@ import {
   messages,
   pushNotifications,
   pushSubscriptions,
+  serverSettings,
   signupInvites,
   users
 } from '../db/schema.js';
-import { forbidden, notFound } from '../utils/error-responses.js';
+import { badRequest, forbidden, notFound } from '../utils/error-responses.js';
 import { toMemberDetail } from '../utils/users.js';
 
 const startedAt = new Date();
@@ -82,11 +84,10 @@ async function hiddenMessageCount() {
 }
 
 export async function registerAdminRoutes(fastify: FastifyInstance) {
-  fastify.addHook('onRoute', (route) => {
-    if (route.url.startsWith('/api/v1/admin')) {
-      const existing = Array.isArray(route.preHandler) ? route.preHandler : route.preHandler ? [route.preHandler] : [];
-      route.preHandler = [...existing, fastify.authenticate, async (request) => requireAdmin(request)];
-    }
+  fastify.addHook('preHandler', async (request, reply) => {
+    if (!request.url.startsWith('/api/v1/admin')) return;
+    await fastify.authenticate(request, reply);
+    requireAdmin(request);
   });
 
   fastify.get('/api/v1/admin/summary', async () => {
@@ -235,6 +236,10 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
 
   fastify.post('/api/v1/admin/invites', async (request) => {
     const body = CreateInviteRequestSchema.parse(request.body);
+    if (body.expiresAt && new Date(body.expiresAt).getTime() <= Date.now()) {
+      throw badRequest('expiresAt must be in the future');
+    }
+
     const [invite] = await db.insert(signupInvites).values({
       code: inviteCode(),
       label: body.label,
@@ -243,11 +248,44 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
     }).returning();
 
     return {
+      id: invite.id,
       code: invite.code,
+      label: invite.label,
       uses: invite.uses,
       maxUses: invite.maxUses,
+      expiresAt: invite.expiresAt?.toISOString() ?? null,
+      revokedAt: invite.revokedAt?.toISOString() ?? null,
       createdAt: invite.createdAt.toISOString()
     };
+  });
+
+  fastify.post('/api/v1/admin/invites/:id/revoke', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const [invite] = await db.update(signupInvites)
+      .set({ revokedAt: new Date() })
+      .where(eq(signupInvites.id, id))
+      .returning({ id: signupInvites.id });
+
+    if (!invite) throw notFound('Invite not found');
+    return reply.status(204).send();
+  });
+
+  fastify.get('/api/v1/admin/registration-mode', async () => {
+    const [setting] = await db.select().from(serverSettings).where(eq(serverSettings.key, 'registration_mode')).limit(1);
+    return { registrationMode: setting?.value ?? 'invite_only' };
+  });
+
+  fastify.put('/api/v1/admin/registration-mode', async (request) => {
+    const body = UpdateRegistrationModeRequestSchema.parse(request.body);
+    const [setting] = await db.insert(serverSettings)
+      .values({ key: 'registration_mode', value: body.registrationMode, updatedAt: new Date() })
+      .onConflictDoUpdate({
+        target: serverSettings.key,
+        set: { value: body.registrationMode, updatedAt: new Date() }
+      })
+      .returning();
+
+    return { registrationMode: setting.value };
   });
 
   fastify.post('/api/v1/admin/moderate/:messageId', async (request) => {
@@ -255,31 +293,160 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
     const query = request.query as { action?: 'hide' | 'unhide' };
     const body = AdminModerateMessageRequestSchema.parse(request.body);
 
-    const [message] = await db.select().from(messages).where(eq(messages.id, params.messageId)).limit(1);
-    if (!message) throw notFound('Message not found');
-
     const action = query.action === 'unhide' ? 'unhide' : 'hide';
-    const [event] = await db.insert(messageModerationEvents).values({
-      messageId: message.id,
-      action,
-      actorUserId: request.authUser!.userId,
-      reason: body.reason
-    }).returning();
-
-    fastify.io.to(`chat:${message.chatId}`).emit('message.moderated', {
-      type: 'message.moderated',
-      payload: {
-        chatId: message.chatId,
-        messageId: message.id,
-        action,
-        moderatedAt: event.createdAt.toISOString()
-      }
-    });
-
-    return {
-      messageId: message.id,
-      action,
-      moderatedAt: event.createdAt.toISOString()
-    };
+    return moderateMessage(fastify, params.messageId, request.authUser!.userId, action, body.reason);
   });
+
+  fastify.post('/api/v1/admin/messages/:messageId/hide', async (request) => {
+    const { messageId } = request.params as { messageId: string };
+    const body = AdminModerateMessageRequestSchema.parse(request.body);
+    return moderateMessage(fastify, messageId, request.authUser!.userId, 'hide', body.reason);
+  });
+
+  fastify.post('/api/v1/admin/messages/:messageId/unhide', async (request) => {
+    const { messageId } = request.params as { messageId: string };
+    const body = AdminModerateMessageRequestSchema.parse(request.body);
+    return moderateMessage(fastify, messageId, request.authUser!.userId, 'unhide', body.reason);
+  });
+
+  fastify.get('/api/v1/admin/chats', async () => {
+    const result = await pool.query(
+      `SELECT c.id,
+              c.type,
+              CASE
+                WHEN c.type = 'dm' THEN string_agg('@' || u.username, ' + ' ORDER BY u.username)
+                ELSE c.name
+              END AS name,
+              c.created_at,
+              c.updated_at
+       FROM chats c
+       LEFT JOIN chat_members cm ON cm.chat_id = c.id
+       LEFT JOIN users u ON u.id = cm.user_id
+       GROUP BY c.id, c.type, c.name, c.created_at, c.updated_at
+       ORDER BY c.updated_at DESC`
+    );
+
+    return result.rows.map((row) => ({
+      id: row.id,
+      type: row.type,
+      name: row.name,
+      createdAt: new Date(row.created_at).toISOString(),
+      updatedAt: new Date(row.updated_at).toISOString()
+    }));
+  });
+
+  fastify.get('/api/v1/admin/chats/:chatId/messages', async (request) => {
+    const { chatId } = request.params as { chatId: string };
+    return listAdminMessages(chatId);
+  });
+}
+
+async function moderateMessage(
+  fastify: FastifyInstance,
+  messageId: string,
+  actorUserId: string,
+  action: 'hide' | 'unhide',
+  reason: string
+) {
+  const [message] = await db.select().from(messages).where(eq(messages.id, messageId)).limit(1);
+  if (!message) throw notFound('Message not found');
+
+  const [event] = await db.transaction(async (tx) => {
+    await tx.update(messages)
+      .set({
+        hiddenByModeration: action === 'hide',
+        moderationAction: action,
+        moderationReason: reason,
+        moderationActorUserId: actorUserId,
+        moderationUpdatedAt: new Date()
+      })
+      .where(eq(messages.id, message.id));
+
+    return tx.insert(messageModerationEvents).values({
+      messageId: message.id,
+      action,
+      actorUserId,
+      reason
+    }).returning();
+  });
+
+  const moderated = await loadAdminMessage(message.id);
+  fastify.io.to(`chat:${message.chatId}`).emit('message.moderated', {
+    type: 'message.moderated',
+    payload: {
+      chatId: message.chatId,
+      messageId: message.id,
+      action,
+      moderatedAt: event.createdAt.toISOString(),
+      message: moderated
+    }
+  });
+
+  return {
+    ...moderated,
+    messageId: message.id,
+    action,
+    moderatedAt: event.createdAt.toISOString()
+  };
+}
+
+async function loadAdminMessage(messageId: string) {
+  const [message] = await listAdminMessages(null, messageId);
+  if (!message) throw notFound('Message not found');
+  return message;
+}
+
+async function listAdminMessages(chatId: string | null, messageId?: string) {
+  const resolvedChatId = chatId === '00000000-0000-0000-0000-000000000001'
+    ? (await db.select({ id: chats.id }).from(chats).where(eq(chats.systemKey, 'general')).limit(1))[0]?.id ?? chatId
+    : chatId;
+  const result = await pool.query(
+    `SELECT m.id,
+            m.chat_id,
+            m.sender_id,
+            u.username AS sender_username,
+            u.display_name AS sender_display_name,
+            u.status AS sender_status,
+            m.content,
+            m.message_type,
+            m.metadata,
+            m.created_at,
+            m.hidden_by_moderation,
+            m.moderation_action,
+            m.moderation_reason,
+            m.moderation_updated_at,
+            m.moderation_actor_user_id,
+            actor.username AS moderation_actor_username,
+            actor.display_name AS moderation_actor_display_name
+     FROM messages m
+     JOIN users u ON u.id = m.sender_id
+     LEFT JOIN users actor ON actor.id = m.moderation_actor_user_id
+     WHERE ($1::uuid IS NULL OR m.chat_id = $1::uuid)
+       AND ($2::uuid IS NULL OR m.id = $2::uuid)
+     ORDER BY m.created_at ASC`,
+    [resolvedChatId, messageId ?? null]
+  );
+
+  return result.rows.map((row) => ({
+    id: row.id,
+    chatId: row.chat_id,
+    senderId: row.sender_id,
+    senderUsername: row.sender_username,
+    senderDisplayName: row.sender_display_name,
+    senderStatus: row.sender_status,
+    content: row.content,
+    type: row.message_type,
+    metadata: row.metadata ?? null,
+    createdAt: new Date(row.created_at).toISOString(),
+    hidden: Boolean(row.hidden_by_moderation),
+    moderation: {
+      hiddenByModeration: Boolean(row.hidden_by_moderation),
+      latestAction: row.moderation_action ?? null,
+      latestReason: row.moderation_reason ?? null,
+      latestCreatedAt: row.moderation_updated_at ? new Date(row.moderation_updated_at).toISOString() : null,
+      latestActorUserId: row.moderation_actor_user_id ?? null,
+      latestActorUsername: row.moderation_actor_username ?? null,
+      latestActorDisplayName: row.moderation_actor_display_name ?? null
+    }
+  }));
 }

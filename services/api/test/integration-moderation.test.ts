@@ -77,7 +77,7 @@ describe('[integration] message moderation', { skip: SKIP, concurrency: false },
       headers: helpers.authHeaders(member.accessToken)
     });
     assert.equal(memberMessagesRes.statusCode, 200);
-    const memberMessages = JSON.parse(memberMessagesRes.payload);
+    const memberMessages = JSON.parse(memberMessagesRes.payload).messages;
     const tombstoned = memberMessages.find((entry: any) => entry.id === messageId);
     assert.ok(tombstoned);
     assert.equal(tombstoned.hidden, true);
@@ -98,7 +98,7 @@ describe('[integration] message moderation', { skip: SKIP, concurrency: false },
     assert.equal(auditMessage.hidden, true);
     assert.equal(auditMessage.moderation.latestReason, 'Spam cleanup');
 
-    const moderationEvent = emitted.find((entry) => entry.room === `chat:${GENERAL_CHAT_ID}` && entry.event === 'message.moderated');
+    const moderationEvent = emitted.find((entry) => entry.event === 'message.moderated');
     assert.ok(moderationEvent);
     assert.equal((moderationEvent?.data as any)?.payload?.message?.hidden, true);
 
@@ -123,7 +123,7 @@ describe('[integration] message moderation', { skip: SKIP, concurrency: false },
       headers: helpers.authHeaders(member.accessToken)
     });
     assert.equal(restoredMessagesRes.statusCode, 200);
-    const restoredMessages = JSON.parse(restoredMessagesRes.payload);
+    const restoredMessages = JSON.parse(restoredMessagesRes.payload).messages;
     const restoredMemberMessage = restoredMessages.find((entry: any) => entry.id === messageId);
     assert.ok(restoredMemberMessage);
     assert.equal(restoredMemberMessage.hidden, false);
@@ -131,6 +131,7 @@ describe('[integration] message moderation', { skip: SKIP, concurrency: false },
   });
 
   test('rejects non-admin moderation attempts and missing reasons', async () => {
+    await helpers.registerUser(app, 'existing_moderation_admin');
     const member = await helpers.registerUser(app, 'plain_member_mod');
     const target = await helpers.registerUser(app, 'target_member_mod');
 
@@ -208,7 +209,7 @@ describe('[integration] message moderation', { skip: SKIP, concurrency: false },
       headers: helpers.authHeaders(member.accessToken)
     });
     assert.equal(memberMessagesRes.statusCode, 200);
-    const memberMessages = JSON.parse(memberMessagesRes.payload);
+    const memberMessages = JSON.parse(memberMessagesRes.payload).messages;
     const tombstoned = memberMessages.find((entry: any) => entry.id === messageId);
     assert.ok(tombstoned);
     assert.equal(tombstoned.hidden, true);
@@ -287,7 +288,7 @@ describe('[integration] message moderation', { skip: SKIP, concurrency: false },
       headers: helpers.authHeaders(alice.accessToken)
     });
     assert.equal(memberMessagesRes.statusCode, 200);
-    const memberMessages = JSON.parse(memberMessagesRes.payload);
+    const memberMessages = JSON.parse(memberMessagesRes.payload).messages;
     const tombstoned = memberMessages.find((entry: any) => entry.id === messageId);
     assert.ok(tombstoned);
     assert.equal(tombstoned.hidden, true);

@@ -37,7 +37,7 @@ describe('[integration] invite management', { skip: SKIP, concurrency: false }, 
       headers: authHeaders(admin.accessToken)
     });
     assert.equal(res.statusCode, 200);
-    const invites = JSON.parse(res.payload);
+    const { invites } = JSON.parse(res.payload);
     assert.ok(invites.length >= 1);
     assert.ok(invites.some((inv: any) => inv.code === 'PENTHOUSE-ALPHA'));
   });
@@ -53,7 +53,7 @@ describe('[integration] invite management', { skip: SKIP, concurrency: false }, 
       headers: authHeaders(admin.accessToken),
       payload: { label: 'Friends batch', maxUses: 5 }
     });
-    assert.equal(res.statusCode, 201);
+    assert.equal(res.statusCode, 200);
     const created = JSON.parse(res.payload);
     assert.equal(created.label, 'Friends batch');
     assert.equal(created.maxUses, 5);
@@ -87,7 +87,7 @@ describe('[integration] invite management', { skip: SKIP, concurrency: false }, 
         testNoticeVersion: 'alpha-v1'
       }
     });
-    assert.equal(regRes.statusCode, 201);
+    assert.equal(regRes.statusCode, 200);
   });
 
   test('revoked invite fails at registration', async () => {
@@ -151,7 +151,7 @@ describe('[integration] invite management', { skip: SKIP, concurrency: false }, 
         testNoticeVersion: 'alpha-v1'
       }
     });
-    assert.equal(firstReg.statusCode, 201);
+    assert.equal(firstReg.statusCode, 200);
 
     // Second use should fail
     const secondReg = await app.inject({
@@ -180,7 +180,7 @@ describe('[integration] invite management', { skip: SKIP, concurrency: false }, 
       headers: authHeaders(admin.accessToken),
       payload: { label: 'Expiring', maxUses: 10 }
     });
-    assert.equal(createRes.statusCode, 201);
+    assert.equal(createRes.statusCode, 200);
     const invite = JSON.parse(createRes.payload);
 
     await pool.query(
@@ -247,6 +247,7 @@ describe('[integration] invite management', { skip: SKIP, concurrency: false }, 
 
   test('non-admin cannot manage invites', async () => {
     const { registerUser, authHeaders } = await import('./helpers.js');
+    await registerUser(app, 'existing_admin_inv');
     const member = await registerUser(app, 'nonadmin_inv');
 
     const listRes = await app.inject({
@@ -334,7 +335,7 @@ describe('[integration] invite management', { skip: SKIP, concurrency: false }, 
       headers: { authorization: `Bearer ${accessToken}` },
       payload: { label: 'expiring-test', expiresAt: futureDate }
     });
-    assert.equal(result.statusCode, 201);
+    assert.equal(result.statusCode, 200);
     const invite = JSON.parse(result.payload);
     assert.ok(invite.expiresAt, 'invite should have expiresAt set');
   });
@@ -363,7 +364,7 @@ describe('[integration] invite management', { skip: SKIP, concurrency: false }, 
       payload: { label: 'bad-date', expiresAt: 'not-a-date' }
     });
     assert.equal(result.statusCode, 400);
-    assert.equal(JSON.parse(result.payload).error, 'expiresAt must be a valid ISO 8601 datetime');
+    assert.equal(JSON.parse(result.payload).message, 'expiresAt must be a valid ISO 8601 datetime');
   });
 
   test('create invite with past expiresAt returns 400', async () => {
@@ -392,7 +393,7 @@ describe('[integration] invite management', { skip: SKIP, concurrency: false }, 
     });
     assert.equal(result.statusCode, 400);
     const body = JSON.parse(result.payload);
-    assert.equal(body.error, 'expiresAt must be in the future');
+    assert.equal(body.message, 'expiresAt must be in the future');
   });
 
   test('closed registration mode reflected in public auth config', async () => {

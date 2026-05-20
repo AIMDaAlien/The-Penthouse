@@ -9,6 +9,10 @@ type Bucket = {
 
 const buckets = new Map<string, Bucket>();
 
+export function resetRateLimitBucketsForTests() {
+  buckets.clear();
+}
+
 export function rateLimit(maxAttempts: number, windowMs = 15 * 60_000) {
   return async (request: FastifyRequest, reply: FastifyReply) => {
     if (env.DISABLE_RATE_LIMIT) return;
