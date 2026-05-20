@@ -11,6 +11,8 @@ export default defineConfig(async () => ({
 	plugins: [
 		...(await sveltekit()),
 		...(await SvelteKitPWA({
+			base: '/',
+			scope: '/',
 			registerType: 'autoUpdate',
 			strategies: 'injectManifest',
 			srcDir: 'src',
