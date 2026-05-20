@@ -1,32 +1,25 @@
-import { createApp } from './app.js';
+import { buildApp } from './app.js';
 import { env } from './config/env.js';
-import { runMigrations } from './db/migrate.js';
-import { pool } from './db/pool.js';
-import { initRealtime } from './realtime/socket.js';
-import { maybeBootstrapAdmin } from './utils/users.js';
+import { closeDb } from './db/pool.js';
 
-async function main() {
-  await runMigrations();
-  await maybeBootstrapAdmin(pool);
+const app = await buildApp();
 
-  const app = await createApp();
-  app.decorate('io', initRealtime(app));
+await app.listen({ host: env.HOST, port: env.PORT });
 
-  const shutdown = async () => {
-    await app.close();
-    await pool.end();
-    process.exit(0);
+function gracefulShutdown(signal: string) {
+  return async () => {
+    app.log.info(`Received ${signal}, starting graceful shutdown...`);
+    try {
+      await app.close();
+      await closeDb();
+      app.log.info('Graceful shutdown complete.');
+      process.exit(0);
+    } catch (err) {
+      app.log.error(err, 'Graceful shutdown failed');
+      process.exit(1);
+    }
   };
-
-  process.on('SIGINT', shutdown);
-  process.on('SIGTERM', shutdown);
-
-  await app.listen({ port: env.PORT, host: '0.0.0.0' });
-  app.log.info(`API listening on ${env.PORT}`);
 }
 
-main().catch(async (error) => {
-  console.error(error);
-  await pool.end();
-  process.exit(1);
-});
+process.on('SIGTERM', gracefulShutdown('SIGTERM'));
+process.on('SIGINT', gracefulShutdown('SIGINT'));

@@ -1,14 +1,18 @@
 <script lang="ts">
 	import { readReceiptsStore } from '$stores/readReceipts.svelte';
+	import { sessionStore } from '$stores/session.svelte';
+	import Avatar from '$components/Avatar.svelte';
 
 	interface Props {
 		messageId: string;
 		chatId: string;
 		isSentByMe: boolean;
 		isPending: boolean;
+		chatType: 'dm' | 'group' | 'channel';
 		deliveredAt?: string | null;
-		clientSendTime?: number;
-		isLastOwnMessage?: boolean;
+		clientSendTime?: string | null;
+		usersMap: Map<string, { displayName: string; avatarUrl?: string | null }>;
+		orderedMessageIds: string[];
 	}
 
 	let {
@@ -16,71 +20,136 @@
 		chatId,
 		isSentByMe,
 		isPending,
+		chatType,
 		deliveredAt = null,
-		clientSendTime,
-		isLastOwnMessage = true
+		clientSendTime = null,
+		usersMap,
+		orderedMessageIds
 	}: Props = $props();
 
-	const receipts = $derived(isSentByMe ? readReceiptsStore.getReadReceipts(chatId, messageId) : []);
-	const isRead = $derived(receipts.length > 0);
+	const myId = $derived(sessionStore.user?.id);
+	const isAcked = $derived(!clientSendTime || messageId !== clientSendTime);
 
-	const latencyMs = $derived(
-		deliveredAt && clientSendTime != null
-			? new Date(deliveredAt).getTime() - clientSendTime
-			: null
-	);
+	const dmStatus = $derived.by(() => {
+		if (!isSentByMe || chatType !== 'dm') return null;
 
-	function formatLatency(ms: number): string {
-		if (ms < 1000) return `${ms}ms`;
-		if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
-		return ''; // unusually slow — just show "Received"
-	}
+		const readers = readReceiptsStore.getReadersForMessage(chatId, messageId, orderedMessageIds);
+		const otherReader = readers.find((r) => r.userId !== myId);
 
-	const readAt = $derived(receipts[0]?.readAt ?? null);
+		if (otherReader) return 'read';
+		if (deliveredAt || isAcked) return 'delivered';
+		return 'sent';
+	});
 
-	function formatElapsed(iso: string): string {
-		const elapsed = Date.now() - new Date(iso).getTime();
-		const m = Math.floor(elapsed / 60_000);
-		if (m < 1) return 'just now';
-		if (m < 60) return `${m}m`;
-		const h = Math.floor(m / 60);
-		const rem = m % 60;
-		if (h < 24) return rem > 0 ? `${h}h ${rem}m` : `${h}h`;
-		return `${Math.floor(h / 24)}d`;
-	}
+	const groupReaders = $derived.by(() => {
+		if (!isSentByMe || (chatType !== 'channel' && chatType !== 'group')) return [];
 
-	const state = $derived(
-		!isSentByMe
-			? null
-			: isRead
-				? 'read'
-				: deliveredAt
-					? 'received'
-					: 'sent'
-	);
-
-	const label = $derived(
-		state === 'read' && readAt
-			? `Read after ${formatElapsed(readAt)}`
-			: state === 'received' && latencyMs !== null
-				? `Received${formatLatency(latencyMs) ? ` in ${formatLatency(latencyMs)}` : ''}`
-				: state === 'sent'
-					? 'Sent'
-					: ''
-	);
+		const readers = readReceiptsStore.getReadersForMessage(chatId, messageId, orderedMessageIds);
+		return readers.filter((r) => r.userId !== myId).slice(0, 5);
+	});
 </script>
 
-{#if label && isLastOwnMessage}
-	<span class="receipt-label">{label}</span>
+{#if isSentByMe}
+	{#if chatType === 'dm' && dmStatus}
+		<span class="dm-glyphs" class:read={dmStatus === 'read'} aria-live="polite">
+			<span class="sr-only">
+				{#if dmStatus === 'read'}
+					Read
+				{:else if dmStatus === 'delivered'}
+					Delivered
+				{:else}
+					Sent
+				{/if}
+			</span>
+			<span aria-hidden="true">
+				{#if dmStatus === 'sent'}
+					/
+				{:else}
+					//
+				{/if}
+			</span>
+		</span>
+	{:else if chatType !== 'dm' && groupReaders.length > 0}
+		<div class="avatar-rail" aria-live="polite">
+			<span class="sr-only">
+				Read by {groupReaders.map((r) => usersMap.get(r.userId)?.displayName ?? 'Unknown').join(', ')}
+			</span>
+			{#each groupReaders as reader, index (reader.userId)}
+				{@const user = usersMap.get(reader.userId)}
+				<div class="avatar-wrap" style:--index={index} aria-hidden="true">
+					<Avatar
+						url={user?.avatarUrl ?? null}
+						name={user?.displayName ?? 'Unknown'}
+						size={20}
+					/>
+				</div>
+			{/each}
+		</div>
+	{/if}
 {/if}
 
 <style>
-	.receipt-label {
-		display: block;
-		text-align: right;
+	.dm-glyphs {
+		font-family: var(--font-mono);
 		font-size: var(--text-xs);
-		color: var(--color-accent);
-		opacity: 0.75;
-		margin-top: var(--space-1);
+		color: var(--p-text-2);
+		letter-spacing: -0.1em;
+		margin-left: auto;
+	}
+
+	.dm-glyphs.read {
+		color: var(--p-accent);
+	}
+
+	.avatar-rail {
+		display: flex;
+		flex-direction: row-reverse;
+		justify-content: flex-end;
+		margin-left: auto;
+		padding-left: var(--space-2);
+	}
+
+	.avatar-wrap {
+		width: 20px;
+		height: 20px;
+		margin-left: -8px;
+		border-radius: 50%;
+		border: 2px solid var(--p-bg);
+		overflow: hidden;
+		animation: slideIn 200ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+		animation-delay: calc(var(--index, 0) * 40ms);
+	}
+
+	.avatar-wrap:first-child {
+		margin-left: 0;
+	}
+
+	@keyframes slideIn {
+		from {
+			opacity: 0;
+			transform: translateX(6px) scale(0.8);
+		}
+		to {
+			opacity: 1;
+			transform: translateX(0) scale(1);
+		}
+	}
+
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border-width: 0;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.avatar-wrap {
+			animation: none;
+		}
 	}
 </style>

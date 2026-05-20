@@ -1,1563 +1,776 @@
-import { randomUUID } from 'node:crypto';
+import { and, desc, eq, ilike, inArray, isNull, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
-import { z } from 'zod';
 import {
-  AddReactionRequestSchema,
-  ChatMemberReadStateSchema,
+  AddChatMemberRequestSchema,
   ChatPreferencesRequestSchema,
-  ChatPreferencesResponseSchema,
-  CreatePollRequestSchema,
   CreateDirectChatRequestSchema,
+  CreateGroupChatRequestSchema,
   EditMessageRequestSchema,
-  EditMessageResponseSchema,
   MarkChatReadRequestSchema,
-  MarkChatReadResponseSchema,
-  MessageSchema,
   PinMessageRequestSchema,
-  PinnedMessageSchema,
   SendMessageRequestSchema,
-  SendMessageResponseSchema,
-  StarredMessagesResponseSchema,
-  VotePollRequestSchema
+  UpdateChatRequestSchema
 } from '@penthouse/contracts';
-import { pool } from '../db/pool.js';
-import { touchLastSeen } from '../utils/activity.js';
-import { REPLY_TARGET_NOT_FOUND_ERROR, loadPersistedMessageById, sendChatMessage } from '../utils/chatMessages.js';
-import { createAuthRateLimiter, replyIfRateLimited } from '../utils/authRateLimit.js';
-import { formatValidationError } from '../utils/error-responses.js';
-import { hydrateMessageReadReceipts, listChatMemberReadStates, markChatRead } from '../utils/messageReads.js';
-import { hydrateMessageReactions, loadGroupedReactionsForMessageIds, toPinnedMessage } from '../utils/messageHydration.js';
-import { toMemberMessage } from '../utils/messages.js';
-import { sendPushForNewMessage } from '../push/fcm.js';
-import { sendWebPushForNewMessage } from '../push/web.js';
-import { createPollRecords, loadPollVoteContext, recordPollVote } from '../utils/polls.js';
-import { getUserById } from '../utils/users.js';
+import { db } from '../db/pool.js';
+import { chatMembers, chats, directChats, messages, pinnedMessages, users } from '../db/schema.js';
+import { badRequest, forbidden, notFound } from '../utils/error-responses.js';
 import {
-  getChatSendState,
-  getChatSummaryForUser,
-  listChatSummariesForUser,
-  orderDirectChatParticipants
-} from '../utils/chats.js';
-
-const NOT_A_CHAT_MEMBER_ERROR = 'You are not a member of this chat';
-const ChatIdParamsSchema = z.object({
-  chatId: z.string().uuid()
-});
-const ChatMessageParamsSchema = z.object({
-  chatId: z.string().uuid(),
-  messageId: z.string().uuid()
-});
-const ChatReactionParamsSchema = z.object({
-  chatId: z.string().uuid(),
-  messageId: z.string().uuid(),
-  emoji: z.string().min(1).max(8)
-});
-const PollVoteParamsSchema = z.object({
-  pollId: z.string().uuid()
-});
-const ChatListQuerySchema = z.object({
-  archived: z.enum(['true', 'false']).optional()
-});
-const MessageHistoryQuerySchema = z.object({
-  cursor: z.string().uuid().optional(),
-  before: z.string().uuid().optional(),
-  limit: z.string().optional()
-});
-const StarredMessagesQuerySchema = z.object({
-  cursor: z.string().optional(),
-  limit: z.string().optional()
-});
-const CHAT_ROUTE_RATE_LIMITS = {
-  messageEdits: {
-    windowMs: 60_000,
-    maxRequests: 20,
-    error: 'Too many edits. Try again in a minute.'
-  },
-  messageDeletes: {
-    windowMs: 60_000,
-    maxRequests: 10,
-    error: 'Too many deletes. Try again in a minute.'
-  },
-  stars: {
-    windowMs: 60_000,
-    maxRequests: 60,
-    error: 'Too many star updates. Try again in a minute.'
-  },
-  reactions: {
-    windowMs: 60_000,
-    maxRequests: 30,
-    error: 'Too many reaction updates. Try again in a minute.'
-  },
-  pollVotes: {
-    windowMs: 60_000,
-    maxRequests: 10,
-    error: 'Too many poll votes. Try again in a minute.'
-  },
-  pins: {
-    windowMs: 60_000,
-    maxRequests: 20,
-    error: 'Too many pin updates. Try again in a minute.'
-  },
-  readMarks: {
-    windowMs: 60_000,
-    maxRequests: 60,
-    error: 'Too many read updates. Try again in a minute.'
-  }
-} as const;
-
-function joinUserSocketsToChat(app: FastifyInstance, chatId: string, userIds: string[]): void {
-  const io = app.io as
-    | {
-        in?: (room: string) => {
-          socketsJoin?: (targetRoom: string) => void;
-        };
-      }
-    | undefined;
-
-  if (!io?.in) return;
-
-  const targetRoom = `chat:${chatId}`;
-  for (const userId of new Set(userIds)) {
-    io.in(`user:${userId}`).socketsJoin?.(targetRoom);
-  }
-}
-
-async function ensureMembership(userId: string, chatId: string): Promise<boolean> {
-  const res = await pool.query('SELECT 1 FROM chat_members WHERE user_id = $1 AND chat_id = $2', [userId, chatId]);
-  return Boolean(res.rowCount);
-}
-
-type ChatPreferencesRow = {
-  chat_id: string;
-  notifications_muted: boolean;
-  notifications_muted_updated_at: string | Date;
-};
-
-function toChatPreferencesResponse(row: ChatPreferencesRow) {
-  return ChatPreferencesResponseSchema.parse({
-    chatId: row.chat_id,
-    notificationsMuted: Boolean(row.notifications_muted),
-    updatedAt: new Date(row.notifications_muted_updated_at).toISOString()
-  });
-}
-
-async function getChatPreferencesForUser(userId: string, chatId: string): Promise<ChatPreferencesRow | null> {
-  const result = await pool.query(
-    `SELECT chat_id, notifications_muted, notifications_muted_updated_at
-     FROM chat_members
-     WHERE chat_id = $1 AND user_id = $2`,
-    [chatId, userId]
-  );
-
-  if (!result.rowCount) return null;
-  return result.rows[0] as ChatPreferencesRow;
-}
-
-type ChatMessageContextRow = {
-  message_id: string;
-  chat_id: string;
-  sender_id: string;
-  content: string;
-  message_type: string | null;
-  created_at: string | Date;
-  deleted_at: string | Date | null;
-  hidden_by_moderation: boolean;
-  sender_status: 'active' | 'removed' | 'banned';
-  sender_display_name: string | null;
-};
-
-async function getChatMessageContext(chatId: string, messageId: string): Promise<ChatMessageContextRow | null> {
-  const result = await pool.query(
-    `SELECT m.id AS message_id,
-            m.chat_id,
-            m.sender_id,
-            m.content,
-            m.message_type,
-            m.created_at,
-            m.deleted_at,
-            COALESCE(m.hidden_by_moderation, FALSE) AS hidden_by_moderation,
-            u.status AS sender_status,
-            u.display_name AS sender_display_name
-     FROM messages m
-     JOIN users u ON u.id = m.sender_id
-     WHERE m.chat_id = $1
-       AND m.id = $2`,
-    [chatId, messageId]
-  );
-
-  return (result.rows[0] as ChatMessageContextRow | undefined) ?? null;
-}
-
-async function loadHydratedMessageForUser(userId: string, chatId: string, messageId: string) {
-  const result = await pool.query(
-    `SELECT m.id,
-            m.chat_id,
-            m.sender_id,
-            u.username AS sender_username,
-            u.display_name AS sender_display_name,
-            u.status AS sender_status,
-            m.hidden_by_moderation,
-            m.moderation_action,
-            m.moderation_reason,
-            m.moderation_updated_at,
-            m.moderation_actor_user_id,
-            media.storage_key AS avatar_storage_key,
-            m.content,
-            m.message_type,
-            m.metadata,
-            m.reply_to_snapshot,
-            m.created_at,
-            m.edited_at,
-            m.edit_count,
-            m.deleted_at,
-            m.deleted_by_user_id,
-            m.client_message_id,
-            sm.user_id IS NOT NULL AS starred,
-            seen.seen_at
-     FROM messages m
-     JOIN users u ON u.id = m.sender_id
-     LEFT JOIN media_uploads media ON media.id = u.avatar_media_id
-     LEFT JOIN starred_messages sm ON sm.message_id = m.id AND sm.user_id = $3
-     LEFT JOIN LATERAL (
-       SELECT MAX(cm_seen.last_read_at) AS seen_at
-       FROM chat_members cm_seen
-       JOIN users u_seen ON u_seen.id = cm_seen.user_id
-       JOIN messages m_seen ON m_seen.id = cm_seen.last_read_message_id
-       WHERE cm_seen.chat_id = m.chat_id
-         AND cm_seen.user_id <> m.sender_id
-         AND u_seen.status = 'active'
-         AND m_seen.created_at >= m.created_at
-     ) seen ON TRUE
-     WHERE m.chat_id = $1
-       AND m.id = $2`,
-    [chatId, messageId, userId]
-  );
-
-  const row = result.rows[0];
-  if (!row) return null;
-
-  const [withReceipts] = await hydrateMessageReadReceipts(pool, userId, [MessageSchema.parse(toMemberMessage(row as any))]);
-  const [message] = await hydrateMessageReactions(pool, [withReceipts]);
-  return MessageSchema.parse(message);
-}
-
-function parseStarredCursor(cursor?: string): { starredAt: string; messageId: string } | null {
-  if (!cursor) return null;
-  const [starredAt, messageId] = cursor.split('|');
-  if (!starredAt || !messageId || Number.isNaN(new Date(starredAt).getTime())) {
-    return null;
-  }
-  if (!z.string().uuid().safeParse(messageId).success) {
-    return null;
-  }
-  return { starredAt, messageId };
-}
-
-function encodeStarredCursor(row: { starred_at: string | Date; message_id: string }): string {
-  return `${new Date(row.starred_at).toISOString()}|${row.message_id}`;
-}
-
-async function listPinnedMessagesForChat(chatId: string) {
-  const result = await pool.query(
-    `SELECT chat_id, message_id, pinned_by, pinned_at, content_snapshot, sender_display_name_snapshot
-     FROM pinned_messages
-     WHERE chat_id = $1
-     ORDER BY pinned_at DESC`,
-    [chatId]
-  );
-
-  return result.rows.map((row) => PinnedMessageSchema.parse(toPinnedMessage(row as any)));
-}
-
-async function pinMessageForChat(
-  app: FastifyInstance,
-  request: any,
-  reply: any,
-  chatId: string,
-  messageId: string
-) {
-  const userId = request.user.userId;
-  const isMember = await ensureMembership(userId, chatId);
-  if (!isMember) return reply.status(403).send({ error: NOT_A_CHAT_MEMBER_ERROR });
-
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    await client.query('SELECT id FROM chats WHERE id = $1 FOR UPDATE', [chatId]);
-
-    const existingPinResult = await client.query(
-      `SELECT chat_id, message_id, pinned_by, pinned_at, content_snapshot, sender_display_name_snapshot
-       FROM pinned_messages
-       WHERE chat_id = $1
-         AND message_id = $2`,
-      [chatId, messageId]
-    );
-    const existingPinRow = existingPinResult.rows[0];
-    if (existingPinRow) {
-      await client.query('COMMIT');
-      return reply.send(PinnedMessageSchema.parse(toPinnedMessage(existingPinRow as any)));
-    }
-
-    const countResult = await client.query(
-      `SELECT COUNT(*)::int AS pin_count
-       FROM pinned_messages
-       WHERE chat_id = $1`,
-      [chatId]
-    );
-    const pinCount = Number((countResult.rows[0] as { pin_count: number }).pin_count ?? 0);
-    if (pinCount >= 5) {
-      await client.query('ROLLBACK');
-      return reply.status(422).send({ error: 'This chat already has the maximum of 5 pinned messages' });
-    }
-
-    const messageContext = await client.query(
-      `SELECT m.id AS message_id,
-              m.chat_id,
-              m.sender_id,
-              m.content,
-              m.created_at,
-              m.deleted_at,
-              COALESCE(m.hidden_by_moderation, FALSE) AS hidden_by_moderation,
-              u.status AS sender_status,
-              u.display_name AS sender_display_name
-       FROM messages m
-       JOIN users u ON u.id = m.sender_id
-       WHERE m.chat_id = $1
-         AND m.id = $2`,
-      [chatId, messageId]
-    );
-    const row = messageContext.rows[0] as ChatMessageContextRow | undefined;
-    if (!row || row.hidden_by_moderation || row.sender_status !== 'active' || row.deleted_at) {
-      await client.query('ROLLBACK');
-      return reply.status(404).send({ error: 'Message not found' });
-    }
-
-    const inserted = await client.query(
-      `INSERT INTO pinned_messages(
-         chat_id,
-         message_id,
-         pinned_by,
-         content_snapshot,
-         sender_display_name_snapshot
-       )
-       VALUES($1, $2, $3, $4, $5)
-       RETURNING chat_id, message_id, pinned_by, pinned_at, content_snapshot, sender_display_name_snapshot`,
-      [chatId, messageId, userId, row.content, row.sender_display_name]
-    );
-
-    await client.query('COMMIT');
-
-    const pin = PinnedMessageSchema.parse(toPinnedMessage(inserted.rows[0] as any));
-    app.io.to(`chat:${chatId}`).emit('message.pinned', {
-      type: 'message.pinned',
-      payload: {
-        chatId,
-        messageId,
-        pinnedByUserId: userId,
-        pinnedAt: pin.pinnedAt
-      }
-    });
-
-    return reply.send(pin);
-  } catch (error) {
-    await client.query('ROLLBACK');
-    request.log.error({ error, chatId, messageId, userId }, 'failed to pin message');
-    return reply.status(500).send({ error: 'Failed to pin message' });
-  } finally {
-    client.release();
-  }
-}
-
-async function unpinMessageForChat(
-  app: FastifyInstance,
-  request: any,
-  reply: any,
-  chatId: string,
-  messageId: string
-) {
-  const userId = request.user.userId;
-  const isMember = await ensureMembership(userId, chatId);
-  if (!isMember) return reply.status(403).send({ error: NOT_A_CHAT_MEMBER_ERROR });
-
-  const deleteResult = await pool.query(
-    `DELETE FROM pinned_messages
-     WHERE chat_id = $1
-       AND message_id = $2`,
-    [chatId, messageId]
-  );
-
-  if (deleteResult.rowCount) {
-    app.io.to(`chat:${chatId}`).emit('message.unpinned', {
-      type: 'message.unpinned',
-      payload: {
-        chatId,
-        messageId
-      }
-    });
-  }
-
-  return reply.status(204).send();
-}
-
-async function resolveOrCreateSelfChat(userId: string): Promise<string> {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    await client.query('SELECT pg_advisory_xact_lock(hashtext($1::text))', [`self-dm:${userId}`]);
-
-    const existing = await client.query(
-      `SELECT c.id
-       FROM chats c
-       JOIN chat_members cm ON cm.chat_id = c.id
-       LEFT JOIN direct_chats dc ON dc.chat_id = c.id
-       WHERE c.type = 'dm'
-         AND dc.chat_id IS NULL
-         AND c.name = 'Notes'
-       GROUP BY c.id
-       HAVING COUNT(*) = 1
-          AND COUNT(*) FILTER (WHERE cm.user_id = $1) = 1`,
-      [userId]
-    );
-
-    const existingChatId = (existing.rows[0] as { id: string } | undefined)?.id;
-    if (existingChatId) {
-      await client.query('COMMIT');
-      return existingChatId;
-    }
-
-    const chatId = randomUUID();
-    await client.query(
-      `INSERT INTO chats(id, type, name)
-       VALUES($1, 'dm', 'Notes')`,
-      [chatId]
-    );
-    await client.query(
-      `INSERT INTO chat_members(chat_id, user_id)
-       VALUES($1, $2)`,
-      [chatId, userId]
-    );
-    await client.query('COMMIT');
-    return chatId;
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
-}
-
-export async function registerChatRoutes(app: FastifyInstance): Promise<void> {
-  const messageEditRateLimiter = createAuthRateLimiter(CHAT_ROUTE_RATE_LIMITS.messageEdits);
-  const messageDeleteRateLimiter = createAuthRateLimiter(CHAT_ROUTE_RATE_LIMITS.messageDeletes);
-  const starRateLimiter = createAuthRateLimiter(CHAT_ROUTE_RATE_LIMITS.stars);
-  const reactionRateLimiter = createAuthRateLimiter(CHAT_ROUTE_RATE_LIMITS.reactions);
-  const pollVoteRateLimiter = createAuthRateLimiter(CHAT_ROUTE_RATE_LIMITS.pollVotes);
-  const pinRateLimiter = createAuthRateLimiter(CHAT_ROUTE_RATE_LIMITS.pins);
-  const readMarkRateLimiter = createAuthRateLimiter(CHAT_ROUTE_RATE_LIMITS.readMarks);
-
-  app.get('/api/v1/chats', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
-    const parsedQuery = ChatListQuerySchema.safeParse(request.query ?? {});
-    if (!parsedQuery.success) return reply.status(400).send({ error: formatValidationError(parsedQuery.error) });
-
-    const summaries = await listChatSummariesForUser(pool, request.user.userId, {
-      archived: parsedQuery.data.archived === 'true'
-    });
-    touchLastSeen(pool, request.user.userId, request.log);
-    return summaries;
-  });
-
-  app.get('/api/v1/me/starred', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
-    const userId = request.user.userId;
-    const parsedQuery = StarredMessagesQuerySchema.safeParse(request.query ?? {});
-    if (!parsedQuery.success) return reply.status(400).send({ error: formatValidationError(parsedQuery.error) });
-
-    const safeLimit = Math.max(1, Math.min(50, Number.parseInt(parsedQuery.data.limit ?? '30', 10) || 30));
-    const cursor = parseStarredCursor(parsedQuery.data.cursor);
-    if (parsedQuery.data.cursor && !cursor) {
-      return reply.status(400).send({ error: 'Invalid cursor' });
-    }
-
-    const query = cursor
-      ? `SELECT sm.starred_at,
-                sm.message_id,
-                c.name AS chat_name,
-                c.type AS chat_type,
-                m.id,
-                m.chat_id,
-                m.sender_id,
-                u.username AS sender_username,
-                u.display_name AS sender_display_name,
-                u.status AS sender_status,
-                m.hidden_by_moderation,
-                m.moderation_action,
-                m.moderation_reason,
-                m.moderation_updated_at,
-                m.moderation_actor_user_id,
-                media.storage_key AS avatar_storage_key,
-                m.content,
-                m.message_type,
-                m.metadata,
-                m.reply_to_snapshot,
-                m.created_at,
-                m.edited_at,
-                m.edit_count,
-                m.deleted_at,
-                m.deleted_by_user_id,
-                m.client_message_id,
-                TRUE AS starred,
-                NULL::timestamptz AS seen_at
-         FROM starred_messages sm
-         JOIN messages m ON m.id = sm.message_id
-         JOIN chats c ON c.id = m.chat_id
-         JOIN chat_members cm ON cm.chat_id = m.chat_id AND cm.user_id = sm.user_id
-         JOIN users u ON u.id = m.sender_id
-         LEFT JOIN media_uploads media ON media.id = u.avatar_media_id
-         WHERE sm.user_id = $1
-           AND (sm.starred_at, sm.message_id) < ($2::timestamptz, $3::uuid)
-         ORDER BY sm.starred_at DESC, sm.message_id DESC
-         LIMIT $4`
-      : `SELECT sm.starred_at,
-                sm.message_id,
-                c.name AS chat_name,
-                c.type AS chat_type,
-                m.id,
-                m.chat_id,
-                m.sender_id,
-                u.username AS sender_username,
-                u.display_name AS sender_display_name,
-                u.status AS sender_status,
-                m.hidden_by_moderation,
-                m.moderation_action,
-                m.moderation_reason,
-                m.moderation_updated_at,
-                m.moderation_actor_user_id,
-                media.storage_key AS avatar_storage_key,
-                m.content,
-                m.message_type,
-                m.metadata,
-                m.reply_to_snapshot,
-                m.created_at,
-                m.edited_at,
-                m.edit_count,
-                m.deleted_at,
-                m.deleted_by_user_id,
-                m.client_message_id,
-                TRUE AS starred,
-                NULL::timestamptz AS seen_at
-         FROM starred_messages sm
-         JOIN messages m ON m.id = sm.message_id
-         JOIN chats c ON c.id = m.chat_id
-         JOIN chat_members cm ON cm.chat_id = m.chat_id AND cm.user_id = sm.user_id
-         JOIN users u ON u.id = m.sender_id
-         LEFT JOIN media_uploads media ON media.id = u.avatar_media_id
-         WHERE sm.user_id = $1
-         ORDER BY sm.starred_at DESC, sm.message_id DESC
-         LIMIT $2`;
-
-    const values = cursor
-      ? [userId, cursor.starredAt, cursor.messageId, safeLimit + 1]
-      : [userId, safeLimit + 1];
-    const result = await pool.query(query, values);
-    const pageRows = result.rows.slice(0, safeLimit);
-    const baseMessages = pageRows.map((row: any) => MessageSchema.parse(toMemberMessage(row)));
-    const hydratedMessages = await hydrateMessageReactions(pool, baseMessages);
-
-    const items = pageRows.map((row: any, index: number) => ({
-      starredAt: new Date(row.starred_at).toISOString(),
-      message: {
-        ...hydratedMessages[index],
-        chatName: row.chat_name,
-        chatType: row.chat_type
-      }
-    }));
-
-    const nextCursor = result.rows.length > safeLimit ? encodeStarredCursor(pageRows[pageRows.length - 1] as any) : null;
-
-    touchLastSeen(pool, userId, request.log);
-    return reply.send(StarredMessagesResponseSchema.parse({ items, nextCursor }));
-  });
-
-  app.post('/api/v1/chats/dm', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
-    const userId = request.user.userId;
-    const parsed = CreateDirectChatRequestSchema.safeParse(request.body ?? {});
-    if (!parsed.success) return reply.status(400).send({ error: formatValidationError(parsed.error) });
-
-    if (parsed.data.memberId === userId) {
-      return reply.status(409).send({ error: 'Cannot message yourself' });
-    }
-
-    const target = await getUserById(pool, parsed.data.memberId);
-    if (!target) {
-      return reply.status(404).send({ error: 'Member not found' });
-    }
-
-    if (target.status !== 'active') {
-      return reply.status(409).send({ error: 'Member account is not active' });
-    }
-
-    const [firstUserId, secondUserId] = orderDirectChatParticipants(userId, parsed.data.memberId);
-    const client = await pool.connect();
-
-    let chatId: string | null = null;
-
-    try {
-      await client.query('BEGIN');
-
-      const existing = await client.query(
-        `SELECT chat_id
-         FROM direct_chats
-         WHERE first_user_id = $1 AND second_user_id = $2`,
-        [firstUserId, secondUserId]
-      );
-
-      chatId = (existing.rows[0] as { chat_id: string } | undefined)?.chat_id ?? null;
-
-      if (!chatId) {
-        const insertedChatId = randomUUID();
-        await client.query(
-          `INSERT INTO chats(id, type, name)
-           VALUES($1, 'dm', 'Direct message')`,
-          [insertedChatId]
-        );
-
-        const insertedDirectChat = await client.query(
-          `INSERT INTO direct_chats(chat_id, first_user_id, second_user_id)
-           VALUES($1, $2, $3)
-           ON CONFLICT (first_user_id, second_user_id) DO NOTHING
-           RETURNING chat_id`,
-          [insertedChatId, firstUserId, secondUserId]
-        );
-
-        if (insertedDirectChat.rowCount) {
-          chatId = insertedChatId;
-        } else {
-          await client.query('DELETE FROM chats WHERE id = $1', [insertedChatId]);
-          const raced = await client.query(
-            `SELECT chat_id
-             FROM direct_chats
-             WHERE first_user_id = $1 AND second_user_id = $2`,
-            [firstUserId, secondUserId]
-          );
-          chatId = (raced.rows[0] as { chat_id: string } | undefined)?.chat_id ?? null;
-        }
-      }
-
-      if (!chatId) {
-        throw new Error('Failed to resolve direct chat');
-      }
-
-      await client.query(
-        `INSERT INTO chat_members(chat_id, user_id)
-         VALUES ($1, $2), ($1, $3)
-         ON CONFLICT (chat_id, user_id) DO NOTHING`,
-        [chatId, userId, parsed.data.memberId]
-      );
-
-      await client.query('COMMIT');
-    } catch (error) {
-      await client.query('ROLLBACK');
-      request.log.error({ error, userId, counterpartUserId: parsed.data.memberId }, 'failed to resolve direct chat');
-      return reply.status(500).send({ error: 'Failed to resolve direct chat' });
-    } finally {
-      client.release();
-    }
-
-    if (!chatId) {
-      return reply.status(500).send({ error: 'Failed to resolve direct chat' });
-    }
-
-    joinUserSocketsToChat(app, chatId, [userId, parsed.data.memberId]);
-
-    const summary = await getChatSummaryForUser(pool, userId, chatId);
-    if (!summary) {
-      return reply.status(500).send({ error: 'Failed to load direct chat' });
-    }
-
-    return reply.send(summary);
-  });
-
-  app.post('/api/v1/chats/self', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
-    try {
-      const chatId = await resolveOrCreateSelfChat(request.user.userId);
-      joinUserSocketsToChat(app, chatId, [request.user.userId]);
-
-      const summary = await getChatSummaryForUser(pool, request.user.userId, chatId);
-      if (!summary) {
-        return reply.status(500).send({ error: 'Failed to load self chat' });
-      }
-
-      return reply.send(summary);
-    } catch (error) {
-      request.log.error({ error, userId: request.user.userId }, 'failed to resolve self chat');
-      return reply.status(500).send({ error: 'Failed to resolve self chat' });
-    }
-  });
-
-  app.post('/api/v1/chats/:chatId/archive', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
-    const params = ChatIdParamsSchema.safeParse(request.params ?? {});
-    if (!params.success) return reply.status(400).send({ error: formatValidationError(params.error) });
-
-    const result = await pool.query(
-      `UPDATE chat_members
-       SET archived_at = NOW()
-       WHERE chat_id = $1 AND user_id = $2`,
-      [params.data.chatId, request.user.userId]
-    );
-
-    if (!result.rowCount) {
-      return reply.status(403).send({ error: NOT_A_CHAT_MEMBER_ERROR });
-    }
-
-    return reply.status(204).send();
-  });
-
-  app.post('/api/v1/chats/:chatId/unarchive', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
-    const params = ChatIdParamsSchema.safeParse(request.params ?? {});
-    if (!params.success) return reply.status(400).send({ error: formatValidationError(params.error) });
-
-    const result = await pool.query(
-      `UPDATE chat_members
-       SET archived_at = NULL
-       WHERE chat_id = $1 AND user_id = $2`,
-      [params.data.chatId, request.user.userId]
-    );
-
-    if (!result.rowCount) {
-      return reply.status(403).send({ error: NOT_A_CHAT_MEMBER_ERROR });
-    }
-
-    return reply.status(204).send();
-  });
-
-  app.get('/api/v1/chats/:chatId/messages', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
-    const userId = request.user.userId;
-    const params = ChatIdParamsSchema.safeParse(request.params ?? {});
-    if (!params.success) return reply.status(400).send({ error: formatValidationError(params.error) });
-    const parsedQuery = MessageHistoryQuerySchema.safeParse(request.query ?? {});
-    if (!parsedQuery.success) return reply.status(400).send({ error: formatValidationError(parsedQuery.error) });
-
-    const { chatId } = params.data;
-    const { cursor, before, limit = '30' } = parsedQuery.data;
-
-    const isMember = await ensureMembership(userId, chatId);
-    if (!isMember) return reply.status(403).send({ error: NOT_A_CHAT_MEMBER_ERROR });
-
-    const safeLimit = Math.max(1, Math.min(100, Number.parseInt(limit, 10) || 30));
-    const paginationCursor = before ?? cursor;
-
-    const query = paginationCursor
-      ? `SELECT m.id, m.chat_id, m.sender_id, u.username AS sender_username, u.display_name AS sender_display_name,
-                u.status AS sender_status,
-                m.hidden_by_moderation, m.moderation_action, m.moderation_reason, m.moderation_updated_at, m.moderation_actor_user_id,
-                media.storage_key AS avatar_storage_key, m.content, m.message_type, m.metadata, m.reply_to_snapshot, m.created_at,
-                m.edited_at, m.edit_count, m.deleted_at, m.deleted_by_user_id, m.client_message_id,
-                sm.user_id IS NOT NULL AS starred,
-                seen.seen_at
-         FROM messages m
-         JOIN users u ON u.id = m.sender_id
-         LEFT JOIN media_uploads media ON media.id = u.avatar_media_id
-         LEFT JOIN starred_messages sm ON sm.message_id = m.id AND sm.user_id = $4
-         LEFT JOIN LATERAL (
-           SELECT MAX(cm_seen.last_read_at) AS seen_at
-           FROM chat_members cm_seen
-           JOIN users u_seen ON u_seen.id = cm_seen.user_id
-           JOIN messages m_seen ON m_seen.id = cm_seen.last_read_message_id
-           WHERE cm_seen.chat_id = m.chat_id
-             AND cm_seen.user_id <> m.sender_id
-             AND u_seen.status = 'active'
-             AND m_seen.created_at >= m.created_at
-         ) seen ON TRUE
-         WHERE m.chat_id = $1 AND m.created_at < (SELECT created_at FROM messages WHERE id = $2)
-         ORDER BY m.created_at DESC
-         LIMIT $3`
-      : `SELECT m.id, m.chat_id, m.sender_id, u.username AS sender_username, u.display_name AS sender_display_name,
-                u.status AS sender_status,
-                m.hidden_by_moderation, m.moderation_action, m.moderation_reason, m.moderation_updated_at, m.moderation_actor_user_id,
-                media.storage_key AS avatar_storage_key, m.content, m.message_type, m.metadata, m.reply_to_snapshot, m.created_at,
-                m.edited_at, m.edit_count, m.deleted_at, m.deleted_by_user_id, m.client_message_id,
-                sm.user_id IS NOT NULL AS starred,
-                seen.seen_at
-         FROM messages m
-         JOIN users u ON u.id = m.sender_id
-         LEFT JOIN media_uploads media ON media.id = u.avatar_media_id
-         LEFT JOIN starred_messages sm ON sm.message_id = m.id AND sm.user_id = $3
-         LEFT JOIN LATERAL (
-           SELECT MAX(cm_seen.last_read_at) AS seen_at
-           FROM chat_members cm_seen
-           JOIN users u_seen ON u_seen.id = cm_seen.user_id
-           JOIN messages m_seen ON m_seen.id = cm_seen.last_read_message_id
-           WHERE cm_seen.chat_id = m.chat_id
-             AND cm_seen.user_id <> m.sender_id
-             AND u_seen.status = 'active'
-             AND m_seen.created_at >= m.created_at
-         ) seen ON TRUE
-         WHERE m.chat_id = $1
-         ORDER BY m.created_at DESC
-         LIMIT $2`;
-
-    const values = paginationCursor ? [chatId, paginationCursor, safeLimit, userId] : [chatId, safeLimit, userId];
-    const rows = await pool.query(query, values);
-    touchLastSeen(pool, request.user.userId, request.log);
-
-    const messagesWithReadReceipts = await hydrateMessageReadReceipts(
-      pool,
-      userId,
-      rows.rows.map((messageRow: any) => MessageSchema.parse(toMemberMessage(messageRow)))
-    );
-    const messages = await hydrateMessageReactions(pool, messagesWithReadReceipts);
-
-    return messages.map((message) => MessageSchema.parse(message));
-  });
-
-  app.post('/api/v1/chats/:chatId/messages', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
-    const userId = request.user.userId;
-    const params = ChatIdParamsSchema.safeParse(request.params ?? {});
-    if (!params.success) return reply.status(400).send({ error: formatValidationError(params.error) });
-
-    const parsed = SendMessageRequestSchema.safeParse({
-      ...(request.body as object),
-      chatId: params.data.chatId
-    });
-
-    if (!parsed.success) return reply.status(400).send({ error: formatValidationError(parsed.error) });
-
-    const sendState = await getChatSendState(pool, userId, parsed.data.chatId);
-    if (!sendState.isMember) return reply.status(403).send({ error: NOT_A_CHAT_MEMBER_ERROR });
-    if (sendState.isReadOnly) return reply.status(409).send({ error: 'Direct message is unavailable' });
-
-    try {
-      const response = await sendChatMessage({
-        io: app.io,
-        log: request.log,
-        chatId: parsed.data.chatId,
-        senderUserId: userId,
-        content: parsed.data.content,
-        clientMessageId: parsed.data.clientMessageId,
-        messageType: parsed.data.type ?? 'text',
-        metadata: parsed.data.metadata ?? null,
-        replyToMessageId: parsed.data.replyToMessageId
-      });
-
-      return reply.send(SendMessageResponseSchema.parse(response));
-    } catch (error) {
-      if (error instanceof Error && error.message === REPLY_TARGET_NOT_FOUND_ERROR) {
-        return reply.status(404).send({ error: REPLY_TARGET_NOT_FOUND_ERROR });
-      }
-      request.log.error({ error, chatId: parsed.data.chatId, userId }, 'failed to send message');
-      return reply.status(500).send({ error: 'Failed to send message' });
-    }
-  });
-
-  app.patch('/api/v1/chats/:chatId/messages/:messageId', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
-    const userId = request.user.userId;
-    const params = ChatMessageParamsSchema.safeParse(request.params ?? {});
-    if (!params.success) return reply.status(400).send({ error: formatValidationError(params.error) });
-    const parsed = EditMessageRequestSchema.safeParse(request.body ?? {});
-    if (!parsed.success) return reply.status(400).send({ error: formatValidationError(parsed.error) });
-
-    if (
-      replyIfRateLimited(
-        reply,
-        messageEditRateLimiter.consume(userId),
-        CHAT_ROUTE_RATE_LIMITS.messageEdits.error
-      )
-    ) {
-      return;
-    }
-
-    const { chatId, messageId } = params.data;
-    const isMember = await ensureMembership(userId, chatId);
-    if (!isMember) return reply.status(403).send({ error: NOT_A_CHAT_MEMBER_ERROR });
-
-    const messageContext = await getChatMessageContext(chatId, messageId);
-    if (!messageContext || messageContext.hidden_by_moderation || messageContext.sender_status !== 'active' || messageContext.deleted_at) {
-      return reply.status(404).send({ error: 'Message not found' });
-    }
-    if (messageContext.sender_id !== userId) {
-      return reply.status(403).send({ error: `You don't have permission to perform this action` });
-    }
-    if ((messageContext.message_type ?? 'text') !== 'text') {
-      return reply.status(403).send({ error: 'Only text messages can be edited' });
-    }
-    if (Date.now() - new Date(messageContext.created_at).getTime() > 15 * 60 * 1000) {
-      return reply.status(403).send({ error: 'Message can no longer be edited' });
-    }
-
-    const updated = await pool.query(
-      `UPDATE messages
-       SET content = $1,
-           edited_at = NOW(),
-           edit_count = edit_count + 1
-       WHERE id = $2
-         AND chat_id = $3
-         AND sender_id = $4
-         AND deleted_at IS NULL
-         AND COALESCE(message_type, 'text') = 'text'
-         AND NOW() - created_at <= interval '15 minutes'
-       RETURNING edited_at, edit_count`,
-      [parsed.data.content, messageId, chatId, userId]
-    );
-
-    const row = updated.rows[0] as { edited_at: string | Date; edit_count: number } | undefined;
-    if (!row) return reply.status(404).send({ error: 'Message not found' });
-
-    const message = await loadHydratedMessageForUser(userId, chatId, messageId);
-    if (!message) return reply.status(404).send({ error: 'Message not found' });
-
-    app.io.to(`chat:${chatId}`).emit('message.edited', {
-      type: 'message.edited',
-      payload: {
-        chatId,
-        messageId,
-        content: parsed.data.content,
-        editedAt: new Date(row.edited_at).toISOString(),
-        editCount: Number(row.edit_count)
-      }
-    });
-
-    return reply.send(EditMessageResponseSchema.parse({ message }));
-  });
-
-  app.post('/api/v1/chats/:chatId/messages/:messageId/reactions', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
-    const userId = request.user.userId;
-    const params = ChatMessageParamsSchema.safeParse(request.params ?? {});
-    if (!params.success) return reply.status(400).send({ error: formatValidationError(params.error) });
-    const { chatId, messageId } = params.data;
-    const parsed = AddReactionRequestSchema.safeParse(request.body ?? {});
-    if (!parsed.success) return reply.status(400).send({ error: formatValidationError(parsed.error) });
-
-    const isMember = await ensureMembership(userId, chatId);
-    if (!isMember) return reply.status(403).send({ error: NOT_A_CHAT_MEMBER_ERROR });
-    if (
-      replyIfRateLimited(
-        reply,
-        reactionRateLimiter.consume(userId),
-        CHAT_ROUTE_RATE_LIMITS.reactions.error
-      )
-    ) {
-      return;
-    }
-
-    const messageContext = await getChatMessageContext(chatId, messageId);
-    if (!messageContext || messageContext.hidden_by_moderation || messageContext.sender_status !== 'active' || messageContext.deleted_at) {
-      return reply.status(404).send({ error: 'Message not found' });
-    }
-
-    const insertResult = await pool.query(
-      `INSERT INTO message_reactions(message_id, user_id, emoji)
-       VALUES($1, $2, $3)
-       ON CONFLICT DO NOTHING
-       RETURNING created_at`,
-      [messageId, userId, parsed.data.emoji]
-    );
-
-    if (insertResult.rowCount) {
-      app.io.to(`chat:${chatId}`).emit('reaction.add', {
-        type: 'reaction.add',
-        payload: {
-          chatId,
-          messageId,
-          userId,
-          emoji: parsed.data.emoji,
-          createdAt: new Date((insertResult.rows[0] as { created_at: string | Date }).created_at).toISOString()
-        }
-      });
-    }
-
-    const grouped = await loadGroupedReactionsForMessageIds(pool, [messageId]);
-    return reply.send(grouped.get(messageId) ?? []);
-  });
-
-  app.delete('/api/v1/chats/:chatId/messages/:messageId/reactions/:emoji', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
-    const userId = request.user.userId;
-    const params = ChatReactionParamsSchema.safeParse(request.params ?? {});
-    if (!params.success) return reply.status(400).send({ error: formatValidationError(params.error) });
-    const { chatId, messageId, emoji } = params.data;
-
-    const isMember = await ensureMembership(userId, chatId);
-    if (!isMember) return reply.status(403).send({ error: NOT_A_CHAT_MEMBER_ERROR });
-    if (
-      replyIfRateLimited(
-        reply,
-        reactionRateLimiter.consume(userId),
-        CHAT_ROUTE_RATE_LIMITS.reactions.error
-      )
-    ) {
-      return;
-    }
-
-    const messageContext = await getChatMessageContext(chatId, messageId);
-    if (!messageContext || messageContext.hidden_by_moderation || messageContext.sender_status !== 'active' || messageContext.deleted_at) {
-      return reply.status(404).send({ error: 'Message not found' });
-    }
-
-    const deleteResult = await pool.query(
-      `DELETE FROM message_reactions
-       WHERE message_id = $1
-         AND user_id = $2
-         AND emoji = $3`,
-      [messageId, userId, emoji]
-    );
-
-    if (!deleteResult.rowCount) {
-      const existingReaction = await pool.query(
-        `SELECT 1
-         FROM message_reactions
-         WHERE message_id = $1
-           AND emoji = $2
-         LIMIT 1`,
-        [messageId, emoji]
-      );
-
-      if (existingReaction.rowCount) {
-        return reply.status(403).send({ error: `You don't have permission to perform this action` });
-      }
-    }
-
-    if (deleteResult.rowCount) {
-      app.io.to(`chat:${chatId}`).emit('reaction.remove', {
-        type: 'reaction.remove',
-        payload: {
-          chatId,
-          messageId,
-          userId,
-          emoji
-        }
-      });
-    }
-
-    return reply.status(204).send();
-  });
-
-  app.delete('/api/v1/chats/:chatId/messages/:messageId', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
-    const userId = request.user.userId;
-    const params = ChatMessageParamsSchema.safeParse(request.params ?? {});
-    if (!params.success) return reply.status(400).send({ error: formatValidationError(params.error) });
-    const { chatId, messageId } = params.data;
-
-    if (
-      replyIfRateLimited(
-        reply,
-        messageDeleteRateLimiter.consume(userId),
-        CHAT_ROUTE_RATE_LIMITS.messageDeletes.error
-      )
-    ) {
-      return;
-    }
-
-    const isMember = await ensureMembership(userId, chatId);
-    if (!isMember) return reply.status(403).send({ error: NOT_A_CHAT_MEMBER_ERROR });
-
-    const messageContext = await getChatMessageContext(chatId, messageId);
-
-    if (!messageContext || messageContext.hidden_by_moderation || messageContext.sender_status !== 'active') {
-      return reply.status(404).send({ error: 'Message not found' });
-    }
-
-    if (messageContext.sender_id !== userId) {
-      return reply.status(403).send({ error: `You don't have permission to perform this action` });
-    }
-
-    if (Date.now() - new Date(messageContext.created_at).getTime() > 24 * 60 * 60 * 1000) {
-      return reply.status(403).send({ error: 'Message can no longer be deleted' });
-    }
-
-    const client = await pool.connect();
-    let deletedAt: string | null = null;
-    let removedPin = false;
-
-    try {
-      await client.query('BEGIN');
-      const result = await client.query(
-        `UPDATE messages
-         SET deleted_at = NOW(),
-             deleted_by_user_id = $1,
-             content = '',
-             message_type = 'text',
-             metadata = NULL,
-             reply_to_message_id = NULL,
-             reply_to_snapshot = NULL
-         WHERE id = $2
-           AND chat_id = $3
-           AND sender_id = $4
-           AND deleted_at IS NULL
-           AND NOW() - created_at <= interval '24 hours'
-         RETURNING deleted_at`,
-        [userId, messageId, chatId, userId]
-      );
-
-      if (result.rowCount) {
-        deletedAt = new Date((result.rows[0] as { deleted_at: string | Date }).deleted_at).toISOString();
-        const pinDelete = await client.query('DELETE FROM pinned_messages WHERE message_id = $1', [messageId]);
-        removedPin = Boolean(pinDelete.rowCount);
-      }
-
-      await client.query('COMMIT');
-    } catch (error) {
-      await client.query('ROLLBACK');
-      request.log.error({ error, chatId, messageId, userId }, 'failed to delete message');
-      return reply.status(500).send({ error: 'Failed to delete message' });
-    } finally {
-      client.release();
-    }
-
-    if (deletedAt) {
-      app.io.to(`chat:${chatId}`).emit('message.deleted', {
-        type: 'message.deleted',
-        payload: {
-          chatId,
-          messageId,
-          deletedAt,
-          deletedByUserId: userId
-        }
-      });
-      if (removedPin) {
-        app.io.to(`chat:${chatId}`).emit('message.unpinned', {
-          type: 'message.unpinned',
-          payload: {
-            chatId,
-            messageId
-          }
-        });
-      }
-    }
-
-    return reply.status(204).send();
-  });
-
-  app.post('/api/v1/chats/:chatId/messages/:messageId/star', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
-    const userId = request.user.userId;
-    const params = ChatMessageParamsSchema.safeParse(request.params ?? {});
-    if (!params.success) return reply.status(400).send({ error: formatValidationError(params.error) });
-    const { chatId, messageId } = params.data;
-
-    if (
-      replyIfRateLimited(
-        reply,
-        starRateLimiter.consume(userId),
-        CHAT_ROUTE_RATE_LIMITS.stars.error
-      )
-    ) {
-      return;
-    }
-
-    const isMember = await ensureMembership(userId, chatId);
-    if (!isMember) return reply.status(403).send({ error: NOT_A_CHAT_MEMBER_ERROR });
-
-    const messageContext = await getChatMessageContext(chatId, messageId);
-    if (!messageContext || messageContext.hidden_by_moderation || messageContext.sender_status !== 'active' || messageContext.deleted_at) {
-      return reply.status(404).send({ error: 'Message not found' });
-    }
-
-    await pool.query(
-      `INSERT INTO starred_messages (user_id, message_id)
-       VALUES ($1, $2)
-       ON CONFLICT DO NOTHING`,
-      [userId, messageId]
-    );
-
-    return reply.status(204).send();
-  });
-
-  app.delete('/api/v1/chats/:chatId/messages/:messageId/star', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
-    const userId = request.user.userId;
-    const params = ChatMessageParamsSchema.safeParse(request.params ?? {});
-    if (!params.success) return reply.status(400).send({ error: formatValidationError(params.error) });
-    const { chatId, messageId } = params.data;
-
-    if (
-      replyIfRateLimited(
-        reply,
-        starRateLimiter.consume(userId),
-        CHAT_ROUTE_RATE_LIMITS.stars.error
-      )
-    ) {
-      return;
-    }
-
-    const isMember = await ensureMembership(userId, chatId);
-    if (!isMember) return reply.status(403).send({ error: NOT_A_CHAT_MEMBER_ERROR });
-
-    await pool.query(
-      `DELETE FROM starred_messages
-       WHERE user_id = $1
-         AND message_id = $2
-         AND EXISTS (
-           SELECT 1 FROM messages m
-           WHERE m.id = $2
-             AND m.chat_id = $3
-         )`,
-      [userId, messageId, chatId]
-    );
-
-    return reply.status(204).send();
-  });
-
-  app.get('/api/v1/chats/:chatId/pins', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
-    const params = ChatIdParamsSchema.safeParse(request.params ?? {});
-    if (!params.success) return reply.status(400).send({ error: formatValidationError(params.error) });
-    const { chatId } = params.data;
-    const isMember = await ensureMembership(request.user.userId, chatId);
-    if (!isMember) return reply.status(403).send({ error: NOT_A_CHAT_MEMBER_ERROR });
-
-    return reply.send(await listPinnedMessagesForChat(chatId));
-  });
-
-  app.post('/api/v1/chats/:chatId/messages/:messageId/pin', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
-    const params = ChatMessageParamsSchema.safeParse(request.params ?? {});
-    if (!params.success) return reply.status(400).send({ error: formatValidationError(params.error) });
-    const { chatId, messageId } = params.data;
-    if (
-      replyIfRateLimited(
-        reply,
-        pinRateLimiter.consume(request.user.userId),
-        CHAT_ROUTE_RATE_LIMITS.pins.error
-      )
-    ) {
-      return;
-    }
-    return pinMessageForChat(app, request, reply, chatId, messageId);
-  });
-
-  app.delete('/api/v1/chats/:chatId/messages/:messageId/pin', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
-    const params = ChatMessageParamsSchema.safeParse(request.params ?? {});
-    if (!params.success) return reply.status(400).send({ error: formatValidationError(params.error) });
-    const { chatId, messageId } = params.data;
-    if (
-      replyIfRateLimited(
-        reply,
-        pinRateLimiter.consume(request.user.userId),
-        CHAT_ROUTE_RATE_LIMITS.pins.error
-      )
-    ) {
-      return;
-    }
-    return unpinMessageForChat(app, request, reply, chatId, messageId);
-  });
-
-  app.post('/api/v1/chats/:chatId/pins', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
-    const params = ChatIdParamsSchema.safeParse(request.params ?? {});
-    if (!params.success) return reply.status(400).send({ error: formatValidationError(params.error) });
-    const { chatId } = params.data;
-    const parsed = PinMessageRequestSchema.safeParse(request.body ?? {});
-    if (!parsed.success) return reply.status(400).send({ error: formatValidationError(parsed.error) });
-    if (
-      replyIfRateLimited(
-        reply,
-        pinRateLimiter.consume(request.user.userId),
-        CHAT_ROUTE_RATE_LIMITS.pins.error
-      )
-    ) {
-      return;
-    }
-
-    return pinMessageForChat(app, request, reply, chatId, parsed.data.messageId);
-  });
-
-  app.delete('/api/v1/chats/:chatId/pins/:messageId', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
-    const params = ChatMessageParamsSchema.safeParse(request.params ?? {});
-    if (!params.success) return reply.status(400).send({ error: formatValidationError(params.error) });
-    const { chatId, messageId } = params.data;
-    if (
-      replyIfRateLimited(
-        reply,
-        pinRateLimiter.consume(request.user.userId),
-        CHAT_ROUTE_RATE_LIMITS.pins.error
-      )
-    ) {
-      return;
-    }
-    return unpinMessageForChat(app, request, reply, chatId, messageId);
-  });
-
-  app.post('/api/v1/chats/:chatId/polls', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
-    const userId = request.user.userId;
-    const params = ChatIdParamsSchema.safeParse(request.params ?? {});
-    if (!params.success) return reply.status(400).send({ error: formatValidationError(params.error) });
-    const { chatId } = params.data;
-    const parsed = CreatePollRequestSchema.safeParse(request.body ?? {});
-    if (!parsed.success) return reply.status(400).send({ error: formatValidationError(parsed.error) });
-
-    if (parsed.data.expiresAt && new Date(parsed.data.expiresAt) <= new Date()) {
-      return reply.status(400).send({ error: 'Poll expiry must be in the future' });
-    }
-
-    const sendState = await getChatSendState(pool, userId, chatId);
-    if (!sendState.isMember) return reply.status(403).send({ error: NOT_A_CHAT_MEMBER_ERROR });
-    if (sendState.isReadOnly) return reply.status(409).send({ error: 'Direct message is unavailable' });
-
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-
-      const messageId = randomUUID();
-      const clientMessageId = `poll-${randomUUID()}`;
-      await client.query(
-        `INSERT INTO messages(id, chat_id, sender_id, content, message_type, metadata, client_message_id)
-         VALUES($1, $2, $3, $4, 'poll', NULL, $5)`,
-        [messageId, chatId, userId, parsed.data.question, clientMessageId]
-      );
-
-      const poll = await createPollRecords(client, {
-        chatId,
-        messageId,
-        createdByUserId: userId,
-        question: parsed.data.question,
-        options: parsed.data.options,
-        multiSelect: parsed.data.multiSelect,
-        expiresAt: parsed.data.expiresAt
-      });
-
-      await client.query(
-        `UPDATE messages
-         SET metadata = $1
-         WHERE id = $2`,
-        [poll, messageId]
-      );
-      await client.query('UPDATE chats SET updated_at = NOW() WHERE id = $1', [chatId]);
-      await client.query(
-        `UPDATE chat_members
-         SET archived_at = NULL
-         WHERE chat_id = $1
-           AND archived_at IS NOT NULL`,
-        [chatId]
-      );
-
-      const persistedMessage = await loadPersistedMessageById(client, messageId);
-      if (!persistedMessage) {
-        throw new Error('Failed to load poll message');
-      }
-
-      await client.query('COMMIT');
-
-      const message = MessageSchema.parse(toMemberMessage(persistedMessage));
-      const response = SendMessageResponseSchema.parse({
-        message,
-        deduped: false
-      });
-
-      app.io.to(`chat:${chatId}`).emit('message.new', {
-        type: 'message.new',
-        payload: message
-      });
-      void sendPushForNewMessage(request.log, chatId, userId, message);
-      void sendWebPushForNewMessage(request.log, chatId, userId, message);
-
-      return reply.send(response);
-    } catch (error) {
-      await client.query('ROLLBACK');
-      request.log.error({ error, chatId, userId }, 'failed to create poll');
-      return reply.status(500).send({ error: 'Failed to create poll' });
-    } finally {
-      client.release();
-    }
-  });
-
-  app.post('/api/v1/polls/:pollId/vote', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
-    const userId = request.user.userId;
-    const params = PollVoteParamsSchema.safeParse(request.params ?? {});
-    if (!params.success) return reply.status(400).send({ error: formatValidationError(params.error) });
-    const { pollId } = params.data;
-    const parsed = VotePollRequestSchema.safeParse(request.body ?? {});
-    if (!parsed.success) return reply.status(400).send({ error: formatValidationError(parsed.error) });
-
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-
-      const context = await loadPollVoteContext(client, pollId, userId);
-      if (!context) {
-        await client.query('ROLLBACK');
-        return reply.status(404).send({ error: 'Poll not found' });
-      }
-      if (!context.isMember) {
-        await client.query('ROLLBACK');
-        return reply.status(403).send({ error: NOT_A_CHAT_MEMBER_ERROR });
-      }
-      if (
-        replyIfRateLimited(
-          reply,
-          pollVoteRateLimiter.consume(userId),
-          CHAT_ROUTE_RATE_LIMITS.pollVotes.error
-        )
-      ) {
-        await client.query('ROLLBACK');
-        return;
-      }
-      if (context.expiresAt && new Date(context.expiresAt) <= new Date()) {
-        await client.query('ROLLBACK');
-        return reply.status(409).send({ error: 'Poll is closed' });
-      }
-
-      const optionId = context.optionIdsByIndex.get(parsed.data.optionIndex);
-      if (!optionId) {
-        await client.query('ROLLBACK');
-        return reply.status(400).send({ error: 'Poll option is invalid' });
-      }
-
-      const { poll, changed } = await recordPollVote(client, {
-        pollId,
-        userId,
-        optionId,
-        multiSelect: context.multiSelect,
-        existingOptionIds: context.existingOptionIds
-      });
-
-      await client.query(
-        `UPDATE messages
-         SET metadata = $1
-         WHERE id = (
-           SELECT message_id
-           FROM polls
-           WHERE id = $2
-         )`,
-        [poll, pollId]
-      );
-
-      await client.query('COMMIT');
-
-      if (changed) {
-        app.io.to(`chat:${context.chatId}`).emit('poll.voted', {
-          type: 'poll.voted',
-          payload: {
-            chatId: context.chatId,
-            pollId,
-            poll
-          }
-        });
-      }
-
-      return reply.send(poll);
-    } catch (error: any) {
-      await client.query('ROLLBACK');
-      if (error?.message === 'You have already voted on this poll') {
-        return reply.status(409).send({ error: error.message });
-      }
-      request.log.error({ error, pollId, userId }, 'failed to record poll vote');
-      return reply.status(500).send({ error: 'Failed to record poll vote' });
-    } finally {
-      client.release();
-    }
-  });
-
-  app.get('/api/v1/chats/:chatId/preferences', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
-    const userId = request.user.userId;
-    const params = ChatIdParamsSchema.safeParse(request.params ?? {});
-    if (!params.success) return reply.status(400).send({ error: formatValidationError(params.error) });
-    const { chatId } = params.data;
-
-    const preferences = await getChatPreferencesForUser(userId, chatId);
-    if (!preferences) {
-      return reply.status(403).send({ error: NOT_A_CHAT_MEMBER_ERROR });
-    }
-
-    return reply.send(toChatPreferencesResponse(preferences));
-  });
-
-  const saveChatPreferences = async (request: any, reply: any) => {
-    const userId = request.user.userId;
-    const params = ChatIdParamsSchema.safeParse(request.params ?? {});
-    if (!params.success) return reply.status(400).send({ error: formatValidationError(params.error) });
-    const { chatId } = params.data;
-    const parsed = ChatPreferencesRequestSchema.safeParse(request.body ?? {});
-    if (!parsed.success) return reply.status(400).send({ error: formatValidationError(parsed.error) });
-
-    const result = await pool.query(
-      `UPDATE chat_members
-       SET notifications_muted = $1,
-           notifications_muted_updated_at = NOW()
-       WHERE chat_id = $2 AND user_id = $3
-       RETURNING chat_id, notifications_muted, notifications_muted_updated_at`,
-      [parsed.data.notificationsMuted, chatId, userId]
-    );
-
-    if (!result.rowCount) {
-      return reply.status(403).send({ error: NOT_A_CHAT_MEMBER_ERROR });
-    }
-
-    return reply.send(toChatPreferencesResponse(result.rows[0] as ChatPreferencesRow));
+  addMessageReaction,
+  assertChatMember,
+  createMessage,
+  deleteMessage,
+  editMessage,
+  hydrateMessage,
+  listMessages,
+  markChatRead,
+  unreadCount
+} from '../utils/messages.js';
+import { avatarUrlFromMediaId, bannerUrlFromMediaId } from '../utils/users.js';
+import { appEvents } from '../core/events.js';
+import { appendSyncEvent, buildChatSummaryForUser } from '../features/sync/service.js';
+import {
+  assertNotLastOwner,
+  childChannels,
+  requireChatManager,
+  resolveChatHierarchy,
+  rootMember,
+  serializeChannel
+} from '../utils/chat-management.js';
+
+type ChatMember = typeof chatMembers.$inferSelect;
+type Chat = typeof chats.$inferSelect;
+
+function readStatePayload(member: ChatMember) {
+  return {
+    chatId: member.chatId,
+    userId: member.userId,
+    lastReadAt: member.lastReadAt?.toISOString() ?? null,
+    lastReadMessageId: member.lastReadMessageId ?? null,
+    notificationsMuted: member.notificationsMuted,
+    archivedAt: member.archivedAt?.toISOString() ?? null
   };
+}
 
-  app.post('/api/v1/chats/:chatId/preferences', { preHandler: [app.authenticate, app.requireFullAccess] }, saveChatPreferences);
-  app.patch('/api/v1/chats/:chatId/preferences', { preHandler: [app.authenticate, app.requireFullAccess] }, saveChatPreferences);
+async function appendChatSummaryForMembers(
+  chat: Chat,
+  members: ChatMember[],
+  actorUserId: string,
+  writer: Pick<typeof db, 'insert'> = db
+) {
+  for (const member of members) {
+    await appendSyncEvent({
+      scope: 'user',
+      userId: member.userId,
+      actorUserId,
+      entityId: chat.id,
+      op: { type: 'chat.upsert', payload: await buildChatSummaryForUser(chat, member, member.userId) }
+    }, writer);
+  }
+}
 
-  app.post('/api/v1/chats/:chatId/read', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
-    const userId = request.user.userId;
-    const params = ChatIdParamsSchema.safeParse(request.params ?? {});
-    if (!params.success) return reply.status(400).send({ error: formatValidationError(params.error) });
-    const { chatId } = params.data;
-    const parsed = MarkChatReadRequestSchema.safeParse(request.body ?? {});
-    if (!parsed.success) return reply.status(400).send({ error: formatValidationError(parsed.error) });
+async function setArchivedAt(chatId: string, userId: string, actorUserId: string, archivedAt: Date | null) {
+  const { chatId: resolvedChatId } = await assertChatMember(chatId, userId);
+  const [member] = await db.update(chatMembers)
+    .set({ archivedAt })
+    .where(and(eq(chatMembers.chatId, resolvedChatId), eq(chatMembers.userId, userId)))
+    .returning();
 
-    const isMember = await ensureMembership(userId, chatId);
-    if (!isMember) return reply.status(403).send({ error: NOT_A_CHAT_MEMBER_ERROR });
-    if (
-      replyIfRateLimited(
-        reply,
-        readMarkRateLimiter.consume(userId),
-        CHAT_ROUTE_RATE_LIMITS.readMarks.error
-      )
-    ) {
-      return;
-    }
-
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      const result = await markChatRead(client, chatId, userId, parsed.data.throughMessageId);
-      await client.query('COMMIT');
-
-      request.log.info(
-        {
-          chatId,
-          userId,
-          advanced: result.advanced,
-          unreadCount: result.unreadCount,
-          seenThroughMessageId: result.seenThroughMessageId
-        },
-        'chat read state updated'
-      );
-
-      if (result.advanced) {
-        app.io.to(`chat:${chatId}`).emit('message.read', {
-          type: 'message.read',
-          payload: {
-            chatId,
-            readerUserId: userId,
-            seenAt: result.lastReadAt,
-            seenThroughMessageId: result.seenThroughMessageId
-          }
-        });
-      }
-
-      return reply.send(
-        MarkChatReadResponseSchema.parse({
-          chatId,
-          unreadCount: result.unreadCount,
-          lastReadAt: result.lastReadAt,
-          seenThroughMessageId: result.seenThroughMessageId
-        })
-      );
-    } catch (error: any) {
-      await client.query('ROLLBACK');
-      if (error?.message === 'Forbidden') {
-        return reply.status(403).send({ error: NOT_A_CHAT_MEMBER_ERROR });
-      }
-      request.log.error({ error, chatId, userId }, 'failed to mark chat read');
-      return reply.status(500).send({ error: 'Failed to mark chat read' });
-    } finally {
-      client.release();
-    }
+  await appendSyncEvent({
+    scope: 'user',
+    userId,
+    actorUserId,
+    entityId: `${resolvedChatId}:${userId}`,
+    op: { type: 'read.upsert', payload: readStatePayload(member) }
   });
 
-  app.get('/api/v1/chats/:chatId/members/read', { preHandler: [app.authenticate, app.requireFullAccess] }, async (request, reply) => {
-    const params = ChatIdParamsSchema.safeParse(request.params ?? {});
-    if (!params.success) return reply.status(400).send({ error: formatValidationError(params.error) });
-    const { chatId } = params.data;
-    const isMember = await ensureMembership(request.user.userId, chatId);
-    if (!isMember) return reply.status(403).send({ error: NOT_A_CHAT_MEMBER_ERROR });
+  return {
+    chatId: resolvedChatId,
+    archivedAt: member.archivedAt?.toISOString() ?? null
+  };
+}
 
-    const readStates = await listChatMemberReadStates(pool, chatId);
-    return reply.send(readStates.map((state) => ChatMemberReadStateSchema.parse(state)));
+async function removeMemberFromGroup(rootChatId: string, member: ChatMember, actorUserId: string) {
+  await assertNotLastOwner(rootChatId, member);
+  const channels = await childChannels(rootChatId);
+  const channelIds = channels.map((channel) => channel.id);
+  const chatIds = [rootChatId, ...channelIds];
+
+  await db.transaction(async (tx) => {
+    await tx.delete(chatMembers)
+      .where(and(eq(chatMembers.userId, member.userId), inArray(chatMembers.chatId, chatIds)));
+
+    for (const channel of channels) {
+      await appendSyncEvent({
+        scope: 'user',
+        userId: member.userId,
+        actorUserId,
+        entityId: channel.id,
+        op: { type: 'channel.delete', payload: { channelId: channel.id, parentChatId: rootChatId } }
+      }, tx);
+    }
+
+    await appendSyncEvent({
+      scope: 'user',
+      userId: member.userId,
+      actorUserId,
+      entityId: rootChatId,
+      op: { type: 'chat.delete', payload: { chatId: rootChatId } }
+    }, tx);
+  });
+}
+
+export async function registerChatRoutes(fastify: FastifyInstance) {
+  fastify.post('/api/v1/chats/dm', { preHandler: fastify.authenticate }, async (request) => {
+    const body = CreateDirectChatRequestSchema.parse(request.body);
+    const memberId = body.memberId;
+    const myId = request.authUser!.userId;
+
+    if (memberId === myId) throw badRequest('Cannot create a DM with yourself');
+
+    const [otherUser] = await db.select().from(users).where(eq(users.id, memberId)).limit(1);
+    if (!otherUser) throw notFound('User not found');
+
+    const firstUserId = myId < memberId ? myId : memberId;
+    const secondUserId = myId < memberId ? memberId : myId;
+
+    const [existing] = await db.select().from(directChats)
+      .where(and(eq(directChats.firstUserId, firstUserId), eq(directChats.secondUserId, secondUserId)))
+      .limit(1);
+
+    if (existing) {
+      return { chatId: existing.chatId };
+    }
+
+    const [chat] = await db.insert(chats).values({
+      type: 'dm',
+      name: otherUser.displayName
+    }).returning();
+
+    await db.insert(chatMembers).values([
+      { chatId: chat.id, userId: myId },
+      { chatId: chat.id, userId: memberId }
+    ]);
+
+    await db.insert(directChats).values({
+      chatId: chat.id,
+      firstUserId,
+      secondUserId
+    });
+
+    const memberRows = await db.select().from(chatMembers).where(eq(chatMembers.chatId, chat.id));
+    for (const member of memberRows) {
+      await appendSyncEvent({
+        scope: 'user',
+        userId: member.userId,
+        actorUserId: myId,
+        entityId: chat.id,
+        op: { type: 'chat.upsert', payload: await buildChatSummaryForUser(chat, member, member.userId) }
+      });
+    }
+
+    return { chatId: chat.id };
+  });
+
+  fastify.post('/api/v1/chats/group', { preHandler: fastify.authenticate }, async (request) => {
+    const body = CreateGroupChatRequestSchema.parse(request.body);
+    const myId = request.authUser!.userId;
+    const memberIds = [...new Set(body.memberIds.filter((id) => id !== myId))];
+
+    if (memberIds.length > 0) {
+      const found = await db.select({ id: users.id }).from(users).where(inArray(users.id, memberIds));
+      if (found.length !== memberIds.length) throw notFound('One or more users were not found');
+    }
+
+    const { chat, members } = await db.transaction(async (tx) => {
+      const [created] = await tx.insert(chats).values({
+        type: 'group',
+        name: body.name
+      }).returning();
+
+      const values = [
+        { chatId: created.id, userId: myId, role: 'owner' as const },
+        ...memberIds.map((memberId) => ({ chatId: created.id, userId: memberId, role: 'member' as const }))
+      ];
+      const insertedMembers = await tx.insert(chatMembers).values(values).returning();
+
+      await appendChatSummaryForMembers(created, insertedMembers, myId, tx);
+      return { chat: created, members: insertedMembers };
+    });
+
+    for (const member of members) {
+      fastify.io.to(`user:${member.userId}`).emit('chat.sync_required', {
+        type: 'chat.sync_required',
+        payload: { chatId: chat.id, reason: 'group.created' }
+      });
+    }
+
+    const ownMember = members.find((member) => member.userId === myId)!;
+    return { chat: await buildChatSummaryForUser(chat, ownMember, myId) };
+  });
+
+  fastify.patch('/api/v1/chats/:id', { preHandler: fastify.authenticate }, async (request) => {
+    const params = request.params as { id: string };
+    const body = UpdateChatRequestSchema.parse(request.body);
+    const { chat, root } = await requireChatManager(params.id, request.authUser!.userId, request.authUser!.role);
+    if (chat.type === 'dm') throw badRequest('DMs cannot be renamed');
+
+    const [updated] = await db.update(chats)
+      .set({ name: body.name, updatedAt: new Date() })
+      .where(eq(chats.id, chat.id))
+      .returning();
+
+    if (updated.type === 'channel') {
+      const serialized = serializeChannel(updated);
+      await appendSyncEvent({
+        scope: 'chat',
+        chatId: updated.id,
+        actorUserId: request.authUser!.userId,
+        entityId: updated.id,
+        op: { type: 'channel.upsert', payload: serialized }
+      });
+      fastify.io.to(`chat:${updated.id}`).emit('chat.sync_required', {
+        type: 'chat.sync_required',
+        payload: { chatId: root.id, reason: 'channel.renamed' }
+      });
+      return { channel: serialized };
+    }
+
+    const memberRows = await db.select().from(chatMembers).where(eq(chatMembers.chatId, updated.id));
+    await appendChatSummaryForMembers(updated, memberRows, request.authUser!.userId);
+    for (const member of memberRows) {
+      fastify.io.to(`user:${member.userId}`).emit('chat.sync_required', {
+        type: 'chat.sync_required',
+        payload: { chatId: updated.id, reason: 'group.renamed' }
+      });
+    }
+
+    const viewerMember = memberRows.find((member) => member.userId === request.authUser!.userId) ?? memberRows[0];
+    return { chat: await buildChatSummaryForUser(updated, viewerMember, request.authUser!.userId) };
+  });
+
+  fastify.delete('/api/v1/chats/:id', { preHandler: fastify.authenticate }, async (request) => {
+    const params = request.params as { id: string };
+    const { chat, root } = await resolveChatHierarchy(params.id);
+
+    if (chat.type === 'dm') {
+      return setArchivedAt(chat.id, request.authUser!.userId, request.authUser!.userId, new Date());
+    }
+
+    await requireChatManager(chat.id, request.authUser!.userId, request.authUser!.role);
+
+    if (chat.type === 'channel') {
+      const memberRows = await db.select({ userId: chatMembers.userId })
+        .from(chatMembers)
+        .where(eq(chatMembers.chatId, chat.id));
+
+      await db.transaction(async (tx) => {
+        await tx.delete(chats).where(eq(chats.id, chat.id));
+        for (const member of memberRows) {
+          await appendSyncEvent({
+            scope: 'user',
+            userId: member.userId,
+            actorUserId: request.authUser!.userId,
+            entityId: chat.id,
+            op: { type: 'channel.delete', payload: { channelId: chat.id, parentChatId: root.id } }
+          }, tx);
+        }
+      });
+
+      return { chatId: chat.id, deletedAt: new Date().toISOString() };
+    }
+
+    const channels = await childChannels(chat.id);
+    const memberRows = await db.select({ userId: chatMembers.userId })
+      .from(chatMembers)
+      .where(eq(chatMembers.chatId, chat.id));
+
+    await db.transaction(async (tx) => {
+      await tx.delete(chats).where(eq(chats.id, chat.id));
+      for (const member of memberRows) {
+        for (const channel of channels) {
+          await appendSyncEvent({
+            scope: 'user',
+            userId: member.userId,
+            actorUserId: request.authUser!.userId,
+            entityId: channel.id,
+            op: { type: 'channel.delete', payload: { channelId: channel.id, parentChatId: chat.id } }
+          }, tx);
+        }
+        await appendSyncEvent({
+          scope: 'user',
+          userId: member.userId,
+          actorUserId: request.authUser!.userId,
+          entityId: chat.id,
+          op: { type: 'chat.delete', payload: { chatId: chat.id } }
+        }, tx);
+      }
+    });
+
+    return { chatId: chat.id, deletedAt: new Date().toISOString() };
+  });
+
+  fastify.post('/api/v1/chats/:id/archive', { preHandler: fastify.authenticate }, async (request) => {
+    const params = request.params as { id: string };
+    return setArchivedAt(params.id, request.authUser!.userId, request.authUser!.userId, new Date());
+  });
+
+  fastify.post('/api/v1/chats/:id/unarchive', { preHandler: fastify.authenticate }, async (request) => {
+    const params = request.params as { id: string };
+    return setArchivedAt(params.id, request.authUser!.userId, request.authUser!.userId, null);
+  });
+
+  fastify.post('/api/v1/chats/:id/members', { preHandler: fastify.authenticate }, async (request) => {
+    const params = request.params as { id: string };
+    const body = AddChatMemberRequestSchema.parse(request.body);
+    const { root } = await requireChatManager(params.id, request.authUser!.userId, request.authUser!.role);
+
+    const [user] = await db.select().from(users).where(eq(users.id, body.memberId)).limit(1);
+    if (!user) throw notFound('User not found');
+
+    const existingMember = await rootMember(root.id, body.memberId);
+    if (existingMember?.role === 'owner' && body.role !== 'owner') {
+      await assertNotLastOwner(root.id, existingMember);
+    }
+
+    const channels = await childChannels(root.id);
+    const { member } = await db.transaction(async (tx) => {
+      const [rootRow] = await tx.insert(chatMembers).values({
+        chatId: root.id,
+        userId: body.memberId,
+        role: body.role
+      }).onConflictDoUpdate({
+        target: [chatMembers.chatId, chatMembers.userId],
+        set: { role: body.role }
+      }).returning();
+
+      if (channels.length > 0) {
+        await tx.insert(chatMembers).values(
+          channels.map((channel) => ({ chatId: channel.id, userId: body.memberId }))
+        ).onConflictDoNothing();
+      }
+
+      await appendSyncEvent({
+        scope: 'user',
+        userId: body.memberId,
+        actorUserId: request.authUser!.userId,
+        entityId: root.id,
+        op: { type: 'chat.upsert', payload: await buildChatSummaryForUser(root, rootRow, body.memberId) }
+      }, tx);
+
+      for (const channel of channels) {
+        await appendSyncEvent({
+          scope: 'user',
+          userId: body.memberId,
+          actorUserId: request.authUser!.userId,
+          entityId: channel.id,
+          op: { type: 'channel.upsert', payload: serializeChannel(channel) }
+        }, tx);
+      }
+
+      return { member: rootRow };
+    });
+
+    fastify.io.to(`user:${body.memberId}`).emit('chat.sync_required', {
+      type: 'chat.sync_required',
+      payload: { chatId: root.id, reason: 'member.added' }
+    });
+
+    return { member: { id: user.id, username: user.username, displayName: user.displayName, role: member.role } };
+  });
+
+  fastify.delete('/api/v1/chats/:id/members/:memberId', { preHandler: fastify.authenticate }, async (request) => {
+    const params = request.params as { id: string; memberId: string };
+    const { root } = await requireChatManager(params.id, request.authUser!.userId, request.authUser!.role);
+    if (params.memberId === request.authUser!.userId) throw badRequest('Use the leave endpoint to remove yourself');
+
+    const member = await rootMember(root.id, params.memberId);
+    if (!member) throw notFound('Chat member not found');
+    await removeMemberFromGroup(root.id, member, request.authUser!.userId);
+
+    fastify.io.to(`user:${params.memberId}`).emit('chat.sync_required', {
+      type: 'chat.sync_required',
+      payload: { chatId: root.id, reason: 'member.removed' }
+    });
+
+    return { success: true };
+  });
+
+  fastify.post('/api/v1/chats/:id/leave', { preHandler: fastify.authenticate }, async (request) => {
+    const params = request.params as { id: string };
+    const { root } = await resolveChatHierarchy(params.id);
+    if (root.type !== 'group') throw badRequest('Only group chats can be left');
+
+    const member = await rootMember(root.id, request.authUser!.userId);
+    if (!member) throw forbidden('You are not a member of this chat', 'CHAT_FORBIDDEN');
+    await removeMemberFromGroup(root.id, member, request.authUser!.userId);
+
+    return { success: true };
+  });
+
+  fastify.get('/api/v1/chats', { preHandler: fastify.authenticate }, async (request) => {
+    const rows = await db.select({
+      chat: chats,
+      member: chatMembers
+    })
+      .from(chatMembers)
+      .innerJoin(chats, eq(chatMembers.chatId, chats.id))
+      .where(and(
+        eq(chatMembers.userId, request.authUser!.userId),
+        isNull(chats.parentChatId)
+      ))
+      .orderBy(sql`${chats.updatedAt} DESC`);
+
+    const summaries = [];
+    for (const row of rows) {
+      let name = row.chat.name;
+      let counterpartMemberId: string | undefined;
+      let counterpartAvatarUrl: string | null | undefined;
+
+      if (row.chat.type === 'dm') {
+        const [other] = await db.select({ user: users })
+          .from(chatMembers)
+          .innerJoin(users, eq(chatMembers.userId, users.id))
+          .where(and(eq(chatMembers.chatId, row.chat.id), sql`${chatMembers.userId} <> ${request.authUser!.userId}`))
+          .limit(1);
+        if (other) {
+          name = other.user.displayName;
+          counterpartMemberId = other.user.id;
+          counterpartAvatarUrl = avatarUrlFromMediaId(other.user.avatarMediaId);
+        }
+      }
+
+      summaries.push({
+        id: row.chat.id,
+        type: row.chat.type,
+        name,
+        role: row.member.role,
+        updatedAt: row.chat.updatedAt.toISOString(),
+        archivedAt: row.member.archivedAt?.toISOString() ?? null,
+        unreadCount: await unreadCount(row.chat.id, request.authUser!.userId),
+        counterpartMemberId,
+        counterpartAvatarUrl,
+        notificationsMuted: row.member.notificationsMuted
+      });
+    }
+
+    return { chats: summaries };
+  });
+
+  fastify.get('/api/v1/chats/:id/messages', { preHandler: fastify.authenticate }, async (request) => {
+    const params = request.params as { id: string };
+    const query = request.query as { before?: string };
+    const { chatId } = await assertChatMember(params.id, request.authUser!.userId);
+    return { messages: await listMessages(chatId, request.authUser!.userId, query.before) };
+  });
+
+  fastify.get('/api/v1/chats/:id/messages/search', { preHandler: fastify.authenticate }, async (request) => {
+    const params = request.params as { id: string };
+    const query = request.query as { q?: string };
+    const { chatId } = await assertChatMember(params.id, request.authUser!.userId);
+    const searchTerm = (query.q ?? '').trim();
+    if (!searchTerm) return { messages: [] };
+
+    const rows = await db.select({ id: messages.id })
+      .from(messages)
+      .where(and(
+        eq(messages.chatId, chatId),
+        ilike(messages.content, `%${searchTerm}%`)
+      ))
+      .orderBy(desc(messages.createdAt))
+      .limit(50);
+
+    const hydrated = [];
+    for (const row of rows) {
+      hydrated.push(await hydrateMessage(row.id, request.authUser!.userId));
+    }
+    return { messages: hydrated };
+  });
+
+  fastify.get('/api/v1/chats/:id/members', { preHandler: fastify.authenticate }, async (request) => {
+    const params = request.params as { id: string };
+    const { chatId } = await assertChatMember(params.id, request.authUser!.userId);
+
+    // Resolve root chat for role authorization — child channels mirror parent membership
+    const [chat] = await db.select({ parentChatId: chats.parentChatId })
+      .from(chats)
+      .where(eq(chats.id, chatId))
+      .limit(1);
+    const rootChatId = chat?.parentChatId ?? chatId;
+
+    const rows = await db.select({ user: users, member: chatMembers })
+      .from(chatMembers)
+      .innerJoin(users, eq(chatMembers.userId, users.id))
+      .where(eq(chatMembers.chatId, rootChatId))
+      .orderBy(users.displayName);
+
+    return {
+      members: rows.map(({ user, member }) => ({
+        id: user.id,
+        username: user.username,
+        displayName: user.displayName,
+        avatarUrl: avatarUrlFromMediaId(user.avatarMediaId),
+        bio: user.bio,
+        timezone: user.timezone,
+        lastSeenAt: user.lastSeenAt?.toISOString() ?? null,
+        profileStyle: user.profileStyle,
+        bannerMediaId: user.bannerMediaId,
+        bannerUrl: bannerUrlFromMediaId(user.bannerMediaId, user.bannerUrl),
+        role: member.role
+      }))
+    };
+  });
+
+  fastify.post('/api/v1/chats/:id/messages', { preHandler: fastify.authenticate }, async (request) => {
+    const params = request.params as { id: string };
+    const { chatId } = await assertChatMember(params.id, request.authUser!.userId);
+    const body = SendMessageRequestSchema.parse({ ...(request.body as object), chatId });
+    const result = await createMessage({
+      chatId,
+      senderId: request.authUser!.userId,
+      content: body.content,
+      messageType: body.type,
+      metadata: body.metadata,
+      replyToMessageId: body.replyToMessageId,
+      clientMessageId: body.clientMessageId
+    });
+
+    // Broadcast to other room members via Socket.IO
+    fastify.io.to(`chat:${chatId}`).emit('message.new', {
+      type: 'message.new',
+      payload: result.message
+    });
+
+    appEvents.emit('message.sent', { message: result.message, senderId: request.authUser!.userId });
+
+    return result;
+  });
+
+  fastify.patch('/api/v1/messages/:id', { preHandler: fastify.authenticate }, async (request) => {
+    const params = request.params as { id: string };
+    const body = EditMessageRequestSchema.parse(request.body);
+    const result = await editMessage({
+      messageId: params.id,
+      editorUserId: request.authUser!.userId,
+      content: body.content
+    });
+
+    fastify.io.to(`chat:${result.chatId}`).emit('message.edited', {
+      type: 'message.edited',
+      payload: result.event
+    });
+
+    return { message: result.message };
+  });
+
+  fastify.delete('/api/v1/messages/:id', { preHandler: fastify.authenticate }, async (request) => {
+    const params = request.params as { id: string };
+    const deletion = await deleteMessage({
+      messageId: params.id,
+      actorUserId: request.authUser!.userId,
+      actorRole: request.authUser!.role
+    });
+
+    fastify.io.to(`chat:${deletion.chatId}`).emit('message.deleted', {
+      type: 'message.deleted',
+      payload: deletion
+    });
+
+    return {
+      messageId: deletion.messageId,
+      deletedAt: deletion.deletedAt,
+      deletedByUserId: deletion.deletedByUserId
+    };
+  });
+
+  fastify.post('/api/v1/chats/:id/read', { preHandler: fastify.authenticate }, async (request) => {
+    const params = request.params as { id: string };
+    const body = MarkChatReadRequestSchema.parse(request.body);
+    const read = await markChatRead({
+      chatId: params.id,
+      userId: request.authUser!.userId,
+      throughMessageId: body.throughMessageId
+    });
+
+    fastify.io.to(`chat:${read.chatId}`).emit('message.read', {
+      type: 'message.read',
+      payload: {
+        chatId: read.chatId,
+        readerUserId: request.authUser!.userId,
+        seenAt: read.member.lastReadAt.toISOString(),
+        seenThroughMessageId: read.messageId
+      }
+    });
+
+    return {
+      chatId: read.chatId,
+      unreadCount: await unreadCount(read.chatId, request.authUser!.userId),
+      lastReadAt: read.member.lastReadAt.toISOString(),
+      seenThroughMessageId: read.messageId
+    };
+  });
+
+  fastify.patch('/api/v1/chats/:id/preferences', { preHandler: fastify.authenticate }, async (request) => {
+    const params = request.params as { id: string };
+    const { chatId } = await assertChatMember(params.id, request.authUser!.userId);
+    const body = ChatPreferencesRequestSchema.parse(request.body);
+    const [member] = await db.update(chatMembers)
+      .set({ notificationsMuted: body.notificationsMuted, notificationsMutedUpdatedAt: new Date() })
+      .where(and(eq(chatMembers.chatId, chatId), eq(chatMembers.userId, request.authUser!.userId)))
+      .returning();
+
+    await appendSyncEvent({
+      scope: 'user',
+      userId: request.authUser!.userId,
+      actorUserId: request.authUser!.userId,
+      entityId: `${chatId}:${request.authUser!.userId}`,
+      op: {
+        type: 'read.upsert',
+        payload: {
+          chatId,
+          userId: request.authUser!.userId,
+          lastReadAt: member.lastReadAt.toISOString(),
+          lastReadMessageId: member.lastReadMessageId ?? null,
+          notificationsMuted: member.notificationsMuted,
+          archivedAt: member.archivedAt?.toISOString() ?? null
+        }
+      }
+    });
+
+    return {
+      chatId,
+      notificationsMuted: member.notificationsMuted,
+      updatedAt: member.notificationsMutedUpdatedAt.toISOString()
+    };
+  });
+
+  fastify.post('/api/v1/chats/:id/pins', { preHandler: fastify.authenticate }, async (request) => {
+    const params = request.params as { id: string };
+    const body = PinMessageRequestSchema.parse(request.body);
+    const { chatId } = await assertChatMember(params.id, request.authUser!.userId);
+
+    const [message] = await db.select({ message: messages, sender: users })
+      .from(messages)
+      .innerJoin(users, eq(messages.senderId, users.id))
+      .where(and(eq(messages.id, body.messageId), eq(messages.chatId, chatId)))
+      .limit(1);
+    if (!message) throw notFound('Message not found');
+    if (message.message.senderId !== request.authUser!.userId && request.authUser!.role !== 'admin') {
+      throw forbidden('Only the sender or admins can pin messages');
+    }
+
+    const pinnedAt = new Date();
+    const [pin] = await db.insert(pinnedMessages).values({
+      chatId,
+      messageId: body.messageId,
+      pinnedBy: request.authUser!.userId,
+      pinnedAt,
+      contentSnapshot: message.message.content,
+      senderDisplayNameSnapshot: message.sender.displayName
+    }).onConflictDoUpdate({
+      target: [pinnedMessages.chatId, pinnedMessages.messageId],
+      set: {
+        pinnedBy: request.authUser!.userId,
+        pinnedAt,
+        contentSnapshot: message.message.content,
+        senderDisplayNameSnapshot: message.sender.displayName
+      }
+    }).returning();
+
+    const payload = {
+      chatId: pin.chatId,
+      messageId: pin.messageId,
+      pinnedByUserId: pin.pinnedBy,
+      pinnedAt: pin.pinnedAt.toISOString(),
+      content: pin.contentSnapshot,
+      senderDisplayName: pin.senderDisplayNameSnapshot
+    };
+    fastify.io.to(`chat:${chatId}`).emit('message.pinned', {
+      type: 'message.pinned',
+      payload
+    });
+    await appendSyncEvent({
+      scope: 'chat',
+      chatId,
+      actorUserId: request.authUser!.userId,
+      entityId: pin.messageId,
+      op: { type: 'message.pin', payload }
+    });
+
+    return { pin: payload };
+  });
+
+  fastify.delete('/api/v1/chats/:id/pins/:messageId', { preHandler: fastify.authenticate }, async (request) => {
+    const params = request.params as { id: string; messageId: string };
+    const { chatId } = await assertChatMember(params.id, request.authUser!.userId);
+    const [pin] = await db.select({ pinnedBy: pinnedMessages.pinnedBy })
+      .from(pinnedMessages)
+      .where(and(eq(pinnedMessages.chatId, chatId), eq(pinnedMessages.messageId, params.messageId)))
+      .limit(1);
+    if (!pin) throw notFound('Pin not found');
+    if (pin.pinnedBy !== request.authUser!.userId && request.authUser!.role !== 'admin') {
+      throw forbidden('Only the pinner or admins can unpin messages');
+    }
+    await db.delete(pinnedMessages)
+      .where(and(eq(pinnedMessages.chatId, chatId), eq(pinnedMessages.messageId, params.messageId)));
+    fastify.io.to(`chat:${chatId}`).emit('message.unpinned', {
+      type: 'message.unpinned',
+      payload: { chatId, messageId: params.messageId }
+    });
+    await appendSyncEvent({
+      scope: 'chat',
+      chatId,
+      actorUserId: request.authUser!.userId,
+      entityId: params.messageId,
+      op: { type: 'message.unpin', payload: { chatId, messageId: params.messageId } }
+    });
+    return { success: true };
+  });
+
+  fastify.get('/api/v1/chats/:id/pins', { preHandler: fastify.authenticate }, async (request) => {
+    const params = request.params as { id: string };
+    const { chatId } = await assertChatMember(params.id, request.authUser!.userId);
+    const rows = await db.select({ pin: pinnedMessages, message: messages, sender: users })
+      .from(pinnedMessages)
+      .innerJoin(messages, eq(pinnedMessages.messageId, messages.id))
+      .innerJoin(users, eq(messages.senderId, users.id))
+      .where(eq(pinnedMessages.chatId, chatId))
+      .orderBy(desc(pinnedMessages.pinnedAt));
+
+    return {
+      pins: rows.map(({ pin, message, sender }) => ({
+        chatId: pin.chatId,
+        messageId: pin.messageId,
+        pinnedByUserId: pin.pinnedBy,
+        pinnedAt: pin.pinnedAt.toISOString(),
+        content: pin.contentSnapshot,
+        senderDisplayName: pin.senderDisplayNameSnapshot,
+        message: {
+          id: message.id,
+          chatId: message.chatId,
+          senderId: message.senderId,
+          senderDisplayName: sender.displayName,
+          senderAvatarUrl: avatarUrlFromMediaId(sender.avatarMediaId),
+          content: message.content,
+          type: message.messageType,
+          createdAt: message.createdAt.toISOString()
+        }
+      }))
+    };
+  });
+
+  fastify.post('/api/v1/messages/:id/reactions', { preHandler: fastify.authenticate }, async (request, reply) => {
+    const params = request.params as { id: string };
+    const body = request.body as { emoji?: string };
+    if (!body.emoji) throw badRequest('emoji is required');
+    const payload = await addMessageReaction({
+      messageId: params.id,
+      userId: request.authUser!.userId,
+      emoji: body.emoji
+    });
+    fastify.io.to(`chat:${payload.chatId}`).emit('reaction.add', {
+      type: 'reaction.add',
+      payload
+    });
+    return reply.status(204).send();
   });
 }

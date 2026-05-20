@@ -1,493 +1,237 @@
-import { randomUUID } from 'node:crypto';
+import { and, count, eq, gt, ilike, isNull, lt, or, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import {
-  AuthResponseSchema,
+  ChangePasswordRequestSchema,
   LoginRequestSchema,
   PasswordResetRequestSchema,
   RefreshRequestSchema,
-  RegisterRequestSchema
+  RegisterRequestSchema,
+  UpdateProfileRequestSchema
 } from '@penthouse/contracts';
-import { pool } from '../db/pool.js';
-import { env } from '../config/env.js';
-import {
-  createRecoveryCode,
-  createOpaqueToken,
-  hashPassword,
-  hashToken,
-  refreshExpiryDate,
-  safeEqualHash,
-  signAccessToken,
-  verifyPassword
-} from '../utils/security.js';
-import type { PoolClient } from 'pg';
-import {
-  getUserById,
-  getUserByUsername,
-  mapAuthUser,
-  maybeBootstrapAdmin,
-  type UserRow
-} from '../utils/users.js';
-import { createAuthRateLimiter, replyIfRateLimited } from '../utils/authRateLimit.js';
-import { createAuthResponse, getSessionMetadataFromRequest, issueRecoveryCode, mergeSessionMetadata } from '../utils/sessions.js';
-import { getRegistrationMode } from '../utils/settings.js';
-import { formatValidationError } from '../utils/error-responses.js';
-import { createAltchaChallenge, verifyAltchaPayloadOnce } from '../utils/altcha.js';
+import { db } from '../db/pool.js';
+import { chatMembers, chats, mediaUploads, notificationPrefs, refreshTokens, serverSettings, signupInvites, users } from '../db/schema.js';
+import { rateLimit } from '../middleware/rateLimit.js';
+import { badRequest, forbidden, notFound, unauthorized } from '../utils/error-responses.js';
+import { recoveryCode, sha256 } from '../utils/crypto.js';
+import { createSession, revokeRefreshToken, revokeSessionDevice, rotateRefreshToken } from '../utils/sessions.js';
+import { hashPassword, toAuthUser, toMeResponse, toMemberDetail, verifyPassword } from '../utils/users.js';
+import { isProduction } from '../config/env.js';
+import { createChallenge, verifyChallenge } from '../utils/altcha.js';
+import { appendSyncEvent } from '../features/sync/service.js';
 
-const SHARED_GENERAL_CHAT_ID = '00000000-0000-0000-0000-000000000001';
-const SHARED_GENERAL_SYSTEM_KEY = 'general';
-const REFRESH_ROTATION_GRACE_MS = 5_000;
-const INVALID_REFRESH_TOKEN_ERROR = 'Refresh token is invalid or expired. Please log in again.';
-const AUTH_RATE_LIMITS = {
-  register: {
-    windowMs: 15 * 60_000,
-    maxRequests: 5,
-    error: 'Too many registration attempts. Try again in a few minutes.'
-  },
-  login: {
-    windowMs: 10 * 60_000,
-    maxRequests: 10,
-    error: 'Too many login attempts. Try again in a few minutes.'
-  },
-  passwordReset: {
-    windowMs: 15 * 60_000,
-    maxRequests: 5,
-    error: 'Too many password reset attempts. Try again in a few minutes.'
-  }
-} as const;
-
-const rotatedRefreshTokenCache = new Map<string, { refreshToken: string; expiresAt: number }>();
-
-function cacheRotatedRefreshToken(oldHash: string, refreshToken: string): void {
-  const expiresAt = Date.now() + REFRESH_ROTATION_GRACE_MS;
-  rotatedRefreshTokenCache.set(oldHash, { refreshToken, expiresAt });
-
-  for (const [hash, entry] of rotatedRefreshTokenCache.entries()) {
-    if (entry.expiresAt <= Date.now()) {
-      rotatedRefreshTokenCache.delete(hash);
-    }
-  }
-}
-
-function getCachedRotatedRefreshToken(oldHash: string): string | null {
-  const entry = rotatedRefreshTokenCache.get(oldHash);
-  if (!entry) return null;
-  if (entry.expiresAt <= Date.now()) {
-    rotatedRefreshTokenCache.delete(oldHash);
-    return null;
-  }
-  return entry.refreshToken;
-}
-
-async function ensureSharedGeneralChannel(client: PoolClient): Promise<string> {
-  await client.query(
-    `INSERT INTO chats(id, type, name, system_key)
-     VALUES($1, 'channel', 'General', $2)
-     ON CONFLICT (system_key) DO NOTHING`,
-    [SHARED_GENERAL_CHAT_ID, SHARED_GENERAL_SYSTEM_KEY]
-  );
-
-  const channel = await client.query('SELECT id FROM chats WHERE system_key = $1', [SHARED_GENERAL_SYSTEM_KEY]);
-  if (!channel.rowCount) {
-    throw new Error('Shared General channel is missing');
-  }
-
-  return channel.rows[0].id as string;
-}
-
-function blockInactiveUser(reply: any, user: Pick<UserRow, 'status'>) {
-  if (user.status !== 'active') {
-    return reply.status(403).send({ error: 'Account unavailable' });
-  }
-  return null;
-}
-
-export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
-  const registerRateLimiter = createAuthRateLimiter(AUTH_RATE_LIMITS.register);
-  const loginRateLimiter = createAuthRateLimiter(AUTH_RATE_LIMITS.login);
-  const passwordResetRateLimiter = createAuthRateLimiter(AUTH_RATE_LIMITS.passwordReset);
-
-  const sendAltchaChallenge = async (reply: any) => {
-    const challenge = await createAltchaChallenge();
-    return reply
-      .header('Cache-Control', 'no-store')
-      .send(challenge);
-  };
-
-  app.get('/api/v1/altcha', async (_request, reply) => {
-    return sendAltchaChallenge(reply);
+export async function registerAuthRoutes(fastify: FastifyInstance) {
+  fastify.get('/api/v1/auth/config', async () => {
+    const [setting] = await db.select().from(serverSettings).where(eq(serverSettings.key, 'registration_mode')).limit(1);
+    return { registrationMode: setting?.value ?? 'invite_only' };
   });
 
-  app.post('/api/v1/altcha', async (_request, reply) => {
-    return sendAltchaChallenge(reply);
-  });
+  fastify.get('/api/v1/auth/challenge', async () => createChallenge());
 
-  app.post('/api/v1/auth/register', async (request, reply) => {
-    const parsed = RegisterRequestSchema.safeParse(request.body);
-    if (!parsed.success) return reply.status(400).send({ error: formatValidationError(parsed.error) });
-    const isE2E = parsed.data.captchaToken === 'e2e-bypass' && env.NODE_ENV !== 'production';
-    if (
-      !isE2E &&
-      replyIfRateLimited(
-        reply,
-        registerRateLimiter.consume(request.ip),
-        AUTH_RATE_LIMITS.register.error
-      )
-    ) {
-      return;
+  fastify.post('/api/v1/auth/register', { preHandler: rateLimit(3) }, async (request) => {
+    const body = RegisterRequestSchema.parse(request.body);
+    if (isProduction && !verifyChallenge(body.captchaToken)) {
+      throw badRequest('Invalid CAPTCHA token', 'CAPTCHA_INVALID');
     }
 
-    const { username, password, inviteCode, captchaToken, testNoticeVersion } = parsed.data;
-    const captchaVerified = 
-      (captchaToken === 'e2e-bypass' && env.NODE_ENV !== 'production') 
-        ? true 
-        : await verifyAltchaPayloadOnce(captchaToken);
-    
-    if (!captchaVerified) {
-      return reply.status(400).send({ error: 'Captcha verification failed. Please try again.' });
-    }
+    const [mode] = await db.select().from(serverSettings).where(eq(serverSettings.key, 'registration_mode')).limit(1);
+    if ((mode?.value ?? 'invite_only') === 'closed') throw forbidden('Registration is closed', 'REGISTRATION_CLOSED');
 
-    if (testNoticeVersion !== env.TEST_ACCOUNT_NOTICE_VERSION) {
-      request.log.info(
-        {
-          username,
-          providedVersion: testNoticeVersion,
-          requiredVersion: env.TEST_ACCOUNT_NOTICE_VERSION
-        },
-        'register rejected: stale test notice acknowledgement'
-      );
-      return reply.status(400).send({
-        error: `Please acknowledge the current test notice (${env.TEST_ACCOUNT_NOTICE_VERSION})`
-      });
-    }
+    const [invite] = await db.select()
+      .from(signupInvites)
+      .where(and(
+        eq(signupInvites.code, body.inviteCode),
+        isNull(signupInvites.revokedAt),
+        or(isNull(signupInvites.expiresAt), gt(signupInvites.expiresAt, new Date()))
+      ))
+      .limit(1);
+    if (!invite || invite.uses >= invite.maxUses) throw badRequest('Invalid invite code', 'INVITE_INVALID');
 
-    // Check registration mode first
-    const registrationMode = await getRegistrationMode(pool);
-    if (registrationMode === 'closed') {
-      return reply.status(403).send({ error: 'Registration is currently closed' });
-    }
+    const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.username, body.username)).limit(1);
+    if (existing) throw badRequest('Username is already taken', 'USERNAME_TAKEN');
 
-    const client = await pool.connect();
+    const [{ value: userCount }] = await db.select({ value: count() }).from(users);
+    const code = recoveryCode();
+    const passwordHash = await hashPassword(body.password);
 
-    try {
-      await client.query('BEGIN');
+    const [user] = await db.transaction(async (tx) => {
+      const [created] = await tx.insert(users).values({
+        username: body.username,
+        displayName: body.displayName ?? body.username,
+        passwordHash,
+        role: userCount === 0 ? 'admin' : 'member',
+        recoveryCodeHash: sha256(code),
+        testNoticeAcceptedVersion: body.testNoticeVersion,
+        testNoticeAcceptedAt: new Date()
+      }).returning();
 
-      const invite = await client.query(
-        `SELECT id, code, max_uses, uses, expires_at, revoked_at
-         FROM signup_invites
-         WHERE code = $1
-         FOR UPDATE`,
-        [inviteCode]
-      );
+      await tx.update(signupInvites)
+        .set({ uses: sql`${signupInvites.uses} + 1` })
+        .where(eq(signupInvites.id, invite.id));
 
-      if (!invite.rowCount) {
-        await client.query('ROLLBACK');
-        return reply.status(400).send({ error: 'Invalid or expired invite code' });
-      }
+      await tx.insert(notificationPrefs).values({ userId: created.id }).onConflictDoNothing();
 
-      const inv = invite.rows[0];
-      const expired = inv.expires_at && new Date(inv.expires_at) < new Date();
-      const exhausted = Number(inv.uses) >= Number(inv.max_uses);
-      const revoked = Boolean(inv.revoked_at);
+      const [general] = await tx.select({ chatId: chats.id })
+        .from(chats)
+        .where(eq(chats.systemKey, 'general'))
+        .limit(1);
 
-      if (expired || exhausted || revoked) {
-        await client.query('ROLLBACK');
-        return reply.status(400).send({ error: 'Invalid or expired invite code' });
-      }
+      if (general) {
+        await tx.insert(chatMembers).values({
+          chatId: general.chatId,
+          userId: created.id,
+          role: userCount === 0 ? 'owner' : 'member'
+        }).onConflictDoNothing();
 
-      const id = randomUUID();
-      const passwordHash = await hashPassword(password);
-      const recoveryCode = createRecoveryCode();
-
-      await client.query(
-        `INSERT INTO users(
-           id,
-           username,
-           display_name,
-           password_hash,
-           recovery_code_hash,
-           test_notice_accepted_version,
-           test_notice_accepted_at
-         ) VALUES($1, $2, $3, $4, $5, $6, NOW())`,
-        [
-          id,
-          username,
-          username,
-          passwordHash,
-          hashToken(recoveryCode.replaceAll('-', '')),
-          env.TEST_ACCOUNT_NOTICE_VERSION
-        ]
-      );
-
-      await client.query(
-        'UPDATE signup_invites SET uses = uses + 1 WHERE code = $1',
-        [inviteCode]
-      );
-
-      const generalChatId = await ensureSharedGeneralChannel(client);
-      await client.query(
-        'INSERT INTO chat_members(chat_id, user_id) VALUES($1, $2) ON CONFLICT (chat_id, user_id) DO NOTHING',
-        [generalChatId, id]
-      );
-
-      await maybeBootstrapAdmin(client, username);
-      const response = await createAuthResponse(app, client, id, recoveryCode, getSessionMetadataFromRequest(request));
-
-      await client.query('COMMIT');
-      return reply.status(201).send(response);
-    } catch (error: any) {
-      await client.query('ROLLBACK');
-      if (error?.code === '23505' && error?.constraint === 'users_username_key') {
-        return reply.status(409).send({ error: 'Username is already taken' });
-      }
-      request.log.error(error);
-      return reply.status(500).send({ error: 'Failed to register' });
-    } finally {
-      client.release();
-    }
-  });
-
-  app.post('/api/v1/auth/login', async (request, reply) => {
-    const parsed = LoginRequestSchema.safeParse(request.body);
-    if (!parsed.success) return reply.status(400).send({ error: formatValidationError(parsed.error) });
-    if (
-      replyIfRateLimited(reply, loginRateLimiter.consume(request.ip), AUTH_RATE_LIMITS.login.error)
-    ) {
-      return;
-    }
-
-    const { username, password } = parsed.data;
-    const user = await getUserByUsername(pool, username);
-
-    if (!user || !user.password_hash) return reply.status(401).send({ error: 'Invalid username or password' });
-
-    const ok = await verifyPassword(password, user.password_hash);
-    if (!ok) return reply.status(401).send({ error: 'Invalid username or password' });
-
-    const inactive = blockInactiveUser(reply, user);
-    if (inactive) return inactive;
-
-    await maybeBootstrapAdmin(pool, username);
-
-    let recoveryCode: string | undefined;
-    if (!user.recovery_code_hash) {
-      recoveryCode = createRecoveryCode();
-      await issueRecoveryCode(pool, user.id, recoveryCode);
-    }
-
-    const response = await createAuthResponse(app, pool, user.id, recoveryCode, getSessionMetadataFromRequest(request));
-    return reply.send(response);
-  });
-
-  app.post('/api/v1/auth/password-reset', async (request, reply) => {
-    const parsed = PasswordResetRequestSchema.safeParse(request.body);
-    if (!parsed.success) return reply.status(400).send({ error: formatValidationError(parsed.error) });
-    if (
-      replyIfRateLimited(
-        reply,
-        passwordResetRateLimiter.consume(request.ip),
-        AUTH_RATE_LIMITS.passwordReset.error
-      )
-    ) {
-      return;
-    }
-
-    const { username, recoveryCode, newPassword } = parsed.data;
-    const user = await getUserByUsername(pool, username);
-    if (!user || !user.recovery_code_hash) {
-      return reply.status(401).send({ error: 'Invalid recovery code or username' });
-    }
-
-    const inactive = blockInactiveUser(reply, user);
-    if (inactive) return inactive;
-
-    if (!safeEqualHash(hashToken(recoveryCode), user.recovery_code_hash)) {
-      return reply.status(401).send({ error: 'Invalid recovery code or username' });
-    }
-
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      const nextRecoveryCode = createRecoveryCode();
-      await issueRecoveryCode(client, user.id, nextRecoveryCode);
-      await client.query(
-        'UPDATE users SET password_hash = $1, must_change_password = FALSE WHERE id = $2',
-        [await hashPassword(newPassword), user.id]
-      );
-      await client.query('DELETE FROM refresh_tokens WHERE user_id = $1', [user.id]);
-
-      const response = await createAuthResponse(app, client, user.id, nextRecoveryCode, getSessionMetadataFromRequest(request));
-
-      await client.query('COMMIT');
-      return reply.send(response);
-    } catch (error) {
-      await client.query('ROLLBACK');
-      request.log.error(error);
-      return reply.status(500).send({ error: 'Failed to reset password' });
-    } finally {
-      client.release();
-    }
-  });
-
-  app.post('/api/v1/auth/refresh', async (request, reply) => {
-    const parsed = RefreshRequestSchema.safeParse(request.body);
-    if (!parsed.success) return reply.status(400).send({ error: formatValidationError(parsed.error) });
-
-    const oldHash = hashToken(parsed.data.refreshToken);
-    const client = await pool.connect();
-    let userId = '';
-    let sessionId = '';
-    let newRefreshToken = '';
-    let reusedRefreshToken = false;
-
-    try {
-      await client.query('BEGIN');
-
-      let tokenRes = await client.query(
-        `SELECT id, user_id, device_label, app_context, has_push_token
-         FROM refresh_tokens
-         WHERE token_hash = $1
-           AND expires_at > NOW()
-         FOR UPDATE`,
-        [oldHash]
-      );
-      if (!tokenRes.rowCount) {
-        tokenRes = await client.query(
-          `SELECT id, user_id, device_label, app_context, has_push_token
-           FROM refresh_tokens
-           WHERE rotated_to_token_hash = $1
-             AND rotated_at IS NOT NULL
-             AND rotated_at > NOW() - ($2 * INTERVAL '1 millisecond')
-             AND expires_at > NOW()
-           FOR UPDATE`,
-          [oldHash, REFRESH_ROTATION_GRACE_MS]
-        );
-        reusedRefreshToken = Boolean(tokenRes.rowCount);
-      }
-
-      if (!tokenRes.rowCount) {
-        await client.query('ROLLBACK');
-        return reply.status(401).send({ error: INVALID_REFRESH_TOKEN_ERROR });
-      }
-
-      const tokenRow = tokenRes.rows[0] as {
-        id: string;
-        user_id: string;
-        device_label: string;
-        app_context: string | null;
-        has_push_token: boolean;
-      };
-
-      userId = tokenRow.user_id;
-      sessionId = tokenRow.id;
-      const user = await getUserById(client, userId);
-      if (!user) {
-        await client.query('ROLLBACK');
-        return reply.status(401).send({ error: 'Invalid user session' });
-      }
-      if (user.status !== 'active') {
-        await client.query('DELETE FROM refresh_tokens WHERE user_id = $1', [user.id]);
-        await client.query('COMMIT');
-        return reply.status(403).send({ error: 'Account unavailable' });
-      }
-
-      const metadata = mergeSessionMetadata(getSessionMetadataFromRequest(request), {
-        deviceLabel: tokenRow.device_label,
-        appContext: tokenRow.app_context,
-        hasPushToken: tokenRow.has_push_token
-      });
-
-      if (reusedRefreshToken) {
-        const cachedRefreshToken = getCachedRotatedRefreshToken(oldHash);
-        if (!cachedRefreshToken) {
-          await client.query('ROLLBACK');
-          return reply.status(401).send({ error: INVALID_REFRESH_TOKEN_ERROR });
+        const childRows = await tx.select({ chatId: chats.id }).from(chats).where(eq(chats.parentChatId, general.chatId));
+        for (const channel of childRows) {
+          await tx.insert(chatMembers).values({ chatId: channel.chatId, userId: created.id }).onConflictDoNothing();
         }
-
-        newRefreshToken = cachedRefreshToken;
-        await client.query(
-          `UPDATE refresh_tokens
-           SET last_used_at = NOW(),
-               device_label = $1,
-               app_context = $2,
-               has_push_token = $3
-           WHERE id = $4`,
-          [
-            metadata.deviceLabel,
-            metadata.appContext,
-            metadata.hasPushToken,
-            tokenRow.id
-          ]
-        );
-      } else {
-        newRefreshToken = createOpaqueToken();
-        const newHash = hashToken(newRefreshToken);
-        const expiresAt = refreshExpiryDate();
-
-        await client.query(
-          `UPDATE refresh_tokens
-           SET token_hash = $1,
-               expires_at = $2,
-               last_used_at = NOW(),
-               device_label = $3,
-               app_context = $4,
-               has_push_token = $5,
-               rotated_at = NOW(),
-               rotated_to_token_hash = $6
-           WHERE id = $7`,
-          [
-            newHash,
-            expiresAt.toISOString(),
-            metadata.deviceLabel,
-            metadata.appContext,
-            metadata.hasPushToken,
-            oldHash,
-            tokenRow.id
-          ]
-        );
-        cacheRotatedRefreshToken(oldHash, newRefreshToken);
       }
 
-      await client.query('COMMIT');
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
-
-    const user = await getUserById(pool, userId);
-    if (!user) return reply.status(401).send({ error: 'Invalid user session' });
-
-    const accessToken = await signAccessToken(app, user.id, user.username, sessionId);
-
-    const response = AuthResponseSchema.parse({
-      user: mapAuthUser(user),
-      accessToken,
-      refreshToken: newRefreshToken
+      return [created];
     });
 
-    return reply.send(response);
+    const session = await createSession(fastify, user);
+    await appendUserProfileSyncEvents(user, user.id);
+    return {
+      user: toAuthUser(user),
+      accessToken: session.accessToken,
+      refreshToken: session.refreshToken,
+      recoveryCode: code
+    };
   });
 
-  app.post('/api/v1/auth/logout', async (request, reply) => {
-    const parsed = RefreshRequestSchema.safeParse(request.body);
-    if (!parsed.success) return reply.status(400).send({ error: formatValidationError(parsed.error) });
+  fastify.post('/api/v1/auth/login', { preHandler: rateLimit(5) }, async (request) => {
+    const body = LoginRequestSchema.parse(request.body);
+    const [user] = await db.select().from(users).where(eq(users.username, body.username)).limit(1);
+    if (!user || user.status !== 'active') throw unauthorized('Invalid username or password', 'AUTH_INVALID');
+    if (!(await verifyPassword(body.password, user.passwordHash))) {
+      throw unauthorized('Invalid username or password', 'AUTH_INVALID');
+    }
 
-    await pool.query(
-      `DELETE FROM refresh_tokens
-       WHERE token_hash = $1
-          OR (
-            rotated_to_token_hash = $1
-            AND rotated_at IS NOT NULL
-            AND rotated_at > NOW() - ($2 * INTERVAL '1 millisecond')
-          )`,
-      [hashToken(parsed.data.refreshToken), REFRESH_ROTATION_GRACE_MS]
-    );
+    const session = await createSession(fastify, user);
+    return {
+      user: toAuthUser(user),
+      accessToken: session.accessToken,
+      refreshToken: session.refreshToken
+    };
+  });
+
+  fastify.post('/api/v1/auth/refresh', async (request) => {
+    const body = RefreshRequestSchema.parse(request.body);
+    const refreshed = await rotateRefreshToken(fastify, body.refreshToken);
+    return {
+      user: toAuthUser(refreshed.user),
+      accessToken: refreshed.accessToken,
+      refreshToken: refreshed.refreshToken
+    };
+  });
+
+  fastify.post('/api/v1/auth/logout', { preHandler: fastify.authenticate }, async (request, reply) => {
+    const maybeBody = request.body && typeof request.body === 'object' ? request.body as { refreshToken?: string } : {};
+    if (maybeBody.refreshToken) await revokeRefreshToken(maybeBody.refreshToken);
+    if (request.authUser?.sessionDeviceId) await revokeSessionDevice(request.authUser.sessionDeviceId);
     return reply.status(204).send();
   });
 
-  app.get('/api/v1/auth/config', async () => {
-    const registrationMode = await getRegistrationMode(pool);
-    return { registrationMode };
+  fastify.get('/api/v1/auth/me', { preHandler: fastify.authenticate }, async (request) => {
+    const [user] = await db.select().from(users).where(eq(users.id, request.authUser!.userId)).limit(1);
+    if (!user) throw notFound('User not found');
+    return toMeResponse(user);
   });
+
+  fastify.patch('/api/v1/auth/me', { preHandler: fastify.authenticate }, async (request) => {
+    const body = UpdateProfileRequestSchema.parse(request.body);
+    if (body.avatarUploadId !== undefined) {
+      await assertOwnedProfileImageUpload(body.avatarUploadId, request.authUser!.userId);
+    }
+    if (body.bannerUploadId !== undefined) {
+      await assertOwnedProfileImageUpload(body.bannerUploadId, request.authUser!.userId);
+    }
+
+    const [user] = await db.transaction(async (tx) => {
+      if (body.avatarUploadId) {
+        await tx.update(mediaUploads).set({ scope: 'public' }).where(eq(mediaUploads.id, body.avatarUploadId));
+      }
+      if (body.bannerUploadId) {
+        await tx.update(mediaUploads).set({ scope: 'public' }).where(eq(mediaUploads.id, body.bannerUploadId));
+      }
+      return tx.update(users)
+        .set({
+        ...(body.displayName !== undefined ? { displayName: body.displayName } : {}),
+        ...(body.bio !== undefined ? { bio: body.bio } : {}),
+        ...(body.timezone !== undefined ? { timezone: body.timezone } : {}),
+        ...(body.avatarUploadId !== undefined ? { avatarMediaId: body.avatarUploadId } : {}),
+        ...(body.bannerUploadId !== undefined ? { bannerMediaId: body.bannerUploadId } : {}),
+        ...(body.profileStyle !== undefined ? { profileStyle: body.profileStyle } : {})
+        })
+        .where(eq(users.id, request.authUser!.userId))
+        .returning();
+    });
+    await appendUserProfileSyncEvents(user, request.authUser!.userId);
+    return toMeResponse(user);
+  });
+
+  fastify.patch('/api/v1/auth/password', { preHandler: fastify.authenticate }, async (request, reply) => {
+    const body = ChangePasswordRequestSchema.parse(request.body);
+    const [user] = await db.select().from(users).where(eq(users.id, request.authUser!.userId)).limit(1);
+    if (!user || !(await verifyPassword(body.currentPassword, user.passwordHash))) {
+      throw unauthorized('Current password is incorrect', 'AUTH_INVALID');
+    }
+    await db.update(users).set({
+      passwordHash: await hashPassword(body.newPassword),
+      mustChangePassword: false
+    }).where(eq(users.id, user.id));
+    return reply.status(204).send();
+  });
+
+  fastify.post('/api/v1/auth/reset-password', async (request, reply) => {
+    const body = PasswordResetRequestSchema.parse(request.body);
+    const [user] = await db.select().from(users).where(ilike(users.username, body.username)).limit(1);
+    if (!user || user.recoveryCodeHash !== sha256(body.recoveryCode)) {
+      throw unauthorized('Invalid recovery details', 'AUTH_INVALID');
+    }
+    await db.update(users).set({ passwordHash: await hashPassword(body.newPassword) }).where(eq(users.id, user.id));
+    return reply.status(204).send();
+  });
+}
+
+async function assertOwnedProfileImageUpload(mediaUploadId: string | null, userId: string) {
+  if (!mediaUploadId) return;
+  const [upload] = await db.select()
+    .from(mediaUploads)
+    .where(eq(mediaUploads.id, mediaUploadId))
+    .limit(1);
+
+  if (!upload) throw notFound('Media upload not found');
+  if (upload.uploaderId !== userId) throw forbidden('Only your own uploads can be used for profile media');
+  if (upload.mediaKind !== 'image') throw badRequest('Profile media must be an image', 'PROFILE_MEDIA_NOT_IMAGE');
+}
+
+async function appendUserProfileSyncEvents(user: typeof users.$inferSelect, actorUserId: string) {
+  const memberRows = await db.select({ chatId: chatMembers.chatId })
+    .from(chatMembers)
+    .where(eq(chatMembers.userId, user.id));
+  const payload = toMemberDetail(user);
+
+  if (memberRows.length === 0) {
+    await appendSyncEvent({
+      scope: 'user',
+      userId: user.id,
+      actorUserId,
+      entityId: user.id,
+      op: { type: 'user.upsert', payload }
+    });
+    return;
+  }
+
+  for (const member of memberRows) {
+    await appendSyncEvent({
+      scope: 'chat',
+      chatId: member.chatId,
+      actorUserId,
+      entityId: user.id,
+      op: { type: 'user.upsert', payload }
+    });
+  }
 }

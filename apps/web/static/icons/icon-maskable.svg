@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="ph-icon-mask-title">
+	<title id="ph-icon-mask-title">The Penthouse</title>
+	<!--
+		PWA maskable variant. Full-bleed background (no rounded corners;
+		the host OS applies its own mask). All content scaled to 80% and
+		centered inside the inner-80% safe zone (radius 205 around 256,256)
+		so it survives Android / Chrome icon-shape masks.
+	-->
+	<rect width="512" height="512" fill="oklch(0.16 0.020 280)"/>
+	<g transform="translate(51.2 51.2) scale(0.8)">
+		<g font-family="'Playfair Display','Bodoni 72','Didot','Times New Roman',serif" font-weight="900" fill="oklch(0.95 0.012 280)" letter-spacing="-5">
+			<text x="133" y="143" text-anchor="middle" dominant-baseline="central" font-size="174">P</text>
+			<text x="379" y="143" text-anchor="middle" dominant-baseline="central" font-size="174">E</text>
+			<text x="133" y="369" text-anchor="middle" dominant-baseline="central" font-size="174">N</text>
+			<text x="379" y="369" text-anchor="middle" dominant-baseline="central" font-size="174">T</text>
+		</g>
+		<rect x="246" y="51" width="20" height="410" fill="oklch(0.72 0.150 285)"/>
+		<rect x="51" y="246" width="410" height="20" fill="oklch(0.72 0.150 285)"/>
+	</g>
+</svg>

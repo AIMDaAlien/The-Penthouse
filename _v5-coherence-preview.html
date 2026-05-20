@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Penthouse V5 · Coherence preview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  /* ============================================================
+     DESIGN TOKENS — shared across all 3 panes (T-D1 Periwinkle theme)
+     ============================================================ */
+  :root {
+    /* Color tokens — OKLCH, all tinted toward periwinkle hue ≈ 280 */
+    --p-bg: oklch(0.16 0.02 280);
+    --p-surface: oklch(0.21 0.025 280);
+    --p-surface-2: oklch(0.26 0.03 280);
+    --p-text: oklch(0.93 0.012 280);
+    --p-text-2: oklch(0.80 0.025 280);
+    --p-muted: oklch(0.65 0.05 280);
+    --p-muted-2: oklch(0.50 0.04 280);
+    --p-accent: oklch(0.69 0.14 285);
+    --p-accent-soft: oklch(0.69 0.14 285 / 0.16);
+    --p-accent-edge: oklch(0.69 0.14 285 / 0.36);
+    --p-secondary: oklch(0.78 0.09 280);
+    --p-line: oklch(0.78 0.09 280 / 0.12);
+    --p-line-2: oklch(0.78 0.09 280 / 0.22);
+    --p-warning: oklch(0.62 0.07 35);
+    --p-warning-soft: oklch(0.62 0.07 35 / 0.12);
+    --p-warning-edge: oklch(0.62 0.07 35 / 0.32);
+
+    /* Spacing — fibonacci-ish, varied for rhythm */
+    --sp-1: 4px;
+    --sp-2: 8px;
+    --sp-3: 14px;
+    --sp-4: 22px;
+    --sp-5: 40px;
+    --sp-6: 64px;
+
+    /* Radii */
+    --r-pill: 999px;
+    --r-lg: 22px;
+    --r-md: 14px;
+    --r-sm: 8px;
+    --r-xs: 4px;
+
+    /* Motion */
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+    --dur-fast: 180ms;
+    --dur-base: 280ms;
+    --dur-slow: 420ms;
+
+    /* Texture — A1.3 Coarse Perlin · 40% opacity · shared across all panes */
+    --tex: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.18' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.85'/%3E%3C/svg%3E");
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: oklch(0.10 0.012 280);
+    color: var(--p-text);
+    font-family: 'Ubuntu', sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    padding: 48px 32px 120px;
+  }
+
+  /* ----- preview chrome (the page that holds the demos) ----- */
+  .page-head {
+    max-width: 1280px;
+    margin: 0 auto 48px;
+    padding-bottom: 22px;
+    border-bottom: 1px solid var(--p-line);
+  }
+  .page-head .eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--p-secondary);
+    font-size: 0.72rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .page-head h1 {
+    margin: 0;
+    font-family: 'Ubuntu', sans-serif;
+    font-size: 2.5rem;
+    font-weight: 700;
+    letter-spacing: -1px;
+    color: var(--p-text);
+    line-height: 1;
+  }
+  .page-head p {
+    margin: 14px 0 0;
+    color: var(--p-muted);
+    max-width: 720px;
+    font-size: 0.95rem;
+  }
+  .page-head code {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--p-secondary);
+    background: var(--p-accent-soft);
+    padding: 1px 6px;
+    border-radius: var(--r-xs);
+    font-size: 0.78rem;
+  }
+
+  .panel-stack {
+    max-width: 1280px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 56px;
+  }
+  .pane-label {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--p-secondary);
+    font-size: 0.72rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: var(--sp-3);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .pane-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--p-line);
+  }
+  .pane-frame {
+    width: 860px;
+    height: 760px;
+    margin: 0 auto;
+    border: 1px solid var(--p-line-2);
+    border-radius: var(--r-md);
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 30px 80px -20px oklch(0 0 0 / 0.5);
+  }
+
+  /* ============================================================
+     SHARED PANE FOUNDATION — same texture, same fonts, same head
+     ============================================================ */
+  .pane {
+    width: 100%;
+    height: 100%;
+    background-color: var(--p-bg);
+    color: var(--p-text);
+    font-family: 'Ubuntu', sans-serif;
+    position: relative;
+    overflow: hidden;
+  }
+  .pane::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: var(--tex);
+    mix-blend-mode: overlay;
+    opacity: 0.40;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .pane > * { position: relative; z-index: 1; }
+
+  /* shared header pattern (eyebrow + display title + version) */
+  .pane-head {
+    padding: var(--sp-5) var(--sp-5) var(--sp-4);
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    border-bottom: 1px solid var(--p-line);
+  }
+  .pane-head .title-block {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+  }
+  .pane-head .eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--p-secondary);
+    font-size: 0.7rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  .pane-head h1 {
+    margin: 0;
+    font-family: 'Ubuntu', sans-serif;
+    font-weight: 700;
+    color: var(--p-text);
+    line-height: 0.95;
+    letter-spacing: -1.5px;
+    font-size: 2.6rem;
+  }
+  .pane-head .ver {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--p-muted);
+    font-size: 0.68rem;
+    letter-spacing: 1.5px;
+    text-align: right;
+  }
+  .pane-head .ver strong {
+    color: var(--p-secondary);
+    font-weight: 500;
+  }
+
+  /* ============================================================
+     PANE 1 — CHAT (T-D1 Periwinkle, A1.3 texture 40%, A2.4 bubbles 70%)
+     ============================================================ */
+  .chat-body {
+    position: absolute;
+    inset: 130px 0 100px 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: var(--sp-5);
+    gap: var(--sp-3);
+    overflow-y: auto;
+  }
+  .chat-row {
+    display: flex;
+    gap: var(--sp-3);
+    align-items: flex-end;
+    max-width: 78%;
+    animation: msgIn var(--dur-slow) var(--ease-out) backwards;
+  }
+  .chat-row.own { align-self: flex-end; flex-direction: row; }
+  .chat-row:nth-child(1) { animation-delay: 0ms; }
+  .chat-row:nth-child(2) { animation-delay: 80ms; }
+  .chat-row:nth-child(3) { animation-delay: 160ms; }
+  .chat-row:nth-child(4) { animation-delay: 240ms; }
+  .chat-row:nth-child(5) { animation-delay: 320ms; }
+  @keyframes msgIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .av {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: linear-gradient(135deg, var(--p-accent), var(--p-secondary));
+    position: relative;
+    overflow: hidden;
+  }
+  .av::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: var(--tex);
+    mix-blend-mode: overlay;
+    opacity: 0.4;
+  }
+
+  .bub {
+    font-family: 'Ubuntu', sans-serif;
+    font-size: 0.92rem;
+    line-height: 1.45;
+    padding: 10px 18px;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    transition: transform var(--dur-fast) var(--ease-out);
+  }
+  .bub.short { padding: 8px 16px; }
+  .chat-row:not(.own) .bub {
+    background: oklch(1 0 0 / 0.07);
+    border: 1px solid oklch(1 0 0 / 0.10);
+    color: var(--p-text);
+    border-radius: var(--r-lg);
+    border-bottom-left-radius: var(--r-xs);
+  }
+  .chat-row:not(.own) .bub.short { border-radius: var(--r-pill); border-bottom-left-radius: var(--r-xs); }
+  .chat-row.own .bub {
+    background: oklch(0.69 0.14 285 / 0.70);
+    border: 1px solid var(--p-accent-edge);
+    color: oklch(0.98 0.01 280);
+    border-radius: var(--r-lg);
+    border-bottom-right-radius: var(--r-xs);
+  }
+  .chat-row.own .bub.short { border-radius: var(--r-pill); border-bottom-right-radius: var(--r-xs); }
+  .chat-row .bub:hover { transform: translateY(-1px); }
+
+  .composer-wrap {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    padding: var(--sp-4) var(--sp-5) var(--sp-5);
+    display: flex;
+    justify-content: center;
+    background: linear-gradient(0deg, var(--p-bg) 60%, transparent);
+  }
+  .composer {
+    width: 100%;
+    max-width: 680px;
+    background: oklch(1 0 0 / 0.04);
+    border: 1px solid var(--p-line-2);
+    border-radius: var(--r-pill);
+    padding: 6px 6px 6px 22px;
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    transition: border-color var(--dur-base) var(--ease-out);
+  }
+  .composer:focus-within { border-color: var(--p-accent-edge); }
+  .composer input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--p-text);
+    font-family: 'Ubuntu', sans-serif;
+    font-size: 0.95rem;
+    padding: 6px 0;
+  }
+  .composer input::placeholder { color: var(--p-muted-2); }
+  .composer .send {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: var(--p-accent);
+    border: 1px solid var(--p-accent-edge);
+    color: oklch(0.98 0.01 280);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
+  }
+  .composer .send:hover { transform: scale(1.05); }
+  .composer .send svg { width: 16px; height: 16px; }
+
+  /* ============================================================
+     PANE 2 — SETTINGS (Lunar Mist, glass-soft + typography-led)
+     ============================================================ */
+  .settings-body {
+    position: absolute;
+    inset: 130px 0 0 0;
+    padding: var(--sp-5);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--sp-5);
+    overflow-y: auto;
+  }
+  .settings-col {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-4);
+  }
+
+  /* identity column: preview-led (banner + pfp prominent) */
+  .id-block {
+    border-radius: var(--r-lg);
+    overflow: hidden;
+    background: oklch(1 0 0 / 0.03);
+    border: 1px solid var(--p-line);
+  }
+  .id-block .banner {
+    height: 150px;
+    background:
+      linear-gradient(135deg, var(--p-accent), var(--p-secondary));
+    position: relative;
+  }
+  .id-block .banner::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: var(--tex);
+    mix-blend-mode: overlay;
+    opacity: 0.45;
+  }
+  .id-block .id-body {
+    padding: 0 var(--sp-4) var(--sp-4);
+    margin-top: -48px;
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+  }
+  .id-block .pfp {
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, oklch(0.78 0.06 280), oklch(0.55 0.08 280));
+    border: 4px solid var(--p-bg);
+    position: relative;
+    overflow: hidden;
+  }
+  .id-block .pfp::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: var(--tex);
+    mix-blend-mode: overlay;
+    opacity: 0.5;
+  }
+  .id-block .id-meta { display: flex; flex-direction: column; gap: 4px; }
+  .id-block .id-meta .handle {
+    font-family: 'Ubuntu', sans-serif;
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: var(--p-text);
+    line-height: 1.2;
+  }
+  .id-block .id-meta .id-sub {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--p-muted);
+    font-size: 0.66rem;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .id-block .id-meta .id-sub::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: oklch(0.68 0.12 145);
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .field label {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--p-muted);
+    font-size: 0.66rem;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+  }
+  .field input,
+  .field .display-value {
+    background: oklch(1 0 0 / 0.04);
+    border: 1px solid var(--p-line);
+    border-radius: var(--r-sm);
+    padding: 11px 14px;
+    color: var(--p-text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.86rem;
+    transition: border-color var(--dur-base) var(--ease-out), background var(--dur-base) var(--ease-out);
+    outline: none;
+  }
+  .field input:focus {
+    border-color: var(--p-accent-edge);
+    background: oklch(0.69 0.14 285 / 0.05);
+  }
+
+  .presence-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+  }
+  .presence-btn {
+    background: oklch(1 0 0 / 0.03);
+    border: 1px solid var(--p-line);
+    border-radius: var(--r-sm);
+    padding: 9px 6px;
+    color: var(--p-muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.66rem;
+    letter-spacing: 1px;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all var(--dur-base) var(--ease-out);
+  }
+  .presence-btn:hover {
+    color: var(--p-text);
+    border-color: var(--p-line-2);
+  }
+  .presence-btn.active {
+    background: var(--p-accent-soft);
+    border-color: var(--p-accent-edge);
+    color: var(--p-text);
+  }
+
+  /* config column: glass-soft surfaces */
+  .glass-panel {
+    background: oklch(1 0 0 / 0.03);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--p-line);
+    border-radius: var(--r-lg);
+    padding: var(--sp-4);
+  }
+  .glass-panel h2 {
+    margin: 0 0 var(--sp-3);
+    font-family: 'Ubuntu', sans-serif;
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--p-secondary);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  .toggle-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    font-size: 0.86rem;
+    border-bottom: 1px dashed var(--p-line);
+  }
+  .toggle-row:last-child { border-bottom: none; }
+  .toggle-row span {
+    color: var(--p-text-2);
+  }
+  .toggle {
+    width: 38px;
+    height: 22px;
+    border-radius: var(--r-pill);
+    background: oklch(1 0 0 / 0.10);
+    border: none;
+    position: relative;
+    cursor: pointer;
+    transition: background var(--dur-base) var(--ease-out);
+  }
+  .toggle::after {
+    content: '';
+    width: 16px;
+    height: 16px;
+    background: var(--p-text);
+    border-radius: 50%;
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    transition: transform var(--dur-base) var(--ease-out), background var(--dur-base) var(--ease-out);
+  }
+  .toggle.on {
+    background: var(--p-accent);
+  }
+  .toggle.on::after {
+    transform: translateX(16px);
+    background: oklch(0.98 0.01 280);
+  }
+
+  .signout {
+    margin-top: auto;
+    width: 100%;
+    background: var(--p-warning-soft);
+    border: 1px solid var(--p-warning-edge);
+    color: oklch(0.78 0.07 35);
+    padding: 14px;
+    border-radius: var(--r-md);
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: 0.74rem;
+    letter-spacing: 2px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    transition: all var(--dur-base) var(--ease-out);
+  }
+  .signout:hover {
+    background: oklch(0.62 0.07 35 / 0.18);
+    transform: translateY(-1px);
+  }
+  .signout svg { width: 14px; height: 14px; }
+
+  /* ============================================================
+     PANE 3 — PEOPLE (Vogue-dynamic pfp + NY-layout fusion, Ubuntu/JBM)
+     ============================================================ */
+  .people-body {
+    position: absolute;
+    inset: 130px 0 0 0;
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    gap: 0;
+    overflow: hidden;
+  }
+  .roster {
+    border-right: 1px solid var(--p-line);
+    padding: var(--sp-4) var(--sp-3);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    overflow-y: auto;
+  }
+  .roster-head {
+    padding: 0 10px var(--sp-3);
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  .roster-head .roster-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.66rem;
+    color: var(--p-muted);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+  }
+  .roster-head .roster-count {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--p-secondary);
+    font-size: 0.72rem;
+  }
+  .member {
+    display: flex;
+    gap: var(--sp-3);
+    align-items: center;
+    padding: 10px;
+    border-radius: var(--r-md);
+    cursor: pointer;
+    transition: background var(--dur-base) var(--ease-out);
+    text-align: left;
+    background: none;
+    border: none;
+    color: inherit;
+    font: inherit;
+    width: 100%;
+  }
+  .member:hover { background: oklch(1 0 0 / 0.04); }
+  .member.active {
+    background: var(--p-accent-soft);
+    border: 1px solid var(--p-accent-edge);
+    padding: 9px;
+  }
+  .member .av-sm {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: linear-gradient(135deg, oklch(0.78 0.06 280), oklch(0.55 0.08 280));
+    position: relative;
+    overflow: hidden;
+  }
+  .member .av-sm::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: var(--tex);
+    mix-blend-mode: overlay;
+    opacity: 0.45;
+  }
+  .member .av-sm .dot {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid var(--p-bg);
+    z-index: 2;
+  }
+  .member .av-sm .dot.online { background: oklch(0.74 0.14 145); }
+  .member .av-sm .dot.away { background: oklch(0.82 0.13 80); }
+  .member .av-sm .dot.offline { background: oklch(0.55 0.02 280); }
+  .member.active .av-sm .dot { border-color: oklch(0.30 0.04 280); }
+  .member-info { display: flex; flex-direction: column; min-width: 0; }
+  .member-info .name {
+    font-family: 'Ubuntu', sans-serif;
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: var(--p-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .member-info .role {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    color: var(--p-muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-top: 2px;
+  }
+
+  /* focus pane — Vogue dynamic pfp size + NY layout structure */
+  .focus {
+    overflow-y: auto;
+    position: relative;
+  }
+  .focus-banner {
+    height: 180px;
+    background: linear-gradient(135deg, oklch(0.55 0.08 285), oklch(0.42 0.06 270));
+    position: relative;
+    overflow: hidden;
+  }
+  .focus-banner::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: var(--tex);
+    mix-blend-mode: overlay;
+    opacity: 0.5;
+  }
+  .focus-content {
+    padding: 0 var(--sp-5) var(--sp-5);
+    margin-top: -68px;
+    position: relative;
+  }
+  .focus-pfp {
+    width: 128px;
+    height: 128px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, oklch(0.85 0.05 280), oklch(0.55 0.08 280));
+    border: 5px solid var(--p-bg);
+    position: relative;
+    overflow: hidden;
+    margin-bottom: var(--sp-3);
+  }
+  .focus-pfp::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: var(--tex);
+    mix-blend-mode: overlay;
+    opacity: 0.45;
+  }
+  .focus-pfp .focus-dot {
+    position: absolute;
+    bottom: 6px;
+    right: 6px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: oklch(0.74 0.14 145);
+    border: 3px solid var(--p-bg);
+    z-index: 2;
+  }
+  .focus-role {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--p-secondary);
+    font-size: 0.68rem;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .focus-name {
+    font-family: 'Ubuntu', sans-serif;
+    font-weight: 700;
+    font-size: 2.2rem;
+    letter-spacing: -1.2px;
+    line-height: 0.98;
+    margin: 0 0 var(--sp-3);
+    color: var(--p-text);
+  }
+  .focus-meta {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--p-muted);
+    font-size: 0.7rem;
+    letter-spacing: 1.5px;
+    display: flex;
+    gap: var(--sp-3);
+    margin-bottom: var(--sp-4);
+  }
+  .focus-meta span { display: flex; align-items: center; gap: 6px; }
+  .focus-meta span::before {
+    content: '';
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--p-muted);
+  }
+  .focus-meta span:first-child::before { display: none; }
+  .focus-bio {
+    font-family: 'Ubuntu', sans-serif;
+    font-size: 0.95rem;
+    line-height: 1.65;
+    color: var(--p-text-2);
+    column-count: 2;
+    column-gap: var(--sp-5);
+    margin-bottom: var(--sp-4);
+    max-width: 100%;
+  }
+  .focus-actions {
+    display: flex;
+    gap: var(--sp-3);
+    padding-top: var(--sp-3);
+    border-top: 1px solid var(--p-line);
+  }
+  .btn {
+    font-family: 'Ubuntu', sans-serif;
+    border-radius: var(--r-pill);
+    padding: 11px 24px;
+    font-size: 0.82rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--dur-base) var(--ease-out);
+    border: 1px solid transparent;
+  }
+  .btn-primary {
+    background: var(--p-accent);
+    color: oklch(0.98 0.01 280);
+    border-color: var(--p-accent-edge);
+  }
+  .btn-primary:hover { background: oklch(0.74 0.14 285); transform: translateY(-1px); }
+  .btn-ghost {
+    background: transparent;
+    color: var(--p-text-2);
+    border-color: var(--p-line-2);
+  }
+  .btn-ghost:hover { background: oklch(1 0 0 / 0.04); color: var(--p-text); }
+
+  /* ============================================================
+     COHERENCE CHEAT SHEET
+     ============================================================ */
+  .cheat {
+    max-width: 1280px;
+    margin: 96px auto 0;
+    border: 1px solid var(--p-line);
+    border-radius: var(--r-lg);
+    padding: var(--sp-5);
+    background: oklch(0.13 0.018 280);
+  }
+  .cheat h3 {
+    margin: 0 0 var(--sp-4);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--p-secondary);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  .cheat-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--sp-4);
+  }
+  .cheat-item {
+    border: 1px solid var(--p-line);
+    border-radius: var(--r-md);
+    padding: var(--sp-3) var(--sp-4);
+  }
+  .cheat-item .ci-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    color: var(--p-muted);
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .cheat-item .ci-value {
+    font-family: 'Ubuntu', sans-serif;
+    font-size: 0.88rem;
+    color: var(--p-text);
+  }
+  .cheat-item code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--p-secondary);
+  }
+
+  /* send-icon svg path */
+  .icon-send {
+    fill: currentColor;
+  }
+</style>
+</head>
+<body>
+
+<header class="page-head">
+  <div class="eyebrow">PENTHOUSE / V5 · COHERENCE PREVIEW</div>
+  <h1>One design language, three panes</h1>
+  <p>All three panes share the same texture (<code>A1.3 @ 40%</code>), same OKLCH token palette (T-D1 Periwinkle), same Ubuntu + JetBrains Mono pair, same header pattern, same bubble / pfp / dot vocabulary, same motion curves. The variation across the 30 prototypes will swap palette tokens and layout structure while these primitives stay locked.</p>
+</header>
+
+<div class="panel-stack">
+
+  <!-- ========================= PANE 1 — CHAT ========================= -->
+  <div>
+    <div class="pane-label">A · Chat pane · T-D1 Periwinkle · A2.4 bubbles</div>
+    <div class="pane-frame">
+      <div class="pane">
+        <header class="pane-head">
+          <div class="title-block">
+            <div class="eyebrow">N° 04 / THE PENTHOUSE</div>
+            <h1>Kimi</h1>
+          </div>
+          <div class="ver">
+            <div>V5 / 01</div>
+            <div><strong>LUNAR MIST</strong></div>
+          </div>
+        </header>
+
+        <div class="chat-body">
+          <div class="chat-row">
+            <div class="av"></div>
+            <div class="bub short">Hey 👋</div>
+          </div>
+          <div class="chat-row">
+            <div class="av"></div>
+            <div class="bub">How was the studio this afternoon?</div>
+          </div>
+          <div class="chat-row own">
+            <div class="bub short">Wonderful</div>
+          </div>
+          <div class="chat-row own">
+            <div class="bub">The light through the west window was incredible, I lost an hour just watching it move across the floor.</div>
+          </div>
+          <div class="chat-row">
+            <div class="av"></div>
+            <div class="bub">That sounds like one of those afternoons you don't get back.</div>
+          </div>
+        </div>
+
+        <div class="composer-wrap">
+          <div class="composer">
+            <input type="text" placeholder="Write something quiet…" />
+            <button class="send" aria-label="Send">
+              <svg viewBox="0 0 24 24" class="icon-send"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================= PANE 2 — SETTINGS ========================= -->
+  <div>
+    <div class="pane-label">B · Settings pane · Lunar Mist · glass-soft + preview-led identity</div>
+    <div class="pane-frame">
+      <div class="pane">
+        <header class="pane-head">
+          <div class="title-block">
+            <div class="eyebrow">N° 04 / PREFERENCES</div>
+            <h1>Profile</h1>
+          </div>
+          <div class="ver">
+            <div>V5 / 01</div>
+            <div><strong>LUNAR MIST</strong></div>
+          </div>
+        </header>
+
+        <div class="settings-body">
+          <!-- identity column: preview-led -->
+          <div class="settings-col">
+            <div class="id-block">
+              <div class="banner"></div>
+              <div class="id-body">
+                <div class="pfp"></div>
+                <div class="id-meta">
+                  <div class="handle">kimi.eve</div>
+                  <div class="id-sub">AVAILABLE · 14:22</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="field">
+              <label>Display name</label>
+              <input type="text" value="kimi.eve" />
+            </div>
+
+            <div class="field">
+              <label>Presence</label>
+              <div class="presence-grid">
+                <button class="presence-btn active">Available</button>
+                <button class="presence-btn">Busy</button>
+                <button class="presence-btn">DND</button>
+                <button class="presence-btn">AFK</button>
+                <button class="presence-btn">Offline</button>
+                <button class="presence-btn">Auto</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- config column: glass-soft -->
+          <div class="settings-col">
+            <div class="glass-panel">
+              <h2>Preferences</h2>
+              <div class="toggle-row">
+                <span>Auto-AFK after 5 min</span>
+                <button class="toggle on" aria-label="Auto-AFK"></button>
+              </div>
+              <div class="toggle-row">
+                <span>Push notifications</span>
+                <button class="toggle on" aria-label="Push"></button>
+              </div>
+              <div class="toggle-row">
+                <span>Show typing indicator</span>
+                <button class="toggle" aria-label="Typing"></button>
+              </div>
+              <div class="toggle-row">
+                <span>Read receipts</span>
+                <button class="toggle on" aria-label="Read receipts"></button>
+              </div>
+            </div>
+
+            <div class="glass-panel">
+              <h2>Wallpaper</h2>
+              <div class="field" style="margin-bottom: 14px;">
+                <label>Image URL</label>
+                <input type="text" placeholder="https://…" />
+              </div>
+              <div class="toggle-row">
+                <span>Tint opacity</span>
+                <span style="font-family: 'JetBrains Mono', monospace; color: var(--p-text); font-size: 0.78rem;">0.15</span>
+              </div>
+            </div>
+
+            <button class="signout">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+              SIGN OUT NOW
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================= PANE 3 — PEOPLE ========================= -->
+  <div>
+    <div class="pane-label">C · People pane · Vogue-dynamic pfp + NY layout + Ubuntu/JBM only</div>
+    <div class="pane-frame">
+      <div class="pane">
+        <header class="pane-head">
+          <div class="title-block">
+            <div class="eyebrow">N° 04 / THE COLLECTIVE</div>
+            <h1>Members</h1>
+          </div>
+          <div class="ver">
+            <div>V5 / 01</div>
+            <div><strong>LUNAR MIST</strong></div>
+          </div>
+        </header>
+
+        <div class="people-body">
+          <aside class="roster">
+            <div class="roster-head">
+              <div class="roster-title">Active</div>
+              <div class="roster-count">5 / 12</div>
+            </div>
+            <button class="member active">
+              <div class="av-sm"><div class="dot online"></div></div>
+              <div class="member-info">
+                <div class="name">Amelie Laurent</div>
+                <div class="role">Editor in Chief</div>
+              </div>
+            </button>
+            <button class="member">
+              <div class="av-sm"><div class="dot away"></div></div>
+              <div class="member-info">
+                <div class="name">Julian Vane</div>
+                <div class="role">Creative Director</div>
+              </div>
+            </button>
+            <button class="member">
+              <div class="av-sm"><div class="dot online"></div></div>
+              <div class="member-info">
+                <div class="name">Sasha Meyer</div>
+                <div class="role">Staff Writer</div>
+              </div>
+            </button>
+            <button class="member">
+              <div class="av-sm"><div class="dot offline"></div></div>
+              <div class="member-info">
+                <div class="name">Marcus Thorne</div>
+                <div class="role">Photographer</div>
+              </div>
+            </button>
+            <button class="member">
+              <div class="av-sm"><div class="dot online"></div></div>
+              <div class="member-info">
+                <div class="name">Elena Rossi</div>
+                <div class="role">Stylist</div>
+              </div>
+            </button>
+          </aside>
+
+          <main class="focus">
+            <div class="focus-banner"></div>
+            <div class="focus-content">
+              <div class="focus-pfp"><div class="focus-dot"></div></div>
+              <div class="focus-role">Editor in Chief</div>
+              <h2 class="focus-name">Amelie Laurent</h2>
+              <div class="focus-meta">
+                <span>Paris</span>
+                <span>est. 2019</span>
+                <span>N° 04</span>
+              </div>
+              <p class="focus-bio">
+                Curation of the fine arts and digital minimalism. Spent eleven years at the Whitney before moving to The Penthouse last spring, where she now writes a quarterly long-form on the slowness of looking. Currently working on a piece about the rooms that hold their light.
+              </p>
+              <div class="focus-actions">
+                <button class="btn btn-primary">Message</button>
+                <button class="btn btn-ghost">View portfolio</button>
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<aside class="cheat">
+  <h3>Shared design tokens</h3>
+  <div class="cheat-grid">
+    <div class="cheat-item">
+      <div class="ci-label">Texture</div>
+      <div class="ci-value"><code>A1.3 @ 40%</code> overlay, soft-light blend</div>
+    </div>
+    <div class="cheat-item">
+      <div class="ci-label">Display</div>
+      <div class="ci-value">Ubuntu 700 · -1.5px · 2.6rem</div>
+    </div>
+    <div class="cheat-item">
+      <div class="ci-label">Body</div>
+      <div class="ci-value">Ubuntu 400 · 0.92rem · 1.45</div>
+    </div>
+    <div class="cheat-item">
+      <div class="ci-label">Meta / values</div>
+      <div class="ci-value">JBM 400 · uppercase · 1.5–2.5px</div>
+    </div>
+    <div class="cheat-item">
+      <div class="ci-label">Bubbles</div>
+      <div class="ci-value">A2.4 mixed · 70% opaque · 4px tail</div>
+    </div>
+    <div class="cheat-item">
+      <div class="ci-label">Avatars</div>
+      <div class="ci-value">Circle · 32 / 38 / 84 / 128 px</div>
+    </div>
+    <div class="cheat-item">
+      <div class="ci-label">Status dot</div>
+      <div class="ci-value">10–18px · ring matches surface</div>
+    </div>
+    <div class="cheat-item">
+      <div class="ci-label">Sign-out</div>
+      <div class="ci-value">Terracotta soft <code>B3.3</code></div>
+    </div>
+    <div class="cheat-item">
+      <div class="ci-label">Spacing</div>
+      <div class="ci-value">4 / 8 / 14 / 22 / 40 / 64</div>
+    </div>
+    <div class="cheat-item">
+      <div class="ci-label">Radii</div>
+      <div class="ci-value">999 · 22 · 14 · 8 · 4</div>
+    </div>
+    <div class="cheat-item">
+      <div class="ci-label">Motion</div>
+      <div class="ci-value">ease-out-expo · 180 / 280 / 420 ms</div>
+    </div>
+    <div class="cheat-item">
+      <div class="ci-label">Color base</div>
+      <div class="ci-value">OKLCH · hue 280–285</div>
+    </div>
+  </div>
+</aside>
+
+</body>
+</html>

@@ -1,17 +1,25 @@
 import { sveltekit } from '@sveltejs/kit/vite';
 import { SvelteKitPWA } from '@vite-pwa/sveltekit';
-import { defineConfig, configDefaults } from 'vitest/config';
+import { defineConfig } from 'vite';
+import { configDefaults } from 'vitest/config';
 
-export default defineConfig({
+export default defineConfig(async () => ({
 	test: {
-		// Extend defaults so dist/, .svelte-kit/, etc. stay excluded too
 		exclude: [...configDefaults.exclude, 'e2e/**'],
 		passWithNoTests: true
 	},
 	plugins: [
-		sveltekit(),
-		SvelteKitPWA({
+		...(await sveltekit()),
+		...(await SvelteKitPWA({
+			base: '/',
+			scope: '/',
 			registerType: 'autoUpdate',
+			strategies: 'injectManifest',
+			srcDir: 'src',
+			filename: 'service-worker.ts',
+			injectManifest: {
+				globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}']
+			},
 			manifest: {
 				name: 'The Penthouse',
 				short_name: 'Penthouse',
@@ -41,24 +49,9 @@ export default defineConfig({
 					}
 				]
 			},
-			workbox: {
-				// Cache the SPA shell for offline graceful degradation.
-				// Never cache auth endpoints or message data.
-				globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-				runtimeCaching: [
-					{
-						urlPattern: /\/api\/v1\/health/,
-						handler: 'NetworkFirst',
-						options: {
-							cacheName: 'api-health',
-							expiration: { maxAgeSeconds: 60 }
-						}
-					}
-				]
-			},
 			devOptions: {
-				enabled: false // PWA only active in production build
+				enabled: false
 			}
-		})
+		}))
 	]
-});
+}));

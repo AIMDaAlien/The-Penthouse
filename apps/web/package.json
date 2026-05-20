@@ -1,7 +1,7 @@
 {
 	"name": "@penthouse/web",
 	"private": true,
-	"version": "2.1.0-alpha.1",
+	"version": "4.0.0-alpha.1",
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",
@@ -9,22 +9,27 @@
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
 		"typecheck": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-		"test": "vitest run"
+		"test": "vitest run",
+		"test:e2e": "playwright test"
 	},
 	"dependencies": {
-		"@penthouse/contracts": "file:../../packages/contracts",
+		"@penthouse/contracts": "*",
 		"altcha": "^2.3.0",
-		"socket.io-client": "^4.8.1"
+		"dompurify": "^3.4.2",
+		"mediasoup-client": "^3.20.0",
+		"snarkdown": "^2.0.0",
+		"socket.io-client": "^4.8.1",
+		"sql.js": "^1.14.1"
 	},
 	"devDependencies": {
 		"@axe-core/playwright": "^4.11.1",
-		"@percy/cli": "^1.31.11",
-		"@percy/playwright": "^1.1.0",
 		"@playwright/test": "^1.59.1",
 		"@sveltejs/adapter-static": "^3.0.8",
 		"@sveltejs/kit": "^2.50.2",
 		"@sveltejs/vite-plugin-svelte": "^6.2.4",
 		"@testing-library/svelte": "^5.2.7",
+		"@types/dompurify": "^3.0.5",
+		"@types/sql.js": "^1.4.11",
 		"@vite-pwa/sveltekit": "^1.1.0",
 		"playwright-lighthouse": "^4.0.0",
 		"svelte": "^5.54.0",

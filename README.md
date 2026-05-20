@@ -1,125 +1,92 @@
 # The Penthouse
 
-A privacy-focused, invite-only messaging PWA for small communities. Self-hosted, no big-tech dependencies.
+The Penthouse is a self-hosted alpha messaging app: invite-only accounts, real-time chat, folders, media uploads, push notification groundwork, and a static PWA frontend.
 
-**Current version:** v2.1.0-alpha.1 (SvelteKit PWA)
+This repo is currently release-shaped for an early production alpha. Users should be treated as normal invited users giving feedback, not as demo-account testers.
 
-> **v2.0.0-alpha [DISCONTINUED]** — The previous release used Vue 3 + Capacitor for Android APK distribution. That approach is discontinued. The SvelteKit PWA is the canonical release going forward. Users install via browser "Add to Home Screen" — no APK, no app store.
+## Local Development
 
----
+Prerequisites:
 
-## Stack
+- Node.js 22+
+- npm 11+
+- Docker with Compose
 
-| Layer | Technology |
-|---|---|
-| Frontend | SvelteKit 2.x + TypeScript |
-| PWA | @vite-pwa/sveltekit (Workbox, service worker, offline) |
-| Realtime | Socket.IO (client + server) |
-| Backend | Fastify + PostgreSQL + Socket.IO |
-| Shared types | @penthouse/contracts (Zod schemas) |
-| Infra | Docker Compose + Caddy (self-hosted) |
+Start Postgres:
 
----
+```sh
+npm run db:start
+```
 
-## Quick Start
+Install dependencies and migrate the database:
 
-```bash
-# 1. Install dependencies
+```sh
 npm install
-
-# 2. Start Postgres
-docker compose -f infra/compose/docker-compose.yml up -d postgres
-
-# 3. Start the API
-npm --workspace services/api run dev
-
-# 4. Start the PWA frontend
-npm --workspace apps/web run dev
+npm --workspace @penthouse/api run migrate
 ```
 
-Frontend runs at `http://localhost:5173`. API runs at `http://localhost:3000`.
+Run the API and web app in separate terminals:
 
----
-
-## What Changed Since v2.0.0-alpha
-
-The `pwa` branch is a full frontend replacement. The backend (Fastify + PostgreSQL + Socket.IO) is unchanged in architecture; new feature endpoints were added on top.
-
-### Frontend
-
-- **Replaced** `apps/mobile` (Vue 3 + Capacitor) with `apps/web` (SvelteKit 2.x PWA)
-- No Capacitor, no Android SDK, no APK signing required
-- Users install via browser "Add to Home Screen" on Android Chrome
-- Custom design system: CSS custom properties, dark theme, mobile-first layout
-
-### Features added (Wave A)
-
-- GIF picker (Klipy integration)
-- Message reactions
-- Message replies (threaded)
-- Read receipts
-- Poll creation and voting
-- Chat muting
-- Welcome / landing page with auth guard
-- Connection status indicator (online / offline / reconnecting)
-
-### Features added (Wave B)
-
-- Media uploads — images, videos, and documents in messages
-  - Up to 10 files · 25 MB per message
-  - Real-thumbnail preview grid in the composer (1→2→3 columns)
-  - Per-file XHR upload with progress rings and error/retry
-  - File download chips for documents
-  - +N overflow expand in the message bubble
-
-### Backend additions
-
-- Wave A/B DB migrations (polls, reactions, replies, pins, mute, media)
-- Upload endpoint with rate limiting, MIME validation, and advisory locking
-- Input validation and UUID guards hardened across all routes
-
----
-
-## Repository Structure
-
-```
-apps/web/           ← SvelteKit PWA frontend (primary)
-services/api/       ← Fastify backend
-packages/contracts/ ← Shared Zod schemas + TypeScript types
-infra/              ← Docker Compose, Caddy, env configs
-scripts/            ← Build + release gate scripts
-docs/               ← Design specs, implementation plans, handoff docs
+```sh
+npm --workspace @penthouse/api run dev
+npm --workspace @penthouse/web run dev -- --host 0.0.0.0 --port 5173
 ```
 
----
+Local defaults:
 
-## Production Deployment
+- Web: `http://localhost:5173`
+- API: `http://localhost:3000`
+- Postgres: `localhost:5434`
+- Default local invite: `PENTHOUSE-ALPHA`
 
-Production compose files:
+## Production Alpha
 
-- `infra/compose/docker-compose.production.yml` — standard VPS
-- `infra/compose/docker-compose.truenas.yml` — TrueNAS Scale
+Production release uses Docker Compose + Caddy + PostgreSQL. The full runbook is in [docs/PRODUCTION_ALPHA_RELEASE.md](docs/PRODUCTION_ALPHA_RELEASE.md).
 
-Environment template: `services/api/.env.example`
+Prepare the server env:
 
-The PWA frontend is served as a static build via Caddy. No separate frontend Node.js process in production.
-
----
-
-## Development
-
-```bash
-# Typecheck
-npm --workspace apps/web run typecheck
-
-# Tests
-npm --workspace apps/web run test
-
-# Build
-npm --workspace apps/web run build
-
-# Release gate
-npm run release:gate
+```sh
+cp infra/production.env.example infra/production.env
 ```
 
-Agent delegation map: see `CLAUDE.md`.
+Replace every placeholder secret in `infra/production.env`, then validate the stack:
+
+```sh
+docker compose --env-file infra/production.env -f infra/docker-compose.yml --profile production config
+```
+
+Build and start:
+
+```sh
+docker compose --env-file infra/production.env -f infra/docker-compose.yml --profile production up -d --build
+```
+
+The production container creates or refreshes the private alpha invite automatically when `ALPHA_BOOTSTRAP_INVITE_CODE` is present. For a manual local run after migrations:
+
+```sh
+docker compose --env-file infra/production.env -f infra/docker-compose.yml --profile production exec api \
+  npm --workspace @penthouse/api run bootstrap:alpha:prod
+```
+
+The first registered account becomes admin. Use the private bootstrap invite from `ALPHA_BOOTSTRAP_INVITE_CODE`, then create normal tester invites from the admin API.
+
+## Quality Gates
+
+Run these before a release handoff:
+
+```sh
+npm run validate
+npm --workspace @penthouse/api run build
+npm --workspace @penthouse/web run build
+docker compose --env-file infra/production.env.example -f infra/docker-compose.yml --profile production config
+```
+
+For a real deploy, also verify the live root app, `/api/v1/health`, `/api/v1/app-distribution`, `/manifest.webmanifest`, `/service-worker.js`, invite registration, login, socket connection, message send/receive, and media upload.
+
+## Alpha Limits
+
+- No public demo account is provided.
+- Registration is invite-only.
+- Recovery-code password reset exists; email reset is not part of this release slice.
+- Voice/media signaling is still alpha infrastructure and can be disabled in production with `MEDIASOUP_ENABLED=false`.
+- A release is not considered complete until the live domains and a real browser session prove the deployed stack.

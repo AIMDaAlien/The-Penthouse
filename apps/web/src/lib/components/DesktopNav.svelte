@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { page } from '$app/state';
+	import { page } from '$app/stores';
 
-	const pathname = $derived(page.url.pathname);
+	const pathname = $derived($page.url.pathname);
 </script>
 
 <nav class="desktop-nav" aria-label="Main navigation">
@@ -53,7 +53,7 @@
 			font-style: italic;
 			font-weight: 400;
 			line-height: 0.8;
-			color: var(--color-text-secondary);
+			color: var(--p-text-2);
 			opacity: 0.2;
 			cursor: pointer;
 			transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
@@ -75,7 +75,7 @@
 
 		.nav-item.active {
 			opacity: 1;
-			color: var(--color-text-primary);
+			color: var(--p-text);
 			transform: translateX(16px);
 		}
 

@@ -1,79 +1,105 @@
-/**
- * Read Receipts Store — tracks who has read which messages in each chat.
- * OWNED BY: Claude (apps/web)
- * - Receives message.read socket events from backend
- * - Stores read state: { chatId: { messageId: [{ userId, readAt }] } }
- * - Cleaned up when leaving a chat (socket event cleanup in chat page)
- */
-
 import { socketStore } from './socket.svelte';
+import type { ServerMessageReadEvent } from '@penthouse/contracts';
 
 function createReadReceiptsStore() {
-	// Map<chatId, Map<messageId, Array<{ userId: string; readAt: string }>>>
-	let readReceiptsMap = $state<Map<string, Map<string, Array<{ userId: string; readAt: string }>>>>(
+	// Marker model: chatId → readerUserId → { seenThroughMessageId, seenAt }
+	// seenThroughMessageId is a read-through marker — the reader has seen everything at or before that message.
+	let markersMap = $state<Map<string, Map<string, { seenThroughMessageId: string; seenAt: string }>>>(
 		new Map()
 	);
+
+	function setMarker(
+		chatId: string,
+		readerUserId: string,
+		seenThroughMessageId: string,
+		seenAt: string
+	) {
+		const outerCopy = new Map(markersMap);
+		const innerCopy = new Map(outerCopy.get(chatId) ?? []);
+		innerCopy.set(readerUserId, { seenThroughMessageId, seenAt });
+		outerCopy.set(chatId, innerCopy);
+		markersMap = outerCopy;
+	}
 
 	function initializeSocketListeners() {
 		const socket = socketStore.instance;
 		if (!socket) return;
 
-		// Remove prior listener before re-registering to prevent stacking.
 		socket.off('message.read');
 
-		// Backend wraps realtime events: { type: 'message.read', payload: {...} }
-		socket.on('message.read', (envelope: { type: string; payload: { chatId: string; readerUserId: string; seenAt: string; seenThroughMessageId: string | null } }) => {
+		socket.on('message.read', (envelope: ServerMessageReadEvent) => {
 			const { chatId, readerUserId, seenAt, seenThroughMessageId } = envelope.payload;
-
-			// Ensure chat exists in map
-			if (!readReceiptsMap.has(chatId)) {
-				readReceiptsMap.set(chatId, new Map());
-			}
-
-			const chatReceipts = readReceiptsMap.get(chatId)!;
-
-			// If we have a seenThroughMessageId, that's the marker
-			// In a real implementation, we might track all messages up to that point
-			// For Wave A, we just mark that specific message (sender will need to handle rendering all up-to)
 			if (seenThroughMessageId) {
-				if (!chatReceipts.has(seenThroughMessageId)) {
-					chatReceipts.set(seenThroughMessageId, []);
-				}
-
-				const receipts = chatReceipts.get(seenThroughMessageId)!;
-
-				// Check if this user already has a read receipt for this message
-				const existingIndex = receipts.findIndex((r) => r.userId === readerUserId);
-				if (existingIndex !== -1) {
-					// Update existing (in case of re-read)
-					receipts[existingIndex] = { userId: readerUserId, readAt: seenAt };
-				} else {
-					// Add new receipt
-					receipts.push({ userId: readerUserId, readAt: seenAt });
-				}
+				setMarker(chatId, readerUserId, seenThroughMessageId, seenAt);
 			}
-
-			// Trigger reactivity
-			readReceiptsMap = readReceiptsMap;
 		});
 	}
 
-	function clearChatReadReceipts(chatId: string) {
-		readReceiptsMap.delete(chatId);
-		readReceiptsMap = readReceiptsMap;
+	// Seed markers from REST-loaded messages so hard reloads show correct read state immediately.
+	// Messages must be in chronological order (oldest first). Each message's readReceipts means
+	// that reader has seen AT LEAST through that message — the last occurrence per reader wins.
+	function seedFromMessages(
+		chatId: string,
+		messages: Array<{ id: string; readReceipts?: Array<{ userId: string; readAt: string }> | null }>
+	) {
+		const outerCopy = new Map(markersMap);
+		const innerCopy = new Map(outerCopy.get(chatId) ?? []);
+		let changed = false;
+
+		for (const msg of messages) {
+			if (!msg.readReceipts?.length) continue;
+			for (const receipt of msg.readReceipts) {
+				innerCopy.set(receipt.userId, {
+					seenThroughMessageId: msg.id,
+					seenAt: receipt.readAt
+				});
+				changed = true;
+			}
+		}
+
+		if (changed) {
+			outerCopy.set(chatId, innerCopy);
+			markersMap = outerCopy;
+		}
 	}
 
-	function getReadReceipts(chatId: string, messageId: string): Array<{ userId: string; readAt: string }> {
-		return readReceiptsMap.get(chatId)?.get(messageId) ?? [];
+	function clearChatReadReceipts(chatId: string) {
+		const outerCopy = new Map(markersMap);
+		outerCopy.delete(chatId);
+		markersMap = outerCopy;
+	}
+
+	// Returns readers whose read-through marker covers messageId (i.e. they've seen at or past it).
+	// orderedIds is the full ordered message ID list for the chat (used for position comparison).
+	function getReadersForMessage(
+		chatId: string,
+		messageId: string,
+		orderedIds: string[]
+	): Array<{ userId: string; readAt: string }> {
+		const msgIdx = orderedIds.indexOf(messageId);
+		if (msgIdx === -1) return [];
+
+		const chatMarkers = markersMap.get(chatId);
+		if (!chatMarkers) return [];
+
+		const readers: Array<{ userId: string; readAt: string }> = [];
+		for (const [userId, marker] of chatMarkers) {
+			const markerIdx = orderedIds.indexOf(marker.seenThroughMessageId);
+			if (markerIdx >= msgIdx) {
+				readers.push({ userId, readAt: marker.seenAt });
+			}
+		}
+		return readers;
 	}
 
 	return {
-		get readReceiptsMap() {
-			return readReceiptsMap;
+		get markersMap() {
+			return markersMap;
 		},
 		initializeSocketListeners,
+		seedFromMessages,
 		clearChatReadReceipts,
-		getReadReceipts
+		getReadersForMessage
 	};
 }
 

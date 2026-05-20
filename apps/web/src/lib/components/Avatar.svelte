@@ -1,108 +1,70 @@
 <script lang="ts">
-	import { presenceStore } from '$stores/presence.svelte';
-
 	interface Props {
-		userId: string;
-		displayName: string;
-		avatarUrl?: string | null;
-		size?: 'sm' | 'md' | 'lg';
-		showPresence?: boolean;
+		url?: string | null;
+		name: string;
+		size?: number;
 	}
 
-	let { userId, displayName, avatarUrl, size = 'md', showPresence = true } = $props();
-
-	const sizeClasses: Record<string, string> = {
-		sm: 'avatar-sm',
-		md: 'avatar-md',
-		lg: 'avatar-lg'
-	};
+	let { url, name, size = 40 }: Props = $props();
 
 	const initials = $derived(
-		(displayName || '')
+		name
 			.split(' ')
-			.map((n: string) => n[0])
+			.map((w) => w[0])
+			.filter(Boolean)
+			.slice(0, 2)
 			.join('')
 			.toUpperCase()
-			.slice(0, 2)
 	);
 
-	const isOnline = $derived(presenceStore.userPresenceMap.get(userId) ?? false);
+	// Solid muted themed fallback — replaced per-name HSL hue per DND design handoff
+	const fallbackBg = 'color-mix(in oklch, var(--p-accent) 30%, var(--p-surface-2))';
+
 </script>
 
-<div class="avatar-container {sizeClasses[size]}">
-	<div class="avatar">
-		{#if avatarUrl}
-			<img src={avatarUrl} alt={displayName} />
-		{:else}
-			<span class="initials">{initials}</span>
-		{/if}
+{#if url}
+	<img src={url} alt={name} class="avatar" style:width="{size}px" style:height="{size}px" />
+{:else}
+	<div
+		class="avatar fallback"
+		style:width="{size}px"
+		style:height="{size}px"
+		style:background={fallbackBg}
+	>
+		{initials}
 	</div>
-	{#if showPresence && isOnline}
-		<div class="presence-indicator" title={isOnline ? 'Online' : 'Offline'}></div>
-	{/if}
-</div>
+{/if}
 
 <style>
-	.avatar-container {
-		position: relative;
-		display: inline-block;
-	}
-
-	.avatar-container.avatar-sm {
-		width: 32px;
-		height: 32px;
-	}
-
-	.avatar-container.avatar-md {
-		width: 48px;
-		height: 48px;
-	}
-
-	.avatar-container.avatar-lg {
-		width: 64px;
-		height: 64px;
-	}
-
 	.avatar {
-		width: 100%;
-		height: 100%;
 		border-radius: 50%;
-		background: var(--color-accent-dim);
+		object-fit: cover;
+		flex-shrink: 0;
+	}
+
+	.fallback {
 		display: flex;
 		align-items: center;
 		justify-content: center;
+		color: var(--p-text);
+		font-size: calc(var(--size, 40px) * 0.4);
+		font-weight: var(--weight-bold);
+		font-family: var(--font-body);
+		position: relative;
 		overflow: hidden;
-		border: 2px solid var(--color-border);
-		font-weight: 600;
-		color: var(--color-accent);
-		font-size: 0.875rem;
 	}
 
-	.avatar img {
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
-	}
-
-	.presence-indicator {
+	.fallback::after {
+		content: '';
 		position: absolute;
-		bottom: 0;
-		right: 0;
-		width: 30%;
-		aspect-ratio: 1;
-		border-radius: 50%;
-		background: var(--color-success);
-		border: 2px solid var(--color-bg);
-		box-shadow: 0 0 8px rgba(52, 211, 153, 0.5);
+		inset: 0;
+		background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.18' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.85'/%3E%3C/svg%3E");
+		mix-blend-mode: overlay;
+		opacity: 0.45;
+		pointer-events: none;
 	}
 
-	.avatar-container.avatar-sm .presence-indicator {
-		width: 28%;
-		border-width: 1.5px;
-	}
-
-	.avatar-container.avatar-lg .presence-indicator {
-		width: 28%;
-		border-width: 2.5px;
+	:global([data-mode="light"]) .fallback::after {
+		opacity: 0.30;
 	}
 </style>

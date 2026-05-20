@@ -1,1142 +1,788 @@
-<!-- Chat list pane — used by (app)/+layout.svelte on both mobile and desktop -->
 <script lang="ts">
-	import { goto } from '$app/navigation';
-	import { onMount } from 'svelte';
-	import { chats, users } from '$services/api';
-	import { sessionStore } from '$stores/session.svelte';
-	import { socketStore } from '$stores/socket.svelte';
-	import { presenceStore } from '$stores/presence.svelte';
-	import Avatar from '$lib/components/Avatar.svelte';
-	import Icon from '$lib/components/Icon.svelte';
-	import AvatarModal from '$lib/components/AvatarModal.svelte';
-	import type { ChatSummary, MemberDetail } from '@penthouse/contracts';
+	import ChatListItem from './ChatListItem.svelte';
+	import Icon from './Icon.svelte';
+	import FolderColorPopover from './FolderColorPopover.svelte';
+	import { createChatListDnd } from '$lib/dnd/chatListDnd.svelte';
+	import type { ChatSummary } from '@penthouse/contracts';
+	import type { FolderWithItems } from '$stores/folders.svelte';
 
-	interface UserProfile {
-		id: string;
-		displayName: string;
-		username: string;
-		avatarUrl?: string | null;
-		bio?: string | null;
-		status?: string | null;
-		online?: boolean;
-		lastSeen?: string | null;
-		role?: string;
-		createdAt?: string | null;
-		bannerColor?: string | null;
+	interface Props {
+		chats: ChatSummary[];
+		activeChatId?: string;
+		onSelectChat?: (chatId: string) => void;
+		folders?: FolderWithItems[];
+		onCreateFolder?: (name: string) => void;
+		onCreateGroup?: (name: string) => void;
+		onMoveToFolder?: (chatId: string, folderId: string | null, currentFolderId?: string) => void;
 	}
 
-	let chatList = $state<ChatSummary[]>([]);
-	let loading = $state(true);
-	let error = $state('');
-	let selfChatId = $state<string | null>(null);
+	let { chats, activeChatId, onSelectChat, folders = [], onCreateFolder, onCreateGroup, onMoveToFolder }: Props = $props();
 
-	// Context menu state (mute toggle / archive)
-	let contextMenuChat = $state<ChatSummary | null>(null);
-	let longPressTimer: ReturnType<typeof setTimeout> | null = null;
-	let muteLoading = $state(false);
-	let archiveLoading = $state(false);
-	// Timestamp comparison prevents ghost-clicks after long-press on slow devices
-	let longPressCompletedAt = 0;
+	const dnd = createChatListDnd({
+		onToggleFolder: (id) => toggleFolder(id)
+	});
+	let listEl: HTMLElement;
+	$effect(() => dnd.setListEl(listEl));
 
-	// Archived chats
-	let archivedChats = $state<ChatSummary[]>([]);
-	let showArchived = $state(false);
-	let archivedLoading = $state(false);
-	let archivedLoaded = $state(false);
-
-	// New DM modal state
-	let showNewDmModal = $state(false);
-	let dmSearchQuery = $state('');
-	let dmSearchResults = $state<MemberDetail[]>([]);
-	let dmSearching = $state(false);
-	let dmCreating = $state(false);
-	let dmError = $state('');
-	let dmSearchTimeout: ReturnType<typeof setTimeout> | null = null;
-	let latestDmSearchId = 0;
-
-	// Avatar modal state
-	let avatarModalProfile = $state<UserProfile | null>(null);
-	let avatarModalLoading = $state(false);
-
-	const currentUserId = sessionStore.current?.user.id ?? '';
-	const connectionStatus = $derived(socketStore.state);
-
-	// Pin self-chat at top; everything else stays in server order
-	const sortedChatList = $derived(
-		selfChatId
-			? [
-					...chatList.filter((c) => c.id === selfChatId),
-					...chatList.filter((c) => c.id !== selfChatId)
-				]
-			: chatList
-	);
-
-	function formatChatTime(iso: string): string {
-		const d = new Date(iso);
-		const now = new Date();
-		const diffMs = now.getTime() - d.getTime();
-		const isToday = d.toDateString() === now.toDateString();
-		if (isToday) return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-		const diffDays = Math.floor(diffMs / 86400000);
-		if (diffDays < 7) return d.toLocaleDateString([], { weekday: 'short' });
-		return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
-	}
-
-	onMount(async () => {
-		// Guard: auth redirect from +layout.svelte is async — API calls must not fire before it lands.
-		if (!sessionStore.isAuthenticated) {
-			loading = false;
-			return;
+	// Folder open/close state — client-side only
+	let openFolders = $state<Set<string>>(new Set());
+	let prevFolderIds = new Set<string>();
+	$effect(() => {
+		const currentIds = new Set(folders.map((f) => f.id));
+		const next = new Set(openFolders);
+		let changed = false;
+		for (const id of currentIds) {
+			if (!prevFolderIds.has(id)) {
+				next.add(id);
+				changed = true;
+			}
 		}
-		try {
-			// Fetch chat list and self-DM in parallel.
-			// chats.self() will fail until Codex implements the endpoint — that's expected.
-			const [list] = await Promise.all([
-				chats.list(),
-				chats.self().then((s) => { selfChatId = s.id; }).catch(() => {})
-			]);
-			chatList = list;
-		} catch (err: unknown) {
-			error = err instanceof Error ? err.message : 'Failed to load chats.';
-		} finally {
-			loading = false;
+		if (changed) {
+			openFolders = next;
+		}
+		prevFolderIds = currentIds;
+	});
+
+	let creatingFolder = $state(false);
+	let newFolderName = $state('');
+	let creatingGroup = $state(false);
+	let newGroupName = $state('');
+	let colorEdit = $state<{ folderId: string; anchorRect: DOMRect } | null>(null);
+	let combineInputEl: HTMLInputElement | undefined = $state();
+
+	$effect(() => {
+		if (dnd.combineEditing && combineInputEl) {
+			combineInputEl.focus();
+			combineInputEl.select();
 		}
 	});
 
-	// Long-press + right-click → context menu
-	function handlePointerDown(e: PointerEvent, chat: ChatSummary) {
-		if (e.button !== 0) return;
-		longPressTimer = setTimeout(() => {
-			contextMenuChat = chat;
-			longPressCompletedAt = Date.now();
-		}, 500);
-	}
-
-	function handlePointerUp() {
-		if (longPressTimer) {
-			clearTimeout(longPressTimer);
-			longPressTimer = null;
+	function handleCreateGroup() {
+		const name = newGroupName.trim();
+		if (name) {
+			onCreateGroup?.(name);
 		}
+		creatingGroup = false;
+		newGroupName = '';
 	}
 
-	function handleChatRowClick(chat: ChatSummary) {
-		if (Date.now() - longPressCompletedAt < 600) return;
-		goto(`/chat/${chat.id}?name=${encodeURIComponent(chat.name ?? 'Direct message')}`);
+	function handleCreateFolder() {
+		const name = newFolderName.trim();
+		if (name) {
+			onCreateFolder?.(name);
+		}
+		creatingFolder = false;
+		newFolderName = '';
 	}
 
-	function handleContextMenu(e: Event, chat: ChatSummary) {
-		e.preventDefault();
-		contextMenuChat = chat;
+	function toggleFolder(id: string) {
+		if (dnd.drag?.active) return;
+		const next = new Set(openFolders);
+		if (next.has(id)) next.delete(id);
+		else next.add(id);
+		openFolders = next;
 	}
 
-	async function handleAvatarClick(e: MouseEvent, chat: ChatSummary) {
+	function openColorPicker(e: MouseEvent, folderId: string) {
 		e.stopPropagation();
-		if (!chat.counterpartMemberId) return;
-		avatarModalLoading = true;
-		try {
-			const profile = await users.getProfile(chat.counterpartMemberId);
-			const online = presenceStore.userPresenceMap.get(profile.id) ?? false;
-			avatarModalProfile = {
-				id: profile.id,
-				displayName: profile.displayName,
-				username: profile.username,
-				avatarUrl: profile.avatarUrl,
-				bio: profile.bio ?? null,
-				status: null,
-				online,
-				lastSeen: (profile as MemberDetail & { lastSeenAt?: string | null }).lastSeenAt ?? null,
-				role: undefined,
-				createdAt: null,
-				bannerColor: null
-			};
-		} catch {
-			// silently fail — tapping avatar still shouldn't break anything
-		} finally {
-			avatarModalLoading = false;
-		}
+		const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+		colorEdit = { folderId, anchorRect: rect };
 	}
 
-	async function handleToggleMute() {
-		if (!contextMenuChat) return;
-		muteLoading = true;
-
-		const targetChatId = contextMenuChat.id;
-		const newMuted = !contextMenuChat.notificationsMuted;
-		const originalMuted = contextMenuChat.notificationsMuted;
-
-		// Optimistic update
-		chatList = chatList.map((c) =>
-			c.id === targetChatId ? { ...c, notificationsMuted: newMuted } : c
-		);
-		if (contextMenuChat) {
-			contextMenuChat = { ...contextMenuChat, notificationsMuted: newMuted };
-		}
-
-		try {
-			await chats.setPreferences(targetChatId, { notificationsMuted: newMuted });
-		} catch (err: unknown) {
-			chatList = chatList.map((c) =>
-				c.id === targetChatId ? { ...c, notificationsMuted: originalMuted } : c
-			);
-			if (contextMenuChat) {
-				contextMenuChat = { ...contextMenuChat, notificationsMuted: originalMuted };
-			}
-			error = err instanceof Error ? err.message : 'Failed to update mute state.';
-			setTimeout(() => (error = ''), 4000);
-		} finally {
-			muteLoading = false;
-			contextMenuChat = null;
-		}
+	async function handleSetFolderColor(folderId: string, color: string) {
+		// Use the store's update method; the socket will sync it back
+		// We call the API directly here since foldersStore.update exists
+		const { folders: foldersApi } = await import('$services/folders');
+		await foldersApi.update(folderId, { color });
+		colorEdit = null;
 	}
 
-	function handleDmSearch() {
-		if (dmSearchTimeout) clearTimeout(dmSearchTimeout);
-		if (!dmSearchQuery.trim()) {
-			latestDmSearchId++;
-			dmSearchResults = [];
-			dmSearching = false;
-			return;
-		}
-		dmSearching = true;
-		dmError = '';
-		const capturedId = ++latestDmSearchId;
-		dmSearchTimeout = setTimeout(async () => {
-			try {
-				const response = await users.search(dmSearchQuery.trim(), 10);
-				if (capturedId === latestDmSearchId) dmSearchResults = response.results;
-			} catch (err: unknown) {
-				if (capturedId === latestDmSearchId) {
-					dmError = err instanceof Error ? err.message : 'Search failed';
-					dmSearchResults = [];
-				}
-			} finally {
-				if (capturedId === latestDmSearchId) dmSearching = false;
-			}
-		}, 300);
+	const sortedFolders = $derived([...folders].sort((a, b) => a.sortOrder - b.sortOrder));
+	const folderedChatIds = $derived(new Set(folders.flatMap((f) => f.items.map((i) => i.chatId))));
+	const unfolderedChats = $derived(chats.filter((c) => !folderedChatIds.has(c.id)));
+
+	function handlePointerDownOnRow(e: PointerEvent, source: { kind: 'folder' | 'chat'; id: string; fromFolderId?: string }) {
+		const el = e.currentTarget as HTMLElement;
+		dnd.pickUp(e, source, el);
 	}
 
-	async function handleSelectUser(user: MemberDetail) {
-		if (user.id === currentUserId) {
-			dmError = "You can't message yourself";
-			return;
-		}
-		dmCreating = true;
-		dmError = '';
-		try {
-			const result = await chats.createDm(user.id);
-			showNewDmModal = false;
-			dmSearchQuery = '';
-			dmSearchResults = [];
-			await goto(`/chat/${result.id}`);
-		} catch (err: unknown) {
-			dmError = err instanceof Error ? err.message : 'Failed to create message';
-		} finally {
-			dmCreating = false;
-		}
+	function getFolderColor(folderId: string): string {
+		return folders.find((f) => f.id === folderId)?.color ?? 'var(--p-accent)';
 	}
 
-	function handleCloseDmModal() {
-		if (!dmCreating) {
-			showNewDmModal = false;
-			dmSearchQuery = '';
-			dmSearchResults = [];
-			dmError = '';
+	function getGhostColor(): string {
+		if (!dnd.drag) return 'var(--p-accent)';
+		if (dnd.drag.source.kind === 'folder') {
+			return getFolderColor(dnd.drag.source.id);
 		}
-	}
-
-	async function handleToggleArchive() {
-		if (!contextMenuChat || archiveLoading) return;
-		archiveLoading = true;
-		const target = contextMenuChat;
-		const isArchived = !!(target as any).archivedAt;
-		contextMenuChat = null;
-
-		try {
-			if (isArchived) {
-				await chats.unarchive(target.id);
-				archivedChats = archivedChats.filter((c) => c.id !== target.id);
-				chatList = [...chatList, { ...target, archivedAt: undefined } as any];
-			} else {
-				await chats.archive(target.id);
-				chatList = chatList.filter((c) => c.id !== target.id);
-				if (archivedLoaded) {
-					archivedChats = [{ ...target, archivedAt: new Date().toISOString() } as any, ...archivedChats];
-				}
-			}
-		} catch (err: unknown) {
-			error = err instanceof Error ? err.message : 'Failed to update archive.';
-			setTimeout(() => (error = ''), 4000);
-		} finally {
-			archiveLoading = false;
-		}
-	}
-
-	async function loadArchivedChats() {
-		if (archivedLoaded || archivedLoading) return;
-		archivedLoading = true;
-		try {
-			archivedChats = await chats.list({ archived: true });
-			archivedLoaded = true;
-		} catch {
-			// silently fail
-		} finally {
-			archivedLoading = false;
-		}
-	}
-
-	function toggleArchivedSection() {
-		showArchived = !showArchived;
-		if (showArchived && !archivedLoaded) loadArchivedChats();
-	}
-
-	function handleKeydown(e: KeyboardEvent) {
-		if (e.key === 'Escape') {
-			if (avatarModalProfile) { avatarModalProfile = null; return; }
-			if (contextMenuChat && !muteLoading) { contextMenuChat = null; return; }
-			if (showNewDmModal && !dmCreating) handleCloseDmModal();
-		}
+		const parent = folders.find((f) => f.items.some((i) => i.chatId === dnd.drag!.source.id));
+		return parent?.color ?? 'var(--p-accent)';
 	}
 </script>
 
-<svelte:window onkeydown={handleKeydown} />
+<svelte:window
+	onpointermove={dnd.handlePointerMove}
+	onpointerup={dnd.handlePointerUp}
+	onkeydown={dnd.handleKeydown}
+/>
 
-<div class="shell">
-	<header class="app-header">
-		<div class="logo">
-			<span class="logo-the">The</span>
-			<span class="logo-name">Penthouse</span>
-		</div>
+<div class="pane">
+	<header class="header">
+		<h2>Messages</h2>
 		<div class="header-actions">
-			<div
-				class="conn-pill"
-				class:connected={connectionStatus === 'connected'}
-				class:degraded={connectionStatus === 'connecting' || connectionStatus === 'degraded'}
-				class:failed={connectionStatus === 'failed'}
-				title={connectionStatus}
-			>
-				<span class="conn-dot"></span>
-			</div>
-			<button class="new-dm-btn" onclick={() => (showNewDmModal = true)} aria-label="New message">
-				<Icon name="plus" size={20} />
-			</button>
+			{#if creatingFolder}
+				<form class="folder-form" onsubmit={(e) => { e.preventDefault(); handleCreateFolder(); }}>
+					<input
+						type="text"
+						bind:value={newFolderName}
+						placeholder="Folder name"
+					/>
+					<button type="submit" class="icon-btn" aria-label="Create folder">
+						<Icon name="check" size={16} />
+					</button>
+					<button type="button" class="icon-btn" aria-label="Cancel" onclick={() => { creatingFolder = false; newFolderName = ''; }}>
+						<Icon name="x" size={16} />
+					</button>
+				</form>
+			{:else if creatingGroup}
+				<form class="group-form" onsubmit={(e) => { e.preventDefault(); handleCreateGroup(); }}>
+					<input
+						type="text"
+						bind:value={newGroupName}
+						placeholder="Group name"
+					/>
+					<button type="submit" class="icon-btn" aria-label="Create group">
+						<Icon name="check" size={16} />
+					</button>
+					<button type="button" class="icon-btn" aria-label="Cancel" onclick={() => { creatingGroup = false; newGroupName = ''; }}>
+						<Icon name="x" size={16} />
+					</button>
+				</form>
+			{:else}
+				<button class="icon-btn" aria-label="New folder" onclick={() => creatingFolder = true}>
+					<Icon name="folder-plus" size={20} />
+				</button>
+				<button class="icon-btn" aria-label="New chat" onclick={() => creatingGroup = true}>
+					<Icon name="plus" size={20} />
+				</button>
+			{/if}
 		</div>
 	</header>
 
-	<main class="chat-list">
-		{#if error}
-			<div class="state-msg error">{error}</div>
-		{/if}
-
-		{#if loading}
-			<div class="state-msg">Loading...</div>
-		{:else if chatList.length === 0 && !error}
-			<div class="empty-state">
-				<p class="empty-title">No conversations yet</p>
-				<button class="empty-cta" onclick={() => (showNewDmModal = true)}>
-					<Icon name="compose" size={16} />
-					Start a conversation
-				</button>
+	<div class="list" bind:this={listEl} role="list">
+		{#if chats.length === 0 && folders.length === 0}
+			<div class="empty">
+				<Icon name="message" size={32} />
+				<p>No conversations yet</p>
 			</div>
 		{:else}
-			{#each sortedChatList.filter((c) => !(c as any).archivedAt) as chat (chat.id)}
-				{@const isSelf = chat.id === selfChatId}
-				<div
-					class="chat-row"
-					class:muted={chat.notificationsMuted}
-					class:self-chat={isSelf}
-					class:unread={chat.unreadCount > 0 && !chat.notificationsMuted}
-					role="button"
-					tabindex="0"
-					onclick={() => handleChatRowClick(chat)}
-					onpointerdown={(e) => handlePointerDown(e, chat)}
-					onpointerup={handlePointerUp}
-					onpointerleave={handlePointerUp}
-					oncontextmenu={(e) => handleContextMenu(e, chat)}
-					onkeydown={(e) => e.key === 'Enter' && handleChatRowClick(chat)}
+			{#each sortedFolders as folder, fi (folder.id)}
+				<div class="slot" class:line={dnd.folderIndicatorBetween(fi)}></div>
+				<section
+					class="folder"
+					class:open={openFolders.has(folder.id)}
+					class:dimmed={dnd.isDragSource('folder', folder.id)}
+					class:receiving={dnd.targetFolderId() === folder.id}
+					style:--fc={folder.color ?? 'var(--p-accent)'}
 				>
-					{#if isSelf}
-						<div class="self-icon" aria-hidden="true">
-							<Icon name="bookmark" size={18} />
-						</div>
-					{:else if chat.counterpartMemberId}
-						<button
-							class="avatar-btn"
-							onclick={(e) => handleAvatarClick(e, chat)}
-							onpointerdown={(e) => e.stopPropagation()}
-							onpointerup={(e) => e.stopPropagation()}
-							aria-label="View {chat.name ?? 'profile'}"
-							disabled={avatarModalLoading}
-						>
-							<Avatar
-								userId={chat.counterpartMemberId}
-								displayName={chat.name ?? 'DM'}
-								avatarUrl={chat.counterpartAvatarUrl}
-								size="md"
-								showPresence={true}
-							/>
-						</button>
-					{:else}
-						<div class="channel-icon" aria-hidden="true">
-							<Icon name="hash" size={18} />
-						</div>
-					{/if}
+					<div class="aura-bg" aria-hidden="true"></div>
 
-					<div class="chat-info">
-						<div class="chat-name-row">
-							<span class="chat-name">{isSelf ? 'Saved' : (chat.name ?? 'Direct message')}</span>
-							{#if chat.notificationsMuted && !isSelf}
-								<Icon name="bell-off" size={12} class="muted-icon" />
-							{/if}
-							<span class="chat-time">{formatChatTime(chat.updatedAt)}</span>
-						</div>
-						<span class="chat-subtext">
-							{isSelf ? 'Your personal notes' : (chat.type === 'channel' ? 'Channel' : 'Direct message')}
+					<div
+						class="frow"
+						data-folder-header
+						data-folder-id={folder.id}
+						tabindex="0"
+						role="button"
+						aria-grabbed={dnd.drag?.active && dnd.drag.source.kind === 'folder' && dnd.drag.source.id === folder.id}
+						aria-expanded={openFolders.has(folder.id)}
+						onpointerdown={(e) => handlePointerDownOnRow(e, { kind: 'folder', id: folder.id })}
+						onkeydown={(e) => dnd.rowKeydown(e, 'folder', folder.id)}
+					>
+						<button
+							class="dot-btn"
+							type="button"
+							aria-label="Change folder color"
+							onclick={(e) => openColorPicker(e, folder.id)}
+							onpointerdown={(e) => e.stopPropagation()}
+						>
+							<span class="dot" aria-hidden="true"></span>
+						</button>
+						<span class="fname">{folder.name}</span>
+						<span class="fcount">{folder.items.length}</span>
+						<span class="caret" aria-hidden="true">
+							<svg viewBox="0 0 12 12" width="10" height="10">
+								<path d="M3 4.5 L6 7.5 L9 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+							</svg>
 						</span>
 					</div>
 
-					{#if chat.unreadCount > 0 && !chat.notificationsMuted}
-						<span class="unread-badge" aria-label="{chat.unreadCount} unread">
-							{chat.unreadCount > 99 ? '99+' : chat.unreadCount}
-						</span>
-					{/if}
-				</div>
-			{/each}
-
-			<!-- Archived chats collapsible -->
-			<button class="archived-toggle" onclick={toggleArchivedSection} aria-expanded={showArchived}>
-				<Icon name={showArchived ? 'chevron-down' : 'chevron-right'} size={14} />
-				<Icon name="archive" size={15} />
-				<span>Archived</span>
-			</button>
-
-			{#if showArchived}
-				{#if archivedLoading}
-					<div class="state-msg small">Loading...</div>
-				{:else if archivedChats.length === 0}
-					<div class="state-msg small">No archived chats</div>
-				{:else}
-					{#each archivedChats as chat (chat.id)}
-						<div
-							class="chat-row archived-row"
-							role="button"
-							tabindex="0"
-							onclick={() => handleChatRowClick(chat)}
-							onpointerdown={(e) => handlePointerDown(e, chat)}
-							onpointerup={handlePointerUp}
-							onpointerleave={handlePointerUp}
-							oncontextmenu={(e) => handleContextMenu(e, chat)}
-							onkeydown={(e) => e.key === 'Enter' && handleChatRowClick(chat)}
-						>
-							{#if chat.counterpartMemberId}
-								<Avatar
-									userId={chat.counterpartMemberId}
-									displayName={chat.name ?? 'DM'}
-									avatarUrl={chat.counterpartAvatarUrl}
-									size="md"
-									showPresence={false}
-								/>
-							{:else}
-								<div class="channel-icon" aria-hidden="true">
-									<Icon name="hash" size={18} />
-								</div>
-							{/if}
-							<div class="chat-info">
-								<div class="chat-name-row">
-									<span class="chat-name">{chat.name ?? 'Direct message'}</span>
-									<span class="chat-time">{formatChatTime(chat.updatedAt)}</span>
-								</div>
-								<span class="chat-subtext archived-label">Archived</span>
-							</div>
+					{#if openFolders.has(folder.id) && folder.items.length > 0}
+						<div class="fbody">
+							{#each folder.items as item, ci (item.chatId)}
+								{@const chat = chats.find((c) => c.id === item.chatId)}
+								{#if chat}
+									<div class="slot" class:line={dnd.indicatorBetween(folder.id, ci)}></div>
+									<div
+										data-chat-row
+										data-chat-id={chat.id}
+										class="in-folder"
+									>
+										<ChatListItem
+											chat={chat}
+											active={chat.id === activeChatId}
+											onSelect={() => onSelectChat?.(chat.id)}
+											folders={folders}
+											onMoveToFolder={(targetFolderId) => onMoveToFolder?.(chat.id, targetFolderId, folder.id)}
+											onPointerDown={(e) => handlePointerDownOnRow(e, { kind: 'chat', id: chat.id, fromFolderId: folder.id })}
+											onRowKeydown={(e) => dnd.rowKeydown(e, 'chat', chat.id, folder.id)}
+											dimmed={dnd.isDragSource('chat', chat.id)}
+											combine={dnd.combineTargetId() === chat.id}
+										/>
+										{#if dnd.combineEditing?.targetChatId === chat.id}
+											<form
+												class="combine-form"
+											 onsubmit={(e) => { e.preventDefault(); dnd.commitCombine(dnd.combineEditing!.name); }}
+											>
+												<input
+													bind:this={combineInputEl}
+													type="text"
+													bind:value={dnd.combineEditing.name}
+													onkeydown={(e) => {
+														if (e.key === 'Enter') { e.preventDefault(); dnd.commitCombine(dnd.combineEditing!.name); }
+														if (e.key === 'Escape') { e.preventDefault(); dnd.cancelCombine(); }
+													}}
+												/>
+												<button type="submit" class="combine-btn">Create</button>
+												<button type="button" class="combine-btn" onclick={dnd.cancelCombine}>Cancel</button>
+											</form>
+										{/if}
+									</div>
+								{/if}
+							{/each}
+							<div class="slot tail" class:line={dnd.indicatorBetween(folder.id, folder.items.length)}></div>
 						</div>
-					{/each}
-				{/if}
+					{/if}
+				</section>
+			{/each}
+			<div class="slot" class:line={dnd.folderIndicatorBetween(sortedFolders.length)}></div>
+
+			{#if unfolderedChats.length > 0 || (dnd.drag?.active && dnd.drag.source.kind === 'chat' && dnd.drag.source.fromFolderId)}
+				<div class="sec"><span class="sec-glyph">◌</span> Direct</div>
 			{/if}
+
+			<div class="root-zone" data-root-zone class:active={dnd.rootIsTarget()}>
+				{#if unfolderedChats.length === 0 && dnd.drag?.active && dnd.drag.source.kind === 'chat' && dnd.drag.source.fromFolderId}
+					<div class="root-pill">release to ungroup</div>
+				{/if}
+				{#each unfolderedChats as chat, ci (chat.id)}
+					<div class="slot" class:line={dnd.indicatorBetween('root', ci)}></div>
+					<div
+						data-chat-row
+						data-chat-id={chat.id}
+						class:combine-target={dnd.combineTargetId() === chat.id}
+					>
+						<ChatListItem
+							chat={chat}
+							active={chat.id === activeChatId}
+							onSelect={() => onSelectChat?.(chat.id)}
+							folders={folders}
+							onMoveToFolder={(targetFolderId) => onMoveToFolder?.(chat.id, targetFolderId)}
+							onPointerDown={(e) => handlePointerDownOnRow(e, { kind: 'chat', id: chat.id })}
+							onRowKeydown={(e) => dnd.rowKeydown(e, 'chat', chat.id)}
+							dimmed={dnd.isDragSource('chat', chat.id)}
+							combine={dnd.combineTargetId() === chat.id}
+						/>
+						{#if dnd.combineEditing?.targetChatId === chat.id}
+							<form
+								class="combine-form"
+							 onsubmit={(e) => { e.preventDefault(); dnd.commitCombine(dnd.combineEditing!.name); }}
+							>
+								<input
+									bind:this={combineInputEl}
+									type="text"
+									bind:value={dnd.combineEditing.name}
+									onkeydown={(e) => {
+										if (e.key === 'Enter') { e.preventDefault(); dnd.commitCombine(dnd.combineEditing!.name); }
+										if (e.key === 'Escape') { e.preventDefault(); dnd.cancelCombine(); }
+									}}
+								/>
+								<button type="submit" class="combine-btn">Create</button>
+								<button type="button" class="combine-btn" onclick={dnd.cancelCombine}>Cancel</button>
+							</form>
+						{/if}
+					</div>
+				{/each}
+				<div class="slot tail" class:line={dnd.indicatorBetween('root', unfolderedChats.length)}></div>
+			</div>
 		{/if}
-	</main>
+	</div>
 </div>
 
-<!-- Avatar modal -->
-{#if avatarModalProfile}
-	<AvatarModal user={avatarModalProfile} onClose={() => (avatarModalProfile = null)} />
-{/if}
-
-<!-- Context menu (mute toggle) -->
-{#if contextMenuChat}
+<!-- Ghost -->
+{#if dnd.drag?.active}
+	{@const d = dnd.drag}
+	{@const gc = getGhostColor()}
 	<div
-		class="overlay"
-		onclick={(e) => { if (e.target === e.currentTarget) contextMenuChat = null; }}
-		onkeydown={(e) => e.key === 'Escape' && (contextMenuChat = null)}
-		role="dialog"
-		aria-modal="true"
-		aria-label="Chat options"
-		tabindex="-1"
+		class="ghost"
+		style:left="{d.pointerX - d.offsetX}px"
+		style:top="{d.pointerY - d.offsetY}px"
+		style:--gc={gc}
+		aria-hidden="true"
 	>
-		<div class="bottom-sheet" role="document">
-			<div class="sheet-handle"></div>
-			<div class="sheet-header">
-				<p class="sheet-title">{contextMenuChat.name ?? 'Direct message'}</p>
-				<button class="icon-btn" onclick={() => (contextMenuChat = null)} aria-label="Close" disabled={muteLoading}>
-					<Icon name="close" size={18} />
-				</button>
-			</div>
-			<button class="sheet-action" onclick={handleToggleMute} disabled={muteLoading || archiveLoading}>
-				<Icon name={contextMenuChat.notificationsMuted ? 'bell' : 'bell-off'} size={18} />
-				{contextMenuChat.notificationsMuted ? 'Unmute notifications' : 'Mute notifications'}
-			</button>
-			<button class="sheet-action" onclick={handleToggleArchive} disabled={muteLoading || archiveLoading}>
-				<Icon name={(contextMenuChat as any).archivedAt ? 'inbox' : 'archive'} size={18} />
-				{(contextMenuChat as any).archivedAt ? 'Unarchive' : 'Archive'}
-			</button>
-		</div>
+		{#if d.source.kind === 'folder'}
+			<span class="g-dot" style:background={gc}></span>
+			<span class="g-name">{d.preview}</span>
+		{:else}
+			{@const chat = chats.find((c) => c.id === d.source.id)}
+			{#if chat}
+				<div class="g-avatar">{chat.name.split(/[\s_]+/).map((w) => w[0]).filter(Boolean).join('').slice(0, 2).toUpperCase()}</div>
+				<span class="g-name">{d.preview}</span>
+			{/if}
+		{/if}
 	</div>
 {/if}
 
-<!-- New DM modal -->
-{#if showNewDmModal}
-	<div
-		class="overlay"
-		onclick={(e) => { if (e.target === e.currentTarget) handleCloseDmModal(); }}
-		onkeydown={(e) => e.key === 'Escape' && handleCloseDmModal()}
-		role="dialog"
-		aria-modal="true"
-		aria-labelledby="dm-modal-title"
-		tabindex="-1"
-	>
-		<div class="bottom-sheet" role="document">
-			<div class="sheet-handle"></div>
-			<div class="sheet-header">
-				<p class="sheet-title" id="dm-modal-title">New message</p>
-				<button class="icon-btn" onclick={handleCloseDmModal} aria-label="Close" disabled={dmCreating}>
-					<Icon name="close" size={18} />
-				</button>
-			</div>
-
-			<div class="sheet-body">
-				<div class="search-wrap">
-					<Icon name="search" size={15} class="search-icon" />
-					<input
-						type="text"
-						class="search-input"
-						placeholder="Search by name or username..."
-						bind:value={dmSearchQuery}
-						oninput={handleDmSearch}
-						disabled={dmSearching || dmCreating}
-					/>
-				</div>
-
-				{#if dmError}
-					<div class="inline-error">{dmError}</div>
-				{/if}
-
-				{#if dmSearching}
-					<p class="state-msg">Searching...</p>
-				{:else if dmSearchQuery && dmSearchResults.length === 0}
-					<p class="state-msg">No users found</p>
-				{:else}
-					<div class="dm-results">
-						{#each dmSearchResults as user (user.id)}
-							<button
-								class="dm-user-row"
-								onclick={() => handleSelectUser(user)}
-								disabled={dmCreating || user.id === currentUserId}
-							>
-								<Avatar
-									userId={user.id}
-									displayName={user.displayName}
-									avatarUrl={user.avatarUrl}
-									size="sm"
-									showPresence={true}
-								/>
-								<div class="dm-user-info">
-									<span class="dm-user-name">{user.displayName}</span>
-									<span class="dm-user-handle">@{user.username}</span>
-								</div>
-								{#if user.id === currentUserId}
-									<span class="you-badge">You</span>
-								{/if}
-							</button>
-						{/each}
-					</div>
-				{/if}
-			</div>
-		</div>
-	</div>
+<!-- Color picker popover -->
+{#if colorEdit}
+	{@const folder = folders.find((f) => f.id === colorEdit?.folderId)}
+	{#if folder}
+		<FolderColorPopover
+			current={folder.color ?? 'var(--p-accent)'}
+			anchorRect={colorEdit.anchorRect}
+			onSelect={(c) => handleSetFolderColor(folder.id, c)}
+			onClose={() => (colorEdit = null)}
+		/>
+	{/if}
 {/if}
+
+<!-- Live region for screen readers -->
+<div class="live" aria-live="polite" aria-atomic="true">{dnd.liveMsg}</div>
 
 <style>
-	.shell {
+	.pane {
 		display: flex;
 		flex-direction: column;
-		min-height: 100dvh;
+		flex: 1;
+		min-height: 0;
+		background: var(--p-bg);
 	}
 
-	/* ── Header ── */
-	.app-header {
-		position: sticky;
-		top: 0;
-		z-index: 10;
+	.header {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		padding: var(--space-3) var(--space-5);
-		background: var(--color-surface-glass);
-		backdrop-filter: var(--blur-glass);
-		-webkit-backdrop-filter: var(--blur-glass);
-		border-bottom: 1px solid var(--color-border);
+		padding: var(--space-md) var(--space-lg);
+		border-bottom: 1px solid var(--p-line);
 	}
 
-	.logo {
+	h2 {
 		font-family: var(--font-display);
-		display: flex;
-		align-items: baseline;
-		gap: 0.25em;
-		line-height: 1;
-	}
-
-	.logo-the {
-		font-size: 0.8rem;
-		font-weight: 400;
-		color: var(--color-accent);
-		letter-spacing: 0.08em;
-	}
-
-	.logo-name {
-		font-size: 1.3rem;
+		font-size: var(--text-lg);
 		font-weight: 600;
-		color: var(--color-text-primary);
-		letter-spacing: -0.01em;
+		color: var(--p-text);
 	}
 
 	.header-actions {
 		display: flex;
 		align-items: center;
-		gap: var(--space-2);
-	}
-
-	.conn-pill {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		padding: 6px 10px;
-		background: var(--color-surface-glass);
-		backdrop-filter: blur(12px);
-		-webkit-backdrop-filter: blur(12px);
-		border: 1px solid rgba(255,255,255,0.05);
-		border-radius: var(--radius-pill);
-	}
-
-	.conn-dot {
-		width: 6px;
-		height: 6px;
-		border-radius: var(--radius-full);
-		background: var(--color-text-secondary);
-		opacity: 0.35;
-		transition: background 0.3s, opacity 0.3s;
-	}
-
-	.new-dm-btn {
-		width: 36px;
-		height: 36px;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background: var(--color-surface-glass);
-		backdrop-filter: blur(12px);
-		-webkit-backdrop-filter: blur(12px);
-		border: 1px solid rgba(255,255,255,0.05);
-		color: var(--color-text-primary);
-		border-radius: var(--radius-full);
-		padding: 0;
-		cursor: pointer;
-		transition: background 0.15s, transform 0.15s;
-	}
-
-	.new-dm-btn:hover {
-		background: var(--color-accent-dim);
-		transform: scale(1.05);
-	}
-
-	.conn-dot.connected {
-		background: var(--color-success);
-		opacity: 1;
-	}
-
-	.conn-dot.degraded {
-		background: #f59e0b;
-		opacity: 1;
-	}
-
-	.conn-dot.failed {
-		background: var(--color-danger);
-		opacity: 1;
+		gap: var(--space-xs);
 	}
 
 	.icon-btn {
-		width: 36px;
-		height: 36px;
-		display: flex;
-		align-items: center;
-		justify-content: center;
 		background: none;
 		border: none;
-		color: var(--color-text-secondary);
-		border-radius: var(--radius-pill);
-		padding: 0;
-		transition: color 0.15s, background 0.15s;
-		text-shadow: none;
-	}
-
-	.icon-btn:hover {
-		color: var(--color-text-primary);
-		background: var(--color-accent-dim);
-	}
-
-	/* ── Chat list ── */
-	.chat-list {
-		flex: 1;
-		/* Floating nav: 24px bottom offset + 60px height + 24px breathing room */
-		padding-bottom: calc(108px + env(safe-area-inset-bottom, 0px));
-	}
-
-	.state-msg {
-		padding: var(--space-8) var(--space-6);
-		text-align: center;
-		color: var(--color-text-secondary);
-		font-size: var(--text-sm);
-	}
-
-	.state-msg.error {
-		color: var(--color-danger);
-		background: color-mix(in srgb, var(--color-danger) 8%, transparent);
-		padding: var(--space-3) var(--space-5);
-		text-align: left;
-	}
-
-	.empty-state {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: var(--space-4);
-		padding: var(--space-8) var(--space-6);
-	}
-
-	.empty-title {
-		color: var(--color-text-secondary);
-		font-size: var(--text-sm);
-	}
-
-	.empty-cta {
+		color: var(--p-accent);
+		padding: var(--space-sm);
+		border-radius: var(--radius-md);
+		cursor: pointer;
 		display: flex;
 		align-items: center;
-		gap: var(--space-2);
-		background: var(--color-accent-dim);
-		color: var(--color-accent);
-		border: 1px solid rgba(119, 119, 194, 0.35);
-		border-radius: var(--radius-pill);
-		padding: var(--space-3) var(--space-5);
-		font-size: var(--text-sm);
-		font-weight: 600;
 		transition: background 0.15s;
 	}
 
-	.empty-cta:hover {
-		background: rgba(119, 119, 194, 0.25);
+	.icon-btn:hover {
+		background: var(--p-surface-2);
 	}
 
-	/* ── Chat rows ── */
-	.chat-row {
+	.folder-form,
+	.group-form {
 		display: flex;
 		align-items: center;
-		gap: var(--space-4);
-		width: 100%;
-		padding: 16px 24px;
-		border-bottom: none;
-		cursor: pointer;
-		transition: background 0.1s;
-		user-select: none;
-		-webkit-user-select: none;
-		background: none;
-		border-left: 2px solid transparent;
-	}
-	
-	.chat-row.unread {
-		border-left-color: var(--color-accent);
-		background: linear-gradient(90deg, var(--color-accent-dim) 0%, transparent 100%);
+		gap: var(--space-xs);
 	}
 
-	.chat-row:hover {
-		background: var(--color-accent-dim);
+	.folder-form input,
+	.group-form input {
+		background: var(--p-surface);
+		border: 1px solid var(--p-line);
+		border-radius: var(--radius-md);
+		padding: var(--space-xs) var(--space-sm);
+		color: var(--p-text);
+		font-size: var(--text-sm);
+		width: 120px;
 	}
 
-	.chat-row:focus-visible {
-		outline: 2px solid var(--color-accent);
-		outline-offset: -2px;
+	.folder-form input:focus,
+	.group-form input:focus {
+		outline: none;
+		border-color: var(--p-accent);
 	}
 
-	:global([data-density='compact']) .chat-row {
-		padding-top: var(--space-2);
-		padding-bottom: var(--space-2);
+	.list {
+		flex: 1;
+		overflow-y: auto;
+		min-height: 0;
+		padding: 4px 0 var(--space-lg);
+		position: relative;
 	}
 
-	.chat-row.muted {
-		opacity: 0.55;
-	}
-
-	.avatar-btn {
-		background: none;
-		border: none;
-		padding: 0;
-		flex-shrink: 0;
-		cursor: pointer;
-		border-radius: var(--radius-full);
-		display: block;
-		line-height: 0;
-		text-shadow: none;
-		transition: opacity 0.15s;
-	}
-
-	.avatar-btn:hover {
-		opacity: 0.85;
-	}
-
-	.avatar-btn:disabled {
-		cursor: default;
-		opacity: 0.7;
-	}
-
-	.channel-icon,
-	.self-icon {
-		width: 50px;
-		height: 50px;
-		border-radius: var(--radius-full);
-		background: var(--color-accent-dim);
-		border: 1px solid var(--color-border);
-		color: var(--color-accent);
+	.empty {
 		display: flex;
+		flex-direction: column;
 		align-items: center;
 		justify-content: center;
-		flex-shrink: 0;
+		gap: var(--space-md);
+		padding: var(--space-xl);
+		color: var(--p-muted);
+		min-height: 200px;
 	}
 
-	.chat-row.self-chat {
-		border-bottom: 1px solid var(--color-border);
-	}
-
-	.chat-row.self-chat + .chat-row {
-		border-top: 1px solid rgba(119, 119, 194, 0.15);
-	}
-
-	:global([data-density='compact']) .channel-icon,
-	:global([data-density='compact']) .self-icon {
-		width: 36px;
-		height: 36px;
-	}
-
-	.chat-info {
-		display: flex;
-		flex-direction: column;
-		gap: 3px;
-		flex: 1;
-		min-width: 0;
-	}
-
-	.chat-name-row {
-		display: flex;
-		align-items: center;
-		gap: var(--space-1);
-	}
-
-	.chat-name {
-		font-weight: 600;
-		font-size: var(--text-base);
-		color: var(--color-text-primary);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		flex: 1;
-	}
-
-	:global(.muted-icon) {
-		flex-shrink: 0;
-		color: var(--color-text-secondary);
-	}
-
-	.chat-time {
-		font-size: 0.6875rem;
-		font-family: var(--font-mono);
-		color: var(--color-text-secondary);
-		white-space: nowrap;
-		flex-shrink: 0;
-		background: var(--color-surface-glass);
-		border: 1px solid var(--color-border);
-		padding: 2px 8px;
-		border-radius: var(--radius-pill);
-		letter-spacing: 0.02em;
-	}
-
-	.chat-subtext {
+	.empty p {
 		font-size: var(--text-sm);
-		color: var(--color-text-secondary);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
 	}
 
-	.unread-badge {
-		background: var(--color-accent);
-		color: #fff;
-		font-size: 0.6875rem;
-		font-weight: 700;
-		padding: 2px 7px;
-		border-radius: var(--radius-full);
-		flex-shrink: 0;
-		min-width: 22px;
-		text-align: center;
-	}
-
-	/* ── Overlay + Bottom sheets ── */
-	.overlay {
-		position: fixed;
-		inset: 0;
-		background: rgba(0, 0, 0, 0.55);
-		display: flex;
-		align-items: flex-end;
-		z-index: 200;
-		animation: fade-in 0.2s ease;
-	}
-
-	@keyframes fade-in {
-		from { opacity: 0; }
-	}
-
-	.bottom-sheet {
-		width: 100%;
-		background: rgba(26, 26, 36, 0.92);
-		backdrop-filter: blur(20px) saturate(1.4);
-		-webkit-backdrop-filter: blur(20px) saturate(1.4);
-		border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-		border-top: 1px solid var(--color-border-solid);
-		max-height: 82dvh;
-		overflow-y: auto;
-		display: flex;
-		flex-direction: column;
-		animation: slide-up 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-	}
-
-	@keyframes slide-up {
-		from { transform: translateY(100%); }
-	}
-
-	.sheet-handle {
-		width: 36px;
-		height: 4px;
-		background: var(--color-border-solid);
-		border-radius: var(--radius-full);
-		margin: var(--space-3) auto var(--space-1);
-		flex-shrink: 0;
-	}
-
-	.sheet-header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: var(--space-2) var(--space-5) var(--space-4);
-		flex-shrink: 0;
-	}
-
-	.sheet-title {
-		font-size: var(--text-base);
-		font-weight: 600;
-		color: var(--color-text-primary);
-		margin: 0;
-	}
-
-	.sheet-action {
-		display: flex;
-		align-items: center;
-		gap: var(--space-3);
-		padding: var(--space-3) var(--space-5);
-		margin: 1px var(--space-3);
-		width: calc(100% - var(--space-6));
-		background: none;
-		border: none;
-		border-radius: var(--radius-pill);
-		color: var(--color-text-primary);
-		font-size: var(--text-base);
-		text-align: left;
-		cursor: pointer;
-		transition: background 0.12s;
-		font-family: var(--font-sans);
-		text-shadow: none;
-		-webkit-tap-highlight-color: transparent;
-	}
-
-	.sheet-action:hover:not(:disabled) {
-		background: rgba(255, 255, 255, 0.06);
-	}
-
-	.sheet-action:disabled {
-		opacity: 0.5;
-		pointer-events: none;
-	}
-
-	/* ── DM search sheet ── */
-	.sheet-body {
-		flex: 1;
-		overflow-y: auto;
-		padding: var(--space-3) var(--space-5) calc(var(--space-8) + env(safe-area-inset-bottom, 0px));
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-3);
-	}
-
-	.search-wrap {
+	/* ----- Folder ----- */
+	.folder {
 		position: relative;
-		display: flex;
-		align-items: center;
+		border-bottom: 1px solid var(--p-line);
 	}
 
-	:global(.search-icon) {
+	.aura-bg {
 		position: absolute;
-		left: var(--space-3);
-		color: var(--color-text-secondary);
+		inset: 0;
 		pointer-events: none;
+		opacity: 0;
+		transition: opacity 320ms cubic-bezier(0.22, 1, 0.36, 1);
+		background:
+			radial-gradient(120% 80% at 0% 0%, color-mix(in oklch, var(--fc) 26%, transparent), transparent 70%),
+			linear-gradient(180deg, color-mix(in oklch, var(--fc) 14%, transparent), color-mix(in oklch, var(--fc) 2%, transparent) 70%, transparent);
 	}
 
-	.search-input {
-		width: 100%;
-		background: var(--color-surface-glass);
-		backdrop-filter: blur(12px);
-		-webkit-backdrop-filter: blur(12px);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-pill);
-		color: var(--color-text-primary);
-		padding: var(--space-3) var(--space-4) var(--space-3) calc(var(--space-4) + 24px);
-		font-size: var(--text-base);
-		outline: none;
-		transition: border-color 0.15s;
-		font-family: var(--font-sans);
+	.folder.open .aura-bg {
+		opacity: 1;
 	}
 
-	.search-input:focus {
-		border-color: var(--color-accent);
-	}
-
-	.search-input:disabled {
-		opacity: 0.5;
-	}
-
-	.inline-error {
-		padding: var(--space-2) var(--space-3);
-		background: color-mix(in srgb, var(--color-danger) 10%, transparent);
-		color: var(--color-danger);
-		border-radius: var(--radius-md);
-		font-size: var(--text-sm);
-	}
-
-	.dm-results {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-1);
-	}
-
-	.dm-user-row {
-		display: flex;
+	.frow {
+		display: grid;
+		grid-template-columns: 22px 1fr auto 14px;
 		align-items: center;
-		gap: var(--space-3);
-		width: 100%;
-		padding: var(--space-3) var(--space-3);
+		gap: 10px;
+		padding: var(--space-sm) var(--space-lg);
+		position: relative;
+		z-index: 2;
+		cursor: pointer;
+		transition: padding 200ms cubic-bezier(0.22, 1, 0.36, 1);
+		user-select: none;
+	}
+
+	.frow:hover .fname {
+		color: var(--p-text);
+	}
+
+	.frow:focus-visible {
+		outline: 2px solid var(--fc);
+		outline-offset: -2px;
+		border-radius: 2px;
+	}
+
+	.dot-btn {
+		width: 22px;
+		height: 22px;
+		padding: 0;
+		margin: 0;
 		background: none;
 		border: 1px solid transparent;
-		border-radius: var(--radius-lg);
-		color: inherit;
-		text-align: left;
-		transition: background 0.1s, border-color 0.1s;
+		border-radius: 6px;
 		cursor: pointer;
-		text-shadow: none;
+		display: grid;
+		place-items: center;
+		transition: border-color 160ms, background 160ms;
 	}
 
-	.dm-user-row:hover:not(:disabled) {
-		background: var(--color-accent-dim);
-		border-color: rgba(119, 119, 194, 0.25);
+	.dot-btn:hover {
+		border-color: color-mix(in oklch, var(--fc) 40%, var(--p-line));
+		background: oklch(1 0 0 / 0.04);
 	}
 
-	.dm-user-row:disabled {
-		opacity: 0.5;
+	.dot-btn:focus-visible {
+		outline: 2px solid var(--fc);
+		outline-offset: 0;
+	}
+
+	.dot {
+		display: block;
+		width: 10px;
+		height: 10px;
+		border-radius: 50%;
+		background: var(--fc);
+		box-shadow:
+			0 0 0 2px color-mix(in oklch, var(--fc) 22%, transparent),
+			0 0 10px color-mix(in oklch, var(--fc) 50%, transparent);
+		transition: box-shadow 200ms;
+	}
+
+	.dot-btn:hover .dot {
+		box-shadow:
+			0 0 0 2px color-mix(in oklch, var(--fc) 32%, transparent),
+			0 0 14px color-mix(in oklch, var(--fc) 65%, transparent);
+	}
+
+	.fname {
+		font-size: 13.5px;
+		font-weight: var(--weight-bold);
+		letter-spacing: -0.005em;
+		color: var(--p-text);
+		transition: color 160ms;
+	}
+
+	.fcount {
+		font-size: 10.5px;
+		font-weight: var(--weight-bold);
+		color: color-mix(in oklch, var(--fc) 80%, var(--p-text-2));
+		background: color-mix(in oklch, var(--fc) 18%, oklch(0 0 0 / 0.20));
+		padding: 1.5px 8px;
+		border-radius: var(--radius-pill);
+		min-width: 20px;
+		text-align: center;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.caret {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		color: var(--p-muted);
+		transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+	}
+
+	.folder:not(.open) .caret {
+		transform: rotate(-90deg);
+	}
+
+	.folder.receiving {
+		background: color-mix(in oklch, var(--fc) 14%, transparent);
+	}
+
+	.folder.receiving .frow {
+		box-shadow: inset 0 0 0 1.5px var(--fc);
+	}
+
+	.folder.receiving .frow::after {
+		content: '↳';
+		position: absolute;
+		right: 36px;
+		top: 50%;
+		transform: translateY(-50%);
+		color: var(--fc);
+		font-size: 16px;
+	}
+
+	.folder.dimmed {
+		opacity: 0.28;
+		filter: saturate(0.5);
 		pointer-events: none;
 	}
 
-	.dm-user-info {
-		flex: 1;
-		min-width: 0;
+	.fbody {
+		position: relative;
+		z-index: 1;
+		padding-bottom: 4px;
+	}
+
+	/* Drop slot indicators */
+	.slot {
+		height: 0;
+		position: relative;
+		overflow: visible;
+		z-index: 3;
+	}
+
+	.slot.tail {
+		height: 4px;
+	}
+
+	.slot.line::after {
+		content: '';
+		position: absolute;
+		left: var(--space-lg);
+		right: var(--space-lg);
+		top: -1.5px;
+		height: 3px;
+		border-radius: 3px;
+		background: linear-gradient(90deg, transparent, var(--p-accent) 18%, var(--p-accent) 82%, transparent);
+		box-shadow: 0 0 8px var(--p-accent), 0 0 16px var(--p-accent-soft);
+		animation: bar-in 240ms cubic-bezier(0.16, 1, 0.3, 1), bar-pulse 1600ms ease-in-out 240ms infinite;
+	}
+
+	.fbody .slot.line::after {
+		left: 30px;
+	}
+
+	@keyframes bar-in {
+		from { transform: scaleX(0.3); opacity: 0; }
+		to { transform: scaleX(1); opacity: 1; }
+	}
+
+	@keyframes bar-pulse {
+		0%, 100% { box-shadow: 0 0 8px var(--p-accent), 0 0 16px var(--p-accent-soft); }
+		50% { box-shadow: 0 0 14px var(--p-accent), 0 0 28px var(--p-accent-soft); }
+	}
+
+	/* Root zone */
+	.root-zone {
+		position: relative;
+		min-height: 24px;
+		transition: background 240ms;
+	}
+
+	.root-zone.active {
+		background: linear-gradient(180deg, color-mix(in oklch, var(--p-accent) 18%, transparent), transparent);
+	}
+
+	.root-pill {
+		display: inline-block;
+		margin: 20px var(--space-lg);
+		font-size: 11px;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		color: var(--p-accent);
+		background: var(--p-accent-soft);
+		border: 1px solid var(--p-accent-edge);
+		padding: 7px 14px;
+		border-radius: var(--radius-pill);
+		box-shadow: 0 0 14px color-mix(in oklch, var(--p-accent) 30%, transparent);
+	}
+
+	/* Section header */
+	.sec {
+		padding: var(--space-lg) var(--space-lg) var(--space-sm);
+		font-size: 11px;
+		text-transform: uppercase;
+		letter-spacing: 0.14em;
+		color: var(--p-muted);
+		font-weight: var(--weight-bold);
 		display: flex;
-		flex-direction: column;
-		gap: 2px;
+		align-items: center;
+		gap: 8px;
 	}
 
-	.dm-user-name {
-		font-weight: 600;
-		font-size: var(--text-base);
-		color: var(--color-text-primary);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
+	.sec-glyph {
+		color: var(--p-accent);
+		font-size: 13px;
 	}
 
-	.dm-user-handle {
+	/* Combine form */
+	.combine-form {
+		display: flex;
+		align-items: center;
+		gap: var(--space-xs);
+		padding: var(--space-xs) var(--space-lg);
+	}
+
+	.combine-form input {
+		flex: 1;
+		background: var(--p-surface);
+		border: 1px solid var(--p-accent);
+		border-radius: var(--radius-md);
+		padding: var(--space-xs) var(--space-sm);
+		color: var(--p-text);
 		font-size: var(--text-sm);
-		color: var(--color-text-secondary);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
 	}
 
-	.you-badge {
-		background: var(--color-accent-dim);
-		color: var(--color-accent);
-		border: 1px solid rgba(119, 119, 194, 0.3);
+	.combine-form input:focus {
+		outline: none;
+		border-color: var(--p-accent);
+	}
+
+	.combine-btn {
+		background: var(--p-accent);
+		color: var(--p-bg);
+		border: none;
+		border-radius: var(--radius-pill);
+		padding: var(--space-xs) var(--space-sm);
 		font-size: var(--text-xs);
-		font-weight: 600;
-		padding: 2px 8px;
-		border-radius: var(--radius-full);
+		font-weight: var(--weight-bold);
+		cursor: pointer;
+	}
+
+	.combine-btn[type="button"] {
+		background: var(--p-surface-2);
+		color: var(--p-text);
+		border: 1px solid var(--p-line);
+	}
+
+	/* Ghost */
+	.ghost {
+		position: fixed;
+		z-index: 100;
+		pointer-events: none;
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding: 9px 14px 9px 12px;
+		background:
+			radial-gradient(circle at 0% 0%, color-mix(in oklch, var(--gc) 30%, transparent), transparent 60%),
+			var(--p-surface-2);
+		border: 1px solid var(--gc);
+		border-radius: var(--radius-lg);
+		box-shadow:
+			0 0 0 4px color-mix(in oklch, var(--gc) 22%, transparent),
+			0 18px 36px oklch(0.04 0.02 280 / 0.55),
+			0 0 36px color-mix(in oklch, var(--gc) 28%, transparent);
+		transform: scale(1.03);
+		animation: ghost-in 200ms cubic-bezier(0.16, 1, 0.3, 1);
+	}
+
+	.g-dot {
+		display: block;
+		width: 10px;
+		height: 10px;
+		border-radius: 50%;
+		background: var(--gc);
+		box-shadow: 0 0 10px color-mix(in oklch, var(--gc) 50%, transparent);
+	}
+
+	.g-avatar {
+		width: 28px;
+		height: 28px;
+		border-radius: 50%;
+		background: color-mix(in oklch, var(--p-accent) 30%, var(--p-surface-2));
+		display: grid;
+		place-items: center;
+		font-weight: var(--weight-bold);
+		font-size: 11px;
+		letter-spacing: 0.04em;
+		color: var(--p-text);
 		flex-shrink: 0;
 	}
 
-	/* ── Archived section ── */
-	.archived-toggle {
-		display: flex;
-		align-items: center;
-		gap: var(--space-3);
-		width: 100%;
-		padding: var(--space-4) var(--space-6);
-		background: none;
-		border: none;
-		color: var(--color-text-secondary);
-		font-family: var(--font-mono);
-		font-size: 0.75rem;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		cursor: pointer;
-		text-shadow: none;
-		transition: background 0.12s, color 0.12s;
+	.g-name {
+		font-weight: var(--weight-medium);
+		font-size: 14px;
+		color: var(--p-text);
 	}
 
-	.archived-toggle:hover {
-		color: var(--color-text-primary);
+	@keyframes ghost-in {
+		from { opacity: 0; transform: scale(0.95); }
+		to { opacity: 1; transform: scale(1.03); }
 	}
 
-	.archived-row {
-		opacity: 0.65;
-	}
-
-	.archived-label {
-		color: var(--color-text-secondary);
-		font-style: italic;
-		font-size: var(--text-xs);
-	}
-
-	.state-msg.small {
-		padding: var(--space-3) var(--space-5);
-		font-size: var(--text-xs);
+	/* Accessibility */
+	.live {
+		position: absolute;
+		left: -10000px;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
 	}
 </style>

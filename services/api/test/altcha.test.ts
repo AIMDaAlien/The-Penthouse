@@ -1,34 +1,40 @@
-import test, { beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { after, describe, it } from 'node:test';
+import { env } from '../src/config/env.js';
+import { createChallenge, verifyChallengePayload } from '../src/utils/altcha.js';
 
-// env.ts validates DATABASE_URL + JWT_SECRET at import time — set before dynamic imports
-process.env.DATABASE_URL ??= 'postgresql://penthouse:penthouse@localhost:5432/penthouse_test';
-process.env.JWT_SECRET ??= 'altcha-test-jwt-secret-long-enough';
+describe('ALTCHA proof-of-work', () => {
+  const originalKey = env.ALTCHA_HMAC_KEY;
 
-const { createAltchaChallenge, resetAltchaReplayState, verifyAltchaPayloadOnce } =
-  await import('../src/utils/altcha.js');
-const { createCaptchaToken } = await import('./helpers.js');
+  after(() => {
+    env.ALTCHA_HMAC_KEY = originalKey;
+  });
 
-beforeEach(() => {
-  resetAltchaReplayState();
+  it('creates signed challenges and verifies only solved payloads', () => {
+    env.ALTCHA_HMAC_KEY = 'test-altcha-secret';
+    const challenge = createChallenge(250);
+    const number = solveChallenge(challenge.salt, challenge.challenge, challenge.maxnumber);
+    assert.notEqual(number, null);
+
+    const payloadChallenge = {
+      algorithm: challenge.algorithm,
+      challenge: challenge.challenge,
+      salt: challenge.salt,
+      signature: challenge.signature
+    };
+    const payload = Buffer.from(JSON.stringify({ ...payloadChallenge, number })).toString('base64');
+    assert.equal(verifyChallengePayload(payload, env.ALTCHA_HMAC_KEY), true);
+
+    const tampered = Buffer.from(JSON.stringify({ ...payloadChallenge, number: number! + 1 })).toString('base64');
+    assert.equal(verifyChallengePayload(tampered, env.ALTCHA_HMAC_KEY), false);
+  });
 });
 
-test('altcha challenge returns the expected public shape', async () => {
-  const challenge = await createAltchaChallenge();
-
-  assert.equal(typeof challenge.algorithm, 'string');
-  assert.equal(typeof challenge.challenge, 'string');
-  assert.equal(typeof challenge.salt, 'string');
-  assert.equal(typeof challenge.signature, 'string');
-  assert.equal(typeof challenge.maxnumber, 'number');
-});
-
-test('altcha payload can only be used once', async () => {
-  const captchaToken = await createCaptchaToken();
-
-  const first = await verifyAltchaPayloadOnce(captchaToken);
-  const second = await verifyAltchaPayloadOnce(captchaToken);
-
-  assert.equal(first, true);
-  assert.equal(second, false);
-});
+function solveChallenge(salt: string, challenge: string, maxnumber: number) {
+  for (let number = 0; number <= maxnumber; number += 1) {
+    const hash = createHash('sha256').update(`${salt}${number}`).digest('hex');
+    if (hash === challenge) return number;
+  }
+  return null;
+}

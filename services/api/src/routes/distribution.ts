@@ -2,37 +2,34 @@ import type { FastifyInstance } from 'fastify';
 import { AppDistributionResponseSchema } from '@penthouse/contracts';
 import { env } from '../config/env.js';
 
-const LOCAL_APP_FALLBACK_URL = 'http://localhost:5173';
+const LOCAL_APP_FALLBACK_URL = 'http://localhost:5174';
 const LEGACY_ANDROID_NOTES = 'Deprecated Android APK retained only for existing installs. Use the PWA for new installs.';
 
-function firstUsableOrigin(value: string): string | null {
+function firstUsableOrigin(value: string) {
   for (const origin of value.split(',')) {
     const trimmed = origin.trim();
-    if (/^https?:\/\//.test(trimmed)) {
-      return trimmed;
-    }
+    if (/^https?:\/\//.test(trimmed)) return trimmed;
   }
 
   return null;
 }
 
-function normalizeBaseUrl(value: string): string {
+function normalizeBaseUrl(value: string) {
   return value.replace(/\/+$/, '');
 }
 
-function getPublicAppBaseUrl(): string {
-  const configured = env.PUBLIC_APP_URL.trim();
-  return normalizeBaseUrl(configured || firstUsableOrigin(env.CORS_ORIGIN) || LOCAL_APP_FALLBACK_URL);
+function publicAppBaseUrl() {
+  return normalizeBaseUrl(env.PUBLIC_APP_URL.trim() || firstUsableOrigin(env.CORS_ORIGIN) || LOCAL_APP_FALLBACK_URL);
 }
 
-function normalizeDownloadPath(value: string): string {
+function normalizeDownloadPath(value: string) {
   const trimmed = value.trim() || '/downloads/legacy/the-penthouse.apk';
   return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
 }
 
-export async function registerDistributionRoutes(app: FastifyInstance): Promise<void> {
-  app.get('/api/v1/app-distribution', async (_request, reply) => {
-    const appUrl = getPublicAppBaseUrl();
+export async function registerDistributionRoutes(fastify: FastifyInstance) {
+  fastify.get('/api/v1/app-distribution', async (_request, reply) => {
+    const appUrl = publicAppBaseUrl();
     const legacyDownloadPath = normalizeDownloadPath(env.LEGACY_APK_DOWNLOAD_PATH);
 
     const payload = AppDistributionResponseSchema.parse({
@@ -52,8 +49,6 @@ export async function registerDistributionRoutes(app: FastifyInstance): Promise<
       }
     });
 
-    return reply
-      .header('Cache-Control', 'public, max-age=60')
-      .send(payload);
+    return reply.header('cache-control', 'public, max-age=60').send(payload);
   });
 }

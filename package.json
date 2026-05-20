@@ -1,9 +1,9 @@
 {
   "name": "the-penthouse",
-  "version": "2.1.0-alpha.1",
+  "version": "4.0.0-alpha.1",
   "private": true,
-  "description": "The Penthouse clean-room rebuild monorepo",
-  "packageManager": "npm@11.8.0",
+  "description": "The Penthouse v4 clean-room rebuild",
+  "packageManager": "npm@11.12.1",
   "workspaces": [
     "apps/*",
     "services/*",
@@ -13,16 +13,10 @@
     "db:start": "docker compose -f infra/docker-compose.yml up -d",
     "db:stop": "docker compose -f infra/docker-compose.yml down",
     "typecheck": "npm run --workspaces --if-present typecheck",
-    "lint": "npm run --workspaces --if-present lint",
     "test": "npm run --workspaces --if-present test",
-    "validate": "npm run typecheck && npm run test",
-    "scenario:test": "node antigravity/scripts/run-scenarios.mjs",
-    "release:gate": "node scripts/run-release-gate.mjs"
+    "validate": "npm run typecheck && npm run test"
   },
   "engines": {
     "node": ">=22"
-  },
-  "overrides": {
-    "vite": "^6.4.1"
   }
 }
