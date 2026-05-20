@@ -236,6 +236,7 @@
 		--color-success:           var(--p-success);
 
 		/* ── Typography ── */
+		--font-display: 'Gelasio', Georgia, serif;
 		--font-sans:    'Ubuntu', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 		--font-body:    'Ubuntu', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 		--font-mono:    'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
