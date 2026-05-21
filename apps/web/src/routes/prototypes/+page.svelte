@@ -1,56 +1,65 @@
 <script lang="ts">
-  // V5 Chat Panes
-  import ChatPaneV5_01 from '$lib/prototypes/chat-pane/ChatPane-V5-01-Periwinkle.svelte';
-  import ChatPaneV5_02 from '$lib/prototypes/chat-pane/ChatPane-V5-02-SageMoss.svelte';
-  import ChatPaneV5_03 from '$lib/prototypes/chat-pane/ChatPane-V5-03-SlateBlue.svelte';
-  import ChatPaneV5_04 from '$lib/prototypes/chat-pane/ChatPane-V5-04-PlumMauve.svelte';
-  import ChatPaneV5_05 from '$lib/prototypes/chat-pane/ChatPane-V5-05-CharcoalRust.svelte';
-  import ChatPaneV5_06 from '$lib/prototypes/chat-pane/ChatPane-V5-06-SageCream.svelte';
-  import ChatPaneV5_07 from '$lib/prototypes/chat-pane/ChatPane-V5-07-SkyPastel.svelte';
-  import ChatPaneV5_08 from '$lib/prototypes/chat-pane/ChatPane-V5-08-BlushPastel.svelte';
-  import ChatPaneV5_09 from '$lib/prototypes/chat-pane/ChatPane-V5-09-LavenderPastel.svelte';
-  import ChatPaneV5_10 from '$lib/prototypes/chat-pane/ChatPane-V5-10-OatStone.svelte';
+  import type { Component } from 'svelte';
 
-  // V5 Settings Panes
-  import SettingsPaneV5_01 from '$lib/prototypes/settings-pane/SettingsPane-V5-01-GlassQuiet.svelte';
-  import SettingsPaneV5_02 from '$lib/prototypes/settings-pane/SettingsPane-V5-02-FloatingPreviewLed.svelte';
-  import SettingsPaneV5_03 from '$lib/prototypes/settings-pane/SettingsPane-V5-03-BorderlessTypo.svelte';
-  import SettingsPaneV5_04 from '$lib/prototypes/settings-pane/SettingsPane-V5-04-OutlinedDataLed.svelte';
-  import SettingsPaneV5_05 from '$lib/prototypes/settings-pane/SettingsPane-V5-05-Magazine.svelte';
+  type PrototypePane = { component: Component; name: string };
 
-  // V5 People Panes
-  import PeoplePaneV5_01 from '$lib/prototypes/people-pane/PeoplePane-V5-01-Editorial.svelte';
-  import PeoplePaneV5_02 from '$lib/prototypes/people-pane/PeoplePane-V5-02-Vogue.svelte';
-  import PeoplePaneV5_03 from '$lib/prototypes/people-pane/PeoplePane-V5-03-Wallpaper.svelte';
-
-  const chatPanes = [
-    { component: ChatPaneV5_01, name: 'V5-01: Periwinkle (T-D1 dark)' },
-    { component: ChatPaneV5_02, name: 'V5-02: Sage Moss (T-D2 dark)' },
-    { component: ChatPaneV5_03, name: 'V5-03: Slate Blue (T-D3 dark)' },
-    { component: ChatPaneV5_04, name: 'V5-04: Plum Mauve (T-D4 dark)' },
-    { component: ChatPaneV5_05, name: 'V5-05: Charcoal Rust (T-D7 dark)' },
-    { component: ChatPaneV5_06, name: 'V5-06: Sage Cream (T-L2 light)' },
-    { component: ChatPaneV5_07, name: 'V5-07: Sky Pastel (T-L3 light)' },
-    { component: ChatPaneV5_08, name: 'V5-08: Blush Pastel (T-L4 light)' },
-    { component: ChatPaneV5_09, name: 'V5-09: Lavender Pastel (T-L5 light)' },
-    { component: ChatPaneV5_10, name: 'V5-10: Oat Stone (T-L7 light)' },
+  const chatPaneLoaders = [
+    { loader: () => import('$lib/prototypes/chat-pane/ChatPane-V5-01-Periwinkle.svelte'), name: 'V5-01: Periwinkle (T-D1 dark)' },
+    { loader: () => import('$lib/prototypes/chat-pane/ChatPane-V5-02-SageMoss.svelte'), name: 'V5-02: Sage Moss (T-D2 dark)' },
+    { loader: () => import('$lib/prototypes/chat-pane/ChatPane-V5-03-SlateBlue.svelte'), name: 'V5-03: Slate Blue (T-D3 dark)' },
+    { loader: () => import('$lib/prototypes/chat-pane/ChatPane-V5-04-PlumMauve.svelte'), name: 'V5-04: Plum Mauve (T-D4 dark)' },
+    { loader: () => import('$lib/prototypes/chat-pane/ChatPane-V5-05-CharcoalRust.svelte'), name: 'V5-05: Charcoal Rust (T-D7 dark)' },
+    { loader: () => import('$lib/prototypes/chat-pane/ChatPane-V5-06-SageCream.svelte'), name: 'V5-06: Sage Cream (T-L2 light)' },
+    { loader: () => import('$lib/prototypes/chat-pane/ChatPane-V5-07-SkyPastel.svelte'), name: 'V5-07: Sky Pastel (T-L3 light)' },
+    { loader: () => import('$lib/prototypes/chat-pane/ChatPane-V5-08-BlushPastel.svelte'), name: 'V5-08: Blush Pastel (T-L4 light)' },
+    { loader: () => import('$lib/prototypes/chat-pane/ChatPane-V5-09-LavenderPastel.svelte'), name: 'V5-09: Lavender Pastel (T-L5 light)' },
+    { loader: () => import('$lib/prototypes/chat-pane/ChatPane-V5-10-OatStone.svelte'), name: 'V5-10: Oat Stone (T-L7 light)' },
   ];
 
-  const settingsPanes = [
-    { component: SettingsPaneV5_01, name: 'V5-01: Glass Quiet (S1.4 + S2.1)' },
-    { component: SettingsPaneV5_02, name: 'V5-02: Floating Preview-Led (S1.5 + S2.3)' },
-    { component: SettingsPaneV5_03, name: 'V5-03: Borderless Typography (S1.6 + S2.1)' },
-    { component: SettingsPaneV5_04, name: 'V5-04: Outlined Data-Led (S1.2 + S2.4)' },
-    { component: SettingsPaneV5_05, name: 'V5-05: Magazine (editorial typography)' },
+  const settingsPaneLoaders = [
+    { loader: () => import('$lib/prototypes/settings-pane/SettingsPane-V5-01-GlassQuiet.svelte'), name: 'V5-01: Glass Quiet (S1.4 + S2.1)' },
+    { loader: () => import('$lib/prototypes/settings-pane/SettingsPane-V5-02-FloatingPreviewLed.svelte'), name: 'V5-02: Floating Preview-Led (S1.5 + S2.3)' },
+    { loader: () => import('$lib/prototypes/settings-pane/SettingsPane-V5-03-BorderlessTypo.svelte'), name: 'V5-03: Borderless Typography (S1.6 + S2.1)' },
+    { loader: () => import('$lib/prototypes/settings-pane/SettingsPane-V5-04-OutlinedDataLed.svelte'), name: 'V5-04: Outlined Data-Led (S1.2 + S2.4)' },
+    { loader: () => import('$lib/prototypes/settings-pane/SettingsPane-V5-05-Magazine.svelte'), name: 'V5-05: Magazine (editorial typography)' },
   ];
 
-  const peoplePanes = [
-    { component: PeoplePaneV5_01, name: 'V5-01: Editorial (canonical)' },
-    { component: PeoplePaneV5_02, name: 'V5-02: Vogue (P1.1 — display name hero)' },
-    { component: PeoplePaneV5_03, name: 'V5-03: Wallpaper (P1.2 — banner-led)' },
+  const peoplePaneLoaders = [
+    { loader: () => import('$lib/prototypes/people-pane/PeoplePane-V5-01-Editorial.svelte'), name: 'V5-01: Editorial (canonical)' },
+    { loader: () => import('$lib/prototypes/people-pane/PeoplePane-V5-02-Vogue.svelte'), name: 'V5-02: Vogue (P1.1 — display name hero)' },
+    { loader: () => import('$lib/prototypes/people-pane/PeoplePane-V5-03-Wallpaper.svelte'), name: 'V5-03: Wallpaper (P1.2 — banner-led)' },
   ];
 
   let currentCategory = $state<'chat' | 'settings' | 'people'>('chat');
+  let chatPanes = $state<PrototypePane[] | null>(null);
+  let settingsPanes = $state<PrototypePane[] | null>(null);
+  let peoplePanes = $state<PrototypePane[] | null>(null);
+
+  async function loadPanes(loaders: { loader: () => Promise<{ default: Component }>; name: string }[]) {
+    const modules = await Promise.all(loaders.map((l) => l.loader()));
+    return modules.map((mod, i) => ({
+      component: mod.default as Component,
+      name: loaders[i].name
+    }));
+  }
+
+  $effect(() => {
+    if (currentCategory === 'chat' && !chatPanes) {
+      loadPanes(chatPaneLoaders).then((panes) => { chatPanes = panes; });
+    }
+  });
+
+  $effect(() => {
+    if (currentCategory === 'settings' && !settingsPanes) {
+      loadPanes(settingsPaneLoaders).then((panes) => { settingsPanes = panes; });
+    }
+  });
+
+  $effect(() => {
+    if (currentCategory === 'people' && !peoplePanes) {
+      loadPanes(peoplePaneLoaders).then((panes) => { peoplePanes = panes; });
+    }
+  });
 </script>
 
 <svelte:head>
@@ -73,32 +82,44 @@
   <main>
     <div class="prototype-grid">
       {#if currentCategory === 'chat'}
-        {#each chatPanes as pane (pane.name)}
-          <div class="prototype-wrapper">
-            <h2>{pane.name}</h2>
-            <div class="prototype-container">
-              <pane.component />
+        {#if chatPanes}
+          {#each chatPanes as pane (pane.name)}
+            <div class="prototype-wrapper">
+              <h2>{pane.name}</h2>
+              <div class="prototype-container">
+                <pane.component />
+              </div>
             </div>
-          </div>
-        {/each}
+          {/each}
+        {:else}
+          <p class="loading">Loading chat prototypes…</p>
+        {/if}
       {:else if currentCategory === 'settings'}
-        {#each settingsPanes as pane (pane.name)}
-          <div class="prototype-wrapper">
-            <h2>{pane.name}</h2>
-            <div class="prototype-container">
-              <pane.component />
+        {#if settingsPanes}
+          {#each settingsPanes as pane (pane.name)}
+            <div class="prototype-wrapper">
+              <h2>{pane.name}</h2>
+              <div class="prototype-container">
+                <pane.component />
+              </div>
             </div>
-          </div>
-        {/each}
+          {/each}
+        {:else}
+          <p class="loading">Loading settings prototypes…</p>
+        {/if}
       {:else if currentCategory === 'people'}
-        {#each peoplePanes as pane (pane.name)}
-          <div class="prototype-wrapper">
-            <h2>{pane.name}</h2>
-            <div class="prototype-container">
-              <pane.component />
+        {#if peoplePanes}
+          {#each peoplePanes as pane (pane.name)}
+            <div class="prototype-wrapper">
+              <h2>{pane.name}</h2>
+              <div class="prototype-container">
+                <pane.component />
+              </div>
             </div>
-          </div>
-        {/each}
+          {/each}
+        {:else}
+          <p class="loading">Loading people prototypes…</p>
+        {/if}
       {/if}
     </div>
   </main>
@@ -222,6 +243,13 @@
     box-shadow: var(--shadow-card, 0 14px 36px oklch(0 0 0 / 0.45));
     position: relative;
     border: 1px solid var(--p-line, oklch(0.78 0.090 280 / 0.12));
+  }
+
+  .loading {
+    text-align: center;
+    padding: 4rem;
+    color: var(--p-muted, oklch(0.65 0.050 280));
+    font-family: 'JetBrains Mono', monospace;
   }
 
   @media (max-width: 1000px) {
