@@ -18,7 +18,10 @@ export default defineConfig(async () => ({
 			srcDir: 'src',
 			filename: 'service-worker.ts',
 			injectManifest: {
-				globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}']
+				globPatterns: ['client/**/*.{js,css,ico,png,svg,webp,webmanifest}', 'client/_app/version.json'],
+				modifyURLPrefix: {
+					'client/': ''
+				}
 			},
 			manifest: {
 				name: 'The Penthouse',

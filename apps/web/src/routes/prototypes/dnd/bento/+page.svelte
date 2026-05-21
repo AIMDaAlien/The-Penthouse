@@ -74,6 +74,7 @@
 											data-chat-row
 											data-chat-id={chat.id}
 											class:dimmed={dnd.isDragSource('chat', chat.id)}
+											role="button"
 											tabindex="0"
 											aria-grabbed={dnd.drag?.active && dnd.drag.source.id === chat.id}
 											onpointerdown={(e) => dnd.pickUp(e, { kind: 'chat', id: chat.id, fromFolderId: folder.id }, e.currentTarget as HTMLElement)}
@@ -113,6 +114,7 @@
 							data-chat-id={chat.id}
 							class:dimmed={dnd.isDragSource('chat', chat.id)}
 							class:combine={dnd.combineTargetId() === chat.id}
+							role="button"
 							tabindex="0"
 							aria-grabbed={dnd.drag?.active && dnd.drag.source.id === chat.id}
 							onpointerdown={(e) => dnd.pickUp(e, { kind: 'chat', id: chat.id }, e.currentTarget as HTMLElement)}

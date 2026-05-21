@@ -71,6 +71,7 @@
 	use:focusTrap={{ onEscape: onClose }}
 	onkeydown={handleKeydown}
 	role="listbox"
+	tabindex="0"
 	aria-label="Emoji and emote suggestions"
 >
 	{#if totalResults === 0}

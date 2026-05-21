@@ -3,10 +3,10 @@
 	// Self-contained prototype. No external imports.
 
 	const user = {
-		name: 'kimi.eve',
-		displayName: 'Kimi Eve',
+		name: 'nova.lee',
+		displayName: 'Nova Lee',
 		bio: 'Designing quiet spaces for loud thoughts.',
-		avatar: 'https://i.pravatar.cc/150?u=kimi',
+		avatar: 'https://i.pravatar.cc/150?u=nova-lee',
 		banner: 'https://images.unsplash.com/photo-1519681393784-d120267933ba?w=800&q=80'
 	};
 

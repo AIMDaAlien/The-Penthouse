@@ -1,7 +1,7 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: penthouse-kimi-postgres
+    container_name: penthouse-postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-penthouse}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-penthouse}
@@ -9,7 +9,7 @@ services:
     ports:
       - "${POSTGRES_PORT:-5434}:5432"
     volumes:
-      - penthouse_kimi_pgdata:/var/lib/postgresql/data
+      - penthouse_pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
       interval: 5s
@@ -106,7 +106,7 @@ services:
 
   coturn:
     image: coturn/coturn:4.6
-    container_name: penthouse-kimi-coturn
+    container_name: penthouse-coturn
     profiles:
       - media
     restart: unless-stopped
@@ -129,7 +129,7 @@ services:
       --no-tlsv1_1
 
 volumes:
-  penthouse_kimi_pgdata:
+  penthouse_pgdata:
   penthouse_uploads:
   caddy_data:
   caddy_config:

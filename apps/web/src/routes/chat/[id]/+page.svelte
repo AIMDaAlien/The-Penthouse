@@ -838,7 +838,6 @@
 					placeholder="Search messages..."
 					bind:value={searchQuery}
 					onkeydown={(e) => e.key === 'Enter' && handleSearch()}
-					autofocus
 				/>
 				<button onclick={handleSearch} aria-label="Search">
 					<Icon name="search" size={16} />

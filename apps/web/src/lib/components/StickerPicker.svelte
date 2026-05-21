@@ -15,7 +15,7 @@
 	let activePackId = $state<string | null>(null);
 	let uploadLoading = $state(false);
 	let uploadError = $state('');
-	let fileInput: HTMLInputElement | null = null;
+	let fileInput = $state<HTMLInputElement | null>(null);
 	let uploadTargetPackId = $state<string | null>(null);
 
 	$effect(() => {

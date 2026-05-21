@@ -3,6 +3,7 @@
 	import Icon from './Icon.svelte';
 	import FolderColorPopover from './FolderColorPopover.svelte';
 	import { createChatListDnd } from '$lib/dnd/chatListDnd.svelte';
+	import { folders as foldersApi } from '$services/folders';
 	import type { ChatSummary } from '@penthouse/contracts';
 	import type { FolderWithItems } from '$stores/folders.svelte';
 
@@ -92,7 +93,6 @@
 	async function handleSetFolderColor(folderId: string, color: string) {
 		// Use the store's update method; the socket will sync it back
 		// We call the API directly here since foldersStore.update exists
-		const { folders: foldersApi } = await import('$services/folders');
 		await foldersApi.update(folderId, { color });
 		colorEdit = null;
 	}

@@ -169,7 +169,7 @@
 							<p class="auth-lede">A quieter room for the people you talk to.</p>
 							<label class="auth-field">
 								<span class="auth-label">Handle</span>
-								<input value="kimi.eve" class="auth-input" />
+								<input value="nova.lee" class="auth-input" />
 							</label>
 							<label class="auth-field">
 								<span class="auth-label">Password</span>
@@ -275,7 +275,7 @@
 							<p class="auth-lede">A quieter room for the people you talk to.</p>
 							<label class="auth-field">
 								<span class="auth-label">Handle</span>
-								<input value="kimi.eve" class="auth-input" />
+								<input value="nova.lee" class="auth-input" />
 							</label>
 							<label class="auth-field">
 								<span class="auth-label">Password</span>

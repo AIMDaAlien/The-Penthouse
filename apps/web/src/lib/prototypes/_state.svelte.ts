@@ -146,10 +146,10 @@ class FlowState {
 	mode       = $state<ThemeMode>('dark');
 	profileStyle = $state<PProfileStyleDef['id']>('editorial');
 	presence   = $state<'online' | 'away' | 'offline'>('online');
-	displayName = $state('Kimi Eve');
-	handle      = $state('kimi.eve');
+	displayName = $state('Nova Lee');
+	handle      = $state('nova.lee');
 	bio         = $state('Designing quiet spaces for loud thoughts.');
-	avatar      = $state('https://i.pravatar.cc/300?u=kimi');
+	avatar      = $state('https://i.pravatar.cc/300?u=nova-lee');
 	banner      = $state('https://images.unsplash.com/photo-1519681393784-d120267933ba?w=1400&q=80');
 
 	theme  = $derived(themes.find(t => t.id === this.themeId) ?? themes[0]);

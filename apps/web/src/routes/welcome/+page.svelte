@@ -167,32 +167,6 @@
 						</div>
 					{/if}
 				</div>
-
-				<div class="section">
-					<div class="label">Migration // 04</div>
-					<h2>Coming from somewhere else?</h2>
-					<p>
-						If you are moving from another platform, here is what changes — and what does not.
-					</p>
-					<div class="compare-grid">
-						<div class="compare-card">
-							<h4>Discord</h4>
-							<p><strong>No servers.</strong> Just chats and folders. No noise, no bots, no algorithmic sorting. You own the data.</p>
-						</div>
-						<div class="compare-card">
-							<h4>Signal</h4>
-							<p><strong>No phone number required.</strong> Username-only. Self-hostable. Multiple visual themes instead of one.</p>
-						</div>
-						<div class="compare-card">
-							<h4>WhatsApp</h4>
-							<p><strong>No Meta.</strong> Web-first PWA. Folders instead of labels. Works on any device with a browser.</p>
-						</div>
-						<div class="compare-card">
-							<h4>Telegram</h4>
-							<p><strong>No cloud.</strong> Self-hosted. Smaller, tighter scope. No bots or public channels — just people you choose.</p>
-						</div>
-					</div>
-				</div>
 			</main>
 
 			<footer>
@@ -502,7 +476,7 @@
 		transform: translateY(-1px);
 	}
 
-	/* ── Value / Install / Migration sections ── */
+	/* ── Value / Install sections ── */
 	.section {
 		border-left: 1px solid var(--border);
 		padding-left: 3rem;
@@ -514,48 +488,6 @@
 		font-size: 2.6rem;
 		margin: 0 0 1.5rem 0;
 		color: var(--text);
-	}
-
-	/* ── Compare grid (Migration section) ── */
-	.compare-grid {
-		display: grid;
-		grid-template-columns: repeat(2, 1fr);
-		gap: 1.25rem;
-		margin-top: 2.5rem;
-	}
-
-	.compare-card {
-		background: var(--bg-surface);
-		border: 1px solid var(--border);
-		border-radius: 12px;
-		padding: 1.5rem;
-		transition: border-color 0.3s var(--ease);
-	}
-
-	.compare-card:hover {
-		border-color: rgba(119, 119, 194, 0.35);
-	}
-
-	.compare-card h4 {
-		font-family: var(--font-mono);
-		font-size: 0.8rem;
-		font-weight: 600;
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
-		margin: 0 0 0.75rem 0;
-		color: var(--accent);
-	}
-
-	.compare-card p {
-		font-size: 0.95rem;
-		line-height: 1.6;
-		color: var(--text-soft);
-		margin: 0;
-	}
-
-	.compare-card strong {
-		color: var(--text);
-		font-weight: 500;
 	}
 
 	/* ── APK download link ── */
@@ -660,10 +592,6 @@
 
 		.section {
 			padding-left: 1.5rem;
-		}
-
-		.compare-grid {
-			grid-template-columns: 1fr;
 		}
 
 		footer {

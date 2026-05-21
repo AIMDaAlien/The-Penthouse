@@ -94,7 +94,7 @@
 								title: gif.title
 							})}
 						aria-label="Select GIF: {gif.title ?? 'Untitled'}"
-						role="listitem"
+						type="button"
 					>
 						<img
 							src={gif.previewUrl}
