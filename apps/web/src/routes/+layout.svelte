@@ -30,8 +30,8 @@
 	// Auth guard: redirect unauthenticated users to /auth
 	$effect(() => {
 		const path = $page.url.pathname;
-		const publicPaths: string[] = ['/auth', '/welcome', '/prototypes'];
-		const isPublicPath = publicPaths.includes(path) || path.startsWith('/prototypes/');
+		const publicPaths: string[] = ['/auth', '/welcome'];
+		const isPublicPath = publicPaths.includes(path);
 		if (!sessionStore.isAuthenticated && !isPublicPath) {
 			goto('/auth', { replaceState: true });
 		}

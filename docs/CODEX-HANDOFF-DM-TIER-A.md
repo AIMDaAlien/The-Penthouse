@@ -6,7 +6,7 @@
 **Backend owner:** Codex (services/api)
 
 This handoff covers the backend work for five Tier A DM enhancement features.
-Claude will implement all frontend work in parallel once contracts are finalized.
+Gemini will implement all frontend work in parallel once contracts are finalized.
 Do not modify `apps/web/` — leave that entirely to Claude.
 
 ---

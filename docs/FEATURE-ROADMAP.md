@@ -246,12 +246,12 @@ By the end of Tier 3, The Penthouse becomes a **standalone alternative** to:
 
 | Feature | Owner | Notes |
 |---------|-------|-------|
-| Text formatting | Claude (frontend) | Markdown → HTML |
-| Link previews | Claude (frontend) + Codex (backend API) | oEmbed fetching |
-| Reactions | Claude (frontend) + Codex (backend) | New DB table |
-| Typing indicators | Claude (frontend) + Codex (WebSocket) | Use existing Socket.IO |
+| Text formatting | Gemini (frontend) | Markdown → HTML |
+| Link previews | Gemini (frontend) + Codex (backend API) | oEmbed fetching |
+| Reactions | Gemini (frontend) + Codex (backend) | New DB table |
+| Typing indicators | Gemini (frontend) + Codex (WebSocket) | Use existing Socket.IO |
 | Channels | Codex (backend, complex) | New chat type, permissions |
-| Embedded media | Claude (frontend) + Codex (oEmbed service) | High impact, medium effort |
+| Embedded media | Gemini (frontend) + Codex (oEmbed service) | High impact, medium effort |
 | Calls (WebRTC) | Both (complex coordination) | New infrastructure |
 
 ---

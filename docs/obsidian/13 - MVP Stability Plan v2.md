@@ -13,7 +13,7 @@ This phase also carries the current delegation model:
 
 - Codex owns backend/contracts/tests/release gate
 - Codex acts as validating manager and overall planner
-- Claude owns frontend implementation in `apps/web/`
+- Gemini owns frontend implementation in `apps/web/`
 - Gemini is currently used for member-facing editorial-luxury visual ideation and design critique
 - Claude Opus 4.7 is consulted for major second takes on architecture, security/privacy, release strategy, or broad frontend rewrites
 

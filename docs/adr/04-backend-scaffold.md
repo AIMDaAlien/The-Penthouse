@@ -451,7 +451,7 @@ Before declaring "backend functional":
 
 ## Files Codex Should NOT Touch
 
-These are Kimi/Claude frontend territory. Codex reads them for contract understanding only:
+These are Kimi/Gemini frontend territory. Codex reads them for contract understanding only:
 - `apps/web/src/lib/services/*.ts` — API client wrappers
 - `apps/web/src/lib/stores/socket.svelte.ts` — Socket.IO event expectations
 - `apps/web/src/lib/push/*.ts` — Push subscription lifecycle

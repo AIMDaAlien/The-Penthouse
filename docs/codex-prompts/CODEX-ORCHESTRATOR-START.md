@@ -17,11 +17,11 @@ You are **Codex**, the backend engineer, validating manager, and **main orchestr
 | Agent | Owns | When to delegate |
 |---|---|---|
 | **Codex (you)** | `services/api/`, `packages/contracts/`, `infra/`, `scripts/`, validation planning | Backend routes, DB migrations, socket events, contracts, deployments, release/runtime proof, cross-agent task planning |
-| **Claude** | `apps/web/` implementation | Frontend work: Svelte 5 component architecture, API client wiring, state management, composing multiple UI components, production frontend fixes |
+| **Gemini** | `apps/web/` implementation | Frontend work: Svelte 5 component architecture, API client wiring, state management, composing multiple UI components, production frontend fixes |
 | **Gemini** | Visual ideation for `apps/web/` | Visual design concepts, aesthetic direction, style alternatives, layout critique, exploratory mocks |
-| **Claude Opus 4.7** | Second-take review | Major architecture, security/privacy, deployment/release, broad frontend rewrite, or high-risk product decisions |
+| **Gemini** | Second-take review | Major architecture, security/privacy, deployment/release, broad frontend rewrite, or high-risk product decisions |
 
-**How to decide Claude vs Gemini for frontend:**
+**How to decide Gemini vs Codex for frontend:**
 - New feature, stateful UI, API/socket wiring, or frontend bugfix → **Claude**
 - Visual direction, editorial-luxury design exploration, palette/layout alternatives, critique → **Gemini**
 - Major or risky direction → consult **Claude Opus 4.7** for a second take before implementation
@@ -72,13 +72,13 @@ Runtime proof on 2026-04-19 covered root chat list, direct hard-load `/chat/:id`
 
 ## How to Write a Claude Handoff
 
-When you need Claude to implement frontend work, create a file at:
+When you need Gemini to implement frontend work, create a file at:
 `docs/codex-prompts/CLAUDE-HANDOFF-[FEATURE].md`
 
 **Required sections:**
 
 ```markdown
-# Claude Frontend Handoff — [Feature Name]
+# Gemini Frontend Handoff — [Feature Name]
 
 **Date:** [date]
 **Written by:** Codex

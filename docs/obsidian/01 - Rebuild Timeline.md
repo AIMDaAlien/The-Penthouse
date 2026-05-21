@@ -197,7 +197,7 @@ Highlights:
 
 Current blocker:
 - The legacy APK file has not been found locally or in the Backup deployment tree yet.
-- Claude/frontend handoff remains: remove APK-forward UI language, consume `/api/v1/app-distribution`, and make the PWA install path the only primary CTA.
+- Gemini/frontend handoff remains: remove APK-forward UI language, consume `/api/v1/app-distribution`, and make the PWA install path the only primary CTA.
 
 ### 2026-04-15 - Alpha deploy and PWA smoke
 

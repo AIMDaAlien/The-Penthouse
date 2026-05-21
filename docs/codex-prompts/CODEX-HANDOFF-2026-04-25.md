@@ -1,6 +1,6 @@
 # Codex Handoff — 2026-04-25
 
-## What Claude shipped (frontend, `apps/web/`)
+## What Gemini shipped (frontend, `apps/web/`)
 
 Two commits landed on `main` today:
 
@@ -43,4 +43,4 @@ Manual QA still needed on a real iOS/Android browser. The PWA manifest and servi
 ---
 
 ## No backend contract changes required
-Claude's frontend work is self-contained to `apps/web/`. No migrations, no API changes, no `packages/contracts` edits were made.
+Gemini's frontend work is self-contained to `apps/web/`. No migrations, no API changes, no `packages/contracts` edits were made.

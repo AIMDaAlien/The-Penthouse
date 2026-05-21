@@ -3,7 +3,7 @@
 **Date:** 2026-04-17
 **Branch:** `pwa`
 **Target version:** v2.2.0-alpha
-**Owner:** Claude (frontend), Codex (backend — already complete)
+**Owner:** Gemini (frontend), Codex (backend — already complete)
 
 ---
 

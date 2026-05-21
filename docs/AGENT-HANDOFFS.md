@@ -243,11 +243,11 @@ E2E encryption explicitly DEFERRED per operator request.
 
 ---
 
-## Claude Prototype Handoff — 2026-05-13
+## Gemini Prototype Handoff — 2026-05-13
 
-**Status:** First 3 prototypes built by Kimi. Remaining 27 + refinement handed to Claude.
+**Status:** First 3 prototypes built by Kimi. Remaining 27 + refinement handed to Gemini.
 
-**Handoff doc:** `docs/CLAUDE-PROTOTYPE-HANDOFF.md`
+**Handoff doc:** `docs/GEMINI-PROTOTYPE-HANDOFF.md`
 
 **What's done:**
 - Phase 1 foundation (tokens, theme system, utilities)
@@ -255,7 +255,7 @@ E2E encryption explicitly DEFERRED per operator request.
 - SettingsPane-V5-01-GlassQuiet  
 - PeoplePane-V5-01-Editorial
 
-**What's for Claude:**
+**What's for Gemini:**
 - Review/refine first 3
 - Build 9 remaining chat panes (T-D2–T-D7, T-L2–T-L7)
 - Build 9 remaining settings panes (S1.5–S1.6, moonlit, asymmetric, stacked, mosaic)

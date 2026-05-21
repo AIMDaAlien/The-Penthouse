@@ -13,7 +13,7 @@
 
 Current agent roster as of 2026-04-19:
 
-- **Claude** owns frontend implementation in `apps/web/`: SvelteKit, Svelte 5 runes, API client wiring, component state, and production frontend fixes.
+- **Gemini** owns frontend implementation in `apps/web/`: SvelteKit, Svelte 5 runes, API client wiring, component state, and production frontend fixes.
 - **Gemini** currently owns visual ideation and design exploration for frontend direction. Until its other strengths are proven, use Gemini for concepts, style directions, visual alternatives, and critique rather than core implementation.
 - **Codex** owns backend, contracts, infra, scripts, release validation, runtime proof, and cross-agent planning.
 - **Claude Opus 4.7** should be consulted for major second takes: large architecture shifts, high-risk security/auth/privacy decisions, deployment/release strategy changes, or broad frontend rewrites. Aim expects this because Codex's model knowledge should be treated as aging as of 2026-04-20.
@@ -23,9 +23,9 @@ The cycle for every new feature is:
 ```
 1. You design the full feature spec (backend + contracts + frontend requirements)
 2. You implement backend (services/api/) and contracts (packages/contracts/)
-3. You write a Claude frontend handoff for implementation
+3. You write a Gemini frontend handoff for implementation
 4. Use Gemini for visual ideation or design critique when the feature needs stronger visual direction
-5. Claude implements frontend (apps/web/)
+5. Gemini implements frontend (apps/web/)
 6. You review Claude's output for correctness (types, API calls, socket events, ownership boundaries)
 7. You run integration tests and runtime proof, then assign focused fixbacks if needed
 8. For major/high-risk calls, ask Claude Opus 4.7 for a second take before finalizing
