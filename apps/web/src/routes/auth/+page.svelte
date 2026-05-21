@@ -2,7 +2,6 @@
 	import { env } from '$env/dynamic/public';
 	import { goto } from '$app/navigation';
 	import { dev } from '$app/environment';
-	import { onMount } from 'svelte';
 	import { auth } from '$services/auth';
 	import { sessionStore } from '$stores/session.svelte';
 
@@ -61,7 +60,7 @@
 		altchaRef?.reset?.();
 	}
 
-	onMount(() => {
+	$effect(() => {
 		let alive = true;
 		if (!window.isSecureContext) {
 			altchaFailed = true;

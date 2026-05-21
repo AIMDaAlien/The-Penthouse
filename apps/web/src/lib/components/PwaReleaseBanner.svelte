@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { browser, dev } from '$app/environment';
-	import { onMount } from 'svelte';
 	import Icon from './Icon.svelte';
 
 	const INSTALL_DISMISSED_KEY = 'penthouse:pwa-install-dismissed';
@@ -11,7 +10,7 @@
 	let updateSW = $state<((reloadPage?: boolean) => Promise<void>) | null>(null);
 	let updateError = $state('');
 
-	onMount(() => {
+	$effect(() => {
 		if (!browser) return;
 
 		const installDismissed = sessionStorage.getItem(INSTALL_DISMISSED_KEY) === 'true';

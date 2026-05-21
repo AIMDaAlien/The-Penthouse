@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import {
 		getPushState,
 		subscribeToPush,
@@ -21,21 +20,23 @@
 	let saving = $state(false);
 	let prefsError = $state('');
 
-	onMount(async () => {
-		const state = getPushState();
-		if (state === 'granted') {
-			const sub = await getCurrentSubscription();
-			permission = sub ? 'granted' : 'default';
-		} else {
-			permission = state;
-		}
-		if (permission === 'granted') {
-			try {
-				prefs = await pushService.getPreferences();
-			} catch {
-				// Non-critical
+	$effect(() => {
+		(async () => {
+			const state = getPushState();
+			if (state === 'granted') {
+				const sub = await getCurrentSubscription();
+				permission = sub ? 'granted' : 'default';
+			} else {
+				permission = state;
 			}
-		}
+			if (permission === 'granted') {
+				try {
+					prefs = await pushService.getPreferences();
+				} catch {
+					// Non-critical
+				}
+			}
+		})();
 	});
 
 	async function handleToggle() {

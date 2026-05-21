@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
+	import { onDestroy } from 'svelte';
 	import { PUBLIC_API_URL } from '$env/static/public';
 	import { sessionStore } from '$stores/session.svelte';
 	import Icon from './Icon.svelte';
@@ -49,7 +49,7 @@
 
 	// ── Initialise from prop ───────────────────────────────────────────────────
 
-	onMount(() => {
+	$effect(() => {
 		initFiles(initialFiles);
 	});
 

@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { getPushState, subscribeToPush, unsubscribeFromPush } from '$lib/push/subscribe';
 	import Icon from './Icon.svelte';
 
@@ -8,7 +7,7 @@
 	let loading = $state(false);
 	let error = $state('');
 
-	onMount(() => {
+	$effect(() => {
 		permission = getPushState();
 		// Show banner if permission hasn't been asked yet
 		visible = permission === 'default';

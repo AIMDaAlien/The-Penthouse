@@ -40,8 +40,10 @@
 	import { stickersStore } from '$stores/stickers.svelte';
 	import type { Message } from '@penthouse/contracts';
 
+	const EMPTY_MAP = new Map();
 	const chatId = $derived($page.params.id ?? '');
 	let messages = $state<Message[]>([]);
+	const orderedMessageIds = $derived(messages.map((m) => m.id));
 	let loading = $state(true);
 	let error = $state('');
 	let scrollContainer = $state<HTMLDivElement | null>(null);
@@ -915,9 +917,9 @@
 						{chatId}
 						isSentByMe={message.senderId === sessionStore.user?.id}
 						isPending={!!message.clientMessageId && message.id === message.clientMessageId}
-						chatType="dm"
-						usersMap={new Map()}
-						orderedMessageIds={messages.map((m) => m.id)}
+						chatType={rootChat?.type ?? 'dm'}
+						usersMap={EMPTY_MAP}
+						{orderedMessageIds}
 					/>
 				{/if}
 			{/each}
