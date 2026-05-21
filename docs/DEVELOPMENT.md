@@ -239,4 +239,4 @@ When you deploy to TrueNAS:
    ```
    The output in `apps/web/build/` can be served by Caddy (already configured in `infra/compose/docker-compose.production.yml`)
 
-4. See `docs/DEPLOYMENT.md` and `docs/TRUENAS_DEPLOYMENT.md` for full deployment steps
+4. See `docs/DEPLOYMENT.md` and `docs/UNRAID_DEPLOYMENT.md` for full deployment steps

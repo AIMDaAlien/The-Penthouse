@@ -93,7 +93,7 @@ The-Penthouse/
 │   └── scripts/route-task.mjs
 ├── docs/
 │   ├── DEPLOYMENT.md
-│   ├── TRUENAS_DEPLOYMENT.md
+│   ├── UNRAID_DEPLOYMENT.md
 │   ├── INTERNAL_TESTING.md
 │   └── obsidian/                   ← MUST update with v4 changes
 ├── package.json
@@ -125,7 +125,7 @@ These exist in v3 but NOT in v4. They must be copied over:
 - `services/api/.env.example`
 - `scripts/` (all backup/restore/seed/release scripts)
 - `docs/DEPLOYMENT.md`
-- `docs/TRUENAS_DEPLOYMENT.md`
+- `docs/UNRAID_DEPLOYMENT.md`
 - `docs/INTERNAL_TESTING.md`
 - `antigravity/` (testing framework)
 - `CLAUDE.md`, `HANDOFF_E2E_TESTING.md`, `QA_REPORT.md`
@@ -185,7 +185,7 @@ The v3 README is functional but bland. Operator wants a **fresh creative README*
 2. **Stack section** — Svelte 5, Fastify, PostgreSQL, Socket.IO, Drizzle, Zod
 3. **Feature highlights** — call out NEW v4 features: custom emotes, stickers, GIF search, voice notes with waveforms, dark mode, message search, availability states, chat folders, channels
 4. **Quick start** — `npm install`, `npm run db:start`, `npm run dev` (both workspaces)
-5. **Deployment** — link to DEPLOYMENT.md and TRUENAS_DEPLOYMENT.md
+5. **Deployment** — link to DEPLOYMENT.md and UNRAID_DEPLOYMENT.md
 6. **Testing** — `npm run validate`, `npm run test`, `npm run scenario:test`
 7. **Android note** — mention it's deferred to beta (keep scripts but note status)
 8. **Version badge** — `v4.0.0-alpha.1`
