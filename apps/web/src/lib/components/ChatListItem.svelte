@@ -19,7 +19,7 @@
 
 	let { chat, active = false, onSelect, folders = [], onMoveToFolder, onPointerDown, onRowKeydown, dimmed = false, combine = false }: Props = $props();
 
-	const timeLabel = $derived(() => {
+	const timeLabel = $derived.by(() => {
 		if (!chat.updatedAt) return '';
 		const d = new Date(chat.updatedAt);
 		const now = new Date();
@@ -30,7 +30,7 @@
 		return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
 	});
 
-	const currentFolder = $derived(() => folders.find((f) => f.items.some((i) => i.chatId === chat.id)));
+	const currentFolder = $derived.by(() => folders.find((f) => f.items.some((i) => i.chatId === chat.id)));
 
 	let menuOpen = $state(false);
 	let menuX = $state(0);
@@ -111,7 +111,7 @@
 			<div class="content">
 				<div class="row">
 					<span class="name">{chat.name}</span>
-					<span class="time">{timeLabel()}</span>
+					<span class="time">{timeLabel}</span>
 				</div>
 				<div class="row">
 					<span class="preview">{chat.type === 'dm' ? 'Direct message' : 'Group chat'}</span>
@@ -121,7 +121,7 @@
 				</div>
 			</div>
 		</button>
-		{#if folders.length > 0 || currentFolder()}
+		{#if folders.length > 0 || currentFolder}
 			<button
 				class="actions-btn"
 				type="button"
@@ -138,13 +138,13 @@
 	<div class="context-menu" class:open={menuOpen} style="left: {menuX}px; top: {menuY}px;" role="menu">
 		<div class="menu-section">Move to folder</div>
 		{#each folders as folder (folder.id)}
-			{#if folder.id !== currentFolder()?.id}
+			{#if folder.id !== currentFolder?.id}
 				<button class="menu-item" role="menuitem" onclick={() => handleSelectFolder(folder.id)}>
 					{folder.name}
 				</button>
 			{/if}
 		{/each}
-		{#if currentFolder()}
+		{#if currentFolder}
 			<div class="menu-divider"></div>
 			<button class="menu-item menu-item-danger" role="menuitem" onclick={handleRemoveFromFolder}>
 				Remove from folder

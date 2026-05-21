@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onDestroy } from 'svelte';
 	import Icon from './Icon.svelte';
 	import ReplyBar from './ReplyBar.svelte';
 	import AudioRecorder from './AudioRecorder.svelte';
@@ -29,6 +30,10 @@
 	let showAutocomplete = $state(false);
 	let autocompleteQuery = $state('');
 	let textInput = $state<HTMLInputElement | null>(null);
+
+	onDestroy(() => {
+		if (typingTimer) clearTimeout(typingTimer);
+	});
 
 	function insertAtCursor(insertion: string) {
 		const input = textInput;

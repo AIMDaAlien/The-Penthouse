@@ -60,25 +60,42 @@
 	let showMembersModal = $state(false);
 
 	// PTT keyboard handler
-	if (typeof window !== 'undefined') {
-		window.addEventListener('keydown', (e) => {
+	$effect(() => {
+		if (typeof window === 'undefined') return;
+		function onKeyDown(e: KeyboardEvent) {
 			if (e.code === 'Space' && voiceStore.pttMode && !e.repeat && !['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) {
 				e.preventDefault();
 				voiceStore.setPttActive(true);
 			}
-		});
-		window.addEventListener('keyup', (e) => {
+		}
+		function onKeyUp(e: KeyboardEvent) {
 			if (e.code === 'Space' && voiceStore.pttMode) {
 				e.preventDefault();
 				voiceStore.setPttActive(false);
 			}
-		});
-	}
+		}
+		window.addEventListener('keydown', onKeyDown);
+		window.addEventListener('keyup', onKeyUp);
+		return () => {
+			window.removeEventListener('keydown', onKeyDown);
+			window.removeEventListener('keyup', onKeyUp);
+		};
+	});
 
 	// Read receipt tracking
 	let visibleMessageIds = $state<Set<string>>(new Set());
 	let markReadTimer = $state<ReturnType<typeof setTimeout> | null>(null);
 	let lastMarkedMessageId = $state<string | null>(null);
+
+	// Cleanup timers on unmount
+	$effect(() => {
+		return () => {
+			for (const timer of typingTimers.values()) {
+				clearTimeout(timer);
+			}
+			if (markReadTimer) clearTimeout(markReadTimer);
+		};
+	});
 
 	function genClientId(): string {
 		return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;

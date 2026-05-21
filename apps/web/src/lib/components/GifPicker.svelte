@@ -30,6 +30,7 @@
 	}
 
 	$effect(() => {
+		void query;
 		debouncedSearch();
 		return () => {
 			if (debounceTimer) clearTimeout(debounceTimer);

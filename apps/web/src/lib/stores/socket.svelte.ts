@@ -80,6 +80,7 @@ function createSocketStore() {
 		});
 
 		socket = s;
+		startAfkTracking();
 	}
 
 	function disconnect() {
@@ -87,6 +88,7 @@ function createSocketStore() {
 		socket = null;
 		state = 'idle';
 		error = null;
+		stopAfkTracking();
 	}
 
 	function emit<T>(event: string, payload: T) {
@@ -119,50 +121,63 @@ function createSocketStore() {
 	}
 
 	// AFK auto-detection
-	if (typeof document !== 'undefined') {
-		function goAfk() {
-			if (autoAfkEnabled && !isAutoAfk && presenceState !== 'offline' && presenceState !== 'afk') {
+	let afkTrackingActive = false;
+	const activityEvents = ['mousemove', 'keydown', 'touchstart'];
+
+	function goAfk() {
+		if (autoAfkEnabled && !isAutoAfk && presenceState !== 'offline' && presenceState !== 'afk') {
+			basePresenceState = presenceState;
+			isAutoAfk = true;
+			setPresence('afk', undefined, { automatic: true });
+		}
+	}
+
+	function onActivity() {
+		if (autoAfkEnabled && isAutoAfk) {
+			isAutoAfk = false;
+			setPresence(basePresenceState, undefined, { automatic: true });
+		}
+		resetIdleTimer();
+	}
+
+	function resetIdleTimer() {
+		if (idleTimer) clearTimeout(idleTimer);
+		idleTimer = setTimeout(goAfk, AFK_TIMEOUT_MS);
+	}
+
+	function onVisibilityChange() {
+		if (!autoAfkEnabled) return;
+		if (document.hidden) {
+			if (!isAutoAfk && presenceState !== 'offline' && presenceState !== 'afk') {
 				basePresenceState = presenceState;
 				isAutoAfk = true;
 				setPresence('afk', undefined, { automatic: true });
 			}
-		}
-
-		function onActivity() {
-			if (autoAfkEnabled && isAutoAfk) {
+			if (idleTimer) clearTimeout(idleTimer);
+		} else {
+			if (isAutoAfk) {
 				isAutoAfk = false;
 				setPresence(basePresenceState, undefined, { automatic: true });
 			}
 			resetIdleTimer();
 		}
+	}
 
-		function resetIdleTimer() {
-			if (idleTimer) clearTimeout(idleTimer);
-			idleTimer = setTimeout(goAfk, AFK_TIMEOUT_MS);
-		}
-
-		const activityEvents = ['mousemove', 'keydown', 'touchstart'];
+	function startAfkTracking() {
+		if (afkTrackingActive || typeof document === 'undefined') return;
+		afkTrackingActive = true;
 		activityEvents.forEach((evt) => document.addEventListener(evt, onActivity, { passive: true }));
-
-		document.addEventListener('visibilitychange', () => {
-			if (!autoAfkEnabled) return;
-			if (document.hidden) {
-				if (!isAutoAfk && presenceState !== 'offline' && presenceState !== 'afk') {
-					basePresenceState = presenceState;
-					isAutoAfk = true;
-					setPresence('afk', undefined, { automatic: true });
-				}
-				if (idleTimer) clearTimeout(idleTimer);
-			} else {
-				if (isAutoAfk) {
-					isAutoAfk = false;
-					setPresence(basePresenceState, undefined, { automatic: true });
-				}
-				resetIdleTimer();
-			}
-		});
-
+		document.addEventListener('visibilitychange', onVisibilityChange);
 		resetIdleTimer();
+	}
+
+	function stopAfkTracking() {
+		if (!afkTrackingActive || typeof document === 'undefined') return;
+		afkTrackingActive = false;
+		activityEvents.forEach((evt) => document.removeEventListener(evt, onActivity));
+		document.removeEventListener('visibilitychange', onVisibilityChange);
+		if (idleTimer) clearTimeout(idleTimer);
+		idleTimer = null;
 	}
 
 	return {
