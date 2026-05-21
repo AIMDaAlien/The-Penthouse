@@ -1,16 +1,7 @@
-import bcrypt from 'bcryptjs';
 import type { AuthUser, MeResponse } from '@penthouse/contracts';
 import type { users } from '../db/schema.js';
 
 type UserRow = typeof users.$inferSelect;
-
-export async function hashPassword(password: string) {
-  return bcrypt.hash(password, 10);
-}
-
-export async function verifyPassword(password: string, passwordHash: string) {
-  return bcrypt.compare(password, passwordHash);
-}
 
 export function avatarUrlFromMediaId(mediaId: string | null) {
   return mediaId ? `/api/v1/media/public/${mediaId}` : null;

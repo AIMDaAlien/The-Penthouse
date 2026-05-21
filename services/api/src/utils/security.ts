@@ -1,7 +1,5 @@
 import bcrypt from 'bcryptjs';
 import crypto from 'node:crypto';
-import type { FastifyInstance } from 'fastify';
-import { env } from '../config/env.js';
 
 export async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, 12);
@@ -47,19 +45,4 @@ export function safeEqualHash(left: string, right: string): boolean {
 
   if (leftBuffer.length !== rightBuffer.length) return false;
   return crypto.timingSafeEqual(leftBuffer, rightBuffer);
-}
-
-export function refreshExpiryDate(): Date {
-  const expires = new Date();
-  expires.setDate(expires.getDate() + env.REFRESH_TOKEN_DAYS);
-  return expires;
-}
-
-export async function signAccessToken(
-  app: FastifyInstance,
-  userId: string,
-  username: string,
-  sessionId: string
-): Promise<string> {
-  return app.jwt.sign({ userId, username, sessionId }, { expiresIn: env.ACCESS_TOKEN_TTL });
 }
