@@ -30,6 +30,20 @@
     file_server
   }
 
+  @immutable path /_app/immutable/* /icons/*
+  handle @immutable {
+    root * /srv/site
+    header Cache-Control "public, max-age=31536000, immutable"
+    file_server
+  }
+
+  @revalidate path /manifest.webmanifest /service-worker.js /sw.js /registerSW.js /offline.html /_app/env.js /_app/version.json
+  handle @revalidate {
+    root * /srv/site
+    header Cache-Control "no-cache"
+    file_server
+  }
+
   @legacy path /legacy /legacy/*
   handle @legacy {
     root * /srv/site
@@ -39,6 +53,7 @@
 
   handle {
     root * /srv/site
+    header Cache-Control "no-cache"
     try_files {path} /index.html
     file_server
   }
