@@ -205,8 +205,6 @@ After all 30:
 |------|-------------|
 | `V5-HANDOFF.md` | Original design handoff with locked decisions |
 | `CLAUDE-V5-REDESIGN-HANDOFF-RESPONSE.md` | Your detailed response with all specs |
-| `_v5-coherence-preview.html` | Visual reference — open in browser |
-| `_design-chooser.html` / `_design-chooser-2.html` | Round 1/2 choosers |
 | `apps/web/src/routes/+layout.svelte` | Token source of truth |
 | `apps/web/src/lib/prototypes/chat-pane/ChatPane-V5-01-Periwinkle.svelte` | Kimi's chat reference |
 | `apps/web/src/lib/prototypes/settings-pane/SettingsPane-V5-01-GlassQuiet.svelte` | Kimi's settings reference |

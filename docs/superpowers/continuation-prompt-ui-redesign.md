@@ -21,13 +21,6 @@ Implement the approved "Nocturne" aesthetic directly into Svelte 5 to eliminate 
 - **Typography:** Display `Gelasio` (serif), Body `Ubuntu` (sans-serif), Monospace `JetBrains Mono`.
 - **Shapes & Elements:** Fully rounded pill shapes (`border-radius: 9999px`) for interactive elements. Extensive use of heavy frosted glass (`backdrop-filter: blur(12px)` to `20px`, `background: rgba(..., 0.6)`) for modals, toasts, and floating buttons. Custom 1.5px stroke geometric SVG icons.
 
-**Final Reference Prototypes (in root directory):**
-1. `prototype-components.html`: Base palette, pill-shape radii, and 1.5px stroke custom SVG iconography.
-2. `prototype-composer-interactive.html`: Right-aligned composer, minimalist ledger input (border-bottom only), frosted glass action buttons. Includes "Send fly-away" and "Voice Record pulsing scarlet" micro-interactions.
-3. `prototype-media-animations.html`: Specifically, the **"Fan Out"** animation for the media picker popover.
-4. `prototype-empty-states-interactive.html`: Specifically, the **"Gradient Fade Quote"** (Left-Aligned Book) concept. Monospace uppercase subtitle sits above an authentic italic literary quote.
-5. `prototype-settings-final.html`: Fullpage editorial layout. Features a customizable top header banner gradient with a hover overlay, an overlapping avatar, **Inset Neumorphic** custom toggles using Lighter Periwinkle (`#B4B4FF`) for active states, and heavy frosted glass modals/toasts.
-
 **Execution Directive:**
 When this prompt is invoked in a new session:
 1. Maintain "caveman" style responses (extremely concise, no fluff).
