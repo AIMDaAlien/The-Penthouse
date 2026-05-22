@@ -14,6 +14,7 @@
     "db:stop": "docker compose -f infra/docker-compose.yml down",
     "typecheck": "npm run --workspaces --if-present typecheck",
     "test": "npm run --workspaces --if-present test",
+    "scenario:test": "node antigravity/scripts/run-scenarios.mjs",
     "validate": "npm run typecheck && npm run test"
   },
   "engines": {
