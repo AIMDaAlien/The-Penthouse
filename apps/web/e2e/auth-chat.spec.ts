@@ -2,9 +2,9 @@ import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
 test.describe('auth and routing', () => {
-  test('unauthenticated user is redirected to auth page', async ({ page }) => {
+  test('unauthenticated user is redirected to welcome page', async ({ page }) => {
     await page.goto('/');
-    await expect(page).toHaveURL(/\/auth/);
+    await expect(page).toHaveURL(/\/welcome/);
     await expect(page.getByText('The', { exact: true })).toBeVisible();
     await expect(page.getByText('PENT', { exact: true })).toBeVisible();
     await expect(page.getByText('HOUSE', { exact: true })).toBeVisible();
@@ -34,7 +34,7 @@ test.describe('auth and routing', () => {
       await page.getByRole('button', { name: 'Create account' }).first().click();
       await expect(page.getByLabel('Display name')).toBeVisible({ timeout: 1000 });
     }).toPass({ timeout: 5000 });
-    await expect(page.getByText(/alpha/i)).toBeVisible();
+    await expect(page.getByText('alpha', { exact: true })).toBeVisible();
   });
 
   test('auth page has no critical accessibility violations', async ({ page }) => {

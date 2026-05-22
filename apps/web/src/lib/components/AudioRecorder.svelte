@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onDestroy } from 'svelte';
 	import Icon from './Icon.svelte';
 
 	interface Props {
@@ -14,6 +15,7 @@
 	let mediaRecorder = $state<MediaRecorder | null>(null);
 	let chunks = $state<Blob[]>([]);
 	let error = $state('');
+	let shouldEmitRecording = true;
 
 	const MAX_DURATION_SECONDS = 120;
 
@@ -44,6 +46,7 @@
 			const recorder = new MediaRecorder(stream, { mimeType });
 			mediaRecorder = recorder;
 			chunks = [];
+			shouldEmitRecording = true;
 
 			recorder.ondataavailable = (e) => {
 				if (e.data.size > 0) chunks.push(e.data);
@@ -51,15 +54,17 @@
 
 			recorder.onstop = () => {
 				const blob = new Blob(chunks, { type: mimeType });
-				if (blob.size > 0) {
+				if (shouldEmitRecording && blob.size > 0) {
 					onRecord?.(blob, mimeType);
 				}
 				stream.getTracks().forEach((t) => t.stop());
+				mediaRecorder = null;
+				chunks = [];
 			};
 
 			recorder.onerror = () => {
 				error = 'Recording failed. Please try again.';
-				stopRecording();
+				stopRecording(false);
 			};
 
 			recorder.start(100); // collect data every 100ms
@@ -76,17 +81,22 @@
 		}
 	}
 
-	function stopRecording() {
+	function stopRecording(emit = true) {
 		if (timer) {
 			clearInterval(timer);
 			timer = null;
 		}
 		if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+			shouldEmitRecording = emit;
 			mediaRecorder.stop();
 		}
 		isRecording = false;
 		duration = 0;
 	}
+
+	onDestroy(() => {
+		stopRecording(false);
+	});
 
 	function handleToggle() {
 		if (isRecording) {
@@ -94,6 +104,11 @@
 		} else {
 			startRecording();
 		}
+	}
+
+	function cancelRecording() {
+		stopRecording(false);
+		onCancel?.();
 	}
 
 	function formatTime(seconds: number): string {
@@ -124,7 +139,7 @@
 	</button>
 
 	{#if isRecording}
-		<button type="button" class="cancel-btn" onclick={stopRecording} aria-label="Cancel recording">
+		<button type="button" class="cancel-btn" onclick={cancelRecording} aria-label="Cancel recording">
 			<Icon name="x" size={18} />
 		</button>
 	{/if}

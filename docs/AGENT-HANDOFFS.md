@@ -5,6 +5,17 @@
 
 ---
 
+## Archive Note — 2026-05-21
+
+Completed or superseded raw handoff briefs are archived under `docs/archive/handoffs/` so top-level `docs/` stays focused on active coordination.
+
+Recently archived:
+- `docs/archive/handoffs/2026-05-20-codex-v4-cutover.md`
+- `docs/archive/handoffs/2026-05-21-kimi-codebase-trim-optimize.md`
+- `docs/archive/handoffs/2026-05-21-codex-frontend-backend-optimization.md`
+
+---
+
 ## Current State
 
 - **Phase 3 (Folders + Channels):** Complete. 24/24 integration tests passing.

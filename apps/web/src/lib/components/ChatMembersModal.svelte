@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onDestroy } from 'svelte';
 	import { chats } from '$services/chats';
 	import { users } from '$services/users';
 	import { sessionStore } from '$stores/session.svelte';
@@ -61,9 +62,16 @@
 		}
 	}
 
+	function clearSearchTimeout() {
+		if (!searchTimeout) return;
+		clearTimeout(searchTimeout);
+		searchTimeout = null;
+	}
+
 	function onSearchInput() {
-		if (searchTimeout) clearTimeout(searchTimeout);
+		clearSearchTimeout();
 		searchTimeout = setTimeout(() => {
+			searchTimeout = null;
 			void handleSearch();
 		}, 250);
 	}
@@ -98,9 +106,15 @@
 		if (open) {
 			void loadMembers();
 		} else {
+			clearSearchTimeout();
 			searchQuery = '';
 			searchResults = [];
+			searching = false;
 		}
+	});
+
+	onDestroy(() => {
+		clearSearchTimeout();
 	});
 </script>
 

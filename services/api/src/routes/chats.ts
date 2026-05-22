@@ -45,6 +45,15 @@ import {
 type ChatMember = typeof chatMembers.$inferSelect;
 type Chat = typeof chats.$inferSelect;
 
+type ChatListDecorations = {
+  unreadCounts: Map<string, number>;
+  dmCounterparts: Map<string, {
+    id: string;
+    displayName: string;
+    avatarMediaId: string | null;
+  }>;
+};
+
 function readStatePayload(member: ChatMember) {
   return {
     chatId: member.chatId,
@@ -106,6 +115,71 @@ async function setArchivedAt(chatId: string, userId: string, actorUserId: string
     chatId: resolvedChatId,
     archivedAt: member.archivedAt?.toISOString() ?? null
   };
+}
+
+async function loadChatListDecorations(
+  chatIds: string[],
+  dmChatIds: string[],
+  viewerUserId: string
+): Promise<ChatListDecorations> {
+  const unreadCounts = new Map<string, number>();
+  const dmCounterparts = new Map<string, {
+    id: string;
+    displayName: string;
+    avatarMediaId: string | null;
+  }>();
+
+  if (chatIds.length > 0) {
+    const unreadRows = await pool.query<{
+      chat_id: string;
+      unread_count: number;
+    }>(`
+      SELECT cm.chat_id, count(m.id)::int AS unread_count
+      FROM chat_members cm
+      LEFT JOIN messages read_message
+        ON read_message.id = cm.last_read_message_id
+      LEFT JOIN messages m
+        ON m.chat_id = cm.chat_id
+       AND m.sender_id <> $2
+       AND (
+         cm.last_read_message_id IS NULL
+         OR read_message.id IS NULL
+         OR m.created_at > read_message.created_at
+       )
+      WHERE cm.user_id = $2
+        AND cm.chat_id = ANY($1::uuid[])
+      GROUP BY cm.chat_id
+    `, [chatIds, viewerUserId]);
+
+    for (const row of unreadRows.rows) {
+      unreadCounts.set(row.chat_id, row.unread_count);
+    }
+  }
+
+  if (dmChatIds.length > 0) {
+    const counterpartRows = await pool.query<{
+      chat_id: string;
+      id: string;
+      display_name: string;
+      avatar_media_id: string | null;
+    }>(`
+      SELECT cm.chat_id, u.id, u.display_name, u.avatar_media_id
+      FROM chat_members cm
+      INNER JOIN users u ON u.id = cm.user_id
+      WHERE cm.chat_id = ANY($1::uuid[])
+        AND cm.user_id <> $2
+    `, [dmChatIds, viewerUserId]);
+
+    for (const row of counterpartRows.rows) {
+      dmCounterparts.set(row.chat_id, {
+        id: row.id,
+        displayName: row.display_name,
+        avatarMediaId: row.avatar_media_id
+      });
+    }
+  }
+
+  return { unreadCounts, dmCounterparts };
 }
 
 async function removeMemberFromGroup(rootChatId: string, member: ChatMember, actorUserId: string) {
@@ -427,6 +501,7 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
   });
 
   fastify.get('/api/v1/chats', { preHandler: fastify.authenticate }, async (request) => {
+    const viewerUserId = request.authUser!.userId;
     const rows = await db.select({
       chat: chats,
       member: chatMembers
@@ -439,6 +514,10 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
       ))
       .orderBy(sql`${chats.updatedAt} DESC`);
 
+    const chatIds = rows.map((row) => row.chat.id);
+    const dmChatIds = rows.filter((row) => row.chat.type === 'dm').map((row) => row.chat.id);
+    const { unreadCounts, dmCounterparts } = await loadChatListDecorations(chatIds, dmChatIds, viewerUserId);
+
     const summaries = [];
     for (const row of rows) {
       let name = row.chat.name;
@@ -446,15 +525,11 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
       let counterpartAvatarUrl: string | null | undefined;
 
       if (row.chat.type === 'dm') {
-        const [other] = await db.select({ user: users })
-          .from(chatMembers)
-          .innerJoin(users, eq(chatMembers.userId, users.id))
-          .where(and(eq(chatMembers.chatId, row.chat.id), sql`${chatMembers.userId} <> ${request.authUser!.userId}`))
-          .limit(1);
+        const other = dmCounterparts.get(row.chat.id);
         if (other) {
-          name = other.user.displayName;
-          counterpartMemberId = other.user.id;
-          counterpartAvatarUrl = avatarUrlFromMediaId(other.user.avatarMediaId);
+          name = other.displayName;
+          counterpartMemberId = other.id;
+          counterpartAvatarUrl = avatarUrlFromMediaId(other.avatarMediaId);
         }
       }
 
@@ -465,7 +540,7 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
         role: row.member.role,
         updatedAt: row.chat.updatedAt.toISOString(),
         archivedAt: row.member.archivedAt?.toISOString() ?? null,
-        unreadCount: await unreadCount(row.chat.id, request.authUser!.userId),
+        unreadCount: unreadCounts.get(row.chat.id) ?? 0,
         counterpartMemberId,
         counterpartAvatarUrl,
         notificationsMuted: row.member.notificationsMuted

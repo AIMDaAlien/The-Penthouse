@@ -120,7 +120,7 @@
 		try { await auth.logout(); } catch { /* ignore */ }
 		finally {
 			sessionStore.clear();
-			goto('/auth', { replaceState: true });
+			goto('/welcome', { replaceState: true });
 		}
 	}
 

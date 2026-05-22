@@ -3,12 +3,15 @@
 	import { socketStore } from '$stores/socket.svelte';
 	import { chatsStore } from '$stores/chats.svelte';
 	import { foldersStore } from '$stores/folders.svelte';
+	import { sessionStore } from '$stores/session.svelte';
 	import { goto } from '$app/navigation';
 
 	let loading = $state(true);
 	let error = $state('');
 
 	$effect(() => {
+		if (!sessionStore.isAuthenticated) return;
+
 		loading = true;
 		error = '';
 		Promise.all([

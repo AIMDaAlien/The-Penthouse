@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { chatsStore } from '$stores/chats.svelte';
 	import { foldersStore } from '$stores/folders.svelte';
+	import { sessionStore } from '$stores/session.svelte';
 	import ChatListPane from './ChatListPane.svelte';
 	import DesktopNav from './DesktopNav.svelte';
 
@@ -23,6 +24,8 @@
 	);
 
 	$effect(() => {
+		if (!sessionStore.isAuthenticated) return;
+
 		if (!chatsStore.loaded && !chatsStore.loading) {
 			chatsStore.load();
 		}

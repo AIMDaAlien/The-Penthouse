@@ -37,6 +37,9 @@ test.describe('Auth Flow E2E', () => {
     await page.getByRole('button', { name: /sign out/i }).first().click({ force: true });
     // Confirm in modal
     await page.locator('[role="dialog"] button').filter({ hasText: /sign out/i }).click({ force: true });
+    await expect(page).toHaveURL(/\/welcome/);
+
+    await page.getByRole('button', { name: /enter/i }).click();
     await expect(page).toHaveURL(/\/auth/);
 
     // 2.4 Login with existing user

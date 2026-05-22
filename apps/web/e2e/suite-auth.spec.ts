@@ -83,9 +83,9 @@ test.describe('Auth — Login', () => {
     await expect(page.locator('.error, [role="alert"]')).toBeVisible({ timeout: 8000 });
   });
 
-  test('unauthenticated access to / redirects to /auth', async ({ page }) => {
+  test('unauthenticated access to / redirects to welcome', async ({ page }) => {
     await page.goto('/');
-    await expect(page).toHaveURL(/\/auth/);
+    await expect(page).toHaveURL(/\/welcome/);
   });
 });
 
@@ -98,15 +98,15 @@ test.describe('Auth — Session', () => {
     await expect(page.locator('.app-header')).toBeVisible();
   });
 
-  test('logout redirects to /auth and clears session', async ({ page }) => {
+  test('logout redirects to welcome and clears session', async ({ page }) => {
     const u = `logout_${Date.now()}`;
     await registerUser(page, u);
     // Find and click logout (settings page or header)
     await page.goto('/settings');
     await page.getByRole('button', { name: /sign out|log out/i }).click();
-    await expect(page).toHaveURL(/\/auth/);
-    // Going to / redirects back to auth
+    await expect(page).toHaveURL(/\/welcome/);
+    // Going to / redirects back to welcome
     await page.goto('/');
-    await expect(page).toHaveURL(/\/auth/);
+    await expect(page).toHaveURL(/\/welcome/);
   });
 });

@@ -27,15 +27,15 @@
 
 	const k = $derived(appearanceStore.tokens);
 
-	// Auth guard: redirect unauthenticated users to /auth
+	// Auth guard: make welcome the signed-out entry point, and the app root the signed-in entry point.
 	$effect(() => {
 		const path = $page.url.pathname;
 		const publicPaths: string[] = ['/auth', '/welcome'];
 		const isPublicPath = publicPaths.includes(path);
 		if (!sessionStore.isAuthenticated && !isPublicPath) {
-			goto('/auth', { replaceState: true });
+			goto('/welcome', { replaceState: true });
 		}
-		if (sessionStore.isAuthenticated && path === '/auth') {
+		if (sessionStore.isAuthenticated && (path === '/auth' || path === '/welcome')) {
 			goto('/', { replaceState: true });
 		}
 	});
@@ -159,10 +159,10 @@
 	style:--p-error={k.error}
 	style:--p-error-soft={k.errorSoft}
 	style:--p-error-edge={k.errorEdge}
->
-	<PushPermissionBanner />
-	<PwaReleaseBanner />
-	{#if isMonolithRoute}
+	>
+		<PushPermissionBanner />
+		<PwaReleaseBanner />
+	{#if isMonolithRoute && sessionStore.isAuthenticated}
 		<DesktopShell>
 			{@render children()}
 		</DesktopShell>
