@@ -48,7 +48,7 @@ self.addEventListener('fetch', (event) => {
 
 // ── Push Notifications ──────────────────────────────────────────────────────
 
-import { parsePushPayload, buildNotificationTitle, buildNotificationBody } from './lib/push/payload';
+import { parsePushPayload, buildNotificationTitle, buildNotificationBody, shouldSuppressPush } from './lib/push/payload';
 
 self.addEventListener('push', (event) => {
 	if (!event.data) return;
@@ -61,25 +61,44 @@ self.addEventListener('push', (event) => {
 	}
 
 	const payload = parsePushPayload(raw);
-	const title = buildNotificationTitle(payload);
-	const body = buildNotificationBody(payload);
 
-	const badge = payload.badge && payload.badge > 0 ? payload.badge : undefined;
+	event.waitUntil(
+		self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+			let currentChatId: string | undefined;
+			for (const client of clientList) {
+				if (client.visibilityState === 'visible') {
+					const match = client.url.match(/\/chat\/([^/?#]+)/);
+					if (match) {
+						currentChatId = match[1];
+						break;
+					}
+				}
+			}
 
-	const options: NotificationOptions = {
-		body,
-		badge: badge ?? undefined,
-		tag: payload.chatId ? `chat-${payload.chatId}` : 'penthouse-push',
-		requireInteraction: false,
-		silent: false,
-		data: {
-			chatId: payload.chatId,
-			messageId: payload.messageId,
-			privacyLevel: payload.privacyLevel,
-		} as Record<string, unknown>,
-	};
+			if (shouldSuppressPush(payload, currentChatId)) {
+				return;
+			}
 
-	event.waitUntil(self.registration.showNotification(title, options));
+			const title = buildNotificationTitle(payload);
+			const body = buildNotificationBody(payload);
+			const badge = payload.badge && payload.badge > 0 ? payload.badge : undefined;
+
+			const options: NotificationOptions = {
+				body,
+				badge: badge ?? undefined,
+				tag: payload.chatId ? `chat-${payload.chatId}` : 'penthouse-push',
+				requireInteraction: false,
+				silent: false,
+				data: {
+					chatId: payload.chatId,
+					messageId: payload.messageId,
+					privacyLevel: payload.privacyLevel,
+				} as Record<string, unknown>,
+			};
+
+			return self.registration.showNotification(title, options);
+		})
+	);
 });
 
 self.addEventListener('notificationclick', (event) => {

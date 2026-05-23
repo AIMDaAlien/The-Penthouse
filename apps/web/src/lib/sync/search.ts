@@ -1,27 +1,6 @@
 import type { Message } from '@penthouse/contracts';
 import type { LocalSyncDbClient } from './db-client';
 
-export async function listLocalMessages(
-	client: Pick<LocalSyncDbClient, 'query'>,
-	chatId: string,
-	limit = 50
-) {
-	const rows = await client.query<LocalMessageRow>(
-		`SELECT *
-		FROM (
-			SELECT m.*
-			FROM messages m
-			WHERE m.chat_id = ?
-			ORDER BY m.created_at DESC
-			LIMIT ?
-		) m
-		ORDER BY m.created_at ASC`,
-		[chatId, limit]
-	);
-
-	return rows.map(rowToMessage);
-}
-
 export async function searchLocalMessages(client: Pick<LocalSyncDbClient, 'query'>, chatId: string, query: string) {
 	const terms = toSearchTerms(query);
 	if (terms.length === 0) return [];
