@@ -116,6 +116,10 @@ Status: in progress
   - emoji data deduplicated; `jscpd` reports 0 clones across frontend
   - `mediasoup-client` retained as a documented future seam for voice/video chat
   - all validation passes: typecheck, build, tests, audit clean
+- 2026-05-23 agent swarm pass:
+  - service worker now suppresses push notifications when the user is viewing the target chat
+  - dead code removed: `lib/utils/emotes.ts`, `listLocalMessages` export
+  - E2E test stubs created for typing indicator, message edit/delete, media upload (selectors unverified)
 - 2026-05-22 E2E hardening pass is complete on the active SvelteKit alpha branch:
   - welcome/auth routing is explicitly guarded for signed-out and signed-in users
   - ambient presence and voice-room summaries are wired through contracts, API sockets, and global web stores

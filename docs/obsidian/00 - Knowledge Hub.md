@@ -172,6 +172,11 @@ The `pwa` branch is the active development branch and public deployment target. 
   - `mediasoup-client` kept as an intentional future seam for planned voice/video chat SFU integration
   - emoji data deduplicated: `jscpd` now reports 0 clones (was 2 clones, 137 duplicated lines)
   - all validation passes: `typecheck` 0 errors, `build` green, `test` 4/4, `npm audit` 0 vulnerabilities
+- 2026-05-23 agent swarm pass:
+  - service worker now suppresses push notifications when the user is viewing the target chat or when `dm_only` scope applies to a non-DM
+  - removed `lib/utils/emotes.ts` (dead, duplicated inline in `MarkdownText.svelte`)
+  - removed `listLocalMessages` from `sync/search.ts` (unused export)
+  - E2E test stubs created for typing indicator, message edit/delete, and media upload — selectors need runtime verification before CI enablement
 - Strict DB release gate still needs a rerun in a working Docker/Postgres environment.
 - Manual mobile PWA install proof is still needed on a real iOS/Android browser.
 - The third-party Erode font CDN request should be removed or self-hosted in the next frontend pass.

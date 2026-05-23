@@ -242,6 +242,20 @@ Validation:
 - `jscpd`: 0 clones, 0% duplication.
 - Scope discipline: only `apps/web/` touched; zero backend or contracts changes.
 
+### 2026-05-23 - Agent swarm pass (push suppression, dead code, E2E stubs)
+
+Highlights:
+- Service worker wired with `shouldSuppressPush`: notifications are now suppressed when the user is already viewing the target chat, or when a `dm_only` scoped push targets a non-DM chat.
+- Removed `lib/utils/emotes.ts` (genuinely unused; same logic already inlined in `MarkdownText.svelte`).
+- Removed `listLocalMessages` from `sync/search.ts` (unused export).
+- E2E test stubs created by parallel agents for typing indicator, message edit/delete, and media upload. Selectors are best-guess and need runtime verification before CI enablement.
+
+Validation:
+- `typecheck`: 0 errors, 0 warnings.
+- `build`: passes.
+- `test`: 4/4 passed.
+- Reverted an accidental `handleMediaSend` addition to `chat/[id]/+page.svelte` that an E2E agent injected.
+
 ### 2026-05-22 - Ambient presence and E2E hardening sweep
 
 Highlights:
