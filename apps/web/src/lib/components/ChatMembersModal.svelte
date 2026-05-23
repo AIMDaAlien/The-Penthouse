@@ -3,8 +3,10 @@
 	import { chats } from '$services/chats';
 	import { users } from '$services/users';
 	import { sessionStore } from '$stores/session.svelte';
+	import { presenceStore } from '$stores/presence.svelte';
 	import Icon from './Icon.svelte';
 	import Avatar from './Avatar.svelte';
+	import PresenceAvatar from './PresenceAvatar.svelte';
 	import type { ChatMemberDetail } from '@penthouse/contracts';
 
 	interface Props {
@@ -26,6 +28,22 @@
 	let searchTimeout: ReturnType<typeof setTimeout> | null = null;
 
 	const myUserId = $derived(sessionStore.user?.id ?? '');
+
+	const PRESENCE_ORDER: Record<string, number> = {
+		available: 0,
+		busy: 1,
+		dnd: 2,
+		afk: 3,
+		offline: 4
+	};
+
+	const sortedMembers = $derived(
+		[...members].sort((a, b) => {
+			const pa = presenceStore.get(a.id)?.state ?? 'offline';
+			const pb = presenceStore.get(b.id)?.state ?? 'offline';
+			return PRESENCE_ORDER[pa] - PRESENCE_ORDER[pb];
+		})
+	);
 
 	function canRemove(targetUserId: string): boolean {
 		return canManage && targetUserId !== myUserId;
@@ -197,9 +215,10 @@
 				<p class="state">Loading members...</p>
 			{:else}
 				<div class="members-list" role="list">
-					{#each members as member (member.id)}
+					{#each sortedMembers as member (member.id)}
+						{@const presence = presenceStore.get(member.id)}
 						<div class="member-row" role="listitem">
-							<Avatar url={member.avatarUrl} name={member.displayName} size={32} />
+							<PresenceAvatar url={member.avatarUrl} name={member.displayName} size={32} userId={member.id} showTooltip={false} />
 							<div class="member-meta">
 								<span class="member-name">
 									{member.displayName}
@@ -209,6 +228,12 @@
 								</span>
 								<span class="member-role" class:owner={member.role === 'owner'}>
 									{member.role}
+									{#if presence}
+										<span class="presence-sep">·</span>
+										<span class="presence-label" style:color={presenceStore.presenceColor(presence.state)}>
+											{presenceStore.presenceLabel(presence.state, presence.note)}
+										</span>
+									{/if}
 								</span>
 							</div>
 							{#if canRemove(member.id)}
@@ -460,6 +485,16 @@
 	.member-role.owner {
 		color: var(--p-accent);
 		font-weight: 600;
+	}
+
+	.presence-sep {
+		margin: 0 4px;
+		color: var(--p-line);
+	}
+
+	.presence-label {
+		font-size: var(--text-xs);
+		font-weight: 500;
 	}
 
 	.remove-btn {

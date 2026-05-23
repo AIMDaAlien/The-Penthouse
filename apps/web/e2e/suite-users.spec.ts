@@ -2,25 +2,30 @@
  * Users Suite — directory, search, profiles, new DM, settings
  * Run: npx playwright test e2e/suite-users.spec.ts
  */
-import { test, expect, Browser } from '@playwright/test';
-import { registerUser } from './utils';
+import { test, expect, Browser, Page } from '@playwright/test';
+import { createUserViaApi, openDmWithUser, openUserProfile, registerUser } from './utils';
+
+const rosterItems = (page: Page) => page.locator('.roster-item');
+const profileCard = (page: Page) => page.locator('.pc');
 
 test.describe('User Directory', () => {
   test('directory page loads and shows users', async ({ page }) => {
     const u = `dir_${Date.now()}`;
     await registerUser(page, u);
     await page.goto('/users');
-    await expect(page.locator('.user-card, .user-row')).toBeVisible({ timeout: 8000 });
+    await expect(rosterItems(page).first()).toBeVisible({ timeout: 8000 });
   });
 
   test('search filters users by username', async ({ page }) => {
-    const u = `searchme_${Date.now()}`;
-    await registerUser(page, u);
+    const actor = `search_actor_${Date.now()}`;
+    const target = `searchme_${Date.now()}`;
+    await registerUser(page, actor);
+    await createUserViaApi(page, target);
     await page.goto('/users');
     const input = page.getByPlaceholder(/search/i);
-    await input.fill(u);
+    await input.fill(target);
     await page.keyboard.press('Enter');
-    await expect(page.locator('.user-card, .user-row').filter({ hasText: u })).toBeVisible({ timeout: 8000 });
+    await expect(rosterItems(page).filter({ hasText: target })).toBeVisible({ timeout: 8000 });
   });
 
   test('search with no match shows empty state', async ({ page }) => {
@@ -39,13 +44,13 @@ test.describe('User Directory', () => {
     // If there's a load-more button, click it
     const loadMore = page.locator('button:has-text("Load more"), button:has-text("Show more")');
     if (await loadMore.isVisible({ timeout: 3000 }).catch(() => false)) {
-      const countBefore = await page.locator('.user-card, .user-row').count();
+      const countBefore = await rosterItems(page).count();
       await loadMore.click();
-      const countAfter = await page.locator('.user-card, .user-row').count();
+      const countAfter = await rosterItems(page).count();
       expect(countAfter).toBeGreaterThanOrEqual(countBefore);
     }
     // else auto-scroll pagination — just verify list renders
-    await expect(page.locator('.user-card, .user-row').first()).toBeVisible();
+    await expect(rosterItems(page).first()).toBeVisible();
   });
 });
 
@@ -63,19 +68,11 @@ test.describe('User Profiles', () => {
     const pageB = await ctxB.newPage();
     await registerUser(pageB, userB);
 
-    await pageA.goto('/users');
-    await pageA.getByPlaceholder(/search/i).fill(userB);
-    await pageA.keyboard.press('Enter');
-
-    const userRow = pageA.locator('.user-card, .user-row').filter({ hasText: userB }).first();
-    await expect(userRow).toBeVisible({ timeout: 8000 });
-
-    // Click avatar or name to open profile
-    await userRow.locator('.avatar-btn, .user-name, .avatar').first().click();
+    await openUserProfile(pageA, userB);
 
     // Profile modal/page should open
-    await expect(pageA.locator('.modal-card, .profile-body, [aria-label="User profile"]')).toBeVisible({ timeout: 5000 });
-    await expect(pageA.locator('.display-name, h2').filter({ hasText: new RegExp(userB, 'i') })).toBeVisible({ timeout: 3000 });
+    await expect(profileCard(pageA)).toBeVisible({ timeout: 5000 });
+    await expect(profileCard(pageA).filter({ hasText: new RegExp(userB, 'i') })).toBeVisible({ timeout: 3000 });
 
     await ctxA.close();
     await ctxB.close();
@@ -92,29 +89,25 @@ test.describe('User Profiles', () => {
     const userB = `prof_b_${ts}`;
     await registerUser(pageB, userB);
 
-    await pageA.goto('/users');
-    await pageA.getByPlaceholder(/search/i).fill(userB);
-    await pageA.keyboard.press('Enter');
-    await pageA.locator('.user-card, .user-row').filter({ hasText: userB }).first()
-      .locator('.avatar-btn, .avatar').first().click();
+    await openUserProfile(pageA, userB);
 
-    await expect(pageA.locator('button:has-text("Send message"), button:has-text("Message")')).toBeVisible({ timeout: 5000 });
+    await expect(profileCard(pageA).getByRole('button', { name: 'Message' })).toBeVisible({ timeout: 5000 });
 
     await ctxA.close();
     await ctxB.close();
   });
 
   test('profile does NOT show Send Message button for own profile', async ({ page }) => {
-    const u = `selfprofile_${Date.now()}`;
+    const u = `aaa_selfprofile_${Date.now()}`;
     await registerUser(page, u);
     await page.goto('/users');
-    await page.getByPlaceholder(/search/i).fill(u);
-    await page.keyboard.press('Enter');
-    await page.locator('.user-card, .user-row').filter({ hasText: u }).first()
-      .locator('.avatar-btn, .avatar').first().click();
+    const row = rosterItems(page).filter({ hasText: `@${u}` }).first();
+    await expect(row).toBeVisible({ timeout: 8000 });
+    await row.click();
+    await expect(profileCard(page)).toBeVisible({ timeout: 5000 });
 
     // "Send message" should not be visible when viewing own profile
-    await expect(page.locator('button:has-text("Send message"), button:has-text("Message")')).not.toBeVisible({ timeout: 3000 });
+    await expect(profileCard(page).getByRole('button', { name: 'Message' })).not.toBeVisible({ timeout: 3000 });
   });
 
   test('Send Message from profile navigates to DM thread', async ({ browser }) => {
@@ -128,12 +121,7 @@ test.describe('User Profiles', () => {
     const pageB = await ctxB.newPage();
     await registerUser(pageB, userB);
 
-    await pageA.goto('/users');
-    await pageA.getByPlaceholder(/search/i).fill(userB);
-    await pageA.keyboard.press('Enter');
-    await pageA.locator('.user-card, .user-row').filter({ hasText: userB }).first()
-      .locator('.avatar-btn, .avatar').first().click();
-    await pageA.locator('button:has-text("Send message"), button:has-text("Message")').first().click();
+    await openDmWithUser(pageA, userB);
 
     await expect(pageA).toHaveURL(/\/chat\//, { timeout: 8000 });
 
@@ -167,14 +155,14 @@ test.describe('Settings', () => {
   });
 });
 
-test.describe('New DM via chat list button', () => {
-  test('New Message button opens user search modal', async ({ page }) => {
-    const u = `newdm_${Date.now()}`;
-    await registerUser(page, u);
-    await page.goto('/');
-    await page.getByRole('button', { name: 'New message' }).click();
-    await expect(page.locator('.bottom-sheet, [aria-labelledby="dm-modal-title"]')).toBeVisible({ timeout: 5000 });
-    await expect(page.locator('.search-input, input[type="text"]').first()).toBeVisible();
+test.describe('New DM via People directory', () => {
+  test('People search opens user profile', async ({ page }) => {
+    const actor = `newdm_actor_${Date.now()}`;
+    const target = `newdm_${Date.now()}`;
+    await registerUser(page, actor);
+    await createUserViaApi(page, target);
+    await openUserProfile(page, target);
+    await expect(profileCard(page)).toBeVisible({ timeout: 5000 });
   });
 
   test('searching and selecting a user opens DM thread', async ({ browser }) => {
@@ -188,25 +176,21 @@ test.describe('New DM via chat list button', () => {
     const pageB = await ctxB.newPage();
     await registerUser(pageB, userB);
 
-    await pageA.goto('/');
-    await pageA.getByRole('button', { name: 'New message' }).click();
-    await pageA.locator('.search-input, .bottom-sheet input[type="text"]').first().fill(userB);
-    await pageA.waitForSelector('.dm-user-row', { timeout: 8000 });
-    await pageA.locator('.dm-user-row').filter({ hasText: userB }).first().click();
+    await openDmWithUser(pageA, userB);
     await expect(pageA).toHaveURL(/\/chat\//, { timeout: 8000 });
 
     await ctxA.close();
     await ctxB.close();
   });
 
-  test('Escape closes the New Message modal', async ({ page }) => {
-    const u = `esc_dm_${Date.now()}`;
-    await registerUser(page, u);
-    await page.goto('/');
-    await page.getByRole('button', { name: 'New message' }).click();
-    await expect(page.locator('.bottom-sheet')).toBeVisible({ timeout: 5000 });
-    await page.keyboard.press('Escape');
-    await expect(page.locator('.bottom-sheet')).not.toBeVisible({ timeout: 3000 });
-    await expect(page).toHaveURL('/');
+  test('Back returns from profile detail to people list', async ({ page }) => {
+    const actor = `back_actor_${Date.now()}`;
+    const target = `back_dm_${Date.now()}`;
+    await registerUser(page, actor);
+    await createUserViaApi(page, target);
+    await openUserProfile(page, target);
+    await expect(profileCard(page)).toBeVisible({ timeout: 5000 });
+    await page.getByRole('button', { name: 'Back' }).click();
+    await expect(rosterItems(page).filter({ hasText: target })).toBeVisible({ timeout: 3000 });
   });
 });

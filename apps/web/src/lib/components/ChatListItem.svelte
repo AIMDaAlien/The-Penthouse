@@ -1,6 +1,9 @@
 <script lang="ts">
 	import Avatar from './Avatar.svelte';
+	import PresenceAvatar from './PresenceAvatar.svelte';
 	import Icon from './Icon.svelte';
+	import { presenceStore } from '$stores/presence.svelte';
+	import { voiceRoomsStore } from '$stores/voiceRooms.svelte';
 	import type { ChatSummary } from '@penthouse/contracts';
 	import type { FolderWithItems } from '$stores/folders.svelte';
 
@@ -107,16 +110,42 @@
 			onkeydown={handleKeydown}
 			aria-label={`Open chat ${chat.name}`}
 		>
-			<Avatar url={chat.counterpartAvatarUrl} name={chat.name} size={48} />
+			{#if chat.type === 'dm' && chat.counterpartMemberId}
+				<PresenceAvatar url={chat.counterpartAvatarUrl} name={chat.name} size={48} userId={chat.counterpartMemberId} />
+			{:else}
+				<Avatar url={chat.counterpartAvatarUrl} name={chat.name} size={48} />
+			{/if}
 			<div class="content">
 				<div class="row">
 					<span class="name">{chat.name}</span>
 					<span class="time">{timeLabel}</span>
 				</div>
 				<div class="row">
-					<span class="preview">{chat.type === 'dm' ? 'Direct message' : 'Group chat'}</span>
+					{#if chat.type === 'dm' && chat.counterpartMemberId}
+						{@const p = presenceStore.get(chat.counterpartMemberId)}
+						<span class="preview" class:presence-note={!!p?.note}>
+							{#if p?.note}
+								{p.note}
+							{:else}
+								Direct message
+							{/if}
+						</span>
+					{:else}
+						<span class="preview">{chat.type === 'dm' ? 'Direct message' : 'Group chat'}</span>
+					{/if}
 					{#if chat.unreadCount > 0}
 						<span class="badge">{chat.unreadCount}</span>
+					{/if}
+					{#if true}
+						{@const voice = voiceRoomsStore.get(chat.id)}
+						{#if voice && voice.participantCount > 0}
+							<span class="voice-pill" class:speaking={voice.speakingUserIds.length > 0}>
+								<svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor">
+									<path d="M8 2a3 3 0 0 1 3 3v2a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3zm0 9c2.5 0 4.5-1.8 4.9-4.2a.5.5 0 0 1 1 .2 6 6 0 0 1-1.8 3.8v1.7a1 1 0 0 1-1 1H4.9a1 1 0 0 1-1-1v-1.7a6 6 0 0 1-1.8-3.8.5.5 0 0 1 1-.2C3.5 9.2 5.5 11 8 11z"/>
+								</svg>
+								{voice.participantCount}
+							</span>
+						{/if}
 					{/if}
 				</div>
 			</div>
@@ -255,6 +284,34 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		flex: 1;
+	}
+
+	.preview.presence-note {
+		color: var(--p-accent);
+		font-style: italic;
+	}
+
+	.voice-pill {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		font-size: 11px;
+		font-weight: 600;
+		color: var(--p-accent);
+		background: var(--p-accent-soft);
+		border: 1px solid var(--p-accent-edge);
+		padding: 2px 7px;
+		border-radius: var(--radius-pill);
+		flex-shrink: 0;
+	}
+
+	.voice-pill.speaking {
+		animation: voice-pulse 1.2s ease-in-out infinite;
+	}
+
+	@keyframes voice-pulse {
+		0%, 100% { opacity: 1; }
+		50% { opacity: 0.6; }
 	}
 
 	.badge {

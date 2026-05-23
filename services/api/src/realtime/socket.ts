@@ -128,6 +128,24 @@ interface VoiceParticipantMeta {
 
 const voiceRooms = new Map<string, Map<string, VoiceParticipantMeta>>(); // chatId -> userId -> metadata
 
+function broadcastVoiceRoomSummary(io: Server, chatId: string) {
+  const room = voiceRooms.get(chatId);
+  if (!room || room.size === 0) {
+    io.to(`chat:${chatId}`).emit('voice.room_summary', {
+      type: 'voice.room_summary',
+      payload: { chatId, participantCount: 0, speakingUserIds: [] }
+    });
+    return;
+  }
+  const speakingUserIds = Array.from(room.entries())
+    .filter(([, meta]) => meta.speaking)
+    .map(([userId]) => userId);
+  io.to(`chat:${chatId}`).emit('voice.room_summary', {
+    type: 'voice.room_summary',
+    payload: { chatId, participantCount: room.size, speakingUserIds }
+  });
+}
+
 export function registerSocket(io: Server, fastify: FastifyInstance) {
   io.use(async (socket, next) => {
     fastify.log.info({
@@ -603,6 +621,8 @@ export function registerSocket(io: Server, fastify: FastifyInstance) {
         type: 'voice.user_joined',
         payload: { userId: socket.data.userId, displayName: socket.data.username, muted: false, deafened: false, speaking: false }
       });
+
+      broadcastVoiceRoomSummary(io, chatId);
     }));
 
     socket.on('voice.leave', (payload) => guarded(socket, async () => {
@@ -624,6 +644,8 @@ export function registerSocket(io: Server, fastify: FastifyInstance) {
         type: 'voice.user_left',
         payload: { userId: socket.data.userId }
       });
+
+      broadcastVoiceRoomSummary(io, chatId);
     }));
 
     socket.on('voice.signal', (payload) => guarded(socket, async () => {
@@ -693,6 +715,7 @@ export function registerSocket(io: Server, fastify: FastifyInstance) {
           type: 'voice.speaking',
           payload: { userId: socket.data.userId, speaking: parsed.speaking }
         });
+        broadcastVoiceRoomSummary(io, chatId);
       }
     }));
   });

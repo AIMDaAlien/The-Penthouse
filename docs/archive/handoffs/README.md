@@ -9,3 +9,4 @@ Archived here on 2026-05-21:
 - `2026-05-20-codex-v4-cutover.md` — v4 cutover brief; superseded by the merged canonical repo.
 - `2026-05-21-kimi-codebase-trim-optimize.md` — trim-and-optimize review brief; prior cleanup pass completed.
 - `2026-05-21-codex-frontend-backend-optimization.md` — final frontend/backend optimization brief; consumed by the current Codex pass.
+- `2026-05-22-codex-playwright-ambient-presence.md` — ambient-presence Playwright hardening brief; consumed by the current E2E validation and cleanup pass.

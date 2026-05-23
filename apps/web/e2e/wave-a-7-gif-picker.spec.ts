@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
-import { expectAxePasses, takeVisualSnapshot, throttleNetwork, createMultiplexedContexts } from './qa-utils';
-import { registerUser } from './utils';
+import { expectAxePasses, throttleNetwork, createMultiplexedContexts } from './qa-utils';
+import { openDmWithUser, openGifPicker, registerUser } from './utils';
 
 test.describe('Handoff Feature #7: GIF Picker', () => {
   let userA: string;
@@ -33,44 +33,37 @@ test.describe('Handoff Feature #7: GIF Picker', () => {
     // Register and login User A in the main page
     await registerUser(page, userA);
     
-    // Navigate A to a DM with B
-    await page.goto('/users');
-    await page.getByPlaceholder(/search/i).fill(userB);
-    await page.getByRole('button', { name: new RegExp(userB, 'i') }).click();
+    await openDmWithUser(page, userB);
   });
 
   test('Picker Open/Close behavior & Accessibility', async ({ page }) => {
     // Open picker
-    await page.getByRole('button', { name: /Send a GIF|GIF/i }).click();
+    await openGifPicker(page);
 
-    const gifPicker = page.locator('.gif-picker-modal').or(page.locator('.picker-content')).or(page.getByText('Trending'));
+    const gifPicker = page.locator('.gif-picker');
     await expect(gifPicker.first()).toBeVisible();
+    await expect(page.locator('.gif-picker img').first()).toBeVisible({ timeout: 15000 });
 
     // Axe A11y while Modal is open
-    await expectAxePasses(page);
+    await expectAxePasses(page, { include: ['[role="dialog"][aria-label="Media picker"]'] });
 
-    // Close via backdrop click (we assume clicking outside modal content closes it)
-    await page.mouse.click(10, 10);
-    // Assert it hides
-    await expect(page.getByText('Trending')).toBeHidden();
+    await page.getByRole('button', { name: 'Close media picker' }).click();
+    await expect(page.locator('.gif-picker')).not.toBeVisible();
 
     // Open again
-    await page.getByRole('button', { name: /Send a GIF|GIF/i }).click();
-    await expect(page.getByText('Trending')).toBeVisible();
+    await openGifPicker(page);
+    await expect(page.locator('.gif-picker')).toBeVisible();
 
     // Close via Escape
     await page.keyboard.press('Escape');
-    await expect(page.getByText('Trending')).toBeHidden();
+    await expect(page.locator('.gif-picker')).not.toBeVisible();
   });
 
   test('Search debouncing & non-blocking requests on slow networks', async ({ page }) => {
     await throttleNetwork(page, 'slow3g');
 
-    await page.getByRole('button', { name: /Send a GIF/i }).click();
+    await openGifPicker(page);
     
-    // Click 'Search' tab
-    await page.getByRole('button', { name: /Search/i }).click();
-
     const searchInput = page.getByPlaceholder(/search gifts|search/i).first();
     await searchInput.fill('cat');
 
@@ -85,7 +78,7 @@ test.describe('Handoff Feature #7: GIF Picker', () => {
     await throttleNetwork(page, 'none');
 
     // The grid should eventually populate
-    const gifGrid = page.locator('.gif-grid img');
+    const gifGrid = page.locator('.gif-picker img');
     // Expect at least 1 image to load
     await expect(gifGrid.first()).toBeVisible({ timeout: 15000 });
   });
@@ -103,26 +96,19 @@ test.describe('Handoff Feature #7: GIF Picker', () => {
     await registerUser(pageA, uA);
     await registerUser(pageB, uB);
 
-    // B opens DM with A
-    await pageB.goto('/users');
-    await pageB.getByPlaceholder(/search/i).fill(uA);
-    await pageB.getByRole('button', { name: new RegExp(uA, 'i') }).click();
-
-    // A opens DM with B
-    await pageA.goto('/users');
-    await pageA.getByPlaceholder(/search/i).fill(uB);
-    await pageA.getByRole('button', { name: new RegExp(uB, 'i') }).click();
+    await openDmWithUser(pageB, uA);
+    await openDmWithUser(pageA, uB);
 
     // A sends GIF
-    await pageA.getByRole('button', { name: /Send a GIF/i }).click();
+    await openGifPicker(pageA);
     // Assuming default is trending, just click the first GIF image
-    await pageA.locator('.gif-picker-modal img, .picker-content img').first().click();
+    await pageA.locator('.gif-picker img').first().click();
 
     // It should close picker
-    await expect(pageA.getByText('Trending')).toBeHidden();
+    await expect(pageA.locator('.gif-picker')).not.toBeVisible();
 
     // Check GIF rendering in chat
-    const gifMsgA = pageA.locator('.bubble.gif-bubble img').first();
+    const gifMsgA = pageA.locator('.media-gif, .msg img').first();
     await expect(gifMsgA).toBeVisible();
     
     // Check constraints (Max width: 240px)
@@ -130,12 +116,11 @@ test.describe('Handoff Feature #7: GIF Picker', () => {
     expect(box?.width).toBeLessThanOrEqual(240);
 
     // B receives GIF
-    const gifMsgB = pageB.locator('.bubble.gif-bubble img').first();
+    const gifMsgB = pageB.locator('.media-gif, .msg img').first();
     await expect(gifMsgB).toBeVisible();
 
     // Verify Read Receipts update! A should see "Seen" pill
-    const readReceiptA = pageA.locator('.read-receipts .pill');
-    await expect(readReceiptA).toHaveText('Seen', { timeout: 10000 });
+    await expect(pageA.locator('.read-status', { hasText: '✓✓' }).last()).toBeVisible({ timeout: 10000 });
 
     await contextA.close();
     await contextB.close();

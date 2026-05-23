@@ -157,6 +157,15 @@ The `pwa` branch is the active development branch and public deployment target. 
 
 ## Current blockers
 
+- As of 2026-05-22, the SvelteKit alpha branch has a fresh E2E hardening pass:
+  - signed-out root routing sends users to `/welcome`
+  - signed-in users bypass `/auth` and `/welcome` back into `/`
+  - ambient presence is globalized through `presenceStore`
+  - voice room summaries now broadcast participant counts and speaking users
+  - DM rows, people search, and chat member lists show presence-aware avatars/state
+  - GIF/sticker sends, mobile composer spacing, own-profile messaging, and media-picker accessibility were corrected
+  - active Chromium browser proof passed for auth, chat, GIFs, users, reactions/replies/pins, voice, audio, local sync, and GIF accessibility slices
+  - `npm run validate` passes locally with the test Postgres/JWT environment
 - Strict DB release gate still needs a rerun in a working Docker/Postgres environment.
 - Manual mobile PWA install proof is still needed on a real iOS/Android browser.
 - The third-party Erode font CDN request should be removed or self-hosted in the next frontend pass.

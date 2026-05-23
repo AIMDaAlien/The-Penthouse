@@ -111,6 +111,12 @@ Status: in progress
 - Nightly PostgreSQL dumps now run through TrueNAS cron job `1` at 03:00, with dumps under `/mnt/Backup/penthouse-rebuild/backups/postgres/`; restore was tested successfully.
 - TrueNAS stack watchdog tooling now exists for public uptime recovery: `scripts/truenas-stack-watchdog.sh --boot` is intended for post-init reboot recovery, `--once` is intended for one-minute cron recovery, and failure reports identify cases like missing Docker overlay2 layers under `/mnt/.ix-apps/docker/overlay2`.
 - Known frontend follow-up: the welcome page still loads Erode from a third-party font CDN that returned HTTP 500 during smoke. It falls back, but the dependency should be removed or self-hosted.
+- 2026-05-22 E2E hardening pass is complete on the active SvelteKit alpha branch:
+  - welcome/auth routing is explicitly guarded for signed-out and signed-in users
+  - ambient presence and voice-room summaries are wired through contracts, API sockets, and global web stores
+  - current active browser specs were hardened against real UI selectors and user flows
+  - full local validation passed with test Postgres/JWT env, and focused auth browser proof passed
+  - stale poll-builder and old mute-context-menu specs remain known non-current suites, not product proof blockers
 - Tier A DM enhancements are integrated and locally runtime-proven as of 2026-04-19:
   - message editing
   - delete-for-everyone tombstones

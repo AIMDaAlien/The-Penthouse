@@ -304,6 +304,15 @@ export const ServerVoiceStateEventSchema = z.object({
   })
 });
 
+export const ServerVoiceRoomSummaryEventSchema = z.object({
+  type: z.literal('voice.room_summary'),
+  payload: z.object({
+    chatId: z.string(),
+    participantCount: z.number().int().nonnegative(),
+    speakingUserIds: z.array(z.string())
+  })
+});
+
 export type ClientPresenceUpdateEvent = z.infer<typeof ClientPresenceUpdateEventSchema>;
 export type ClientMessageSendEvent = z.infer<typeof ClientMessageSendEventSchema>;
 export type ServerPresenceUpdateEvent = z.infer<typeof ServerPresenceUpdateEventSchema>;
@@ -337,3 +346,4 @@ export type ServerVoiceSignalEvent = z.infer<typeof ServerVoiceSignalEventSchema
 export type ServerVoiceMuteEvent = z.infer<typeof ServerVoiceMuteEventSchema>;
 export type ServerVoiceSpeakingEvent = z.infer<typeof ServerVoiceSpeakingEventSchema>;
 export type ServerVoiceStateEvent = z.infer<typeof ServerVoiceStateEventSchema>;
+export type ServerVoiceRoomSummaryEvent = z.infer<typeof ServerVoiceRoomSummaryEventSchema>;

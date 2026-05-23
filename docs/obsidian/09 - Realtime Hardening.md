@@ -112,6 +112,11 @@ After this slice:
 - The next debugging step is no longer guesswork:
   - check the badge diagnostics
   - check the API terminal for socket log lines
+- As of 2026-05-22, web ambient presence is an app-level socket concern:
+  - `presenceStore` initializes from the authenticated Svelte layout instead of per-page wiring
+  - user directory, DM rows, and member lists consume the same presence state
+  - `voice.room_summary` events keep chat-list voice participant pills in sync after join, leave, and speaking changes
+  - browser coverage verifies cross-user presence changes and reload survival
 
 ## Next escalation if Android true realtime still fails
 

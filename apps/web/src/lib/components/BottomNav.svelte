@@ -21,7 +21,7 @@
 		}))
 	);
 
-	const showFab = $derived(pathname === '/' || pathname.startsWith('/chat/'));
+	const showFab = $derived(pathname === '/');
 
 	function handleFab() {
 		goto('/users');

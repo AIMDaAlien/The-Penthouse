@@ -2,8 +2,8 @@
  * Polls Suite — create, vote, multi-select, expiry
  * Run: npx playwright test e2e/suite-polls.spec.ts
  */
-import { test, expect, Browser, BrowserContext, Page } from '@playwright/test';
-import { registerUser } from './utils';
+import { test, expect, Browser, Page } from '@playwright/test';
+import { openDmWithUser, registerUser } from './utils';
 
 async function twoUserDm(browser: Browser) {
   const ts = Date.now();
@@ -16,25 +16,14 @@ async function twoUserDm(browser: Browser) {
   const pageB = await ctxB.newPage();
   await registerUser(pageB, userB);
 
-  await pageA.goto('/');
-  await pageA.getByRole('button', { name: 'New message' }).click();
-  await pageA.getByPlaceholder(/search/i).fill(userB);
-  await pageA.waitForSelector('.dm-user-row', { timeout: 8000 });
-  await pageA.locator('.dm-user-row').filter({ hasText: userB }).first().click();
-  await pageA.waitForURL(/\/chat\//);
-
-  await pageB.goto('/');
-  await pageB.getByRole('button', { name: 'New message' }).click();
-  await pageB.getByPlaceholder(/search/i).fill(userA);
-  await pageB.waitForSelector('.dm-user-row', { timeout: 8000 });
-  await pageB.locator('.dm-user-row').filter({ hasText: userA }).first().click();
-  await pageB.waitForURL(/\/chat\//);
+  await openDmWithUser(pageA, userB);
+  await openDmWithUser(pageB, userA);
 
   return { ctxA, pageA, userA, ctxB, pageB, userB };
 }
 
 async function openPollBuilder(page: Page) {
-  const input = page.locator('.composer-input');
+  const input = page.getByPlaceholder(/^Message/);
   await input.fill('/poll');
   // Wait for slash command picker
   const picker = page.locator('.command-picker, .slash-commands');

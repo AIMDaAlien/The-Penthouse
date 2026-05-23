@@ -31,7 +31,7 @@ export async function registerChannelRoutes(fastify: FastifyInstance) {
     await requireChatManager(parentChatId, request.authUser!.userId, request.authUser!.role);
     const body = CreateChannelRequestSchema.parse(request.body);
 
-    const parentMembers = await db.select({ userId: chatMembers.userId })
+    const parentMembers = await db.select({ userId: chatMembers.userId, role: chatMembers.role })
       .from(chatMembers)
       .where(eq(chatMembers.chatId, parentChatId));
 
@@ -44,7 +44,7 @@ export async function registerChannelRoutes(fastify: FastifyInstance) {
 
       if (parentMembers.length > 0) {
         await tx.insert(chatMembers).values(
-          parentMembers.map((m) => ({ chatId: created.id, userId: m.userId }))
+          parentMembers.map((m) => ({ chatId: created.id, userId: m.userId, role: m.role }))
         );
       }
 

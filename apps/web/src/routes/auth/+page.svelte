@@ -206,7 +206,7 @@
 				</label>
 			{/if}
 
-			{#if error}<p class="error-msg">{error}</p>{/if}
+			{#if error}<p class="error-msg" role="alert">{error}</p>{/if}
 
 			<button type="submit" class="submit-btn" disabled={loading || !canSubmit}>
 				{loading ? 'Please wait...' : mode === 'login' ? 'Sign in' : 'Create account'}

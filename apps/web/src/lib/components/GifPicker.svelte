@@ -82,7 +82,7 @@
 		{:else if gifsStore.loaded && gifsStore.results.length === 0}
 			<div class="empty">No results</div>
 		{:else}
-			<div class="grid" role="list">
+			<div class="grid">
 				{#each gifsStore.results as gif (gif.id)}
 					<button
 						class="gif-btn"

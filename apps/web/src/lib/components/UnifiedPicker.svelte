@@ -31,21 +31,23 @@
 	aria-label="Media picker"
 	use:focusTrap={{ onEscape: onClose }}
 >
-	<div class="tab-bar" role="tablist" aria-label="Media picker tabs">
-		{#each tabs as tab (tab.key)}
-			<button
-				class="tab"
-				class:active={activeTab === tab.key}
-				role="tab"
-				aria-selected={activeTab === tab.key}
-				id="tab-{tab.key}"
-				aria-controls="panel-{tab.key}"
-				onclick={() => (activeTab = tab.key)}
-				type="button"
-			>
-				{tab.label}
-			</button>
-		{/each}
+	<div class="tab-row">
+		<div class="tab-bar" role="tablist" aria-label="Media picker tabs">
+			{#each tabs as tab (tab.key)}
+				<button
+					class="tab"
+					class:active={activeTab === tab.key}
+					role="tab"
+					aria-selected={activeTab === tab.key}
+					id="tab-{tab.key}"
+					aria-controls="panel-{tab.key}"
+					onclick={() => (activeTab = tab.key)}
+					type="button"
+				>
+					{tab.label}
+				</button>
+			{/each}
+		</div>
 		<button class="close-btn" onclick={onClose} aria-label="Close media picker" type="button">
 			<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2">
 				<path d="M1 1l12 12M13 1L1 13" />
@@ -119,7 +121,7 @@
 		box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
 	}
 
-	.tab-bar {
+	.tab-row {
 		display: flex;
 		align-items: center;
 		gap: var(--space-xs);
@@ -127,6 +129,13 @@
 		flex-shrink: 0;
 		border-bottom: 1px solid var(--p-line);
 		padding-bottom: var(--space-sm);
+	}
+
+	.tab-bar {
+		display: flex;
+		align-items: center;
+		gap: var(--space-xs);
+		min-width: 0;
 	}
 
 	.tab {
@@ -162,6 +171,7 @@
 		align-items: center;
 		justify-content: center;
 		margin-left: auto;
+		flex-shrink: 0;
 	}
 	.close-btn:hover {
 		background: var(--p-surface);

@@ -25,21 +25,28 @@ interface GiphyGif {
 
 const GIPHY_API_KEY = 'H2jGWv5wskQcoU1gMU2f3YuLCYYLHqjN';
 const GIPHY_SEARCH_URL = 'https://api.giphy.com/v1/gifs/search';
+const GIPHY_TRENDING_URL = 'https://api.giphy.com/v1/gifs/trending';
 
 export async function registerGifRoutes(fastify: FastifyInstance) {
   fastify.get('/api/v1/gifs/search', { preHandler: fastify.authenticate }, async (request) => {
-    const query = GifSearchQuerySchema.parse(request.query);
+    const rawQuery = request.query as { q?: unknown; limit?: unknown };
+    const query = GifSearchQuerySchema.parse({
+      q: typeof rawQuery.q === 'string' && rawQuery.q.trim() ? rawQuery.q : undefined,
+      limit: rawQuery.limit
+    });
     const limit = query.limit ?? 20;
     const searchTerm = query.q ?? '';
 
     try {
-      const url = new URL(GIPHY_SEARCH_URL);
+      const url = new URL(searchTerm ? GIPHY_SEARCH_URL : GIPHY_TRENDING_URL);
       url.searchParams.set('api_key', GIPHY_API_KEY);
-      url.searchParams.set('q', searchTerm);
       url.searchParams.set('limit', String(limit));
       url.searchParams.set('offset', '0');
       url.searchParams.set('rating', 'g');
-      url.searchParams.set('lang', 'en');
+      if (searchTerm) {
+        url.searchParams.set('q', searchTerm);
+        url.searchParams.set('lang', 'en');
+      }
 
       const response = await fetch(url.toString(), {
         headers: { Accept: 'application/json' }

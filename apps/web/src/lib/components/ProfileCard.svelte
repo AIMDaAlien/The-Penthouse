@@ -50,7 +50,9 @@
 				<p class="pc-bio">{person.bio}</p>
 			{/if}
 			<div class="pc-actions">
-				<button class="btn-primary">Message</button>
+				{#if onMessage}
+					<button class="btn-primary" onclick={() => onMessage(person.id)}>Message</button>
+				{/if}
 				<button class="btn-ghost">View portfolio</button>
 			</div>
 		</div>
@@ -89,7 +91,9 @@
 				<p class="pc-bio">{person.bio}</p>
 			{/if}
 			<div class="pc-actions">
-				<button class="btn-primary" onclick={() => onMessage?.(person.id)}>Message</button>
+				{#if onMessage}
+					<button class="btn-primary" onclick={() => onMessage(person.id)}>Message</button>
+				{/if}
 				<button class="btn-ghost">Portfolio</button>
 			</div>
 		</div>
@@ -128,7 +132,9 @@
 				<p class="pc-bio light">{person.bio}</p>
 			{/if}
 			<div class="pc-actions">
-				<button class="btn-primary on-dark" onclick={() => onMessage?.(person.id)}>Message</button>
+				{#if onMessage}
+					<button class="btn-primary on-dark" onclick={() => onMessage(person.id)}>Message</button>
+				{/if}
 				<button class="btn-ghost on-dark">Portfolio</button>
 			</div>
 		</div>

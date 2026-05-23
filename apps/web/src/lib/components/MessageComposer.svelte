@@ -385,10 +385,6 @@
 	}
 
 	@media (max-width: 767px) {
-		.composer-shell {
-			margin-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
-		}
-
 		.picker-popup {
 			left: var(--space-sm);
 			right: var(--space-sm);

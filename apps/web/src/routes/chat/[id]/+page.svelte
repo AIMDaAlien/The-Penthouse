@@ -447,11 +447,11 @@
 	}
 
 	function handleGifSelect(gif: { url: string; previewUrl: string; width?: number; height?: number }) {
-		sendMessage('', 'gif', { url: gif.url });
+		sendMessage('[GIF]', 'gif', { url: gif.url });
 	}
 
 	function handleStickerSelect(sticker: { url: string; name: string }) {
-		sendMessage('', 'sticker', { url: sticker.url });
+		sendMessage('[Sticker]', 'sticker', { stickerUrl: sticker.url });
 	}
 
 	async function handleAudioRecord(blob: Blob, mimeType: string) {
@@ -934,6 +934,8 @@
 		onTypingStart={handleTypingStart}
 		onTypingStop={handleTypingStop}
 		onAudioRecord={handleAudioRecord}
+		onGifSelect={handleGifSelect}
+		onStickerSelect={handleStickerSelect}
 		replyTo={replyToMessage ? {
 			senderName: replyToMessage.senderDisplayName ?? 'Unknown',
 			content: replyToMessage.content
@@ -949,6 +951,14 @@
 		flex: 1;
 		min-height: 0;
 		height: 100%;
+	}
+
+	@media (max-width: 767px) {
+		.thread {
+			height: 100dvh;
+			padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+			overflow: hidden;
+		}
 	}
 
 	.header {

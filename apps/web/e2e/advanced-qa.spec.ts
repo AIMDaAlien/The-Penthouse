@@ -23,13 +23,14 @@ test.describe('Advanced Superhuman QA Suite', () => {
     await registerUser(page, qaUser);
     
     // Wait for the inbox layout to settle
-    await page.waitForSelector('.main-layout', { state: 'visible' });
+    await expect(page.getByRole('button', { name: 'Open chat General' })).toBeVisible({ timeout: 15000 });
 
     // Perceptual AI Snapshot
     await takeVisualSnapshot(page, 'Inbox Dashboard - Day 1 Validation');
     
-    // Validate we can safely log out without breaking layout
-    await page.getByRole('button', { name: /settings|profile/i }).first().click().catch(() => {});
+    // Validate settings navigation without breaking layout
+    await page.getByRole('link', { name: /settings/i }).click();
+    await expect(page.getByRole('button', { name: /sign out/i })).toBeVisible({ timeout: 10000 });
     await takeVisualSnapshot(page, 'Settings Drawer Overlay');
   });
 

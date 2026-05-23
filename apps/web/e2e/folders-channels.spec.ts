@@ -1,4 +1,31 @@
 import { test, expect, type Page } from '@playwright/test';
+import { createUserViaApi, installSession } from './utils';
+
+const E2E_DATABASE_URL = process.env.PLAYWRIGHT_DATABASE_URL
+  ?? process.env.DATABASE_URL
+  ?? 'postgresql://penthouse:penthouse@localhost:5434/penthouse';
+
+async function promoteGeneralOwner(username: string) {
+  const { Client } = await import('pg');
+  const client = new Client({ connectionString: E2E_DATABASE_URL });
+  await client.connect();
+  try {
+    await client.query(
+      `
+        update chat_members
+        set role = 'owner'
+        from users, chats
+        where chat_members.user_id = users.id
+          and chat_members.chat_id = chats.id
+          and users.username = $1
+          and chats.system_key = 'general'
+      `,
+      [username]
+    );
+  } finally {
+    await client.end();
+  }
+}
 
 async function switchToRegister(page: Page) {
   await expect(async () => {
@@ -62,7 +89,9 @@ test.describe('Folders & Channels E2E', () => {
   test('create and navigate channel', async ({ page }) => {
     const username = `channel_${Math.random().toString(36).slice(2, 8)}`;
     const channelName = `random-${Math.random().toString(36).slice(2, 8)}`;
-    await registerAndLogin(page, username);
+    const session = await createUserViaApi(page, username);
+    await promoteGeneralOwner(username);
+    await installSession(page, session);
 
     // Open General chat
     await openGeneralChat(page);
@@ -97,7 +126,9 @@ test.describe('Folders & Channels E2E', () => {
     const userB = `late_b_${Math.random().toString(36).slice(2, 8)}`;
     const channelName = `shared-${Math.random().toString(36).slice(2, 8)}`;
 
-    await registerAndLogin(pageA, userA);
+    const sessionA = await createUserViaApi(pageA, userA);
+    await promoteGeneralOwner(userA);
+    await installSession(pageA, sessionA);
     await registerAndLogin(pageB, userB);
 
     // User B is already in General, so this proves realtime channel sync without a refresh.

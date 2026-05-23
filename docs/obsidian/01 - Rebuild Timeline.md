@@ -224,6 +224,33 @@ Known follow-up:
 - The welcome page's third-party Erode font CSS returned HTTP 500 during smoke. The page falls back successfully, but the font should be removed or self-hosted during the next frontend pass.
 - Manual Add-to-Home-Screen proof is still needed on a real mobile browser.
 
+### 2026-05-22 - Ambient presence and E2E hardening sweep
+
+Highlights:
+- Archived the consumed Playwright ambient-presence handoff into `docs/archive/handoffs/2026-05-22-codex-playwright-ambient-presence.md`.
+- Added global Svelte presence and voice-room stores that initialize from the authenticated layout.
+- Added `voice.room_summary` contract/API broadcast support so chat rows can show live participant counts and speaking activity.
+- Added presence-aware avatars to DM rows, people search, and chat member lists; member rows now sort by presence state.
+- Hardened the signed-out/signed-in routing contract: signed-out `/` lands on `/welcome`, while authenticated users reaching `/auth` or `/welcome` return to `/`.
+- Fixed user-visible polish found during browser testing:
+  - mobile chat composer no longer collides with the bottom nav
+  - chat FAB no longer covers the send button inside threads
+  - GIF/sticker picks now send usable placeholder content and metadata
+  - Giphy empty searches load trending GIFs
+  - media picker tab/close markup is more accessible
+  - duplicate native emoji keys no longer trip Svelte runtime warnings
+  - own profile cards no longer expose a Message action
+- Updated Playwright helpers and active suites to use current people-directory, auth, composer, media-picker, and read-receipt surfaces.
+
+Validation:
+- `npm run validate` passed with `DATABASE_URL=postgresql://penthouse:penthouse@localhost:5433/penthouse_test` and `JWT_SECRET=ci-test-jwt-secret-long-enough`.
+- Focused auth browser proof passed: `18 passed` across `auth-chat.spec.ts`, `suite-auth.spec.ts`, and `auth-flow.spec.ts`.
+- Active Chromium browser matrix passed before commit prep: `46 passed`, `1 skipped`.
+- `git diff --check` passed.
+
+Known boundary:
+- `suite-polls.spec.ts` and `wave-a-6-mute.spec.ts` still describe absent/stale UI surfaces rather than current shipped behavior.
+
 ### 2026-03-28 - Public site refresh
 
 Highlights:

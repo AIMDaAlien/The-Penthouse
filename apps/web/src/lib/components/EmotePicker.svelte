@@ -123,7 +123,7 @@
 				<div class="section-label">Emoji</div>
 			{/if}
 			<div class="emoji-grid">
-				{#each nativeResults as emoji (emoji.name)}
+				{#each nativeResults as emoji, i (`${emoji.name}-${emoji.char}-${i}`)}
 					<button
 						class="emoji-btn"
 						onclick={() => handleNativeSelect(emoji.char)}

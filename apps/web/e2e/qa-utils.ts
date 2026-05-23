@@ -1,13 +1,17 @@
 import { expect, type Page, type BrowserContext, type Browser } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import percySnapshot from '@percy/playwright';
 
 /**
  * Superhuman A11y
  * Crawls the DOM to verify WCAG 2.1 compliance
  */
-export async function expectAxePasses(page: Page, options?: { exclude?: string[] }) {
+export async function expectAxePasses(page: Page, options?: { exclude?: string[]; include?: string[] }) {
   const builder = new AxeBuilder({ page });
+  if (options?.include) {
+    for (const selector of options.include) {
+      builder.include(selector);
+    }
+  }
   if (options?.exclude) {
     builder.exclude(options.exclude);
   }
@@ -60,11 +64,21 @@ export async function humanSwipe(page: Page, from: {x:number, y:number}, to: {x:
  */
 export async function takeVisualSnapshot(page: Page, name: string) {
   // Graceful fail if token is missing locally so tests still run
-  if (process.env.PERCY_TOKEN) {
-    await percySnapshot(page, name);
-  } else {
+  if (!process.env.PERCY_TOKEN) {
     console.warn(`[Percy] Skipping snapshot '${name}' because PERCY_TOKEN is not set.`);
+    return;
   }
+
+  const percyModule = await Function('specifier', 'return import(specifier)')('@percy/playwright') as {
+    default?: (page: Page, name: string) => Promise<void>;
+  };
+  const percySnapshot = percyModule.default;
+
+  if (!percySnapshot) {
+    throw new Error('@percy/playwright did not expose a default snapshot function.');
+  }
+
+  await percySnapshot(page, name);
 }
 
 /**

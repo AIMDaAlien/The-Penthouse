@@ -13,6 +13,13 @@ Recently archived:
 - `docs/archive/handoffs/2026-05-20-codex-v4-cutover.md`
 - `docs/archive/handoffs/2026-05-21-kimi-codebase-trim-optimize.md`
 - `docs/archive/handoffs/2026-05-21-codex-frontend-backend-optimization.md`
+- `docs/archive/handoffs/2026-05-22-codex-playwright-ambient-presence.md`
+
+## Active Handoffs
+
+| Handoff | Owner | Status | File |
+|---------|-------|--------|------|
+| None | - | - | - |
 
 ---
 

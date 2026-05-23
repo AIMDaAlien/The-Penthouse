@@ -519,7 +519,6 @@
 	footer {
 		grid-column: span 2;
 		margin-top: 10rem;
-		opacity: 0.35;
 		font-family: var(--font-mono);
 		font-size: 0.8rem;
 		letter-spacing: 0.1em;
@@ -530,7 +529,7 @@
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		color: var(--text);
+		color: var(--text-soft);
 	}
 
 	/* ── Responsive ── */

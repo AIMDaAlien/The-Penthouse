@@ -78,10 +78,12 @@
 			{/if}
 		</span>
 	{/each}
-	<button class="channel create" onclick={onCreate} aria-label="Create channel">
-		<Icon name="plus" size={14} />
-		<span>New</span>
-	</button>
+	{#if canManage}
+		<button class="channel create" onclick={onCreate} aria-label="Create channel">
+			<Icon name="plus" size={14} />
+			<span>New</span>
+		</button>
+	{/if}
 </div>
 
 <style>

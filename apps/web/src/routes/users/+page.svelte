@@ -2,9 +2,10 @@
 	import { goto } from '$app/navigation';
 	import { users } from '$services/users';
 	import { chats } from '$services/chats';
+	import { sessionStore } from '$stores/session.svelte';
 	import { socketStore, onPresenceUpdate, onPresenceSync } from '$stores/socket.svelte';
 	import Icon from '$components/Icon.svelte';
-	import Avatar from '$components/Avatar.svelte';
+	import PresenceAvatar from '$components/PresenceAvatar.svelte';
 	import ProfileCard from '$components/ProfileCard.svelte';
 	import type { MemberDetail } from '@penthouse/contracts';
 
@@ -183,7 +184,7 @@
 						onclick={() => selectUser(user.id)}
 					>
 						<div class="r-avatar-wrap">
-							<Avatar url={user.avatarUrl} name={user.displayName} size={38} />
+							<PresenceAvatar url={user.avatarUrl} name={user.displayName} size={38} userId={user.id} />
 						</div>
 						<div class="r-meta">
 							<span class="r-name">{user.displayName}</span>
@@ -211,7 +212,7 @@
 					status: presenceToStatus(userPresence[selectedUser.id]?.state)
 				}}
 				style={selectedUser.profileStyle ?? 'editorial'}
-				onMessage={startDM}
+				onMessage={selectedUser.id === sessionStore.user?.id ? undefined : startDM}
 			/>
 		{:else}
 			<div class="empty-focus">

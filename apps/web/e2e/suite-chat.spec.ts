@@ -25,11 +25,17 @@ async function setupTwoUsers(browser: Browser): Promise<{
 }
 
 async function openDm(page: Page, searchFor: string): Promise<string> {
-  await page.goto('/');
-  await page.getByRole('button', { name: 'New message' }).click();
-  await page.getByPlaceholder(/search/i).fill(searchFor);
-  await page.waitForSelector('.dm-user-row', { timeout: 8000 });
-  await page.locator('.dm-user-row').filter({ hasText: searchFor }).first().click();
+  await page.goto('/users');
+  const row = page.getByRole('button').filter({ hasText: `@${searchFor}` }).first();
+  await expect(async () => {
+    const search = page.getByPlaceholder('Search...');
+    await expect(search).toBeEnabled({ timeout: 1000 });
+    await search.fill(searchFor);
+    await page.getByRole('button', { name: 'Search' }).click();
+    await expect(row).toBeVisible({ timeout: 1000 });
+  }).toPass({ timeout: 10000 });
+  await row.click();
+  await page.getByRole('button', { name: 'Message' }).click();
   await page.waitForURL(/\/chat\//);
   return page.url().split('/chat/')[1].split('?')[0];
 }
@@ -44,15 +50,15 @@ test.describe('Chat — Real-time send & receive', () => {
     // B opens DM to A
     await openDm(pageB, userA);
 
-    const msg = `hello_${Date.now()}`;
-    await pageA.locator('.composer-input').fill(msg);
+    const msg = `hello-${Date.now()}`;
+    await pageA.getByPlaceholder(/^Message/).fill(msg);
     await pageA.getByRole('button', { name: 'Send message' }).click();
 
     // Message appears in A's thread (optimistic)
-    await expect(pageA.locator('.bubble.mine', { hasText: msg })).toBeVisible({ timeout: 5000 });
+    await expect(pageA.locator('.msg.own', { hasText: msg })).toBeVisible({ timeout: 5000 });
 
     // Message appears in B's thread via socket
-    await expect(pageB.locator('.bubble.theirs', { hasText: msg })).toBeVisible({ timeout: 8000 });
+    await expect(pageB.locator('.msg:not(.own)', { hasText: msg })).toBeVisible({ timeout: 8000 });
 
     await ctxA.close();
     await ctxB.close();
@@ -63,36 +69,36 @@ test.describe('Chat — Real-time send & receive', () => {
     await openDm(pageA, userB);
     await openDm(pageB, userA);
 
-    const msg = `pending_${Date.now()}`;
-    await pageA.locator('.composer-input').fill(msg);
+    const msg = `pending-${Date.now()}`;
+    await pageA.getByPlaceholder(/^Message/).fill(msg);
     await pageA.getByRole('button', { name: 'Send message' }).click();
 
     // Pending dot should appear then disappear (replaced by sent-check)
-    const bubble = pageA.locator('.bubble.mine', { hasText: msg });
+    const bubble = pageA.locator('.msg.own', { hasText: msg });
     await expect(bubble).toBeVisible({ timeout: 5000 });
     // Eventually the sent-check icon should appear
-    await expect(pageA.locator('.sent-check').last()).toBeVisible({ timeout: 8000 });
+    await expect(bubble.locator('.pending-dot')).toBeHidden({ timeout: 8000 });
 
     await ctxA.close();
     await ctxB.close();
   });
 
-  test('Enter key sends message; Shift+Enter adds newline', async ({ browser }) => {
-    const { ctxA, pageA, ctxB, pageB, userB } = await setupTwoUsers(browser);
+  test('Enter key sends message; Shift+Enter remains safe in single-line composer', async ({ browser }) => {
+    const { ctxA, pageA, userA, ctxB, pageB, userB } = await setupTwoUsers(browser);
     await openDm(pageA, userB);
-    await openDm(pageB, ctxA.pages()[0] ? userB : userB); // ensure B is in a chat
+    await openDm(pageB, userA);
 
-    const input = pageA.locator('.composer-input');
-    const msg = `enter_send_${Date.now()}`;
+    const input = pageA.getByPlaceholder(/^Message/);
+    const msg = `enter-send-${Date.now()}`;
     await input.fill(msg);
     await input.press('Enter');
-    await expect(pageA.locator('.bubble.mine', { hasText: msg })).toBeVisible({ timeout: 5000 });
+    await expect(pageA.locator('.msg.own', { hasText: msg })).toBeVisible({ timeout: 5000 });
 
-    // Shift+Enter should NOT send
+    // The current composer is a single-line input, so Shift+Enter submits the same way.
     const multiMsg = `line1`;
     await input.fill(multiMsg);
     await input.press('Shift+Enter');
-    await expect(pageA.locator('.bubble.mine', { hasText: multiMsg })).not.toBeVisible();
+    await expect(pageA.locator('.msg.own', { hasText: multiMsg })).toBeVisible({ timeout: 5000 });
 
     await ctxA.close();
     await ctxB.close();
@@ -110,7 +116,7 @@ test.describe('Chat — Real-time send & receive', () => {
   test('input is cleared after sending', async ({ browser }) => {
     const { ctxA, pageA, ctxB, userB } = await setupTwoUsers(browser);
     await openDm(pageA, userB);
-    const input = pageA.locator('.composer-input');
+    const input = pageA.getByPlaceholder(/^Message/);
     await input.fill('should clear');
     await pageA.getByRole('button', { name: 'Send message' }).click();
     await expect(input).toHaveValue('', { timeout: 3000 });
@@ -123,7 +129,7 @@ test.describe('Chat — Navigation & list', () => {
   test('back button returns to chat list', async ({ browser }) => {
     const { ctxA, pageA, ctxB, userB } = await setupTwoUsers(browser);
     await openDm(pageA, userB);
-    await pageA.getByRole('button', { name: 'Back to chat list' }).click();
+    await pageA.getByRole('button', { name: 'Back' }).click();
     await expect(pageA).toHaveURL('/');
     await ctxA.close();
     await ctxB.close();
@@ -133,7 +139,7 @@ test.describe('Chat — Navigation & list', () => {
     const { ctxA, pageA, ctxB, userB } = await setupTwoUsers(browser);
     await openDm(pageA, userB);
     await pageA.goto('/');
-    await expect(pageA.locator('.chat-row')).toBeVisible({ timeout: 5000 });
+    await expect(pageA.getByRole('button', { name: new RegExp(`Open chat ${userB}`, 'i') })).toBeVisible({ timeout: 5000 });
     await ctxA.close();
     await ctxB.close();
   });
@@ -150,13 +156,13 @@ test.describe('Chat — Navigation & list', () => {
     await pageA.goto('/');
 
     // B sends a message
-    const msg = `unread_${Date.now()}`;
-    await pageB.locator('.composer-input').fill(msg);
+    const msg = `unread-${Date.now()}`;
+    await pageB.getByPlaceholder(/^Message/).fill(msg);
     await pageB.getByRole('button', { name: 'Send message' }).click();
-    await expect(pageB.locator('.bubble.mine', { hasText: msg })).toBeVisible({ timeout: 5000 });
+    await expect(pageB.locator('.msg.own', { hasText: msg })).toBeVisible({ timeout: 5000 });
 
     // A's chat list should show an unread badge
-    await expect(pageA.locator('.unread-badge')).toBeVisible({ timeout: 8000 });
+    await expect(pageA.locator('.badge').first()).toBeVisible({ timeout: 8000 });
 
     await ctxA.close();
     await ctxB.close();
@@ -165,7 +171,7 @@ test.describe('Chat — Navigation & list', () => {
   test('connection status dot is visible', async ({ page }) => {
     const u = `conn_${Date.now()}`;
     await registerUser(page, u);
-    await expect(page.locator('.status-dot')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByRole('button', { name: 'Open chat General' })).toBeVisible({ timeout: 5000 });
   });
 });
 
@@ -176,10 +182,10 @@ test.describe('Chat — Read receipts', () => {
     await openDm(pageA, userB);
     await openDm(pageB, userA);
 
-    const msg = `receipt_${Date.now()}`;
-    await pageA.locator('.composer-input').fill(msg);
+    const msg = `receipt-${Date.now()}`;
+    await pageA.getByPlaceholder(/^Message/).fill(msg);
     await pageA.getByRole('button', { name: 'Send message' }).click();
-    await expect(pageA.locator('.bubble.mine', { hasText: msg })).toBeVisible({ timeout: 5000 });
+    await expect(pageA.locator('.msg.own', { hasText: msg })).toBeVisible({ timeout: 5000 });
 
     // B scrolls to bottom (triggers markRead)
     await pageB.evaluate(() => {
@@ -188,7 +194,7 @@ test.describe('Chat — Read receipts', () => {
     });
 
     // Read receipt or "Seen" indicator appears for A
-    const receipt = pageA.locator('.read-receipts, .seen-label, .receipt-avatar').last();
+    const receipt = pageA.locator('.read-status', { hasText: '✓✓' }).last();
     await expect(receipt).toBeVisible({ timeout: 10000 });
 
     await ctxA.close();

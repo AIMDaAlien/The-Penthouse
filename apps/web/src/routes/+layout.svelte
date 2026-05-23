@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { sessionStore } from '$stores/session.svelte';
 	import { channelsStore } from '$stores/channels.svelte';
-		import { emotesStore } from '$stores/emotes.svelte';
+	import { emotesStore } from '$stores/emotes.svelte';
 	import { stickersStore } from '$stores/stickers.svelte';
 	import { gifsStore } from '$stores/gifs.svelte';
 	import { chatsStore } from '$stores/chats.svelte';
@@ -21,6 +21,8 @@
 	import PwaReleaseBanner from '$components/PwaReleaseBanner.svelte';
 	import DesktopShell from '$components/DesktopShell.svelte';
 	import { appearanceStore } from '$stores/appearance.svelte';
+	import { presenceStore } from '$stores/presence.svelte';
+	import { voiceRoomsStore } from '$stores/voiceRooms.svelte';
 
 	let { children } = $props();
 	let activeUserId = $state(sessionStore.user?.id ?? null);
@@ -47,6 +49,20 @@
 			socketStore.connect(token);
 		} else {
 			socketStore.disconnect();
+		}
+	});
+
+	// Global presence tracking
+	$effect(() => {
+		if (socketStore.instance) {
+			return presenceStore.init();
+		}
+	});
+
+	// Global voice room tracking
+	$effect(() => {
+		if (socketStore.instance) {
+			return voiceRoomsStore.init();
 		}
 	});
 
