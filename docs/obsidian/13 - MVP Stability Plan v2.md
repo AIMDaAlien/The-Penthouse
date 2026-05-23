@@ -111,6 +111,11 @@ Status: in progress
 - Nightly PostgreSQL dumps now run through TrueNAS cron job `1` at 03:00, with dumps under `/mnt/Backup/penthouse-rebuild/backups/postgres/`; restore was tested successfully.
 - TrueNAS stack watchdog tooling now exists for public uptime recovery: `scripts/truenas-stack-watchdog.sh --boot` is intended for post-init reboot recovery, `--once` is intended for one-minute cron recovery, and failure reports identify cases like missing Docker overlay2 layers under `/mnt/.ix-apps/docker/overlay2`.
 - Known frontend follow-up: the welcome page still loads Erode from a third-party font CDN that returned HTTP 500 during smoke. It falls back, but the dependency should be removed or self-hosted.
+- 2026-05-23 frontend cleanup and deduplication pass is complete on the active SvelteKit alpha branch:
+  - 8 dead files and 4 unused dependencies removed from `apps/web/`
+  - emoji data deduplicated; `jscpd` reports 0 clones across frontend
+  - `mediasoup-client` retained as a documented future seam for voice/video chat
+  - all validation passes: typecheck, build, tests, audit clean
 - 2026-05-22 E2E hardening pass is complete on the active SvelteKit alpha branch:
   - welcome/auth routing is explicitly guarded for signed-out and signed-in users
   - ambient presence and voice-room summaries are wired through contracts, API sockets, and global web stores

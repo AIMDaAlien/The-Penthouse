@@ -182,6 +182,4 @@ export async function unsubscribeFromPush(): Promise<SubscribeResult> {
 	return { ok: true };
 }
 
-// Aliases for backward compatibility
-export const subscribe = subscribeToPush;
-export const unsubscribe = unsubscribeFromPush;
+

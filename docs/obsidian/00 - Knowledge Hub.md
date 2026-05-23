@@ -166,6 +166,12 @@ The `pwa` branch is the active development branch and public deployment target. 
   - GIF/sticker sends, mobile composer spacing, own-profile messaging, and media-picker accessibility were corrected
   - active Chromium browser proof passed for auth, chat, GIFs, users, reactions/replies/pins, voice, audio, local sync, and GIF accessibility slices
   - `npm run validate` passes locally with the test Postgres/JWT environment
+- 2026-05-23 frontend cleanup and deduplication pass completed on the active SvelteKit branch:
+  - 8 dead files removed (`MediaComposer`, `settings.svelte.ts`, `sync/queries.ts`, `messageFormat.ts`, `emoji-data-common.ts`, `build-logo-gallery.mjs`, and test/utils)
+  - 4 dead dependencies removed (`@types/dompurify`, `@testing-library/svelte`, `playwright-lighthouse`, `web-vitals`)
+  - `mediasoup-client` kept as an intentional future seam for planned voice/video chat SFU integration
+  - emoji data deduplicated: `jscpd` now reports 0 clones (was 2 clones, 137 duplicated lines)
+  - all validation passes: `typecheck` 0 errors, `build` green, `test` 4/4, `npm audit` 0 vulnerabilities
 - Strict DB release gate still needs a rerun in a working Docker/Postgres environment.
 - Manual mobile PWA install proof is still needed on a real iOS/Android browser.
 - The third-party Erode font CDN request should be removed or self-hosted in the next frontend pass.

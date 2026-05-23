@@ -224,6 +224,24 @@ Known follow-up:
 - The welcome page's third-party Erode font CSS returned HTTP 500 during smoke. The page falls back successfully, but the font should be removed or self-hosted during the next frontend pass.
 - Manual Add-to-Home-Screen proof is still needed on a real mobile browser.
 
+### 2026-05-23 - Frontend cleanup and deduplication pass
+
+Highlights:
+- Removed 8 dead frontend files: `MediaComposer.svelte` (+ utils + test), `settings.svelte.ts`, `sync/queries.ts`, `messageFormat.ts`, `emoji-data-common.ts`, `build-logo-gallery.mjs`.
+- Removed 4 unused dependencies: `@types/dompurify`, `@testing-library/svelte`, `playwright-lighthouse`, `web-vitals`.
+- Kept `mediasoup-client` as an intentional future seam for planned voice/video chat SFU integration.
+- Deduplicated emoji data: removed `emoji-data-common.ts` (111 entries that were identical to the start of `emoji-data-full.ts`).
+- `jscpd` now reports 0 clones across the frontend (was 2 clones, 137 duplicated lines, 2.02% tokens).
+- Removed dead exports: `subscribe`/`unsubscribe` aliases from `push/subscribe.ts`, `tokensFor` from `themes.ts`.
+- `npm install` removed 183 transitive packages with 0 vulnerabilities.
+
+Validation:
+- `typecheck`: 0 errors, 0 warnings.
+- `build`: SSR 256 modules, client 307 modules, service worker 68 modules, PWA precache 53 entries.
+- `test`: 4/4 passed.
+- `jscpd`: 0 clones, 0% duplication.
+- Scope discipline: only `apps/web/` touched; zero backend or contracts changes.
+
 ### 2026-05-22 - Ambient presence and E2E hardening sweep
 
 Highlights:

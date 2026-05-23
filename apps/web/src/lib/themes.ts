@@ -146,6 +146,3 @@ export const themes: ThemeDef[] = [
 	},
 ];
 
-export function tokensFor(theme: ThemeDef, mode: ThemeMode): PaletteVars {
-	return theme[mode];
-}
