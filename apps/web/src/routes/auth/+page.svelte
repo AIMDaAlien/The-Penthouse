@@ -35,6 +35,7 @@
 		maxOk: password.length <= PASSWORD_MAX,
 		noSpace: password === password.trim() || password.length === 0
 	});
+	const passwordsMatch = $derived(password === confirmPassword && confirmPassword.length > 0);
 
 	const canSubmit = $derived(
 		mode === 'login' || (
@@ -179,6 +180,7 @@
 					<div class="requirements">
 						<div class="req" class:met={strength.minMet}><span>●</span> {PASSWORD_MIN}–{PASSWORD_MAX} characters ({password.length})</div>
 						<div class="req" class:met={strength.noSpace}><span>●</span> No leading/trailing spaces</div>
+						<div class="req" class:met={passwordsMatch}><span>●</span> Passwords match</div>
 					</div>
 				</div>
 
