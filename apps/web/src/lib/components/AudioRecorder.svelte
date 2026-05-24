@@ -179,6 +179,7 @@
 		background: var(--p-accent);
 		color: var(--p-bg);
 		border: none;
+		padding: 0;
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -200,6 +201,7 @@
 		background: var(--p-surface-2);
 		color: var(--p-text-2);
 		border: none;
+		padding: 0;
 		display: flex;
 		align-items: center;
 		justify-content: center;

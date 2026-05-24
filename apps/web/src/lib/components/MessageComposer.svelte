@@ -263,6 +263,7 @@
 		background: var(--p-accent);
 		color: var(--p-bg);
 		border: none;
+		padding: 0;
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -291,6 +292,7 @@
 		height: 44px;
 		border-radius: 50%;
 		border: none;
+		padding: 0;
 		display: flex;
 		align-items: center;
 		justify-content: center;

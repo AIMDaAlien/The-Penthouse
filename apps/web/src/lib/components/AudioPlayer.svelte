@@ -125,6 +125,7 @@
 	.play-btn {
 		width: 36px;
 		height: 36px;
+		padding: 0;
 		border-radius: 50%;
 		background: var(--p-accent);
 		color: var(--p-bg);

@@ -233,6 +233,7 @@
 		place-items: center;
 		width: 40px;
 		height: 40px;
+		padding: 0;
 		margin-right: var(--space-sm);
 		border: none;
 		border-radius: var(--radius-md);

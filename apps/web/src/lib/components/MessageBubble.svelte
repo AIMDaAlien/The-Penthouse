@@ -246,7 +246,6 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-xs);
-		overflow: hidden;
 	}
 
 	.row.own .bubble {
@@ -393,7 +392,7 @@
 		background: none;
 		border: none;
 		color: var(--p-muted);
-		padding: 6px;
+		padding: 0;
 		border-radius: var(--radius-sm);
 		cursor: pointer;
 		display: flex;
