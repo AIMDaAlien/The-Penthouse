@@ -31,7 +31,7 @@
 		flex-direction: column;
 		align-items: center;
 		gap: 6px;
-		padding: 10px 4px;
+		padding: 10px 8px;
 		background: transparent;
 		border: 1px solid var(--p-line-2);
 		border-radius: var(--r-sm);
@@ -58,7 +58,7 @@
 
 	.theme-label {
 		font-family: var(--font-mono);
-		font-size: 0.54rem;
+		font-size: 0.65rem;
 		letter-spacing: 1px;
 		text-transform: uppercase;
 	}

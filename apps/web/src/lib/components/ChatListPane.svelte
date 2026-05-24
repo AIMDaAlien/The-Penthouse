@@ -398,6 +398,9 @@
 		display: flex;
 		align-items: center;
 		transition: background 0.15s;
+		min-width: 44px;
+		min-height: 44px;
+		justify-content: center;
 	}
 
 	.icon-btn:hover {
@@ -434,6 +437,12 @@
 		min-height: 0;
 		padding: 4px 0 var(--space-lg);
 		position: relative;
+	}
+
+	@media (max-width: 767px) {
+		.list {
+			padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+		}
 	}
 
 	.empty {

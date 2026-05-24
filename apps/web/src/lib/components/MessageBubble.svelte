@@ -140,13 +140,13 @@
 			{#if !isDeleted}
 				<div class="actions">
 					<button class="action-btn" onclick={() => onReply?.(message)} aria-label="Reply">
-						<Icon name="arrowLeft" size={14} />
+						<Icon name="arrowLeft" size={16} />
 					</button>
 					<button class="action-btn" onclick={() => { showEmojiPicker = !showEmojiPicker; showMenu = false; }} aria-label="React">
-						<Icon name="emoji" size={14} />
+						<Icon name="emoji" size={16} />
 					</button>
 					<button class="action-btn" onclick={() => { showMenu = !showMenu; showEmojiPicker = false; }} aria-label="More">
-						<Icon name="more" size={14} />
+						<Icon name="more" size={16} />
 					</button>
 				</div>
 
@@ -246,6 +246,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-xs);
+		overflow: hidden;
 	}
 
 	.row.own .bubble {
@@ -375,22 +376,32 @@
 		right: 4px;
 		background: var(--p-surface-2);
 		border-radius: var(--radius-sm);
-		padding: 2px 4px;
+		padding: 4px 6px;
 	}
 	.bubble:hover .actions {
 		opacity: 1;
+	}
+
+	/* Always show actions on touch devices (no hover) */
+	@media (hover: none) {
+		.actions {
+			opacity: 1;
+		}
 	}
 
 	.action-btn {
 		background: none;
 		border: none;
 		color: var(--p-muted);
-		padding: 2px;
+		padding: 6px;
 		border-radius: var(--radius-sm);
 		cursor: pointer;
 		display: flex;
 		align-items: center;
 		transition: color 0.15s;
+		min-width: 44px;
+		min-height: 44px;
+		justify-content: center;
 	}
 
 	.action-btn:hover {

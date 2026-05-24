@@ -59,7 +59,7 @@
 
 	.col-label {
 		font-family: var(--font-mono);
-		font-size: 0.58rem;
+		font-size: 0.65rem;
 		letter-spacing: 1.8px;
 		text-transform: uppercase;
 		color: var(--p-muted);
@@ -97,7 +97,7 @@
 
 	.mode-card-label {
 		font-family: var(--font-mono);
-		font-size: 0.62rem;
+		font-size: 0.7rem;
 		letter-spacing: 1.5px;
 		text-transform: uppercase;
 	}

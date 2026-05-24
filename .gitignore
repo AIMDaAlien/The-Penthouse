@@ -12,4 +12,5 @@ infra/production.env
 coverage/
 *.tsbuildinfo
 apps/web/test-results/
+apps/web/e2e/screenshots/
 services/api/uploads/

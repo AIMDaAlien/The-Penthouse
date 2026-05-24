@@ -296,8 +296,9 @@
 	}
 
 	.search-bar button {
-		width: 36px;
-		height: 36px;
+		width: 44px;
+		height: 44px;
+		min-width: 44px;
 		border-radius: var(--r-sm);
 		background: var(--p-surface-2);
 		border: 1px solid var(--p-line);
@@ -318,6 +319,12 @@
 		gap: 2px;
 	}
 
+	@media (max-width: 767px) {
+		.list-body {
+			padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+		}
+	}
+
 	.roster-item {
 		display: flex;
 		align-items: center;
@@ -329,6 +336,8 @@
 		cursor: pointer;
 		transition: background 0.15s;
 		width: 100%;
+		min-width: 100%;
+		box-sizing: border-box;
 		text-align: left;
 		color: inherit;
 	}
@@ -366,7 +375,7 @@
 
 	.r-role {
 		font-family: var(--font-mono);
-		font-size: 0.65rem;
+		font-size: 0.7rem;
 		letter-spacing: 1.2px;
 		text-transform: uppercase;
 		color: var(--p-muted);
@@ -388,8 +397,8 @@
 		position: absolute;
 		top: var(--sp-3);
 		left: var(--sp-3);
-		width: 30px;
-		height: 30px;
+		width: 44px;
+		height: 44px;
 		background: transparent;
 		border: 1px solid var(--p-line-2);
 		border-radius: var(--r-pill);

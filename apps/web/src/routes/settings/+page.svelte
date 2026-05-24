@@ -283,6 +283,9 @@
 		display: flex;
 		align-items: center;
 		transition: background 0.15s;
+		min-width: 44px;
+		min-height: 44px;
+		justify-content: center;
 	}
 
 	.back-btn:hover { background: var(--p-surface-2); }
@@ -299,6 +302,12 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-xl);
+	}
+
+	@media (max-width: 767px) {
+		.body {
+			padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+		}
 	}
 
 	.profile-section {
@@ -435,7 +444,7 @@
 		border-bottom: 1px solid var(--p-line);
 		border-radius: 0;
 		color: var(--p-text);
-		padding: var(--space-sm) 0;
+		padding: var(--space-md) 0;
 		outline: none;
 		font-family: inherit;
 		font-size: var(--text-base);
@@ -467,11 +476,12 @@
 		color: var(--p-text);
 		cursor: pointer;
 		gap: var(--space-md);
+		min-height: 44px;
 	}
 
 	.toggle-row input[type="checkbox"] {
-		width: 20px;
-		height: 20px;
+		width: 44px;
+		height: 44px;
 		accent-color: var(--p-accent);
 		cursor: pointer;
 		flex-shrink: 0;
@@ -488,6 +498,7 @@
 		cursor: pointer;
 		align-self: flex-start;
 		transition: background 0.15s;
+		min-height: 44px;
 	}
 
 	.btn-secondary:hover { background: var(--p-line); }

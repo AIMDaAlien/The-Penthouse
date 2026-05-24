@@ -276,7 +276,7 @@
 
 	.tab {
 		flex: 1;
-		padding: var(--space-sm) var(--space-md);
+		padding: var(--space-md) var(--space-md);
 		background: none;
 		border: none;
 		border-radius: var(--radius-pill);
@@ -285,6 +285,7 @@
 		font-weight: var(--weight-medium);
 		transition: color 0.15s, background 0.15s;
 		cursor: pointer;
+		min-height: 44px;
 	}
 
 	.tab.active {
@@ -368,12 +369,13 @@
 		border-bottom: 1px solid var(--p-line);
 		border-radius: 0;
 		color: var(--p-text);
-		padding: var(--space-sm) 0;
+		padding: var(--space-md) 0;
 		outline: none;
 		transition: border-color 0.2s;
 		width: 100%;
 		font-family: inherit;
 		font-size: var(--text-base);
+		min-height: 44px;
 	}
 
 	input:focus { border-color: var(--p-accent); }

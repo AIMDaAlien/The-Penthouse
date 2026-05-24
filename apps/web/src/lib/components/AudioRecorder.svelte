@@ -173,8 +173,8 @@
 	}
 
 	.record-btn {
-		width: 40px;
-		height: 40px;
+		width: 44px;
+		height: 44px;
 		border-radius: 50%;
 		background: var(--p-accent);
 		color: var(--p-bg);
@@ -194,8 +194,8 @@
 	}
 
 	.cancel-btn {
-		width: 32px;
-		height: 32px;
+		width: 44px;
+		height: 44px;
 		border-radius: 50%;
 		background: var(--p-surface-2);
 		color: var(--p-text-2);

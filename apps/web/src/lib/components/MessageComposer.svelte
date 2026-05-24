@@ -247,7 +247,7 @@
 		border: 1px solid var(--p-line);
 		border-radius: var(--radius-pill);
 		color: var(--p-text);
-		padding: var(--space-sm) var(--space-md);
+		padding: 12px var(--space-md);
 		font-size: var(--text-base);
 		font-family: inherit;
 		outline: none;
@@ -257,8 +257,8 @@
 	input[type="text"]:disabled { opacity: 0.5; }
 
 	button[type="submit"] {
-		width: 40px;
-		height: 40px;
+		width: 44px;
+		height: 44px;
 		border-radius: 50%;
 		background: var(--p-accent);
 		color: var(--p-bg);
@@ -287,8 +287,8 @@
 	.attach-btn, .tool-btn {
 		background: none;
 		color: var(--p-text-2);
-		width: 40px;
-		height: 40px;
+		width: 44px;
+		height: 44px;
 		border-radius: 50%;
 		border: none;
 		display: flex;
@@ -370,8 +370,8 @@
 		button[type="submit"],
 		.attach-btn,
 		.tool-btn {
-			width: 36px;
-			height: 36px;
+			width: 44px;
+			height: 44px;
 		}
 
 		.composer :global(.recorder) {
@@ -379,8 +379,8 @@
 		}
 
 		.composer :global(.record-btn) {
-			width: 36px;
-			height: 36px;
+			width: 44px;
+			height: 44px;
 		}
 	}
 

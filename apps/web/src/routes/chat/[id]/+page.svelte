@@ -466,6 +466,18 @@
 		}
 	}
 
+	async function handleMediaSend(file: File) {
+		try {
+			const upload = await media.upload(file);
+			const mediaUrl = upload.url.startsWith('http') ? upload.url : `${env.PUBLIC_API_URL ?? 'http://localhost:3000'}${upload.url}`;
+			const messageType: Message['type'] = file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : 'file';
+			const label = messageType === 'image' ? '[Image]' : messageType === 'video' ? '[Video]' : '[File]';
+			sendMessage(label, messageType, { url: mediaUrl });
+		} catch {
+			// Non-critical: media upload failed
+		}
+	}
+
 	function sendMessage(content: string, messageType: Message['type'], metadata?: Record<string, unknown>) {
 		const clientMessageId = genClientId();
 		const optimistic: Message = {
@@ -934,6 +946,7 @@
 		onTypingStart={handleTypingStart}
 		onTypingStop={handleTypingStop}
 		onAudioRecord={handleAudioRecord}
+		onMediaSend={handleMediaSend}
 		onGifSelect={handleGifSelect}
 		onStickerSelect={handleStickerSelect}
 		replyTo={replyToMessage ? {
@@ -981,6 +994,9 @@
 		display: flex;
 		align-items: center;
 		transition: background 0.15s;
+		min-width: 44px;
+		min-height: 44px;
+		justify-content: center;
 	}
 
 	.back-btn:hover { background: var(--p-surface-2); }
@@ -1002,7 +1018,7 @@
 		display: flex;
 		align-items: center;
 		gap: var(--space-xs);
-		padding: var(--space-xs) var(--space-sm);
+		padding: var(--space-sm) var(--space-md);
 		border: 1px solid var(--p-line);
 		border-radius: var(--radius-pill);
 		background: var(--p-surface-2);
@@ -1010,6 +1026,7 @@
 		font-size: var(--text-sm);
 		cursor: pointer;
 		transition: background 0.1s, color 0.1s, border-color 0.1s;
+		min-height: 44px;
 	}
 
 	.voice-btn:hover {
@@ -1210,6 +1227,8 @@
 		justify-content: center;
 		transition: background 0.15s, color 0.15s;
 		margin-left: auto;
+		min-width: 44px;
+		min-height: 44px;
 	}
 	.search-toggle:hover {
 		background: var(--p-surface-2);
@@ -1290,6 +1309,8 @@
 		align-items: center;
 		justify-content: center;
 		transition: background 0.15s, color 0.15s;
+		min-width: 44px;
+		min-height: 44px;
 	}
 	.menu-toggle:hover {
 		background: var(--p-surface-2);

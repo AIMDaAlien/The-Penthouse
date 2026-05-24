@@ -106,7 +106,7 @@
 		width: 100%;
 		max-width: 400px;
 		margin: 0 auto;
-		height: 64px;
+		height: 68px;
 		display: flex;
 		align-items: stretch;
 		background: oklch(0.16 0.020 280 / 0.85);
@@ -194,7 +194,7 @@
 	}
 
 	.tab-label {
-		font-size: 0.6rem;
+		font-size: 0.65rem;
 		font-weight: 500;
 		letter-spacing: 0.06em;
 		text-transform: uppercase;

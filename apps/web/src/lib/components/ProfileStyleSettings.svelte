@@ -21,6 +21,7 @@
 			class="profile-style-btn"
 			class:active={value === opt.id}
 			onclick={() => onChange?.(opt.id)}
+			style="min-height: 44px;"
 		>
 			<span class="psb-label">{opt.label}</span>
 			<span class="psb-desc">{opt.description}</span>
@@ -40,7 +41,8 @@
 		flex-direction: column;
 		align-items: flex-start;
 		gap: 3px;
-		padding: 10px 14px;
+		padding: 14px 20px;
+		min-height: 44px;
 		background: transparent;
 		border: 1px solid var(--p-line-2);
 		border-radius: var(--r-md);
@@ -64,7 +66,7 @@
 
 	.psb-desc {
 		font-family: var(--font-mono);
-		font-size: 0.6rem;
+		font-size: 0.7rem;
 		letter-spacing: 1px;
 		color: var(--p-muted);
 	}
