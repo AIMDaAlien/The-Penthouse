@@ -24,7 +24,8 @@ jobs:
           --health-retries 5
     env:
       DATABASE_URL: postgresql://penthouse:penthouse@localhost:5433/penthouse_test
-      JWT_SECRET: ci-test-jwt-secret-long-enough
+      JWT_SECRET: ci-test-jwt-secret-long-enough-123456
+      MEDIA_SIGNING_KEY: ci-test-media-signing-key-long-enough
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -54,7 +55,8 @@ jobs:
           --health-retries 5
     env:
       DATABASE_URL: postgresql://penthouse:penthouse@localhost:5432/penthouse_test
-      JWT_SECRET: ci-test-jwt-secret-long-enough
+      JWT_SECRET: ci-test-jwt-secret-long-enough-123456
+      MEDIA_SIGNING_KEY: ci-test-media-signing-key-long-enough
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

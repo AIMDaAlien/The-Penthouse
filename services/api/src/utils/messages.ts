@@ -7,13 +7,18 @@ import {
   messageDeletions,
   messageEdits,
   messageReactions,
+  mediaUploads,
   messages,
   users
 } from '../db/schema.js';
 import { badRequest, forbidden, notFound } from './error-responses.js';
 import { avatarUrlFromMediaId } from './users.js';
 import { appendSyncEvent } from '../features/sync/events.js';
-import { assertMessageMediaRefsAllowed, rewriteMessageMediaUrls } from './media-access.js';
+import {
+  assertMessageMediaRefsAllowed,
+  mediaIdsFromMetadata,
+  rewriteMessageMediaUrlsFromRows
+} from './media-access.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 type MessageReader = Pick<typeof db, 'select'>;
@@ -62,7 +67,20 @@ export async function assertChatMember(chatId: string, userId: string) {
 }
 
 export async function hydrateMessage(messageId: string, viewerUserId?: string, reader: MessageReader = db): Promise<Message> {
-  const [row] = await reader.select({
+  const [message] = await hydrateMessages([messageId], viewerUserId, reader);
+  if (!message) throw notFound('Message not found');
+  return message;
+}
+
+export async function hydrateMessages(
+  messageIds: string[],
+  viewerUserId?: string,
+  reader: MessageReader = db
+): Promise<Message[]> {
+  const orderedIds = [...new Set(messageIds)];
+  if (orderedIds.length === 0) return [];
+
+  const rows = await reader.select({
     message: messages,
     sender: users,
     deletion: messageDeletions
@@ -70,67 +88,108 @@ export async function hydrateMessage(messageId: string, viewerUserId?: string, r
     .from(messages)
     .innerJoin(users, eq(messages.senderId, users.id))
     .leftJoin(messageDeletions, eq(messages.id, messageDeletions.messageId))
-    .where(eq(messages.id, messageId))
-    .limit(1);
+    .where(inArray(messages.id, orderedIds));
 
-  if (!row) throw notFound('Message not found');
-
-  const [{ value: editCount }] = await reader.select({ value: count() })
+  const editRows = await reader.select({
+    messageId: messageEdits.messageId,
+    createdAt: messageEdits.createdAt
+  })
     .from(messageEdits)
-    .where(eq(messageEdits.messageId, messageId));
+    .where(inArray(messageEdits.messageId, orderedIds));
 
-  const [latestEdit] = await reader.select()
-    .from(messageEdits)
-    .where(eq(messageEdits.messageId, messageId))
-    .orderBy(desc(messageEdits.createdAt))
-    .limit(1);
+  const editCounts = new Map<string, number>();
+  const latestEdits = new Map<string, Date>();
+  for (const edit of editRows) {
+    editCounts.set(edit.messageId, (editCounts.get(edit.messageId) ?? 0) + 1);
+    const latest = latestEdits.get(edit.messageId);
+    if (!latest || edit.createdAt > latest) latestEdits.set(edit.messageId, edit.createdAt);
+  }
 
-  const reactionRows = await reader.select().from(messageReactions).where(eq(messageReactions.messageId, messageId));
-  const reactions = new Map<string, string[]>();
+  const reactionRows = await reader.select()
+    .from(messageReactions)
+    .where(inArray(messageReactions.messageId, orderedIds));
+  const reactionsByMessage = new Map<string, Map<string, string[]>>();
   for (const reaction of reactionRows) {
+    let reactions = reactionsByMessage.get(reaction.messageId);
+    if (!reactions) {
+      reactions = new Map<string, string[]>();
+      reactionsByMessage.set(reaction.messageId, reactions);
+    }
     reactions.set(reaction.emoji, [...(reactions.get(reaction.emoji) ?? []), reaction.userId]);
   }
 
   const readRows = await reader.select({
+    messageId: chatMembers.lastReadMessageId,
     userId: chatMembers.userId,
     readAt: chatMembers.lastReadAt
   })
     .from(chatMembers)
-    .where(and(eq(chatMembers.chatId, row.message.chatId), eq(chatMembers.lastReadMessageId, messageId)));
+    .where(inArray(chatMembers.lastReadMessageId, orderedIds));
 
-  let replyTo: Message['replyTo'] = null;
-  if (row.message.replyToSnapshot && typeof row.message.replyToSnapshot === 'object') {
-    replyTo = row.message.replyToSnapshot as Message['replyTo'];
+  const readReceiptsByMessage = new Map<string, Array<{ userId: string; readAt: Date }>>();
+  for (const receipt of readRows) {
+    if (!receipt.messageId || !receipt.readAt) continue;
+    const receipts = readReceiptsByMessage.get(receipt.messageId) ?? [];
+    receipts.push({ userId: receipt.userId, readAt: receipt.readAt });
+    readReceiptsByMessage.set(receipt.messageId, receipts);
   }
 
-  const hiddenByModeration = row.message.hiddenByModeration;
+  const mediaIds = [...new Set(rows.flatMap(({ message }) => mediaIdsFromMetadata(message.metadata)))];
+  const mediaRows = mediaIds.length > 0
+    ? await reader.select({
+      id: mediaUploads.id,
+      uploaderId: mediaUploads.uploaderId,
+      scope: mediaUploads.scope
+    }).from(mediaUploads).where(inArray(mediaUploads.id, mediaIds))
+    : [];
 
-  return {
-    id: row.message.id,
-    chatId: row.message.chatId,
-    senderId: row.message.senderId,
-    senderUsername: row.sender.username,
-    senderDisplayName: row.sender.displayName,
-    senderAvatarUrl: avatarUrlFromMediaId(row.sender.avatarMediaId),
-    content: hiddenByModeration ? 'Message removed by moderation.' : row.message.content,
-    type: hiddenByModeration ? 'text' : row.message.messageType,
-    metadata: hiddenByModeration ? null : await rewriteMessageMediaUrls(row.message.metadata, row.message.senderId, reader) as Message['metadata'],
-    createdAt: row.message.createdAt.toISOString(),
-    editedAt: latestEdit?.createdAt.toISOString() ?? null,
-    editCount,
-    deletedAt: row.deletion?.deletedAt.toISOString() ?? null,
-    deletedByUserId: row.deletion?.deletedByUserId ?? null,
-    clientMessageId: row.message.clientMessageId ?? undefined,
-    readReceipts: readRows.map((receipt) => ({
-      userId: receipt.userId,
-      readAt: receipt.readAt.toISOString()
-    })),
-    reactions: [...reactions.entries()].map(([emoji, userIds]) => ({ emoji, userIds })),
-    replyTo,
-    starred: false,
-    hidden: hiddenByModeration,
-    seenAt: viewerUserId === row.message.senderId ? row.message.createdAt.toISOString() : null
-  };
+  const byId = new Map(rows.map((row) => [row.message.id, row]));
+  const hydrated: Message[] = [];
+
+  for (const messageId of orderedIds) {
+    const row = byId.get(messageId);
+    if (!row) continue;
+
+    let replyTo: Message['replyTo'] = null;
+    if (row.message.replyToSnapshot && typeof row.message.replyToSnapshot === 'object') {
+      replyTo = row.message.replyToSnapshot as Message['replyTo'];
+    }
+
+    const hiddenByModeration = row.message.hiddenByModeration;
+    const reactions = reactionsByMessage.get(row.message.id) ?? new Map<string, string[]>();
+    const readReceipts = readReceiptsByMessage.get(row.message.id) ?? [];
+
+    hydrated.push({
+      id: row.message.id,
+      chatId: row.message.chatId,
+      senderId: row.message.senderId,
+      senderUsername: row.sender.username,
+      senderDisplayName: row.sender.displayName,
+      senderAvatarUrl: avatarUrlFromMediaId(row.sender.avatarMediaId),
+      content: hiddenByModeration ? 'Message removed by moderation.' : row.message.content,
+      type: hiddenByModeration ? 'text' : row.message.messageType,
+      metadata: hiddenByModeration
+        ? null
+        : rewriteMessageMediaUrlsFromRows(row.message.metadata, row.message.senderId, mediaRows) as Message['metadata'],
+      createdAt: row.message.createdAt.toISOString(),
+      editedAt: latestEdits.get(row.message.id)?.toISOString() ?? null,
+      editCount: editCounts.get(row.message.id) ?? 0,
+      deletedAt: row.deletion?.deletedAt.toISOString() ?? null,
+      deletedByUserId: row.deletion?.deletedByUserId ?? null,
+      clientMessageId: row.message.clientMessageId ?? undefined,
+      readReceipts: readReceipts.map((receipt) => ({
+        userId: receipt.userId,
+        readAt: receipt.readAt.toISOString()
+      })),
+      reactions: [...reactions.entries()].map(([emoji, userIds]) => ({ emoji, userIds })),
+      replyTo,
+      starred: false,
+      hidden: hiddenByModeration,
+      seenAt: viewerUserId === row.message.senderId ? row.message.createdAt.toISOString() : null
+    });
+  }
+
+  return hydrated;
 }
 
 export async function listMessages(chatId: string, viewerUserId: string, before?: string) {
@@ -144,11 +203,7 @@ export async function listMessages(chatId: string, viewerUserId: string, before?
     .orderBy(desc(messages.createdAt))
     .limit(50);
 
-  const hydrated = [];
-  for (const row of rows.reverse()) {
-    hydrated.push(await hydrateMessage(row.id, viewerUserId));
-  }
-  return hydrated;
+  return hydrateMessages(rows.reverse().map((row) => row.id), viewerUserId);
 }
 
 export async function createMessage(input: {

@@ -3,7 +3,8 @@ import { z } from 'zod';
 
 const EnvSchema = z.object({
   DATABASE_URL: z.string().url().default('postgres://penthouse:penthouse@localhost:5434/penthouse'),
-  JWT_SECRET: z.string().min(16).default('dev-secret-change-me-at-least-16'),
+  JWT_SECRET: z.string().min(32),
+  MEDIA_SIGNING_KEY: z.string().min(32).optional(),
   JWT_ACCESS_EXPIRY: z.string().default('15m'),
   JWT_REFRESH_EXPIRY: z.string().default('7d'),
   ALTCHA_HMAC_KEY: z.string().optional(),
@@ -36,6 +37,14 @@ const EnvSchema = z.object({
   TURN_URL: z.string().optional(),
   TURN_USERNAME: z.string().optional(),
   TURN_CREDENTIAL: z.string().optional()
+}).superRefine((value, ctx) => {
+  if (value.NODE_ENV === 'production' && !value.MEDIA_SIGNING_KEY) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['MEDIA_SIGNING_KEY'],
+      message: 'MEDIA_SIGNING_KEY is required in production'
+    });
+  }
 });
 
 const parsedEnv = EnvSchema.parse(process.env);

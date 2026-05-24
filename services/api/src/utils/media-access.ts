@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { inArray } from 'drizzle-orm';
-import { env } from '../config/env.js';
+import { env, isProduction } from '../config/env.js';
 import { db } from '../db/pool.js';
 import { mediaUploads } from '../db/schema.js';
 import { forbidden } from './error-responses.js';
@@ -11,6 +11,11 @@ const PRIVATE_MEDIA_PATH_RE = /\/api\/v1\/media\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][
 
 type DbReader = Pick<typeof db, 'select'>;
 type MessageMetadata = Record<string, unknown>;
+export type MediaAccessRow = {
+  id: string;
+  uploaderId: string;
+  scope: string;
+};
 type SignedMediaPayload = {
   mediaId: string;
   exp: number;
@@ -87,15 +92,28 @@ export async function rewriteMessageMediaUrls(
 ) {
   if (!isMetadataObject(metadata)) return metadata;
 
-  const rewritten: MessageMetadata = { ...metadata };
   const mediaIds = mediaIdsFromMetadata(metadata);
-  if (mediaIds.length === 0) return rewritten;
+  if (mediaIds.length === 0) return { ...metadata };
 
   const rows = await reader.select({
     id: mediaUploads.id,
     uploaderId: mediaUploads.uploaderId,
     scope: mediaUploads.scope
   }).from(mediaUploads).where(inArray(mediaUploads.id, mediaIds));
+  return rewriteMessageMediaUrlsFromRows(metadata, senderId, rows);
+}
+
+export function rewriteMessageMediaUrlsFromRows(
+  metadata: unknown,
+  senderId: string,
+  rows: MediaAccessRow[]
+) {
+  if (!isMetadataObject(metadata)) return metadata;
+
+  const rewritten: MessageMetadata = { ...metadata };
+  const mediaIds = mediaIdsFromMetadata(metadata);
+  if (mediaIds.length === 0) return rewritten;
+
   const signableIds = new Set(
     rows
       .filter((row) => row.scope === 'private' && row.uploaderId === senderId)
@@ -113,7 +131,7 @@ export async function rewriteMessageMediaUrls(
   return rewritten;
 }
 
-function mediaIdsFromMetadata(metadata: unknown) {
+export function mediaIdsFromMetadata(metadata: unknown) {
   if (!isMetadataObject(metadata)) return [];
   return [...new Set(
     MEDIA_URL_KEYS
@@ -141,8 +159,14 @@ function isMetadataObject(value: unknown): value is MessageMetadata {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+const signingKey = env.MEDIA_SIGNING_KEY ?? env.JWT_SECRET;
+if (isProduction && !env.MEDIA_SIGNING_KEY) {
+  console.warn('[security] MEDIA_SIGNING_KEY is not set; falling back to JWT_SECRET. Set MEDIA_SIGNING_KEY to isolate media signing.');
+}
+
 function sign(encodedPayload: string) {
-  return createHmac('sha256', env.JWT_SECRET).update(encodedPayload).digest('base64url');
+  // TODO: remove JWT_SECRET fallback once all environments define MEDIA_SIGNING_KEY
+  return createHmac('sha256', signingKey).update(encodedPayload).digest('base64url');
 }
 
 function safeEqual(a: string, b: string) {

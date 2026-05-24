@@ -26,6 +26,7 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in infra/production.env}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in infra/production.env}
+      MEDIA_SIGNING_KEY: ${MEDIA_SIGNING_KEY:?Set MEDIA_SIGNING_KEY in infra/production.env}
       JWT_ACCESS_EXPIRY: ${JWT_ACCESS_EXPIRY:-15m}
       JWT_REFRESH_EXPIRY: ${JWT_REFRESH_EXPIRY:-7d}
       ALTCHA_HMAC_KEY: ${ALTCHA_HMAC_KEY:?Set ALTCHA_HMAC_KEY in infra/production.env}
@@ -65,7 +66,7 @@ services:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 10s
       timeout: 5s
       retries: 12

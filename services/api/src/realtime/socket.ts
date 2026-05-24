@@ -27,6 +27,7 @@ import {
 import { appEvents } from '../core/events.js';
 import { appendSyncEvent, getSyncResponse } from '../features/sync/service.js';
 import { closeSocketMediaSessions, registerMediaSignaling } from './media-signaling.js';
+import { sanitizeMessageContent } from '../utils/sanitize.js';
 import { assertActiveSession } from '../utils/sessions.js';
 import { AppError } from '../utils/error-responses.js';
 import { setSocketPresence } from '../utils/presence.js';
@@ -370,7 +371,7 @@ export function registerSocket(io: Server, fastify: FastifyInstance) {
       const result = await createMessage({
         chatId,
         senderId: socket.data.userId,
-        content: parsed.content,
+        content: sanitizeMessageContent(parsed.content),
         messageType: parsed.messageType,
         metadata: parsed.metadata,
         replyToMessageId: parsed.replyToMessageId,
@@ -402,7 +403,7 @@ export function registerSocket(io: Server, fastify: FastifyInstance) {
       const result = await editMessage({
         messageId: body.messageId,
         editorUserId: socket.data.userId,
-        content: parsed.content
+        content: sanitizeMessageContent(parsed.content)
       });
       io.to(`chat:${result.chatId}`).emit('message.edited', {
         type: 'message.edited',

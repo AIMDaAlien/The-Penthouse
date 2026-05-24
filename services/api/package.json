@@ -24,6 +24,7 @@
     "dotenv": "^16.6.1",
     "drizzle-orm": "^0.45.2",
     "fastify": "^5.8.5",
+    "isomorphic-dompurify": "^3.14.0",
     "mediasoup": "^3.19.22",
     "pg": "^8.20.0",
     "sharp": "^0.34.5",
