@@ -24,6 +24,13 @@ test.describe('auth and routing', () => {
       await page.getByRole('button', { name: 'Create account' }).click();
       await expect(page.getByLabel('Display name')).toBeVisible({ timeout: 1000 });
     }).toPass({ timeout: 5000 });
+    await expect(page.locator('.auth-card form .field > label')).toHaveText([
+      'Username',
+      '(optional) Display name',
+      'Password',
+      'Confirm password',
+      'Invite code'
+    ]);
     await expect(page.getByLabel('Confirm password')).toBeVisible();
     await expect(page.getByLabel('Invite code')).toBeVisible();
   });

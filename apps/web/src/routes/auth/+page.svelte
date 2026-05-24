@@ -20,15 +20,16 @@
 	let error = $state('');
 	let loading = $state(false);
 	let altchaRef = $state<AltchaWidget | null>(null);
-	let altchaReady = $state(false);
 	let altchaFailed = $state(false);
 	let altchaStatus = $state<AltchaState>('unverified');
+	let altchaConfigError = $state('');
 
 	const PASSWORD_MIN = 10;
 	const PASSWORD_MAX = 128;
 	const TEST_NOTICE_VERSION = 'alpha-v1';
-	const skipCaptcha = dev || env.PUBLIC_SKIP_CAPTCHA === 'true';
+	const skipCaptcha = env.PUBLIC_SKIP_CAPTCHA === 'true' || (dev && env.PUBLIC_SKIP_CAPTCHA !== 'false');
 	const ALTCHA_URL = env.PUBLIC_ALTCHA_API_URL || (env.PUBLIC_API_URL ? `${env.PUBLIC_API_URL}/api/v1/auth/challenge` : '');
+	const captchaConfigured = ALTCHA_URL.trim().length > 0;
 
 	const strength = $derived({
 		minMet: password.length >= PASSWORD_MIN,
@@ -42,7 +43,7 @@
 			inviteCode.trim().length > 0 &&
 			password === confirmPassword &&
 			acceptedAlphaNotice &&
-			(skipCaptcha || !!captchaToken)
+			(skipCaptcha || (captchaConfigured && !!captchaToken))
 		)
 	);
 
@@ -54,15 +55,22 @@
 		confirmPassword = '';
 		captchaToken = '';
 		acceptedAlphaNotice = false;
-		altchaReady = false;
 		altchaFailed = false;
+		altchaConfigError = '';
 		altchaStatus = 'unverified';
 		altchaRef?.reset?.();
 	}
 
 	$effect(() => {
 		let alive = true;
+		if (skipCaptcha) return;
+		if (!captchaConfigured) {
+			altchaConfigError = 'CAPTCHA challenge URL is not configured.';
+			altchaFailed = true;
+			return;
+		}
 		if (!window.isSecureContext) {
+			altchaConfigError = 'CAPTCHA requires a secure browser context.';
 			altchaFailed = true;
 			return;
 		}
@@ -73,14 +81,16 @@
 					altchaFailed = true;
 					return;
 				}
-				altchaReady = true;
 			})
-			.catch(() => { altchaFailed = true; });
+			.catch(() => {
+				altchaConfigError = 'CAPTCHA widget failed to load.';
+				altchaFailed = true;
+			});
 		return () => { alive = false; };
 	});
 
 	$effect(() => {
-		if (!altchaRef || !altchaReady) return;
+		if (!altchaRef) return;
 		const onState = (e: Event) => {
 			const d = (e as CustomEvent).detail as { state?: AltchaState; payload?: string; error?: string };
 			altchaStatus = d.state ?? 'unverified';
@@ -107,6 +117,7 @@
 				}
 				if (password !== confirmPassword) { error = 'Passwords do not match.'; loading = false; return; }
 				if (!acceptedAlphaNotice) { error = 'Acknowledge the alpha notice to register.'; loading = false; return; }
+				if (!skipCaptcha && !captchaConfigured) { error = 'CAPTCHA is not configured. Contact the administrator.'; loading = false; return; }
 				if (!skipCaptcha && altchaFailed) { error = 'CAPTCHA failed. Reload and try again.'; loading = false; return; }
 				if (!skipCaptcha && !captchaToken) { error = 'Complete the CAPTCHA challenge.'; loading = false; return; }
 				session = await auth.register({
@@ -151,22 +162,15 @@
 				<input id="username" type="text" bind:value={username} autocomplete="username" autocapitalize="none" required disabled={loading} />
 			</div>
 
-			<div class="field">
-				<label for="password">Password</label>
-				<input id="password" type="password" bind:value={password} autocomplete={mode === 'login' ? 'current-password' : 'new-password'} required disabled={loading} />
-			</div>
-
 			{#if mode === 'register'}
 				<div class="field">
-					<label for="display-name">Display name (optional)</label>
-					<input id="display-name" type="text" bind:value={displayName} placeholder="e.g. Alice Smith" autocomplete="name" disabled={loading} maxlength="40" />
-					<span class="hint">Used for your profile. Can be changed later.</span>
+					<label for="display-name"><span class="optional-prefix">(optional)</span> Display name</label>
+					<input id="display-name" type="text" bind:value={displayName} autocomplete="name" disabled={loading} maxlength="40" />
 				</div>
 
 				<div class="field">
-					<label for="invite-code">Invite code</label>
-					<input id="invite-code" class="invite-input" type="text" bind:value={inviteCode} autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" required disabled={loading} />
-					<span class="hint">Use the private alpha code you were issued.</span>
+					<label for="password">Password</label>
+					<input id="password" type="password" bind:value={password} autocomplete="new-password" required disabled={loading} />
 				</div>
 
 				<div class="field">
@@ -174,6 +178,18 @@
 					<input id="confirm-password" type="password" bind:value={confirmPassword} autocomplete="new-password" required disabled={loading} />
 				</div>
 
+				<div class="field">
+					<label for="invite-code">Invite code</label>
+					<input id="invite-code" class="invite-input" type="text" bind:value={inviteCode} autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" required disabled={loading} />
+				</div>
+			{:else}
+				<div class="field">
+					<label for="password">Password</label>
+					<input id="password" type="password" bind:value={password} autocomplete="current-password" required disabled={loading} />
+				</div>
+			{/if}
+
+			{#if mode === 'register'}
 				<div class="field">
 					<div class="section-label">Password requirements</div>
 					<div class="requirements">
@@ -187,15 +203,13 @@
 						<div class="section-label">Verify you're human</div>
 						<div class="altcha-box" class:failed={altchaFailed}>
 							{#if altchaFailed}
-								<p class="altcha-err">CAPTCHA failed to load. Reload the page.</p>
-							{:else if altchaReady}
-								<altcha-widget bind:this={altchaRef} challengeurl={ALTCHA_URL} hidelogo auto="off"></altcha-widget>
+								<p class="altcha-err">{altchaConfigError || 'CAPTCHA failed to load. Reload the page.'}</p>
 							{:else}
-								<p class="altcha-loading">Loading verification challenge...</p>
+								<altcha-widget bind:this={altchaRef} challengeurl={ALTCHA_URL} hidelogo auto="off"></altcha-widget>
 							{/if}
 						</div>
 						<span class="hint">
-							{#if altchaFailed}CAPTCHA failed. Reload and try again.{:else if altchaStatus === 'verifying'}Verifying...{:else if !captchaToken}Solve the CAPTCHA puzzle{:else}✓ CAPTCHA verified{/if}
+							{#if altchaFailed}{altchaConfigError || 'CAPTCHA failed. Reload and try again.'}{:else if altchaStatus === 'verifying'}Verifying...{:else if !captchaToken}Solve the CAPTCHA puzzle{:else}CAPTCHA verified{/if}
 						</span>
 					</div>
 				{/if}
@@ -311,6 +325,17 @@
 		font-weight: var(--weight-medium);
 	}
 
+	.field > label {
+		color: var(--p-text);
+		font-size: 1.15rem;
+		line-height: 1.1;
+		text-transform: uppercase;
+	}
+
+	.optional-prefix {
+		text-transform: none;
+	}
+
 	.hint {
 		font-size: var(--text-xs);
 		color: var(--p-muted);
@@ -354,7 +379,7 @@
 		background: color-mix(in srgb, var(--p-error) 6%, var(--p-bg));
 	}
 
-	.altcha-err, .altcha-loading {
+	.altcha-err {
 		font-size: var(--text-xs);
 		color: var(--p-text-2);
 		text-align: center;
