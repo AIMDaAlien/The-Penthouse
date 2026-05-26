@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS server_settings (
 );
 
 INSERT INTO server_settings (key, value)
-VALUES ('registration_mode', 'invite_only')
+VALUES ('registration_mode', 'open')
 ON CONFLICT (key) DO NOTHING;
 
 -- Restructure signup_invites: add id and label, swap PK

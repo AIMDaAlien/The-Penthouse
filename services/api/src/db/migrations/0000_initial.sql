@@ -350,7 +350,7 @@ CREATE INDEX IF NOT EXISTS idx_push_subscriptions_session ON push_subscriptions(
 CREATE INDEX IF NOT EXISTS idx_chat_notification_overrides_chat ON chat_notification_overrides(chat_id);
 
 INSERT INTO server_settings (key, value)
-VALUES ('registration_mode', 'invite_only')
+VALUES ('registration_mode', 'open')
 ON CONFLICT (key) DO NOTHING;
 
 INSERT INTO signup_invites (code, label, max_uses)

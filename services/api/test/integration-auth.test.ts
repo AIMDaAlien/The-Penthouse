@@ -17,7 +17,6 @@ describe('auth integration', () => {
           username: 'alfred',
           displayName: 'Alfred',
           password: 'password-1234',
-          inviteCode: 'PENTHOUSE-ALPHA',
           captchaToken: 'dev-token',
           acceptTestNotice: true,
           testNoticeVersion: 'alpha-v1'

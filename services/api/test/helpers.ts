@@ -49,7 +49,7 @@ export async function resetDb() {
       users
     RESTART IDENTITY CASCADE
   `);
-  await pool.query("INSERT INTO server_settings (key, value) VALUES ('registration_mode', 'invite_only')");
+  await pool.query("INSERT INTO server_settings (key, value) VALUES ('registration_mode', 'open')");
   await pool.query("INSERT INTO signup_invites (code, label, max_uses) VALUES ('PENTHOUSE-ALPHA', 'Default alpha invite', 999999)");
   await pool.query(`
     INSERT INTO chats (id, type, name, system_key)
@@ -94,7 +94,6 @@ export async function registerUser(app: Awaited<ReturnType<typeof buildApp>>, us
       username,
       displayName: username,
       password: 'password-1234',
-      inviteCode: 'PENTHOUSE-ALPHA',
       captchaToken: 'dev-token',
       acceptTestNotice: true,
       testNoticeVersion: 'alpha-v1'

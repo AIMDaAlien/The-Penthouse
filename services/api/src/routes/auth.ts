@@ -1,4 +1,4 @@
-import { and, count, eq, gt, ilike, isNull, lt, or, sql } from 'drizzle-orm';
+import { count, eq, ilike } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import {
   ChangePasswordRequestSchema,
@@ -9,7 +9,7 @@ import {
   UpdateProfileRequestSchema
 } from '@penthouse/contracts';
 import { db } from '../db/pool.js';
-import { chatMembers, chats, mediaUploads, notificationPrefs, refreshTokens, serverSettings, signupInvites, users } from '../db/schema.js';
+import { chatMembers, chats, mediaUploads, notificationPrefs, refreshTokens, serverSettings, users } from '../db/schema.js';
 import { rateLimit } from '../middleware/rateLimit.js';
 import { badRequest, forbidden, notFound, unauthorized } from '../utils/error-responses.js';
 import { recoveryCode, sha256 } from '../utils/crypto.js';
@@ -23,7 +23,7 @@ import { appendSyncEvent } from '../features/sync/service.js';
 export async function registerAuthRoutes(fastify: FastifyInstance) {
   fastify.get('/api/v1/auth/config', async () => {
     const [setting] = await db.select().from(serverSettings).where(eq(serverSettings.key, 'registration_mode')).limit(1);
-    return { registrationMode: setting?.value ?? 'invite_only' };
+    return { registrationMode: normalizeRegistrationMode(setting?.value) };
   });
 
   fastify.get('/api/v1/auth/challenge', async () => createChallenge());
@@ -35,17 +35,7 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
     }
 
     const [mode] = await db.select().from(serverSettings).where(eq(serverSettings.key, 'registration_mode')).limit(1);
-    if ((mode?.value ?? 'invite_only') === 'closed') throw forbidden('Registration is closed', 'REGISTRATION_CLOSED');
-
-    const [invite] = await db.select()
-      .from(signupInvites)
-      .where(and(
-        eq(signupInvites.code, body.inviteCode),
-        isNull(signupInvites.revokedAt),
-        or(isNull(signupInvites.expiresAt), gt(signupInvites.expiresAt, new Date()))
-      ))
-      .limit(1);
-    if (!invite || invite.uses >= invite.maxUses) throw badRequest('Invalid invite code', 'INVITE_INVALID');
+    if (normalizeRegistrationMode(mode?.value) === 'closed') throw forbidden('Registration is closed', 'REGISTRATION_CLOSED');
 
     const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.username, body.username)).limit(1);
     if (existing) throw badRequest('Username is already taken', 'USERNAME_TAKEN');
@@ -64,10 +54,6 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
         testNoticeAcceptedVersion: body.testNoticeVersion,
         testNoticeAcceptedAt: new Date()
       }).returning();
-
-      await tx.update(signupInvites)
-        .set({ uses: sql`${signupInvites.uses} + 1` })
-        .where(eq(signupInvites.id, invite.id));
 
       await tx.insert(notificationPrefs).values({ userId: created.id }).onConflictDoNothing();
 
@@ -195,6 +181,10 @@ export async function registerAuthRoutes(fastify: FastifyInstance) {
     await db.update(users).set({ passwordHash: await hashPassword(body.newPassword) }).where(eq(users.id, user.id));
     return reply.status(204).send();
   });
+}
+
+function normalizeRegistrationMode(value?: string) {
+  return value === 'closed' ? 'closed' : 'open';
 }
 
 async function assertOwnedProfileImageUpload(mediaUploadId: string | null, userId: string) {

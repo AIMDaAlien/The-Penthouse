@@ -104,7 +104,7 @@ REFRESH_TOKEN_SECRET=...
 PORT=3000
 UPLOAD_DIR=/data/uploads
 FCM_SERVICE_ACCOUNT_KEY=...   (optional, push)
-REGISTRATION_MODE=invite_only  # or 'open' or 'closed'
+REGISTRATION_MODE=open  # or 'closed'
 ```
 
 ---

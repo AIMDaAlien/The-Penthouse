@@ -1,8 +1,8 @@
 import type { Pool, PoolClient } from 'pg';
 
-export type RegistrationMode = 'invite_only' | 'closed';
+export type RegistrationMode = 'open' | 'closed';
 
-const VALID_REGISTRATION_MODES: readonly string[] = ['invite_only', 'closed'];
+const VALID_REGISTRATION_MODES: readonly string[] = ['open', 'closed'];
 
 export async function getRegistrationMode(db: Pool | PoolClient): Promise<RegistrationMode> {
   const result = await db.query(
@@ -10,7 +10,7 @@ export async function getRegistrationMode(db: Pool | PoolClient): Promise<Regist
   );
   const value = result.rows[0]?.value;
   if (VALID_REGISTRATION_MODES.includes(value)) return value as RegistrationMode;
-  return 'invite_only';
+  return 'open';
 }
 
 export async function setRegistrationMode(db: Pool | PoolClient, mode: RegistrationMode): Promise<void> {

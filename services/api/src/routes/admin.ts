@@ -272,7 +272,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
 
   fastify.get('/api/v1/admin/registration-mode', async () => {
     const [setting] = await db.select().from(serverSettings).where(eq(serverSettings.key, 'registration_mode')).limit(1);
-    return { registrationMode: setting?.value ?? 'invite_only' };
+    return { registrationMode: normalizeRegistrationMode(setting?.value) };
   });
 
   fastify.put('/api/v1/admin/registration-mode', async (request) => {
@@ -285,7 +285,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
       })
       .returning();
 
-    return { registrationMode: setting.value };
+    return { registrationMode: normalizeRegistrationMode(setting.value) };
   });
 
   fastify.post('/api/v1/admin/moderate/:messageId', async (request) => {
@@ -339,6 +339,10 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
     const { chatId } = request.params as { chatId: string };
     return listAdminMessages(chatId);
   });
+}
+
+function normalizeRegistrationMode(value?: string) {
+  return value === 'closed' ? 'closed' : 'open';
 }
 
 async function moderateMessage(

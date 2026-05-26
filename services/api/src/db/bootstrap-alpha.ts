@@ -41,10 +41,10 @@ async function main() {
   const expiresAt = optionalDate('ALPHA_BOOTSTRAP_INVITE_EXPIRES_AT');
 
   await db.insert(serverSettings)
-    .values({ key: 'registration_mode', value: 'invite_only' })
+    .values({ key: 'registration_mode', value: 'open' })
     .onConflictDoUpdate({
       target: serverSettings.key,
-      set: { value: 'invite_only', updatedAt: new Date() }
+      set: { value: 'open', updatedAt: new Date() }
     });
 
   const [invite] = await db.insert(signupInvites)

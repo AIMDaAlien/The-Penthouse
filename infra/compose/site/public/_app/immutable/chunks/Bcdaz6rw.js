@@ -1,0 +1,1 @@
+import{a as r}from"./BolP0DWN.js";const a={search(e,t=50){return r.get(`/api/v1/users/search?q=${encodeURIComponent(e)}&limit=${t}`)},list({offset:e=0,limit:t=20}={}){return r.get(`/api/v1/users?offset=${e}&limit=${t}`)},updateProfile(e){return r.patch("/api/v1/auth/me",e)}};export{a as u};

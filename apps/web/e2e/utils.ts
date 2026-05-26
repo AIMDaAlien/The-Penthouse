@@ -2,10 +2,9 @@ import { expect, type Page } from '@playwright/test';
 import type { AuthResponse } from '@penthouse/contracts';
 
 const TEST_PASSWORD = 'Test@12345';
-const TEST_INVITE_CODE = 'PENTHOUSE-ALPHA';
 const API_BASE = process.env.PLAYWRIGHT_API_URL ?? 'http://localhost:3000';
 
-export { TEST_PASSWORD, TEST_INVITE_CODE };
+export { TEST_PASSWORD };
 
 export async function switchToRegister(page: Page) {
   await expect(async () => {
@@ -32,7 +31,6 @@ export async function registerUser(page: Page, username: string) {
   // Fill out the form
   await page.locator('#username').fill(username);
   await page.locator('#display-name').fill(`${username} Display`);
-  await page.locator('#invite-code').fill(TEST_INVITE_CODE);
   await page.locator('#password').fill(TEST_PASSWORD);
   await page.locator('#confirm-password').fill(TEST_PASSWORD);
   await page.getByLabel(/I understand this is an alpha/).check();
@@ -94,7 +92,6 @@ export async function createUserViaApi(page: Page, username: string): Promise<Au
       username,
       displayName: `${username} Display`,
       password: TEST_PASSWORD,
-      inviteCode: TEST_INVITE_CODE,
       captchaToken: 'dev',
       acceptTestNotice: true,
       testNoticeVersion: 'alpha-v1'

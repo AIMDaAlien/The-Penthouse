@@ -1,0 +1,1 @@
+export const env={"PUBLIC_API_URL":"https://api.penthouse.blog","PUBLIC_SOCKET_URL":"https://api.penthouse.blog","PUBLIC_VAPID_PUBLIC_KEY":"BCV8bRwYIGrvqFzvFlAxkw9pstAPYKYsEToHTrp3c1mPpn_5zuOfyDx8O1tBfSkBTCmcF8DlnRtyd2QG9g5ZUr4","PUBLIC_SKIP_CAPTCHA":"true","PUBLIC_ALTCHA_API_URL":"https://api.penthouse.blog/api/v1/altcha"}

@@ -8,7 +8,6 @@ async function registerAndLogin(page: Page, username: string) {
 			username,
 			displayName: username,
 			password: 'TestPassword123!',
-			inviteCode: 'PENTHOUSE-ALPHA',
 			captchaToken: 'dev',
 			acceptTestNotice: true,
 			testNoticeVersion: 'alpha-v1'

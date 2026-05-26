@@ -21,7 +21,6 @@ describe('RegisterRequestSchema', () => {
       username: 'TestUser_123',
       displayName: 'Test User',
       password: 'ValidPass123!',
-      inviteCode: 'ABC123',
       captchaToken: 'captcha-token-123',
       acceptTestNotice: true,
       testNoticeVersion: 'v1.0'
@@ -37,7 +36,6 @@ describe('RegisterRequestSchema', () => {
     const result = RegisterRequestSchema.safeParse({
       username: 'ab',
       password: 'ValidPass123!',
-      inviteCode: 'ABC123',
       captchaToken: 'token',
       acceptTestNotice: true,
       testNoticeVersion: 'v1'
@@ -49,7 +47,6 @@ describe('RegisterRequestSchema', () => {
     const result = RegisterRequestSchema.safeParse({
       username: 'validuser',
       password: ' ValidPass123!',
-      inviteCode: 'ABC123',
       captchaToken: 'token',
       acceptTestNotice: true,
       testNoticeVersion: 'v1'
@@ -61,7 +58,6 @@ describe('RegisterRequestSchema', () => {
     const result = RegisterRequestSchema.safeParse({
       username: 'validuser',
       password: 'ValidPass123!',
-      inviteCode: 'ABC123',
       captchaToken: 'token',
       acceptTestNotice: false,
       testNoticeVersion: 'v1'

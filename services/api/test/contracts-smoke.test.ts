@@ -40,11 +40,10 @@ test('app distribution schema makes the PWA canonical and Android legacy', () =>
   assert.equal(ok.success, true);
 });
 
-test('register schema validates invite-code fields', () => {
+test('register schema accepts open registration payload', () => {
   const ok = RegisterRequestSchema.safeParse({
     username: 'aim',
     password: 'supersecurepassword',
-    inviteCode: 'PENTHOUSE-ALPHA',
     captchaToken: 'valid-captcha-payload',
     acceptTestNotice: true,
     testNoticeVersion: 'alpha-v1'

@@ -11,8 +11,6 @@ export const AUTH_CONSTRAINTS = {
   passwordMax: 128,
   captchaTokenMin: 1,
   captchaTokenMax: 2048,
-  inviteCodeMin: 6,
-  inviteCodeMax: 64,
   recoveryCodeLength: 16,
   testNoticeVersionMin: 1,
   testNoticeVersionMax: 64,
@@ -24,10 +22,6 @@ const RECOVERY_CODE_PATTERN = /^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]+$/;
 
 export function normalizeUsername(value: string): string {
   return value.trim().toLowerCase();
-}
-
-export function normalizeInviteCode(value: string): string {
-  return value.trim().toUpperCase();
 }
 
 export function normalizeRecoveryCode(value: string): string {
@@ -54,13 +48,6 @@ const PasswordEntrySchema = z.string().min(AUTH_CONSTRAINTS.passwordMin).max(AUT
 const PasswordCreationSchema = PasswordEntrySchema.refine((value) => value === value.trim(), {
   message: 'Password cannot start or end with spaces'
 });
-
-const InviteCodeSchema = z
-  .string()
-  .trim()
-  .min(AUTH_CONSTRAINTS.inviteCodeMin)
-  .max(AUTH_CONSTRAINTS.inviteCodeMax)
-  .transform(normalizeInviteCode);
 
 const CaptchaTokenSchema = z
   .string()
@@ -101,7 +88,6 @@ export const RegisterRequestSchema = z.object({
   username: UsernameSchema,
   displayName: DisplayNameSchema.optional(),
   password: PasswordCreationSchema,
-  inviteCode: InviteCodeSchema,
   captchaToken: CaptchaTokenSchema,
   acceptTestNotice: z.literal(true),
   testNoticeVersion: TestNoticeVersionSchema
@@ -153,7 +139,7 @@ export const ChatTypeSchema = z.enum(['dm', 'group', 'channel']);
 export const ChatMemberRoleSchema = z.enum(['owner', 'admin', 'member']);
 export const MessageTypeSchema = z.enum(['text', 'image', 'video', 'gif', 'file', 'poll', 'audio', 'sticker']);
 export const ModerationActionSchema = z.enum(['hide', 'unhide']);
-export const RegistrationModeSchema = z.enum(['invite_only', 'closed']);
+export const RegistrationModeSchema = z.enum(['open', 'closed']);
 export const MediaKindSchema = z.enum(['image', 'video', 'file']);
 export const GifProviderSchema = z.enum(['giphy', 'klipy']);
 export const GifRenderModeSchema = z.enum(['image', 'video']);

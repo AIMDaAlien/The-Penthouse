@@ -27,7 +27,6 @@ function validRegisterPayload() {
   return {
     username: 'alice',
     password: 'supersecurepassword',
-    inviteCode: 'PLACEHOLDER', // Temporary until Codex removes from backend
     captchaToken: 'valid-captcha-payload',
     acceptTestNotice: true as const,
     testNoticeVersion: 'alpha-v1'

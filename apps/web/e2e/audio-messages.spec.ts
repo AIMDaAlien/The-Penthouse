@@ -72,7 +72,6 @@ async function registerAndLogin(page: Page, username: string) {
   }).toPass({ timeout: 5000 });
   await page.locator('#username').fill(username);
   await page.locator('#display-name').fill(username);
-  await page.locator('#invite-code').fill('PENTHOUSE-ALPHA');
   await page.locator('#password').fill('TestPassword123!');
   await page.locator('#confirm-password').fill('TestPassword123!');
   await page.getByLabel(/I understand/i).check();

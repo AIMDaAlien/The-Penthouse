@@ -27,7 +27,7 @@ components:
 
     RegisterRequest:
       type: object
-      required: [username, password, inviteCode, captchaToken, acceptTestNotice, testNoticeVersion]
+      required: [username, password, captchaToken, acceptTestNotice, testNoticeVersion]
       properties:
         username:
           type: string
@@ -40,11 +40,6 @@ components:
           minLength: 10
           maxLength: 128
           description: Must not start or end with spaces
-        inviteCode:
-          type: string
-          minLength: 6
-          maxLength: 64
-          description: Trimmed and uppercased by the server
         captchaToken:
           type: string
           minLength: 1

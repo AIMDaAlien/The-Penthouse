@@ -3,7 +3,7 @@
  * Run: npx playwright test e2e/suite-auth.spec.ts
  */
 import { test, expect } from '@playwright/test';
-import { TEST_INVITE_CODE, TEST_PASSWORD, loginUser, registerUser, switchToRegister } from './utils';
+import { TEST_PASSWORD, loginUser, registerUser, switchToRegister } from './utils';
 
 const API_BASE = process.env.PLAYWRIGHT_API_URL ?? 'http://localhost:3000';
 const pw = TEST_PASSWORD;
@@ -14,7 +14,6 @@ async function seedUser(page: import('@playwright/test').Page, username: string)
       username,
       displayName: `${username} Display`,
       password: pw,
-      inviteCode: TEST_INVITE_CODE,
       captchaToken: 'dev',
       acceptTestNotice: true,
       testNoticeVersion: 'alpha-v1'
@@ -40,7 +39,6 @@ test.describe('Auth — Register', () => {
     await switchToRegister(page);
     await page.locator('#username').fill(u);
     await page.locator('#display-name').fill('Dup Test');
-    await page.locator('#invite-code').fill(TEST_INVITE_CODE);
     await page.locator('#password').fill(pw);
     await page.locator('#confirm-password').fill(pw);
     await page.getByLabel(/I understand this is an alpha/).check();
@@ -53,7 +51,6 @@ test.describe('Auth — Register', () => {
     await page.goto('/auth');
     await switchToRegister(page);
     await page.locator('#username').fill(`short_${Date.now()}`);
-    await page.locator('#invite-code').fill(TEST_INVITE_CODE);
     await page.locator('#password').fill('short');
     await page.locator('#confirm-password').fill('short');
     await page.getByLabel(/I understand this is an alpha/).check();
@@ -65,7 +62,6 @@ test.describe('Auth — Register', () => {
     await page.goto('/auth');
     await switchToRegister(page);
     await page.locator('#username').fill(`mismatch_${Date.now()}`);
-    await page.locator('#invite-code').fill(TEST_INVITE_CODE);
     await page.locator('#password').fill(pw);
     await page.locator('#confirm-password').fill('Different@12345');
     await page.getByLabel(/I understand this is an alpha/).check();

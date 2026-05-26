@@ -91,7 +91,7 @@ Expected:
 - app-distribution reports `"sourceOfTruth":"pwa"`
 - `/downloads/the-penthouse-rebuild.apk` redirects to `/`
 - `/downloads/the-penthouse.apk` redirects to `/downloads/legacy/the-penthouse.apk`
-- auth config returns `{"registrationMode":"invite_only"}`
+- auth config returns `{"registrationMode":"open"}` unless registration has been manually closed
 
 ## Restored TrueNAS Data
 
