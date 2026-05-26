@@ -83,6 +83,7 @@ services:
         PUBLIC_SOCKET_URL: ${PUBLIC_SOCKET_URL:-}
         PUBLIC_VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
         PUBLIC_SKIP_CAPTCHA: ${PUBLIC_SKIP_CAPTCHA:-false}
+        PUBLIC_ALTCHA_API_URL: ${PUBLIC_ALTCHA_API_URL:-}
         PUBLIC_LOCAL_FIRST_SYNC: ${PUBLIC_LOCAL_FIRST_SYNC:-shadow}
     restart: unless-stopped
     environment:

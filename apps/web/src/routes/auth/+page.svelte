@@ -52,28 +52,28 @@
 		confirmPassword = '';
 		captchaToken = '';
 		acceptedAlphaNotice = false;
-		altchaReady = false;
-		altchaFailed = false;
 		altchaStatus = 'unverified';
 		altchaRef?.reset?.();
 	}
 
 	$effect(() => {
 		let alive = true;
+		if (skipCaptcha) return;
+		if (!ALTCHA_URL) {
+			altchaFailed = true;
+			return;
+		}
 		if (!window.isSecureContext) {
 			altchaFailed = true;
 			return;
 		}
+		altchaReady = true;
 		import('altcha')
-			.then(() => {
+			.catch(() => {
 				if (!alive) return;
-				if (!customElements.get('altcha-widget')) {
-					altchaFailed = true;
-					return;
-				}
-				altchaReady = true;
-			})
-			.catch(() => { altchaFailed = true; });
+				altchaReady = false;
+				altchaFailed = true;
+			});
 		return () => { alive = false; };
 	});
 
